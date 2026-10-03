@@ -1,0 +1,34 @@
+# 改行はリポジトリも作業コピーも LF にそろえる（開発元のリポジトリと同じ。写したときに改行だけの差分を出さない）
+* text=auto eol=lf
+
+# Unity の YAML
+*.unity        text eol=lf merge=unityyamlmerge
+*.prefab       text eol=lf merge=unityyamlmerge
+*.asset        text eol=lf merge=unityyamlmerge
+*.mat          text eol=lf merge=unityyamlmerge
+*.anim         text eol=lf merge=unityyamlmerge
+*.controller   text eol=lf merge=unityyamlmerge
+*.overrideController text eol=lf merge=unityyamlmerge
+*.meta         text eol=lf merge=unityyamlmerge
+
+# バイナリ
+*.fbx   binary
+*.FBX   binary
+*.png   binary
+*.PNG   binary
+*.jpg   binary
+*.tga   binary
+*.tif   binary
+*.tiff  binary
+*.psd   binary
+*.exr   binary
+*.hdr   binary
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
+*.ttf   binary
+*.otf   binary
+*.dll   binary
+*.so    binary
+*.a     binary
+*.bytes binary

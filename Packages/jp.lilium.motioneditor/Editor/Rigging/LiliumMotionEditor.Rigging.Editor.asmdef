@@ -1,0 +1,29 @@
+{
+    "name": "LiliumMotionEditor.Rigging.Editor",
+    "rootNamespace": "Lilium",
+    "references": [
+        "LiliumMotionEditor.Runtime",
+        "LiliumMotionEditor.Attributes",
+        "LiliumMotionEditor.Editor",
+        "Unity.Animation.Rigging",
+        "Unity.Animation.Rigging.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MKT_ANIMATION_RIGGING"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.animation.rigging",
+            "expression": "1.0.0",
+            "define": "MKT_ANIMATION_RIGGING"
+        }
+    ]
+}

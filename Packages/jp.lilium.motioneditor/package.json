@@ -1,0 +1,19 @@
+{
+  "name": "jp.lilium.motioneditor",
+  "version": "0.1.0",
+  "unity": "6000.0",
+  "author": "You-Ri",
+  "displayName": "Lilium Motion Editor",
+  "description": "Motion editor window: poses a character through an editing rig (FK, two-bone IK, Animation Rigging values) and saves the rig values to an animation clip.",
+  "dependencies": {
+    "com.unity.burst": "1.8.17",
+    "com.unity.mathematics": "1.3.2"
+  },
+  "samples": [
+    {
+      "displayName": "Demo",
+      "description": "Sample models to try the motion editor.",
+      "path": "Samples~/Demo"
+    }
+  ]
+}

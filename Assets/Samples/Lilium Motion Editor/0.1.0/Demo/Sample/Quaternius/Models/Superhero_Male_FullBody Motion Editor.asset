@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 119d2d5af55dd254aa6abe6e3af98bf5, type: 3}
+  m_Name: Superhero_Male_FullBody Motion Editor
+  m_EditorClassIdentifier: 
+  prefab: {fileID: 919132149155446097, guid: 8b1b2b0f9197fdd4599bcf33b95e2166, type: 3}
+  overrideAnimBankFolders: 0
+  animBankFolders: []
+  overridePoseBankFolders: 0
+  poseBankFolders: []
+  overrideRigDefinition: 0
+  rigDefinition: {fileID: 0}
+  overrideAutoBake: 0
+  autoBake: 1
+  layers:
+    write: EditingRig
+    manipulate: FullBodyIk
+    values:
+    - id: EditingRig
+      enabled: 1
+      weight: 1
+      clipWeight: 1
+    - id: DisplayBone
+      enabled: 1
+      weight: 1
+      clipWeight: 1
+    - id: FullBodyIk
+      enabled: 1
+      weight: 1
+      clipWeight: 1
+    outputs: []
+    humanoidPose: 0
+    overrides: []
+  parentSwitches: []

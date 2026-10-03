@@ -1,0 +1,29 @@
+{
+    "name": "LiliumMotionEditor.Timeline.Editor",
+    "rootNamespace": "Lilium",
+    "references": [
+        "LiliumMotionEditor.Runtime",
+        "LiliumMotionEditor.Attributes",
+        "LiliumMotionEditor.Editor",
+        "Unity.Timeline",
+        "Unity.Timeline.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MKT_TIMELINE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.timeline",
+            "expression": "1.0.0",
+            "define": "MKT_TIMELINE"
+        }
+    ]
+}

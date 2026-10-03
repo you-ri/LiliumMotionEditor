@@ -1,0 +1,542 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
+  m_Name: Default Rig Definition
+  m_EditorClassIdentifier: 
+  version_: 3
+  solver: 1
+  fullBody:
+    iterations: 48
+    pull: 1
+    hipsPin: 0.6
+    directionPoints: 1
+    directionLength: 0.25
+    contactPoints: 1
+  fkControls:
+  - bone: 0
+    position: 1
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.95
+  - bone: 1
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 2
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 3
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 4
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 5
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 6
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 7
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.8
+  - bone: 8
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.6
+  - bone: 9
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.5
+  - bone: 10
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 11
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.5
+  - bone: 12
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.5
+  - bone: 13
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 14
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 15
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 16
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.1
+  - bone: 17
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 18
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 19
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 20
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.2
+  - bone: 21
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 22
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 23
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 24
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 25
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 26
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 27
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 28
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 29
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 30
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 31
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 32
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 33
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 34
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 35
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 36
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 37
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 38
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 39
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 40
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 41
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 42
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 43
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 44
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 45
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 46
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 47
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 48
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 49
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 50
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 51
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 52
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 53
+    position: 0
+    fullBodySolve: 0
+    fullBodyPoint: 0
+    stiffness: 0.2
+  - bone: 54
+    position: 0
+    fullBodySolve: 1
+    fullBodyPoint: 1
+    stiffness: 0.6
+  ikChains:
+  - name: LeftArm
+    root: 13
+    mid: 15
+    tip: 17
+    defaultHint: {x: 0, y: 0, z: -1}
+    reverseFoot: 0
+    toes: 0
+    toeBreak: 30
+    pivots: []
+  - name: RightArm
+    root: 14
+    mid: 16
+    tip: 18
+    defaultHint: {x: 0, y: 0, z: -1}
+    reverseFoot: 0
+    toes: 0
+    toeBreak: 30
+    pivots: []
+  - name: LeftLeg
+    root: 1
+    mid: 3
+    tip: 5
+    defaultHint: {x: 0, y: 0, z: 1}
+    reverseFoot: 1
+    toes: 19
+    toeBreak: 30
+    pivots: []
+  - name: RightLeg
+    root: 2
+    mid: 4
+    tip: 6
+    defaultHint: {x: 0, y: 0, z: 1}
+    reverseFoot: 1
+    toes: 20
+    toeBreak: 30
+    pivots: []
+  extraControls: []
+  bodyPoints:
+  - enabled: 1
+    name: Hips
+    bone: 0
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: LeftUpperLeg
+    bone: 1
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightUpperLeg
+    bone: 2
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftLowerLeg
+    bone: 3
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightLowerLeg
+    bone: 4
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftFoot
+    bone: 5
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: RightFoot
+    bone: 6
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: Spine
+    bone: 7
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: Chest
+    bone: 8
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: Neck
+    bone: 9
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: Head
+    bone: 10
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: LeftShoulder
+    bone: 11
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightShoulder
+    bone: 12
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftUpperArm
+    bone: 13
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightUpperArm
+    bone: 14
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftLowerArm
+    bone: 15
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightLowerArm
+    bone: 16
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftHand
+    bone: 17
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: RightHand
+    bone: 18
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+  - enabled: 1
+    name: LeftToes
+    bone: 19
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightToes
+    bone: 20
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: UpperChest
+    bone: 54
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: HipsDirection
+    bone: 0
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+  - enabled: 1
+    name: UpperChestDirection
+    bone: 54
+    anchor: 0
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+  - enabled: 1
+    name: HeadDirection
+    bone: 10
+    anchor: 0
+    offset: {x: 0, y: 0.075, z: 0.25}
+    rotation: 0
+  - enabled: 1
+    name: HeadTop
+    bone: 10
+    anchor: 0
+    offset: {x: 0, y: 0.25, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftHeel
+    bone: 5
+    anchor: 1
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftToeTip
+    bone: 19
+    anchor: 2
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftPalmIndex
+    bone: 17
+    anchor: 3
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: LeftPalmLittle
+    bone: 17
+    anchor: 4
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightHeel
+    bone: 6
+    anchor: 1
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightToeTip
+    bone: 20
+    anchor: 2
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightPalmIndex
+    bone: 18
+    anchor: 3
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+  - enabled: 1
+    name: RightPalmLittle
+    bone: 18
+    anchor: 4
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0

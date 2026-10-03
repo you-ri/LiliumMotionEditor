@@ -1,0 +1,17 @@
+# Third-Party Notices
+
+This package contains third-party software components governed by the license(s) indicated below.
+
+Component Name: Material Icons
+License Type: Apache License 2.0
+Copyright: Copyright Google LLC
+Location: Editor/Icons/*.png (converted and resized for this package)
+Source: https://github.com/google/material-design-icons
+License Text: Editor/Icons/LICENSE-MaterialIcons.txt
+
+Component Name: Universal Base Characters (Standard)
+License Type: CC0 1.0 Universal (Public Domain Dedication)
+Copyright: Models by Quaternius
+Location: Samples~/Demo/Sample/Quaternius (models and textures; materials were made for this package)
+Source: https://quaternius.com/packs/universalbasecharacters.html
+License Text: Samples~/Demo/Sample/Quaternius/License_Standard.txt

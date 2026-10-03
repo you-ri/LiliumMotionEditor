@@ -1,0 +1,17 @@
+{
+    "name": "LiliumMotionEditor.FullBodyIk",
+    "rootNamespace": "Lilium",
+    "references": [
+        "Unity.Burst",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
