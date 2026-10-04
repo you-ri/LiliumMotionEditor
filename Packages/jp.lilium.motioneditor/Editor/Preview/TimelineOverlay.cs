@@ -87,6 +87,7 @@ namespace Lilium
         void BuildContent (VisualElement root, bool docked)
         {
             Unsubscribe ();
+            AccentStyle.Attach (root);
             root.style.width = kWidth;
             root.style.backgroundColor = kPanelColor;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
@@ -340,8 +341,8 @@ namespace Lilium
         static readonly Color kRulerTickColor = new Color (0.55f, 0.55f, 0.55f);
         static readonly Color kRulerTextColor = new Color (0.8f, 0.8f, 0.8f);
         static readonly Color kNegativeTimeColor = new Color (0, 0, 0, 0.25f);
-        /// <summary>演出の中でこのクリップが使われている区間（S15b）</summary>
-        static readonly Color kTimelineRangeColor = new Color (0.35f, 0.65f, 1f, 0.9f);
+        /// <summary>演出の中でこのクリップが使われている区間（S15b）の不透明度。色はアクセントの色</summary>
+        const float kTimelineRangeAlpha = 0.9f;
         /// <summary>その中で前後のクリップと混ざる区間（キーは打たない）</summary>
         static readonly Color kTimelineBlendColor = new Color (1f, 0.6f, 0.2f, 0.9f);
         static readonly Color kLabelColor = new Color (0.13f, 0.13f, 0.14f);
@@ -356,13 +357,15 @@ namespace Lilium
         static readonly Color kDragKeyColor = new Color (1f, 0.72f, 0.25f);
         static readonly Color kDeleteKeyColor = new Color (0.95f, 0.3f, 0.25f);
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
-        static readonly Color kSelectedKeyColor = new Color (0.45f, 0.72f, 1f);
-        static readonly Color kBoxFillColor = new Color (0.45f, 0.72f, 1f, 0.15f);
-        static readonly Color kBoxBorderColor = new Color (0.45f, 0.72f, 1f, 0.8f);
+        // 選んだキー・枠選択の枠の不透明度。色はアクセントの色
+        const float kBoxFillAlpha = 0.15f;
+        const float kBoxBorderAlpha = 0.8f;
         /// <summary>これより動かなければ枠選択ではなくクリック（フレームを移すだけ）</summary>
         const float kBoxDragThreshold = 3;
 
         readonly PreviewWindow window_;
+        /// <summary>アクセントの色（Unity のテーマの選択の色。AccentStyle から受け取る）</summary>
+        Color accent_ = AccentStyle.kFallbackColor;
         readonly VisualElement rulerCanvas_;
         readonly ScrollView trackScroll_;
         readonly VisualElement tracksCanvas_;
@@ -406,6 +409,11 @@ namespace Lilium
             window_ = window;
             style.flexDirection = FlexDirection.Column;
             style.flexShrink = 0;
+            AccentStyle.Track (this, color => {
+                accent_ = color;
+                rulerCanvas_.MarkDirtyRepaint ();
+                tracksCanvas_.MarkDirtyRepaint ();
+            });
 
             rulerCanvas_ = new VisualElement { name = "MktTimelineRuler" };
             rulerCanvas_.style.height = kRulerHeight;
@@ -703,7 +711,7 @@ namespace Lilium
                 if (x0 >= ruler.xMax || x1 <= ruler.x) return;
                 FillRect (painter, Rect.MinMaxRect (x0, ruler.y, x1, ruler.y + 3), color);
             };
-            band (start, end, kTimelineRangeColor);
+            band (start, end, WithAlpha (accent_, kTimelineRangeAlpha));
             if (blendInEnd > start) band (start, blendInEnd, kTimelineBlendColor);
             if (blendOutStart < end) band (blendOutStart, end, kTimelineBlendColor);
         }
@@ -738,7 +746,7 @@ namespace Lilium
                     Rect box = GetKeyRect (frame, row);
                     if (box.xMax < keyArea.x || box.x > keyArea.xMax) continue;
                     bool isDragged = dragTrack_ == i && dragKeyFrame_ == frame && dragMoved_;
-                    Color fill = selectedKeys_.Contains ((track.label, frame)) ? kSelectedKeyColor : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
+                    Color fill = selectedKeys_.Contains ((track.label, frame)) ? accent_ : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
                     DrawKeyBox (painter, box, fill, isDragged ? 0.35f : 1);
                 }
                 // ドラッグ中のキーは行き先に描く（トラックの外へ出すと赤＝離すと消える）
@@ -750,11 +758,12 @@ namespace Lilium
 
             if (boxSelecting_ && boxMoved_) {
                 Rect band = BoxRect ();
-                FillRect (painter, band, kBoxFillColor);
-                FillRect (painter, new Rect (band.x, band.y, band.width, 1), kBoxBorderColor);
-                FillRect (painter, new Rect (band.x, band.yMax - 1, band.width, 1), kBoxBorderColor);
-                FillRect (painter, new Rect (band.x, band.y, 1, band.height), kBoxBorderColor);
-                FillRect (painter, new Rect (band.xMax - 1, band.y, 1, band.height), kBoxBorderColor);
+                Color border = WithAlpha (accent_, kBoxBorderAlpha);
+                FillRect (painter, band, WithAlpha (accent_, kBoxFillAlpha));
+                FillRect (painter, new Rect (band.x, band.y, band.width, 1), border);
+                FillRect (painter, new Rect (band.x, band.yMax - 1, band.width, 1), border);
+                FillRect (painter, new Rect (band.x, band.y, 1, band.height), border);
+                FillRect (painter, new Rect (band.xMax - 1, band.y, 1, band.height), border);
             }
         }
 
@@ -788,6 +797,12 @@ namespace Lilium
                 FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), kIntervalColor);
                 FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), kIntervalColor);
             }
+        }
+
+        static Color WithAlpha (Color color, float alpha)
+        {
+            color.a = alpha;
+            return color;
         }
 
         /// <summary>

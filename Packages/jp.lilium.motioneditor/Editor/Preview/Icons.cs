@@ -21,6 +21,15 @@ namespace Lilium
             Texture2D icon = EditorGUIUtility.pixelsPerPoint > 1 ? AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + prefix + name + "@2x.png") : null;
             return icon != null ? icon : AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + prefix + name + ".png");
         }
+
+        /// <summary>
+        /// 使う側で色を付けるアイコン（白一色なのでテーマで分けない。UI Toolkit の unityBackgroundImageTintColor で塗る）
+        /// </summary>
+        public static Texture2D LoadTintable (string name)
+        {
+            Texture2D icon = EditorGUIUtility.pixelsPerPoint > 1 ? AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + name + "@2x.png") : null;
+            return icon != null ? icon : AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + name + ".png");
+        }
     }
 
 }

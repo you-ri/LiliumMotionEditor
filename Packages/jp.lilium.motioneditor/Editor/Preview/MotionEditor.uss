@@ -1,0 +1,20 @@
+/*
+ * パネルのアクセントの色。Unity のエディタのテーマが定義する選択の色（USS 変数）を使い、
+ * 明るいテーマ・暗いテーマに合わせて替わるようにする（AccentStyle）
+ */
+
+/* 入っているボタン・今の行 */
+.lilium-accent {
+    background-color: var(--unity-colors-highlight-background);
+}
+
+/* ボタンの地の色（.unity-button と :hover）より後に効かせ、入っている間はなぞっても色を変えない */
+.unity-button.lilium-accent {
+    background-color: var(--unity-colors-highlight-background);
+    color: #FFFFFF;
+}
+
+/* Painter2D で描く所（タイムラインの選んだキーなど）はクラスで塗れないので、カスタムプロパティで受け取る */
+.lilium-accent-source {
+    --lilium-accent: var(--unity-colors-highlight-background);
+}

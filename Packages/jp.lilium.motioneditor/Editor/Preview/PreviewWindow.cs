@@ -1378,6 +1378,7 @@ namespace Lilium
             DisplayGoal goal = default;
             bool hasGoal = false;
             // 全身 IK の点をつかむ（✋ = Full Body IK。S25）間は、点のハンドルを出して骨（FK）のハンドルは出さない（関節の上で重なる）。
+            // ただし点の無い骨（指など）の FK は、リグ定義の fullBodyHandle で出す。
             // それ以外のときは、固定している点の印だけ描く（操作は受けない）
             bool pointGrab = isPointGrab;
             // 枠を引いている間は、枠に入っている点を「選ぼうとしている」印で出す（離すと選ぶ）
@@ -1420,7 +1421,9 @@ namespace Lilium
                         else if (showIk_) point.DrawPinned ();
                         continue;
                     }
-                    if (pointGrab && target is FkTarget) continue;
+                    // 点の無い骨（指など）は、リグ定義で出すと決めた物だけ出す（隠すと見えず動かせない）
+                    FkTarget fk = target as FkTarget;
+                    if (pointGrab && fk != null && !fk.fullBodyHandle) continue;
                     // 骨を隠している間は、選んでいる物だけ出す（選択したまま見た目を確かめ、そのまま動かせるように）。
                     // 手足の IK は View の IK が入っていれば隠さない
                     if (!showBones_ && !selected && !(showIk_ && target is IkTarget)) continue;

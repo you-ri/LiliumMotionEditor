@@ -267,13 +267,17 @@ namespace Lilium
         /// </summary>
         PoseTarget FindPickTarget (Transform bone)
         {
-            // ✋ が全身 IK の段のときは、その骨（無ければ親へたどって最初に当たる骨）の関節の点を選ぶ
+            // ✋ が全身 IK の段のときは、その骨（無ければ親へたどって最初に当たる骨）の関節の点を選ぶ。
+            // 点の無い骨でも、リグ定義で点をつかむ間も出すと決めた FK（指など）なら、その FK を選ぶ
             if (isPointGrab) {
                 for (Transform t = bone; t != null; t = t.parent) {
                     foreach (PoseTarget candidate in targets_) {
                         BodyPointTarget point = candidate as BodyPointTarget;
                         if (point != null && point.isOnBoneOrigin && point.anchor == t) return point;
                     }
+                    PoseTarget target;
+                    FkTarget fk = pickTransforms_.TryGetValue (t, out target) ? target as FkTarget : null;
+                    if (fk != null && fk.fullBodyHandle) return fk;
                 }
                 return null;
             }

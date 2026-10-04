@@ -425,6 +425,27 @@ namespace Lilium
             Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftIndexDistal).fullBodySolve);
             Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.Jaw).fullBodyPoint);
             Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftToes).fullBodySolve, "つま先は接地に使うので解く");
+
+            // 全身 IK の点をつかむ間も出すのは、解かない（点の無い）骨だけ
+            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftIndexDistal).fullBodyHandle);
+            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.Jaw).fullBodyHandle);
+            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftHand).fullBodyHandle);
+        }
+
+        [Test]
+        public void Version3Definition_ShowsUnsolvedBonesWhilePointGrab ()
+        {
+            // 版 3 までの定義には fullBodyHandle が無い（読むと false）。今の定義で解かない骨を出すようにする
+            foreach (EditRigDefinition.FkControl control in definition_.fkControls) control.fullBodyHandle = false;
+            definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftThumbProximal).fullBodySolve = true;
+            definition_.version = 3;
+
+            definition_.UpgradeIfNeeded ();
+
+            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
+            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.RightLittleDistal).fullBodyHandle);
+            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftThumbProximal).fullBodyHandle, "解くようにした骨は点が付くので出さない");
+            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.Hips).fullBodyHandle);
         }
 
         [Test]

@@ -62,6 +62,11 @@ namespace Lilium
             /// <summary>全身 IK の硬さ（0〜1）。元の姿勢の角度に戻ろうとする強さ。体の中心ほど強くする</summary>
             [Range (0, 1)]
             public float stiffness = kDefaultStiffness;
+            /// <summary>
+            /// 全身 IK の点をつかむ間（✋ が全身 IK の段）も、この骨の FK のハンドルを出すか。点をつかむ間は関節の上で点と重なるので FK のハンドルを隠すが、
+            /// 点の無い骨（指・目・顎）は隠すと見えず動かせない。既定は全身 IK で解かない骨だけ出す
+            /// </summary>
+            public bool fullBodyHandle;
 
             /// <summary>Humanoid で必須の骨か（無ければ Avatar が作れないので、どのキャラにもある）</summary>
             public bool required
@@ -116,6 +121,8 @@ namespace Lilium
             public string name;
             public string pattern;
             public bool position;
+            /// <summary>全身 IK の点をつかむ間も、ハンドルを出すか（追加のコントロールは全身 IK で解かず点も無いので、既定は出す）</summary>
+            public bool fullBodyHandle = true;
         }
 
         /// <summary>
@@ -166,7 +173,7 @@ namespace Lilium
 
         public const float kDefaultStiffness = 0.2f;
         /// <summary>定義の形の版。古い版のアセットを読んだら、足りない項目を既定値で埋める</summary>
-        public const int kVersion = 3;
+        public const int kVersion = 4;
 
         [SerializeField, HideInInspector]
         int version_;
@@ -290,6 +297,12 @@ namespace Lilium
                 if (bodyPoints == null) bodyPoints = new List<BodyPoint> ();
                 if (bodyPoints.Count == 0) bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
             }
+            if (version_ >= 1 && version_ < 4) {
+                // 版 4: 全身 IK の点をつかむ間も出す骨を選べるようにした。今の定義で解かない骨（点が無い骨）を出す（版 0 からは SetFullBodyDefaults が入れる）
+                foreach (FkControl control in fkControls) {
+                    if (control != null) control.fullBodyHandle = !control.fullBodySolve;
+                }
+            }
             version_ = kVersion;
         }
 
@@ -346,6 +359,7 @@ namespace Lilium
             bool solve = IsFullBodyBone (bone);
             control.fullBodySolve = solve;
             control.fullBodyPoint = solve;
+            control.fullBodyHandle = !solve;
             control.stiffness = DefaultStiffness (bone);
         }
 

@@ -32,14 +32,14 @@ namespace Lilium
                 Transform control = rig.FindControl (fk.path);
                 Transform bone = rig.GetEditingBone (fk.bone);
                 if (control == null || bone == null) continue;
-                targets.Add (new FkTarget (rig, solver, shapes, control, bone, fk.bone, fk.control.bone.ToString (), fk.control.position));
+                targets.Add (new FkTarget (rig, solver, shapes, control, bone, fk.bone, fk.control.bone.ToString (), fk.control.position, fk.control.fullBodyHandle));
             }
             foreach (RigBinding.Extra extra in rig.binding.extras) {
                 if (!extra.enabled) continue;
                 Transform control = rig.FindControl (extra.path);
                 Transform bone = rig.GetEditingBone (extra.bone);
                 if (control == null || bone == null) continue;
-                targets.Add (new FkTarget (rig, solver, shapes, control, bone, extra.bone, extra.control.name, extra.control.position));
+                targets.Add (new FkTarget (rig, solver, shapes, control, bone, extra.bone, extra.control.name, extra.control.position, extra.control.fullBodyHandle));
             }
             foreach (RigBinding.Ik ik in rig.binding.ik) {
                 if (!ik.enabled) continue;
@@ -201,10 +201,11 @@ namespace Lilium
         readonly Transform display_;
         readonly string label_;
         readonly bool position_;
+        readonly bool fullBodyHandle_;
         readonly int jointHash_;
         readonly int boneHash_;
 
-        public FkTarget (EditingRig rig, EditingRigSolver solver, BoneShapes shapes, Transform control, Transform bone, Transform display, string label, bool position)
+        public FkTarget (EditingRig rig, EditingRigSolver solver, BoneShapes shapes, Transform control, Transform bone, Transform display, string label, bool position, bool fullBodyHandle)
         {
             rig_ = rig;
             solver_ = solver;
@@ -214,6 +215,7 @@ namespace Lilium
             display_ = display;
             label_ = label;
             position_ = position;
+            fullBodyHandle_ = fullBodyHandle;
             jointHash_ = ("MktFkJoint" + control.GetEntityId ()).GetHashCode ();
             boneHash_ = ("MktFkBone" + control.GetEntityId ()).GetHashCode ();
         }
@@ -388,6 +390,12 @@ namespace Lilium
         public Transform bone
         {
             get { return bone_; }
+        }
+
+        /// <summary>全身 IK の点をつかむ間も、ハンドルを出すか（リグ定義の fullBodyHandle）</summary>
+        public bool fullBodyHandle
+        {
+            get { return fullBodyHandle_; }
         }
 
         public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)

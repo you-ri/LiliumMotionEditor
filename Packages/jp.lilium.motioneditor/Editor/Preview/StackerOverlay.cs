@@ -18,7 +18,6 @@ namespace Lilium
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
     class StackerOverlay : Overlay
     {
-        static readonly Color kCurrentColor = new Color (0.29f, 0.45f, 0.69f, 0.45f);
         const int kRowHeight = 20;
 
         PreviewWindow window_;
@@ -36,6 +35,7 @@ namespace Lilium
         public override VisualElement CreatePanelContent ()
         {
             VisualElement root = new VisualElement ();
+            AccentStyle.Attach (root);
             root.style.width = 190;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => 190);
@@ -177,7 +177,7 @@ namespace Lilium
             bool hasNext = index + 1 < keys_.Length;
             interval.SetEnabled (hasNext);
             interval.SetValueWithoutNotify (hasNext ? keys_[index + 1] - keys_[index] : 0);
-            element.style.backgroundColor = keys_[index] == window_.clock.keyFrame ? new StyleColor (kCurrentColor) : new StyleColor (StyleKeyword.Null);
+            AccentStyle.Set (element, keys_[index] == window_.clock.keyFrame);
         }
 
         void Refresh ()

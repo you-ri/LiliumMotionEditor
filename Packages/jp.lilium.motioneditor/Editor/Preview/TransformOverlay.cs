@@ -9,7 +9,7 @@ namespace Lilium
 
     /// <summary>
     /// Spinner と Transform を 1 枚にしたパネル（S8 + S9）。
-    /// 上から、動かす物の名前と Pole の切替・モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）・Mirror。
+    /// 上から、動かす物の名前と Pole の切替・モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）。
     /// 数値欄は保存している値（位置はメートル、回転はオイラー角）を出し、入力 1 回で今のフレームにキーを打つ
     /// </summary>
     // 右の列の View の下に置く。下寄せにするとタイムラインに重なる
@@ -18,8 +18,6 @@ namespace Lilium
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
     class TransformOverlay : Overlay
     {
-        static readonly Color kActiveColor = new Color (0.29f, 0.45f, 0.69f);
-        static readonly Color kActiveRowColor = new Color (0.29f, 0.45f, 0.69f, 0.25f);
         static readonly Color[] kAxisColors = {
             new Color (0.93f, 0.4f, 0.36f),
             new Color (0.45f, 0.8f, 0.4f),
@@ -38,7 +36,6 @@ namespace Lilium
         ValueRow[] rows_;
         /// <summary>足の転がし（roll / bank / twist）の行。足の転がしを持つ脚の IK を選んでいるときだけ出す</summary>
         ValueRow foot_;
-        Button mirror_;
         Label warning_;
         PoseTarget shownTarget_;
         bool shownPole_;
@@ -60,6 +57,7 @@ namespace Lilium
         public override VisualElement CreatePanelContent ()
         {
             VisualElement root = new VisualElement ();
+            AccentStyle.Attach (root);
             root.style.width = kWidth;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
@@ -108,10 +106,6 @@ namespace Lilium
             pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", Tr ("TRANSFORM_OVERLAY_POINT_LOCK_TOOLTIP"));
             ShortcutTooltip.Set (pointStateButtons_[2], containerWindow, pointStateButtons_[2].tooltip, "Toggle Point Lock");
             root.Add (pointStates_);
-
-            mirror_ = new Button (() => window_.MirrorSpinValues ()) { text = "Mirror" };
-            mirror_.style.marginTop = 4;
-            root.Add (mirror_);
 
             warning_ = new Label ();
             warning_.style.whiteSpace = WhiteSpace.Normal;
@@ -302,25 +296,19 @@ namespace Lilium
 
             for (int i = 0; i < modes_.Length; i++) {
                 bool active = (PreviewWindow.SpinnerMode)i == window_.spinnerMode;
-                modes_[i].style.backgroundColor = active ? new StyleColor (kActiveColor) : new StyleColor (StyleKeyword.Null);
+                AccentStyle.Set (modes_[i], active);
             }
             for (int i = 0; i < spaces_.Length; i++) {
                 bool active = (i == 1) == window_.gizmoWorld;
-                spaces_[i].style.backgroundColor = active ? new StyleColor (kActiveColor) : new StyleColor (StyleKeyword.Null);
+                AccentStyle.Set (spaces_[i], active);
             }
             pole_.style.display = window_.isIKSelected ? DisplayStyle.Flex : DisplayStyle.None;
             pole_.SetValueWithoutNotify (window_.spinnerPole);
             spinner_.Refresh ();
 
-            PoseTarget mirror = window_.GetMirrorTarget ();
-            PoseTarget selected = window_.selectedTarget;
-            mirror_.SetEnabled (mirror != null);
             string warning = window_.spinOverrideWarning;
             warning_.text = warning ?? "";
             warning_.style.display = warning != null ? DisplayStyle.Flex : DisplayStyle.None;
-            mirror_.tooltip = mirror == null
-                ? Tr ("TRANSFORM_OVERLAY_MIRROR_NO_PAIR")
-                : mirror == selected ? Tr ("TRANSFORM_OVERLAY_MIRROR_SELF") : Tr ("TRANSFORM_OVERLAY_MIRROR_TO", mirror.label);
             RefreshValues ();
         }
 
@@ -351,7 +339,7 @@ namespace Lilium
                 ValueRow row = rows_[r];
                 bool editable = has && window_.CanEditValues (row.channel);
                 row.root.SetEnabled (editable);
-                row.root.style.backgroundColor = r == activeRow ? new StyleColor (kActiveRowColor) : new StyleColor (StyleKeyword.Null);
+                AccentStyle.Set (row.root, r == activeRow);
                 Vector3 value = row.channel == TransformChannels.Position ? position
                     : row.channel == TransformChannels.Rotation ? euler
                     : Vector3.one;
@@ -368,7 +356,7 @@ namespace Lilium
             Vector3 angles;
             bool foot = window_.TryGetFootAngles (out angles);
             foot_.root.style.display = foot ? DisplayStyle.Flex : DisplayStyle.None;
-            foot_.root.style.backgroundColor = window_.spinnerFoot ? new StyleColor (kActiveRowColor) : new StyleColor (StyleKeyword.Null);
+            AccentStyle.Set (foot_.root, window_.spinnerFoot);
             if (foot) {
                 foot_.root.SetEnabled (window_.CanEditFootAngles ());
                 SetFieldsWithoutNotify (foot_, angles, TransformChannels.Rotation);
@@ -550,7 +538,7 @@ namespace Lilium
         void ShowIdleReadout ()
         {
             string target = window_ != null ? window_.spinTargetLabel : null;
-            readout_.text = target ?? Tr ("TRANSFORM_OVERLAY_SELECT_BONE");
+            readout_.text = target ?? "";
         }
 
         void OnGenerateVisualContent (MeshGenerationContext context)

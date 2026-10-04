@@ -27,7 +27,6 @@ namespace Lilium
         static readonly Color kExactColor = new Color (0.5f, 0.75f, 0.5f);
         static readonly Color kApproximateColor = new Color (0.9f, 0.75f, 0.35f);
         static readonly Color kNoneColor = new Color (0.9f, 0.45f, 0.45f);
-        static readonly Color kOnColor = new Color (0.35f, 0.55f, 0.85f);
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
         /// <summary>書き出す段（Output）の目印の色</summary>
         static readonly Color kOutputColor = new Color (0.55f, 0.4f, 0.2f);
@@ -56,6 +55,7 @@ namespace Lilium
         public override VisualElement CreatePanelContent ()
         {
             root_ = new VisualElement ();
+            AccentStyle.Attach (root_);
             window_ = OverlayWindows.Resolve (containerWindow);
             if (window_ == null) return root_;
 
@@ -134,8 +134,7 @@ namespace Lilium
             if (addOverride_ == null || window_ == null) return;
             // 構造を編集している間だけ、段を足すボタンを出す
             bool editing = window_.layerStructureEditing;
-            editStructure_.style.backgroundColor = editing ? kOnColor : StyleKeyword.Null;
-            editStructure_.style.color = editing ? Color.white : StyleKeyword.Null;
+            AccentStyle.Set (editStructure_, editing);
             editStructure_.text = editing ? Tr ("LAYERS_OVERLAY_EDITING_STRUCTURE") : Tr ("LAYERS_OVERLAY_EDIT_STRUCTURE");
             addOverride_.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
             addOutput_.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
@@ -590,53 +589,81 @@ namespace Lilium
 
         /// <summary>
         /// 姿勢の段の上に出す矢印の行。左半分は ↓（普段の流れ。上の段の姿勢が下の段へ渡る）、
-        /// 右半分は ↑（その段を逆に通れるか。いまの ✋ から ✏ への経路で通る段は濃く出す）
+        /// 右半分は ↑（その段を逆に通れるか。いまの ✋ から ✏ への経路で通る段は濃く出す）。
+        /// 逆に通れるか（戻せる・ずれる・戻せない）は矢印の色で出し、言葉はツールチップに出す（行を短く保つ）
         /// </summary>
         VisualElement Arrow (PoseStack stack, PoseLayer below)
         {
             VisualElement row = new VisualElement ();
             row.style.flexDirection = FlexDirection.Row;
-            row.style.marginLeft = 26;
             row.style.marginTop = 1;
 
-            Label down = Note ("↓", kNoteColor);
-            down.style.flexGrow = 1;
-            down.style.flexBasis = 0;
-            down.style.unityTextAlign = TextAnchor.MiddleCenter;
-            down.tooltip = Tr ("LAYERS_OVERLAY_FLOW_TOOLTIP");
+            Image downIcon;
+            VisualElement down = ArrowHalf ("ArrowDown", out downIcon);
             row.Add (down);
 
-            Label label = Note ("", kNoteColor);
-            label.style.flexGrow = 1;
-            label.style.flexBasis = 0;
-            row.Add (label);
+            Image upIcon;
+            VisualElement up = ArrowHalf ("ArrowUp", out upIcon);
+            // 残差は矢印の右に浮かせて置く（並びに入れると、矢印が半分の真ん中からずれる）
+            Label residual = Note ("", kNoteColor);
+            residual.style.position = Position.Absolute;
+            residual.style.left = new Length (50, LengthUnit.Percent);
+            residual.style.marginLeft = 8;
+            residual.style.top = 0;
+            residual.style.bottom = 0;
+            residual.style.unityTextAlign = TextAnchor.MiddleLeft;
+            residual.style.whiteSpace = WhiteSpace.NoWrap;
+            up.Add (residual);
+            row.Add (up);
             System.Action refresh = () => {
                 string reason;
                 InverseKind kind = stack.StepKind (below, out reason);
                 bool onPath = stack.IsOnPath (below);
 
-                string text = "↑ " + PoseStack.Describe (kind);
-                if (onPath && !string.IsNullOrEmpty (reason)) text += Tr ("LAYERS_OVERLAY_REASON_SUFFIX", reason);
+                string tooltip = Tr ("LAYERS_OVERLAY_INVERSE_TOOLTIP", PoseStack.Describe (kind));
+                if (!string.IsNullOrEmpty (reason)) tooltip += Tr ("LAYERS_OVERLAY_REASON_SUFFIX", reason);
 
                 Color color = kind == InverseKind.None ? kNoneColor
                     : kind == InverseKind.Approximate ? kApproximateColor : kExactColor;
                 // 近似の段は、表示の骨をつかんだ最後の残差で色を決める（閾値の 1°・1cm 以内なら緑、超えたら黄色）
+                string text = "";
                 float angle, distance;
                 bool warning;
                 if (onPath && kind == InverseKind.Approximate && window_.TryGetDisplayResidual (out angle, out distance, out warning)) {
                     color = warning ? kApproximateColor : kExactColor;
-                    text += Tr ("LAYERS_OVERLAY_RESIDUAL", angle.ToString ("F2"), (distance * 1000).ToString ("F1"));
+                    text = Tr ("LAYERS_OVERLAY_RESIDUAL", angle.ToString ("F2"), (distance * 1000).ToString ("F1"));
                 }
                 if (!onPath) color = new Color (color.r, color.g, color.b, 0.45f);
-                label.text = text;
-                label.style.color = color;
+                upIcon.tintColor = color;
+                up.tooltip = tooltip;
+                residual.text = text;
+                residual.style.color = color;
+                residual.style.display = text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
                 // 段を 👁 で切っているときは、流れはその段を素通りする
-                down.style.color = below.enabled ? kNoteColor : new Color (kNoteColor.r, kNoteColor.g, kNoteColor.b, 0.35f);
+                downIcon.tintColor = below.enabled ? kNoteColor : new Color (kNoteColor.r, kNoteColor.g, kNoteColor.b, 0.35f);
                 down.tooltip = below.enabled ? Tr ("LAYERS_OVERLAY_FLOW_TOOLTIP") : Tr ("LAYERS_OVERLAY_FLOW_DISABLED_TOOLTIP");
             };
             refresh ();
             refreshers_.Add (refresh);
             return row;
+        }
+
+        /// <summary>
+        /// 矢印の行の片側（行の半分の幅。真ん中に Material Icons の矢印を置く）
+        /// </summary>
+        static VisualElement ArrowHalf (string icon, out Image image)
+        {
+            VisualElement half = new VisualElement ();
+            half.style.flexGrow = 1;
+            half.style.flexBasis = 0;
+            half.style.flexDirection = FlexDirection.Row;
+            half.style.justifyContent = Justify.Center;
+            half.style.alignItems = Align.Center;
+            image = new Image { image = Icons.LoadTintable (icon), scaleMode = ScaleMode.ScaleToFit };
+            image.style.width = 12;
+            image.style.height = 12;
+            half.Add (image);
+            return half;
         }
 
         static Label Note (string text)
@@ -674,10 +701,7 @@ namespace Lilium
             button.style.paddingLeft = 0;
             button.style.paddingRight = 0;
             button.style.fontSize = 10;
-            if (on) {
-                button.style.backgroundColor = kOnColor;
-                button.style.color = Color.white;
-            }
+            AccentStyle.Set (button, on);
             SetBadge (button, tooltip, disabledReason);
             return button;
         }
