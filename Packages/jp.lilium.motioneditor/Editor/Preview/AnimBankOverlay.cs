@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.IO;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -53,7 +54,7 @@ namespace Lilium
             folder_.style.unityTextAlign = TextAnchor.MiddleLeft;
             folder_.style.fontSize = 10;
             header.Add (folder_);
-            Button choose = new Button (ChooseFolder) { text = "…", tooltip = "このキャラのクリップを作る場所を選ぶ（キャラの設定に書く。取り消すとプロジェクト設定の値に戻す）" };
+            Button choose = new Button (ChooseFolder) { text = "…", tooltip = Tr ("ANIM_BANK_OVERLAY_CHOOSE_FOLDER_TOOLTIP") };
             choose.style.width = 20;
             header.Add (choose);
             root.Add (header);
@@ -71,10 +72,10 @@ namespace Lilium
 
             VisualElement buttons = new VisualElement ();
             buttons.style.flexDirection = FlexDirection.Row;
-            AddButton (buttons, "New", "新しいクリップを作って開く", CreateClip);
-            AddButton (buttons, "Dup", "開いているクリップを複製する（末尾の番号を上げた名前）", DuplicateClip);
-            AddButton (buttons, "Rename", "開いているクリップの名前を変える（焼いた版の名前も合わせる）", BeginRename);
-            AddButton (buttons, "Del", "開いているクリップをゴミ箱へ移す（焼いた版は残す）", DeleteClip);
+            AddButton (buttons, "New", Tr ("ANIM_BANK_OVERLAY_NEW_TOOLTIP"), CreateClip);
+            AddButton (buttons, "Dup", Tr ("ANIM_BANK_OVERLAY_DUP_TOOLTIP"), DuplicateClip);
+            AddButton (buttons, "Rename", Tr ("ANIM_BANK_OVERLAY_RENAME_TOOLTIP"), BeginRename);
+            AddButton (buttons, "Del", Tr ("ANIM_BANK_OVERLAY_DELETE_TOOLTIP"), DeleteClip);
             root.Add (buttons);
 
             rename_ = new TextField { isDelayed = true };
@@ -190,8 +191,8 @@ namespace Lilium
             if (window_ == null || list_ == null) return;
             List<string> list = folders;
             string path = list.Count > 0 ? list[0] : null;
-            folder_.text = path ?? "キャラを選んでください";
-            folder_.tooltip = list.Count > 0 ? "作る場所: " + path + (list.Count > 1 ? "\n並べるフォルダ:\n" + string.Join ("\n", list) : "") : null;
+            folder_.text = path ?? Tr ("POSE_BANK_OVERLAY_SELECT_CHARACTER");
+            folder_.tooltip = list.Count > 0 ? (list.Count > 1 ? Tr ("POSE_BANK_OVERLAY_FOLDER_LIST_TOOLTIP", path, string.Join ("\n", list)) : Tr ("POSE_BANK_OVERLAY_FOLDER_TOOLTIP", path)) : null;
             rows_.Clear ();
             AddRows (list);
             list_.Rebuild ();
@@ -222,7 +223,7 @@ namespace Lilium
         {
             if (window_.model == null) return;
             if (window_.characterSettings == null
-                && EditorUtility.DisplayDialog ("Motion Editor", "フォルダの指定はキャラの設定に保存します（チームで共有されます）。このキャラの設定を作りますか？\n作らないと、この PC だけに覚えます。", "作る", "作らない")) {
+                && EditorUtility.DisplayDialog ("Motion Editor", Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_CREATE"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_DONT_CREATE"))) {
                 window_.CreateCharacterSettings ();
             }
             string start = folder ?? "Assets";
@@ -234,7 +235,7 @@ namespace Lilium
                 string project = Path.GetFullPath (Application.dataPath + "/..").Replace ('\\', '/').TrimEnd ('/') + "/";
                 chosen = chosen.Replace ('\\', '/');
                 if (!chosen.StartsWith (project)) {
-                    ShowMessage ("プロジェクトの中のフォルダを選んでください");
+                    ShowMessage (Tr ("POSE_BANK_OVERLAY_CHOOSE_FOLDER_IN_PROJECT"));
                     return;
                 }
                 AnimBank.SetFolder (window_.model, chosen.Substring (project.Length));
@@ -247,7 +248,7 @@ namespace Lilium
         {
             string path = folder;
             if (path == null) {
-                ShowMessage ("キャラを選んでください");
+                ShowMessage (Tr ("POSE_BANK_OVERLAY_SELECT_CHARACTER"));
                 return;
             }
             AnimationClip clip = AnimBank.Create (path);
@@ -261,7 +262,7 @@ namespace Lilium
             if (window_.clip == null) return;
             AnimationClip clip = AnimBank.Duplicate (window_.clip);
             if (clip == null) {
-                ShowMessage ("複製できない（アセットでないクリップ）");
+                ShowMessage (Tr ("ANIM_BANK_OVERLAY_CANNOT_DUPLICATE"));
                 return;
             }
             window_.SetClip (clip);
@@ -284,7 +285,7 @@ namespace Lilium
         {
             if (rename_.style.display == DisplayStyle.None || window_.clip == null) return;
             string error = AnimBank.Rename (window_.clip, value);
-            ShowMessage (error != null ? "名前を変えられない: " + error : null);
+            ShowMessage (error != null ? Tr ("POSE_BANK_OVERLAY_CANNOT_RENAME", error) : null);
             EndRename ();
             Refresh ();
         }
@@ -299,9 +300,9 @@ namespace Lilium
             AnimationClip clip = window_.clip;
             if (clip == null || !EditorUtility.IsPersistent (clip)) return;
             string path = AssetDatabase.GetAssetPath (clip);
-            if (!EditorUtility.DisplayDialog ("Delete Motion Clip", path + "\n\nをゴミ箱へ移します（焼いた版は残します）。", "Delete", "Cancel")) return;
+            if (!EditorUtility.DisplayDialog ("Delete Motion Clip", Tr ("ANIM_BANK_OVERLAY_DELETE_DIALOG", path), "Delete", "Cancel")) return;
             window_.SetClip (null);
-            if (!AnimBank.Delete (clip)) ShowMessage ("消せなかった: " + path);
+            if (!AnimBank.Delete (clip)) ShowMessage (Tr ("POSE_BANK_OVERLAY_COULD_NOT_DELETE", path));
             else ShowMessage (null);
             Refresh ();
         }

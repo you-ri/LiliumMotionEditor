@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -21,8 +22,8 @@ namespace Lilium
         /// </summary>
         public static string GetProblem (AnimationClip source)
         {
-            if (source == null) return "クリップが無い";
-            if (!source.humanMotion) return "Humanoid のクリップではない（Generic のクリップは Generic Pose の段から取り込む）";
+            if (source == null) return Tr ("GENERIC_IMPORT_NO_CLIP");
+            if (!source.humanMotion) return Tr ("HUMANOID_IMPORT_NOT_HUMANOID_CLIP");
             return null;
         }
 
@@ -34,15 +35,15 @@ namespace Lilium
         {
             string problem = GetProblem (source);
             if (problem != null) throw new System.InvalidOperationException (problem);
-            if (rig == null || rig.root == null) throw new System.InvalidOperationException ("編集用リグが無い");
+            if (rig == null || rig.root == null) throw new System.InvalidOperationException (Tr ("GENERIC_IMPORT_NO_EDITING_RIG"));
 
             List<string> notes = new List<string> ();
             List<Transform> bones = ControlledBones (rig, notes);
             float rate = destination != null && destination.frameRate > 0 ? destination.frameRate : 60;
             if (!Mathf.Approximately (source.frameRate, rate)) {
-                notes.Add ("元は " + source.frameRate + "fps。" + rate + "fps の格子で取り直した");
+                notes.Add (Tr ("GENERIC_IMPORT_RESAMPLED", source.frameRate, rate));
             }
-            notes.Add ("Humanoid を通すので、元のモーションとは骨の向きが少しずれる（可動範囲の丸めとねじりの配り直し）");
+            notes.Add (Tr ("HUMANOID_IMPORT_HUMANOID_DEVIATION"));
 
             float length = Mathf.Max (source.empty ? 0 : source.length, destination == null || destination.empty ? 0 : destination.length);
             int frameCount = Mathf.Max (1, Mathf.RoundToInt (length * rate) + 1);
@@ -74,10 +75,10 @@ namespace Lilium
             if (destination != null) {
                 Undo.RecordObject (destination, "Import Motion");
                 HumanoidOutput.CopyClipSettings (source, destination);
-                notes.Add ("ループとルートの移動の扱いの設定を元のクリップから写した（焼いた出力が既にあれば、その設定は変えない）");
+                notes.Add (Tr ("HUMANOID_IMPORT_CLIP_SETTINGS_COPIED"));
             }
             if (!Mathf.Approximately (settings.level, 0) || !Mathf.Approximately (settings.orientationOffsetY, 0)) {
-                notes.Add ("元のクリップの高さ・向きの補正は姿勢に焼き込んだ");
+                notes.Add (Tr ("HUMANOID_IMPORT_OFFSETS_BAKED"));
             }
             return result;
         }
@@ -115,8 +116,8 @@ namespace Lilium
                 AnimationUtility.SetObjectReferenceCurve (destination, PropertyPlayer.ToClip (binding), AnimationUtility.GetObjectReferenceCurve (source, binding));
                 carried++;
             }
-            if (carried > 0) notes.Add ("人型の姿勢でないカーブ " + carried + " 本（武器の骨など）をそのまま持ち越した");
-            if (skipped.Count > 0) notes.Add ("編集用リグが動かす骨のカーブは持ち越さない: " + string.Join ("、", skipped));
+            if (carried > 0) notes.Add (Tr ("HUMANOID_IMPORT_CURVES_CARRIED", carried));
+            if (skipped.Count > 0) notes.Add (Tr ("HUMANOID_IMPORT_CONTROLLED_CURVES_NOT_CARRIED", string.Join (Tr ("GENERIC_IMPORT_LIST_SEPARATOR"), skipped)));
             EditorUtility.SetDirty (destination);
             return carried;
         }
@@ -140,7 +141,7 @@ namespace Lilium
                 if (extra.enabled) bones.Add (bone);
                 else skipped.Add (bone.name);
             }
-            if (skipped.Count > 0) notes.Add ("編集用リグで動かさない骨 " + skipped.Count + " 本の動きは取り込まない");
+            if (skipped.Count > 0) notes.Add (Tr ("HUMANOID_IMPORT_UNCONTROLLED_BONES_SKIPPED", skipped.Count));
             return bones;
         }
     }

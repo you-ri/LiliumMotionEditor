@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -220,16 +221,16 @@ namespace Lilium
         public static string Rename (AnimationClip clip, string newBaseName)
         {
             string path = AssetDatabase.GetAssetPath (clip);
-            if (string.IsNullOrEmpty (path)) return "アセットでないクリップ";
+            if (string.IsNullOrEmpty (path)) return Tr ("ANIM_BANK_NOT_AN_ASSET_CLIP");
             newBaseName = newBaseName != null ? newBaseName.Trim () : "";
             if (newBaseName.EndsWith (EditingClip.kSuffix, System.StringComparison.OrdinalIgnoreCase)) {
                 newBaseName = newBaseName.Substring (0, newBaseName.Length - EditingClip.kSuffix.Length);
             }
-            if (newBaseName.Length == 0) return "名前が空";
-            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return "ファイル名に使えない文字がある";
+            if (newBaseName.Length == 0) return Tr ("ANIM_BANK_NAME_EMPTY");
+            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return Tr ("ANIM_BANK_INVALID_FILE_NAME_CHARS");
             if (newBaseName == BaseName (path)) return null;
             string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
-            if (Exists (folder, newBaseName)) return "同じ名前のクリップがある";
+            if (Exists (folder, newBaseName)) return Tr ("ANIM_BANK_DUPLICATE_NAME");
 
             // 焼いた版の置き場所は名前から決まるので、先に対応を調べておく
             string oldOutput = HumanoidOutput.GetOutputPath (path);

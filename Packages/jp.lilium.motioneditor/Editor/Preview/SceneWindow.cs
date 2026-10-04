@@ -1,6 +1,7 @@
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -21,7 +22,7 @@ namespace Lilium
         /// <summary>この窓が作った見えないプレビュー窓（開いているものが無かったとき）</summary>
         [SerializeField] PreviewWindow ownedSource_;
 
-        [MenuItem ("Window/Motion Editor (Scene)")]
+        [MenuItem ("Window/Lilium Motion Editor/Motion Editor In Scene (Experimental)")]
         static void Open ()
         {
             SceneWindow window = CreateWindow<SceneWindow> (typeof (SceneView));
@@ -166,19 +167,19 @@ namespace Lilium
             Handles.BeginGUI ();
             GUILayout.BeginArea (new Rect (8, 8, Mathf.Min (position.width - 16, 640), 100));
             if (source_ == null) {
-                GUILayout.Label ("モーションエディタの準備ができていない", EditorStyles.whiteLabel);
+                GUILayout.Label (Tr ("SCENE_WINDOW_NOT_READY"), EditorStyles.whiteLabel);
             } else {
                 string status = source_.sceneTargetStatus;
-                GUILayout.Label (status ?? "編集するキャラを Hierarchy で選んで「選んだキャラを編集」", EditorStyles.whiteLabel);
+                GUILayout.Label (status ?? Tr ("SCENE_WINDOW_SELECT_HINT"), EditorStyles.whiteLabel);
                 GUILayout.BeginHorizontal ();
                 GameObject candidate = PreviewWindow.FindSceneTargetRoot (Selection.activeGameObject);
                 using (new EditorGUI.DisabledScope (candidate == null || candidate == source_.sceneTarget)) {
-                    if (GUILayout.Button (candidate != null ? "選んだキャラを編集（" + candidate.name + "）" : "選んだキャラを編集", GUILayout.ExpandWidth (false))) {
+                    if (GUILayout.Button (candidate != null ? Tr ("SCENE_WINDOW_EDIT_SELECTED_NAMED", candidate.name) : Tr ("SCENE_WINDOW_EDIT_SELECTED"), GUILayout.ExpandWidth (false))) {
                         source_.SetSceneTarget (candidate);
                     }
                 }
                 using (new EditorGUI.DisabledScope (source_.sceneTarget == null && source_.sceneTargetStatus == null)) {
-                    if (GUILayout.Button ("編集をやめる", GUILayout.ExpandWidth (false))) source_.ClearSceneTarget ();
+                    if (GUILayout.Button (Tr ("SCENE_WINDOW_STOP_EDITING"), GUILayout.ExpandWidth (false))) source_.ClearSceneTarget ();
                 }
                 GUILayout.EndHorizontal ();
                 if (source_.sceneTarget != null) {
@@ -187,7 +188,7 @@ namespace Lilium
                     warn.normal.textColor = new Color (1f, 0.8f, 0.3f);
                     if (source_.followStatus != null) GUILayout.Label (source_.followStatus, source_.followWarning ? warn : EditorStyles.whiteLabel);
                     string block = source_.timelineEditBlockReason;
-                    if (block != null) GUILayout.Label ("編集できない: " + block, warn);
+                    if (block != null) GUILayout.Label (Tr ("SCENE_WINDOW_CANNOT_EDIT", block), warn);
                 }
             }
             GUILayout.EndArea ();

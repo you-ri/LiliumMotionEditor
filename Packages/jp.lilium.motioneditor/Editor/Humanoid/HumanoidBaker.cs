@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -81,11 +82,11 @@ namespace Lilium
 
             Avatar avatar = rig != null && rig.displayAnimator != null ? rig.displayAnimator.avatar : null;
             if (rig == null || rig.root == null) {
-                error = "編集用の体が無い";
+                error = Tr ("HUMANOID_BAKER_NO_EDITING_BODY");
                 return;
             }
             if (avatar == null || !avatar.isValid || !avatar.isHuman) {
-                error = "表示モデルに Humanoid の Avatar が無い";
+                error = Tr ("HUMANOID_BAKER_NO_HUMANOID_AVATAR");
                 return;
             }
 
@@ -246,7 +247,7 @@ namespace Lilium
             for (int c = 0; c < goalCurves.Length; c++) goalCurves[c] = new float[frameCount];
             Vector3[] goalPositions = new Vector3[goalCount];
             Quaternion[] goalRotations = new Quaternion[goalCount];
-            if (goals_ == null) context.notes.Add ("IK ゴールを焼けない（表示モデルに Humanoid の Avatar が無い）");
+            if (goals_ == null) context.notes.Add (Tr ("HUMANOID_BAKER_CANNOT_BAKE_IK_GOALS"));
 
             Quaternion previous = Quaternion.identity;
             for (int f = 0; f < frameCount; f++) {
@@ -386,7 +387,7 @@ namespace Lilium
 
             // ゲームの Rig の値（代理 → ゲーム prefab のパス）。Rig を通した後の姿勢を焼くときは焼かない（S21）
             if (!bakeRigProxies && rig_.rigProxies != null && rig_.rigProxies.channels.Count > 0) {
-                context.notes.Add ("Rig を通した後の姿勢を焼いたので、Rig の重みとターゲットは焼いていない（ゲームで二重に掛からないように）");
+                context.notes.Add (Tr ("HUMANOID_BAKER_RIG_VALUES_NOT_BAKED"));
             }
             if (bakeRigProxies && rig_.rigProxies != null) {
                 foreach (RigProxies.Channel proxy in rig_.rigProxies.channels) {
@@ -429,7 +430,7 @@ namespace Lilium
                 referenceBindings.Add (new KeyValuePair<EditorCurveBinding, EditorCurveBinding> (binding, binding));
                 carried++;
             }
-            if (carried > 0) context.notes.Add ("土台のクリップから、人型の姿勢でないカーブ " + carried + " 本をそのまま写した（武器の骨など）");
+            if (carried > 0) context.notes.Add (Tr ("HUMANOID_BAKER_CARRIED_CURVES", carried));
         }
 
         static HashSet<string> humanPoseProperties_;
@@ -454,7 +455,7 @@ namespace Lilium
         {
             foreach (EditorCurveBinding binding in bindings) {
                 if (!HumanoidBakeHooks.ShouldBake (hooks, context, binding)) {
-                    context.notes.Add ("ゲーム側が持つ値なので焼かない: " + binding.path + " " + binding.type.Name + "." + binding.propertyName);
+                    context.notes.Add (Tr ("HUMANOID_BAKER_GAME_OWNED_VALUE", binding.path + " " + binding.type.Name + "." + binding.propertyName));
                     return;
                 }
             }

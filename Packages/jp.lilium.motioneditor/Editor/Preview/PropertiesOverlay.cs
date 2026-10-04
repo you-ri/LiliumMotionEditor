@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -39,10 +40,10 @@ namespace Lilium
             window_ = OverlayWindows.Resolve (containerWindow);
             if (window_ == null) return root;
 
-            search_ = new TextField { tooltip = "部品・プロパティ・パスで絞る（空白で区切ると全部を含む物）" };
+            search_ = new TextField { tooltip = Tr ("PROPERTIES_OVERLAY_SEARCH_TOOLTIP") };
             search_.RegisterValueChangedCallback (e => Refresh ());
             root.Add (search_);
-            keyedOnly_ = new Toggle ("キーのある物だけ");
+            keyedOnly_ = new Toggle (Tr ("PROPERTIES_OVERLAY_KEYED_ONLY"));
             keyedOnly_.RegisterValueChangedCallback (e => Refresh ());
             root.Add (keyedOnly_);
 
@@ -76,17 +77,17 @@ namespace Lilium
 
             VisualElement row2 = new VisualElement ();
             row2.style.flexDirection = FlexDirection.Row;
-            value_ = new FloatField { isDelayed = true, tooltip = "値を入れると今のフレームにキーを打つ" };
+            value_ = new FloatField { isDelayed = true, tooltip = Tr ("PROPERTIES_OVERLAY_VALUE_TOOLTIP") };
             value_.style.flexGrow = 1;
             value_.RegisterValueChangedCallback (e => {
                 if (window_.selectedProperty.HasValue) window_.SetPropertyKey (window_.selectedProperty.Value, e.newValue);
             });
             row2.Add (value_);
-            key_ = new Button (KeyCurrent) { text = "Key", tooltip = "今の値のまま、今のフレームにキーを打つ" };
+            key_ = new Button (KeyCurrent) { text = "Key", tooltip = Tr ("PROPERTIES_OVERLAY_KEY_TOOLTIP") };
             row2.Add (key_);
             remove_ = new Button (() => {
                 if (window_.selectedProperty.HasValue) window_.RemovePropertyCurve (window_.selectedProperty.Value);
-            }) { text = "×", tooltip = "このプロパティのカーブを消す" };
+            }) { text = "×", tooltip = Tr ("PROPERTIES_OVERLAY_REMOVE_TOOLTIP") };
             row2.Add (remove_);
             root.Add (row2);
 
@@ -130,7 +131,7 @@ namespace Lilium
             if (window_ == null || value_ == null) return;
             bool has = window_.selectedProperty.HasValue;
             string problem = window_.GetCurveEditProblem ();
-            selectedLabel_.text = !has ? "プロパティを選んでください" : problem != null ? "書けない: " + problem : "";
+            selectedLabel_.text = !has ? Tr ("PROPERTIES_OVERLAY_SELECT_PROPERTY") : problem != null ? Tr ("PROPERTIES_OVERLAY_CANNOT_WRITE", problem) : "";
             float value = 0;
             bool readable = has && window_.TryGetPropertyValue (window_.selectedProperty.Value, out value);
             if (readable) {

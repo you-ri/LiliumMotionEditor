@@ -1,6 +1,7 @@
 using Lilium;
 
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -43,8 +44,8 @@ namespace Lilium
         public override bool hasWeight { get { return true; } }
         public override GrabTarget grab { get { return GrabTarget.Values; } }
         public override InverseKind inverse { get { return InverseKind.Approximate; } }
-        public override string inverseReason { get { return "全身 IK は骨から点の値を一意に求められない"; } }
-        public override string unavailableReason { get { return rig == null ? "リグの定義が全身 IK でない" : null; } }
+        public override string inverseReason { get { return Tr ("FULL_BODY_LAYER_INVERSE_REASON"); } }
+        public override string unavailableReason { get { return rig == null ? Tr ("FULL_BODY_LAYER_NOT_FULL_BODY") : null; } }
 
         protected override string description
         {
@@ -60,11 +61,11 @@ namespace Lilium
                     else active++;
                 }
                 string text = active + locked > 0
-                    ? "点 " + body.pointCount + "・Pin " + active + "・Locked " + locked
-                    : "点 " + body.pointCount + "・Pin / Locked の点は無い";
+                    ? Tr ("FULL_BODY_LAYER_POINT_COUNTS", body.pointCount, active, locked)
+                    : Tr ("FULL_BODY_LAYER_NO_PINNED_POINTS", body.pointCount);
                 // 今の IK の定義で作ったクリップを全身 IK の定義で開くと、手足が IK で決まらない分だけ姿勢が変わる
                 int ikCurves = host_ != null ? EditingClip.CountIkCurves (host_.clip) : 0;
-                if (ikCurves > 0) text += "。このクリップには、全身 IK の定義では使われない IK のキーがある（" + ikCurves + " 本。消さずに残している）";
+                if (ikCurves > 0) text += Tr ("FULL_BODY_LAYER_UNUSED_IK_CURVES", ikCurves);
                 return text;
             }
         }

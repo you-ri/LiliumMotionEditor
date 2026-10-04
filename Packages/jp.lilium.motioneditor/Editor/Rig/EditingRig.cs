@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -105,7 +106,7 @@ namespace Lilium
 
             foreach (Transform child in source) {
                 if (child.name == RigPaths.kRoot) {
-                    rig.errors.Add ("表示モデルに '" + RigPaths.kRoot + "' という子があり、コントロールのパスと重なる。その骨は複製しない");
+                    rig.errors.Add (Tr ("EDITING_RIG_ROOT_NAME_CONFLICT", RigPaths.kRoot));
                     continue;
                 }
                 rig.CloneBones (child, rig.root.transform, createGameObject);

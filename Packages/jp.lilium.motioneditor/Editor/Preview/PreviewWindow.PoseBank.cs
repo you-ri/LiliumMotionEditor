@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -62,8 +63,8 @@ namespace Lilium
             applied = 0;
             if (pose == null) return null;
             Transform root = editingRoot;
-            if (root == null) return "キャラを選んでください";
-            if (!CanEditClip ()) return GetCurveEditProblem () ?? "今は書き込めない";
+            if (root == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_SELECT_CHARACTER");
+            if (!CanEditClip ()) return GetCurveEditProblem () ?? Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_WRITE_NOW");
 
             HashSet<string> paths = SelectedKeyedPaths ();
             Dictionary<EditorCurveBinding, float> values;
@@ -76,7 +77,7 @@ namespace Lilium
                     (paths == null || paths.Contains (binding.path)) && (binding.path.Length == 0 || root.Find (binding.path) != null));
             }
             if (values.Count == 0) {
-                return paths == null ? "この姿勢にこのキャラの値が無い" : "選んでいる所の値がこの姿勢に無い";
+                return paths == null ? Tr ("PREVIEW_WINDOW_POSE_BANK_NO_VALUES_FOR_CHARACTER") : Tr ("PREVIEW_WINDOW_POSE_BANK_NO_VALUES_FOR_SELECTION");
             }
 
             // 画面に出す値として打つ（Override に書いているときは差分に直る）
@@ -99,15 +100,15 @@ namespace Lilium
         string CaptureHumanoidPose (AnimationClip pose, HashSet<string> selected, out Dictionary<EditorCurveBinding, float> values)
         {
             values = new Dictionary<EditorCurveBinding, float> ();
-            if (stage_ == null || !stage_.canPreviewHumanoid) return "表示モデルが Humanoid でない";
+            if (stage_ == null || !stage_.canPreviewHumanoid) return Tr ("PREVIEW_WINDOW_POSE_BANK_DISPLAY_NOT_HUMANOID");
             Dictionary<int, float> muscles = PoseBank.ReadMuscles (pose);
-            if (muscles.Count == 0) return "この姿勢に Humanoid の値が無い";
+            if (muscles.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_HUMANOID_VALUES");
 
             HashSet<string> moved = stage_.ApplyMusclesAsControls (muscles);
-            if (moved == null) return "Humanoid の姿勢を当てられない";
-            if (moved.Count == 0) return "この姿勢が動かす骨がこのキャラに無い";
+            if (moved == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_APPLY_HUMANOID");
+            if (moved.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_MOVED_BONES");
             Dictionary<EditorCurveBinding, float> captured = CapturePose ();
-            if (captured == null) return "キャラを選んでください";
+            if (captured == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_SELECT_CHARACTER");
             foreach (KeyValuePair<EditorCurveBinding, float> pair in captured) {
                 if (!moved.Contains (pair.Key.path)) continue;
                 if (selected != null && !selected.Contains (pair.Key.path)) continue;

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -65,7 +66,7 @@ namespace Lilium
 
         public override string label
         {
-            get { return "持ち替え " + bound_.definition.name; }
+            get { return Tr ("PARENT_SWITCH_TARGET_LABEL", bound_.definition.name); }
         }
 
         public override Transform anchor

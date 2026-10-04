@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -320,7 +321,7 @@ namespace Lilium
         /// </summary>
         public void Fail (string reason)
         {
-            failure = "例外が出たので止めた: " + reason;
+            failure = Tr ("POSE_LAYER_STOPPED_BY_EXCEPTION", reason);
         }
     }
 

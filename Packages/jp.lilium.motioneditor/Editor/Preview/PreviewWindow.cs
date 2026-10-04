@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -179,7 +180,7 @@ namespace Lilium
         /// </summary>
         public event System.Action poseSampled;
 
-        [MenuItem ("Window/Motion Editor (Preview)")]
+        [MenuItem ("Window/Lilium Motion Editor/Motion Editor")]
         static void Open ()
         {
             GetWindow<PreviewWindow> ().Show ();
@@ -249,9 +250,9 @@ namespace Lilium
             if (prefab == null || settings == null || settings == current) return false;
 
             List<string> notes = new List<string> ();
-            if (settings.prefab != null && settings.prefab != prefab) notes.Add ("「" + settings.name + "」は " + settings.prefab.name + " の設定です。" + settings.prefab.name + " では使われなくなります。");
-            if (current != null) notes.Add ("今の設定「" + current.name + "」はこのキャラから外れます。");
-            if (notes.Count > 0 && !EditorUtility.DisplayDialog ("キャラの設定を付け替える", string.Join ("\n", notes) + "\n\n" + prefab.name + " の設定を「" + settings.name + "」にしますか?", "付け替える", "やめる")) {
+            if (settings.prefab != null && settings.prefab != prefab) notes.Add (Tr ("PREVIEW_WINDOW_SETTINGS_OF_OTHER_PREFAB", settings.name, settings.prefab.name));
+            if (current != null) notes.Add (Tr ("PREVIEW_WINDOW_CURRENT_SETTINGS_DETACHED", current.name));
+            if (notes.Count > 0 && !EditorUtility.DisplayDialog (Tr ("PREVIEW_WINDOW_REASSIGN_SETTINGS_TITLE"), Tr ("PREVIEW_WINDOW_REASSIGN_SETTINGS_MESSAGE", string.Join ("\n", notes), prefab.name, settings.name), Tr ("PREVIEW_WINDOW_REASSIGN"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }
 
@@ -376,7 +377,7 @@ namespace Lilium
         public void RemoveStrayCurves ()
         {
             if (!CanEditClip () || strayCurveCount == 0) return;
-            if (!EditorUtility.DisplayDialog ("Motion Editor", editingClip_.name + " から、編集用リグ以外を指すカーブ " + strayCurveCount + " 本を消します。", "消す", "やめる")) return;
+            if (!EditorUtility.DisplayDialog ("Motion Editor", Tr ("PREVIEW_WINDOW_REMOVE_STRAY_CURVES_CONFIRM", editingClip_.name, strayCurveCount), Tr ("PREVIEW_WINDOW_DELETE"), Tr ("PREVIEW_WINDOW_CANCEL"))) return;
 
             RecordClipUndo ("Remove Stray Curves");
             EditingClip.RemoveStrayCurves (editingClip_);
@@ -714,7 +715,7 @@ namespace Lilium
         /// </summary>
         void NotifyNoKey ()
         {
-            ShowNotification (new GUIContent ("キーがないので動かせません"), 1.5);
+            ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_NO_KEY_CANNOT_MOVE")), 1.5);
         }
 
         /// <summary>
@@ -817,7 +818,7 @@ namespace Lilium
 #if UNITY_6000_6_OR_NEWER
             viewport_ = root.Q<IMGUIContainer> (kEditorToolsContainerName);
             if (viewport_ == null) {
-                Debug.LogWarning ("MotionEditor: ツールのハンドル用の IMGUIContainer が見つからないので、骨ハンドルを出せません");
+                Debug.LogWarning (Tr ("PREVIEW_WINDOW_TOOL_CONTAINER_MISSING"));
                 viewport_ = new VisualElement { name = "MktViewport" };
                 viewport_.style.flexGrow = 1;
                 root.Add (viewport_);
@@ -1523,15 +1524,15 @@ namespace Lilium
                     if (!Reached (beforeAngle, angle) || !Reached (beforeDistance * 100, distance * 100)) {
                         stage_.RestoreControlState (before);
                         SolveAfterManipulate ();
-                        displayGrabStatus_ = "戻した: " + goal.bone.name + " の表示が狙いへ動かない（Humanoid を通ると骨の軸まわりのねじりは表示に出ない・後段の左右反転中など）";
+                        displayGrabStatus_ = Tr ("PREVIEW_WINDOW_DISPLAY_GRAB_REVERTED", goal.bone.name);
                         displayGrabWarning_ = true;
                         SetDisplayResidual (goal, beforeAngle, beforeDistance);
                         RepaintView ();
                         return;
                     }
                     displayGrabWarning_ = angle > kDisplayResidualAngle || distance > kDisplayResidualDistance;
-                    displayGrabStatus_ = goal.bone.name + " の残差 " + angle.ToString ("F2") + "° / " + (distance * 1000).ToString ("F1") + "mm"
-                        + (displayGrabWarning_ ? "（近似の段を通ったので狙いに届いていない。黄色の線が狙った姿）" : "");
+                    displayGrabStatus_ = Tr ("PREVIEW_WINDOW_DISPLAY_GRAB_RESIDUAL", goal.bone.name, angle.ToString ("F2"), (distance * 1000).ToString ("F1"))
+                        + (displayGrabWarning_ ? Tr ("PREVIEW_WINDOW_DISPLAY_GRAB_NOT_REACHED") : "");
                     SetDisplayResidual (goal, angle, distance);
                 }
                 else {
@@ -2096,14 +2097,14 @@ namespace Lilium
                 text = stage_.error;
             }
             else if (prefab_ == null) {
-                text = "キャラクターの prefab を上のツールバーか、ここへドラッグしてください";
+                text = Tr ("PREVIEW_WINDOW_DROP_PREFAB");
             }
             else {
                 text = prefab_.name;
                 if (editingClip_ != null) {
                     text += "   " + editingClip_.name + (targetClip != editingClip_ && targetClip != null ? " → " + targetClip.name : "") + "   " + clock_.Describe ();
-                    if (clock_.isHeld) text += "   （つかんでいる間は再生を止めている）";
-                    else if (!clock_.isPlaying && !clock_.onGrid) text += "   （キーは丸めたフレームに打つ）";
+                    if (clock_.isHeld) text += Tr ("PREVIEW_WINDOW_PLAYBACK_HELD");
+                    else if (!clock_.isPlaying && !clock_.onGrid) text += Tr ("PREVIEW_WINDOW_KEY_ON_ROUNDED_FRAME");
                 }
             }
             GUI.Label (new Rect (rect.x + 8, rect.yMax - 22, rect.width - 16, 18), text, EditorStyles.whiteLabel);
@@ -2119,7 +2120,7 @@ namespace Lilium
                 GUIStyle style = new GUIStyle (EditorStyles.whiteLabel);
                 style.normal.textColor = new Color (1f, 0.8f, 0.3f);
                 GUI.Label (new Rect (rect.x + 8, rect.yMax - 76, rect.width - 16, 18),
-                    "選んでいる間は切っている拘束: " + string.Join ("、", stage_.mutedConstraints), style);
+                    Tr ("PREVIEW_WINDOW_MUTED_CONSTRAINTS", string.Join (Tr ("PREVIEW_WINDOW_LIST_SEPARATOR"), stage_.mutedConstraints)), style);
             }
             // 最後に焼いた結果は右下に出す（失敗は赤）
             if (bakeStatus_ != null) {
@@ -2134,16 +2135,16 @@ namespace Lilium
             if (useHumanoidBase) {
                 // 読み取り専用の土台。Override を書き出し先にしていればそのまま打てるので何も出さない
                 if (overrideWriteLayer == null) {
-                    warning = "元は Humanoid のクリップ（読み取り専用）です。キーを打つには +Override で Override を足すか、取込で編集用クリップにしてください";
+                    warning = Tr ("PREVIEW_WINDOW_HUMANOID_BASE_READ_ONLY");
                     warningType = MessageType.Info;
                 }
             }
             else if (clipProblem_ != null) {
-                warning = "このクリップは編集できません（キーは打たれません）: " + clipProblem_;
+                warning = Tr ("PREVIEW_WINDOW_CLIP_NOT_EDITABLE", clipProblem_);
                 warningType = MessageType.Error;
             }
             else if (editingClip_ != null && strayCurveCount > 0) {
-                warning = "編集用リグ以外を指すカーブが " + strayCurveCount + " 本残っています（姿勢には効きません）。ツールバーの Clean で消せます";
+                warning = Tr ("PREVIEW_WINDOW_STRAY_CURVES", strayCurveCount);
             }
             if (warning != null) {
                 // アイコンの分だけ幅を引いて高さを測る
@@ -2449,16 +2450,16 @@ namespace Lilium
             }
             if (count == 0) {
                 PoseClipboard.Copy (targetClip, currentFrame);
-                ShowNotification (new GUIContent ("ポーズ全体をコピー"), 0.8);
+                ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_COPIED_WHOLE_POSE")), 0.8);
                 return;
             }
 
             // 選んだ物にカーブが無くても、前にコピーしたものは捨てる（V で古い物を貼らないように）
             if (PoseClipboard.Copy (targetClip, currentFrame, binding => paths.Contains (binding.path)) == 0) {
-                ShowNotification (new GUIContent ("選んだ物にキーがありません"), 1.5);
+                ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_SELECTION_HAS_NO_KEYS")), 1.5);
                 return;
             }
-            ShowNotification (new GUIContent ("選んだ物のポーズをコピー（" + count + " 個）"), 0.8);
+            ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_COPIED_SELECTION_POSE", count)), 0.8);
         }
 
         public void PastePose ()
@@ -2538,6 +2539,14 @@ namespace Lilium
         {
             PreviewWindow window = args.context as PreviewWindow;
             if (window != null) window.PastePose ();
+        }
+
+        // Unity の Animation 窓でキーを打つのと同じ K
+        [Shortcut ("Lilium Motion Editor/Key All", typeof (PreviewWindow), KeyCode.K)]
+        static void KeyAllShortcut (ShortcutArguments args)
+        {
+            PreviewWindow window = args.context as PreviewWindow;
+            if (window != null) window.KeyAll ();
         }
 
         [Shortcut ("Lilium Motion Editor/Previous Frame", typeof (PreviewWindow), KeyCode.LeftArrow)]

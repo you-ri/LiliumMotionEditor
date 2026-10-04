@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -72,24 +73,24 @@ namespace Lilium
         /// </summary>
         public string GetHumanoidApplyProblem ()
         {
-            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return "キャラが無い";
-            if (importPreviewing_) return "取込の候補を試し見している";
+            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_CHARACTER");
+            if (importPreviewing_) return Tr ("PREVIEW_WINDOW_IMPORT_PREVIEWING");
             if (useHumanoidBase) {
                 // 読み取り専用の土台へは書けない。Override を書き出し先にしていればそこへ打つ
-                if (overrideWriteLayer == null) return "元が読み取り専用の Humanoid のクリップ（+Override で Override を足すか、取込で編集用クリップにする）";
+                if (overrideWriteLayer == null) return Tr ("PREVIEW_WINDOW_IMPORT_HUMANOID_BASE_READ_ONLY");
             }
             else {
-                if (editingClip_ == null) return "書き出し先が無い（Editing Rig の段で New）";
-                if (clipProblem_ != null) return "書き出し先を編集できない: " + clipProblem_;
+                if (editingClip_ == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_WRITE_TARGET");
+                if (clipProblem_ != null) return Tr ("PREVIEW_WINDOW_IMPORT_WRITE_TARGET_NOT_EDITABLE", clipProblem_);
             }
             PoseLayer humanoid = poseStack_.Find (LayerKind.HumanoidAnimation);
-            if (humanoid == null) return "Humanoid Pose の段が無い（表示モデルが Humanoid ではない）";
-            if (!humanoid.enabled) return "Humanoid Pose の段の有効（👁）を落としている（反映は段の出力を写すので入れる）";
-            if (!humanoid.active) return "Humanoid Pose の段が処理に入っていない（段の出力を写すため）";
+            if (humanoid == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_HUMANOID_POSE_LAYER");
+            if (!humanoid.enabled) return Tr ("PREVIEW_WINDOW_IMPORT_HUMANOID_POSE_LAYER_DISABLED");
+            if (!humanoid.active) return Tr ("PREVIEW_WINDOW_IMPORT_HUMANOID_POSE_LAYER_INACTIVE");
             PoseLayer rig = poseStack_.Find (LayerKind.EditingRig);
-            if (rig == null) return "Editing Rig の段が無い";
-            if (!rig.enabled) return "Editing Rig の段の有効（👁）を落としている";
-            if (rig.clipWeight < 1) return "Editing Rig のクリップの合成が 100% でない";
+            if (rig == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_EDITING_RIG_LAYER");
+            if (!rig.enabled) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_LAYER_DISABLED");
+            if (rig.clipWeight < 1) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_CLIP_WEIGHT");
             return null;
         }
 
@@ -101,7 +102,7 @@ namespace Lilium
         {
             string problem = GetHumanoidApplyProblem ();
             if (problem != null) {
-                SetBakeStatus ("反映できない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_CANNOT_APPLY", problem), true);
                 return false;
             }
 
@@ -115,12 +116,12 @@ namespace Lilium
                 }
                 stage_.editingRigSolver.Capture ();
                 AddKeyAllCurves ();
-                SetBakeStatus ("反映: " + currentFrame + "F の姿勢を Editing Rig のクリップへ書いた（手足は FK）", false);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_APPLIED", currentFrame), false);
                 return true;
             }
             catch (System.Exception e) {
                 Debug.LogException (e);
-                SetBakeStatus ("反映できなかった: " + e.Message, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_APPLY_FAILED", e.Message), true);
                 return false;
             }
             finally {
@@ -135,10 +136,10 @@ namespace Lilium
         /// </summary>
         public string GetPickImportProblem ()
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return "Play Mode 中は取り込まない";
-            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return "キャラが無い";
-            if (AnimBank.GetFolder (model) == null) return "置き場所（AnimBank のフォルダ）が決まらない";
-            if (poseStack_.Find (LayerKind.EditingRig) == null) return "Editing Rig の段が無い";
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return Tr ("PREVIEW_WINDOW_IMPORT_NOT_IN_PLAY_MODE");
+            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_CHARACTER");
+            if (AnimBank.GetFolder (model) == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_ANIM_BANK_FOLDER");
+            if (poseStack_.Find (LayerKind.EditingRig) == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_EDITING_RIG_LAYER");
             return null;
         }
 
@@ -161,7 +162,7 @@ namespace Lilium
         {
             string problem = GetPickImportProblem ();
             if (problem != null) {
-                SetBakeStatus ("取り込めない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_CANNOT_IMPORT", problem), true);
                 return;
             }
             ClipImportWindow.Open (this);
@@ -195,7 +196,7 @@ namespace Lilium
         {
             if (!importPreviewing_) return false;
             if (!useHumanoidBase) {
-                SetBakeStatus ("取り込めない: Humanoid のクリップを選んでいない", true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_NO_HUMANOID_CLIP_SELECTED"), true);
                 return false;
             }
             importPreviewing_ = false;
@@ -229,7 +230,7 @@ namespace Lilium
         {
             string problem = GetPickImportProblem ();
             if (problem != null) return problem;
-            if (!useHumanoidBase) return "元が Humanoid のクリップでない";
+            if (!useHumanoidBase) return Tr ("PREVIEW_WINDOW_IMPORT_BASE_NOT_HUMANOID");
             return null;
         }
 
@@ -241,7 +242,7 @@ namespace Lilium
         {
             string problem = GetImportBaseProblem ();
             if (problem != null) {
-                SetBakeStatus ("取り込めない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_CANNOT_IMPORT", problem), true);
                 return false;
             }
 
@@ -265,18 +266,18 @@ namespace Lilium
                 PoseImport.Result result = HumanoidImport.Import (source, destination, stage_.editingRig, stage_.editingRigSolver,
                     time => poseStack_.EvaluateThroughHumanoid (time), targets_);
                 AssetDatabase.SaveAssetIfDirty (destination);
-                string text = "取込: " + source.name + " → " + destination.name + "（" + result.frameCount + "F・" + result.milliseconds.ToString ("0") + "ms・戻りのずれ "
-                    + (result.maxError * 1000).ToString ("0.00") + "mm）";
-                if (bakeOverrides.Count > 0) text += "  Override " + bakeOverrides.Count + " 枚込み";
+                string text = Tr ("PREVIEW_WINDOW_IMPORT_IMPORTED_BASE", source.name, destination.name, result.frameCount, result.milliseconds.ToString ("0"),
+                    (result.maxError * 1000).ToString ("0.00"));
+                if (bakeOverrides.Count > 0) text += Tr ("PREVIEW_WINDOW_IMPORT_WITH_OVERRIDES", bakeOverrides.Count);
                 if (result.notes.Count > 0) {
-                    text += "  注意 " + result.notes.Count + " 件";
-                    Debug.Log ("MotionEditor: " + source.name + " を " + destination.name + " へ取り込んだ。注意:\n- " + string.Join ("\n- ", result.notes), destination);
+                    text += Tr ("PREVIEW_WINDOW_IMPORT_NOTES_COUNT", result.notes.Count);
+                    Debug.Log (Tr ("PREVIEW_WINDOW_IMPORT_LOG_IMPORTED_NOTES", source.name, destination.name, string.Join ("\n- ", result.notes)), destination);
                 }
                 SetBakeStatus (text, false);
             }
             catch (System.Exception e) {
                 Debug.LogException (e);
-                SetBakeStatus ("取り込めなかった: " + e.Message, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_IMPORT_FAILED", e.Message), true);
                 return false;
             }
             finally {
@@ -294,20 +295,20 @@ namespace Lilium
 
         public string GetImportProblem ()
         {
-            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return "キャラが無い";
-            if (genericClip_ == null) return "Generic のクリップが無い";
+            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_CHARACTER");
+            if (genericClip_ == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_GENERIC_CLIP");
             if (overrideBlocksBaseWrite != null) return overrideBlocksBaseWrite;
             string problem = GenericImport.GetProblem (genericClip_);
             if (problem != null) return problem;
-            if (editingClip_ == null) return "書き出し先が無い（Editing Rig の段で New）";
-            if (clipProblem_ != null) return "書き出し先を編集できない: " + clipProblem_;
+            if (editingClip_ == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_WRITE_TARGET");
+            if (clipProblem_ != null) return Tr ("PREVIEW_WINDOW_IMPORT_WRITE_TARGET_NOT_EDITABLE", clipProblem_);
             PoseLayer generic = poseStack_.Find (LayerKind.GenericPose);
-            if (generic == null) return "Generic Pose の段が並びに無い";
-            if (!generic.active) return "Generic Pose の段が処理に入っていない（段の出力を書くため）";
+            if (generic == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_GENERIC_POSE_LAYER");
+            if (!generic.active) return Tr ("PREVIEW_WINDOW_IMPORT_GENERIC_POSE_LAYER_INACTIVE");
             PoseLayer rig = poseStack_.Find (LayerKind.EditingRig);
-            if (rig == null) return "Editing Rig の段が無い";
-            if (!rig.enabled) return "Editing Rig の段の有効（👁）を落としている";
-            if (rig.clipWeight < 1) return "Editing Rig のクリップの合成が 100% でない";
+            if (rig == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_EDITING_RIG_LAYER");
+            if (!rig.enabled) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_LAYER_DISABLED");
+            if (rig.clipWeight < 1) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_CLIP_WEIGHT");
             return null;
         }
 
@@ -325,12 +326,12 @@ namespace Lilium
         {
             string problem = GetImportProblem ();
             if (problem != null) {
-                SetBakeStatus ("取り込めない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_CANNOT_IMPORT", problem), true);
                 return false;
             }
             bool hasKeys = AnimationUtility.GetCurveBindings (editingClip_).Any (EditingClip.IsRigBinding);
             if (confirm && hasKeys && !EditorUtility.DisplayDialog ("Motion Editor",
-                editingClip_.name + " のキーを、" + genericClip_.name + " を合成した姿勢から取り込んだ値で置き換えます。", "置き換える", "やめる")) {
+                Tr ("PREVIEW_WINDOW_IMPORT_REPLACE_KEYS_CONFIRM", editingClip_.name, genericClip_.name), Tr ("PREVIEW_WINDOW_IMPORT_REPLACE"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }
 
@@ -342,18 +343,18 @@ namespace Lilium
                 PoseImport.Result result = GenericImport.Import (source, editingClip_, stage_.editingRig, stage_.editingRigSolver,
                     time => poseStack_.EvaluateUntil (generic, time), targets_);
                 genericClip_ = null;
-                string text = "取り込み: " + source.name + "（" + result.frameCount + "F・" + result.milliseconds.ToString ("0") + "ms・戻りのずれ "
-                    + (result.maxError * 1000).ToString ("0.00") + "mm）";
+                string text = Tr ("PREVIEW_WINDOW_IMPORT_IMPORTED_GENERIC", source.name, result.frameCount, result.milliseconds.ToString ("0"),
+                    (result.maxError * 1000).ToString ("0.00"));
                 if (result.notes.Count > 0) {
-                    text += "  注意 " + result.notes.Count + " 件";
-                    Debug.Log ("MotionEditor: " + source.name + " を " + editingClip_.name + " へ取り込んだ。注意:\n- " + string.Join ("\n- ", result.notes), editingClip_);
+                    text += Tr ("PREVIEW_WINDOW_IMPORT_NOTES_COUNT", result.notes.Count);
+                    Debug.Log (Tr ("PREVIEW_WINDOW_IMPORT_LOG_IMPORTED_NOTES", source.name, editingClip_.name, string.Join ("\n- ", result.notes)), editingClip_);
                 }
                 SetBakeStatus (text, false);
                 return true;
             }
             catch (System.Exception e) {
                 Debug.LogException (e);
-                SetBakeStatus ("取り込めなかった: " + e.Message, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_IMPORT_FAILED", e.Message), true);
                 return false;
             }
             finally {

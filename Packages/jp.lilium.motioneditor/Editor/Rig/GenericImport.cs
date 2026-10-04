@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -22,11 +23,11 @@ namespace Lilium
         /// </summary>
         public static string GetProblem (AnimationClip source)
         {
-            if (source == null) return "クリップが無い";
-            if (source.humanMotion) return "Humanoid のクリップ（Humanoid からの取り込みはまだ無い）";
+            if (source == null) return Tr ("GENERIC_IMPORT_NO_CLIP");
+            if (source.humanMotion) return Tr ("GENERIC_IMPORT_HUMANOID_CLIP");
             EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (source);
-            if (bindings.Any (EditingClip.IsRigBinding)) return "編集用リグのクリップ（Editing Rig の段で開く）";
-            if (!bindings.Any (b => b.type == typeof (Transform))) return "骨の Transform のカーブが無い";
+            if (bindings.Any (EditingClip.IsRigBinding)) return Tr ("GENERIC_IMPORT_EDITING_RIG_CLIP");
+            if (!bindings.Any (b => b.type == typeof (Transform))) return Tr ("GENERIC_IMPORT_NO_TRANSFORM_CURVES");
             return null;
         }
 
@@ -38,13 +39,13 @@ namespace Lilium
         {
             string problem = GetProblem (source);
             if (problem != null) throw new System.InvalidOperationException (problem);
-            if (rig == null || rig.root == null) throw new System.InvalidOperationException ("編集用リグが無い");
+            if (rig == null || rig.root == null) throw new System.InvalidOperationException (Tr ("GENERIC_IMPORT_NO_EDITING_RIG"));
 
             List<string> notes = new List<string> ();
             List<Transform> bones = CheckBindings (source, rig, notes);
             float rate = destination != null && destination.frameRate > 0 ? destination.frameRate : 60;
             if (!Mathf.Approximately (source.frameRate, rate)) {
-                notes.Add ("元は " + source.frameRate + "fps。" + rate + "fps の格子で取り直した");
+                notes.Add (Tr ("GENERIC_IMPORT_RESAMPLED", source.frameRate, rate));
             }
             return PoseImport.Run (new PoseImport.Options {
                 destination = destination,
@@ -91,10 +92,10 @@ namespace Lilium
                 else if (!controlled.Contains (bone)) uncontrolled.Add (bone.name);
                 else bones.Add (bone);
             }
-            if (rootCurves) notes.Add ("Animator の GameObject のカーブ（ルートモーション）は取り込まない");
-            if (missing.Count > 0) notes.Add ("このキャラに無い骨のカーブ " + missing.Count + " 個は取り込まない: " + ImportNotes.Summary (missing));
-            if (uncontrolled.Count > 0) notes.Add ("編集用リグで動かさない骨 " + uncontrolled.Count + " 本は取り込まない: " + ImportNotes.Summary (uncontrolled));
-            if (others > 0) notes.Add ("骨以外のカーブ " + others + " 本は取り込まない");
+            if (rootCurves) notes.Add (Tr ("GENERIC_IMPORT_ROOT_CURVES_SKIPPED"));
+            if (missing.Count > 0) notes.Add (Tr ("GENERIC_IMPORT_MISSING_BONES_SKIPPED", missing.Count, ImportNotes.Summary (missing)));
+            if (uncontrolled.Count > 0) notes.Add (Tr ("GENERIC_IMPORT_UNCONTROLLED_BONES_SKIPPED", uncontrolled.Count, ImportNotes.Summary (uncontrolled)));
+            if (others > 0) notes.Add (Tr ("GENERIC_IMPORT_OTHER_CURVES_SKIPPED", others));
             return bones.ToList ();
         }
     }
@@ -104,7 +105,8 @@ namespace Lilium
         public static string Summary (IEnumerable<string> names)
         {
             List<string> list = names.ToList ();
-            return string.Join ("、", list.Take (5)) + (list.Count > 5 ? " ほか" : "");
+            string joined = string.Join (Tr ("GENERIC_IMPORT_LIST_SEPARATOR"), list.Take (5));
+            return list.Count > 5 ? Tr ("GENERIC_IMPORT_LIST_AND_MORE", joined) : joined;
         }
     }
 

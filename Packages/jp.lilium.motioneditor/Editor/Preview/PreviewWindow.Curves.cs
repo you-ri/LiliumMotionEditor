@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -55,10 +56,10 @@ namespace Lilium
         /// </summary>
         public string GetCurveEditProblem ()
         {
-            if (editingClip_ == null) return "クリップを開いてください";
+            if (editingClip_ == null) return Tr ("PREVIEW_WINDOW_CURVES_OPEN_CLIP");
             if (clipProblem_ != null) return clipProblem_;
             if (CanEditClip ()) return null;
-            return timelineEditBlockReason ?? "書き出し先の段が止まっているか、合成の重みが 100% 未満";
+            return timelineEditBlockReason ?? Tr ("PREVIEW_WINDOW_CURVES_WRITE_LAYER_INACTIVE");
         }
 
         /// <summary>

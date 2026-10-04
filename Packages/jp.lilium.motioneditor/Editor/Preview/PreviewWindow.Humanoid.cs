@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -74,7 +75,7 @@ namespace Lilium
         public string GetBakeProblem ()
         {
             OutputLayer first = poseStack_ != null ? poseStack_.layers.OfType<OutputLayer> ().FirstOrDefault () : null;
-            return first != null ? GetOutputBakeProblem (first) : "Output の段が無い（Layers の上端の「+Output」で足す）";
+            return first != null ? GetOutputBakeProblem (first) : Tr ("PREVIEW_WINDOW_HUMANOID_NO_OUTPUT_LAYER");
         }
 
         /// <summary>
@@ -84,7 +85,7 @@ namespace Lilium
         {
             List<OutputLayer> outputs = outputLayers;
             if (outputs.Count == 0) {
-                SetBakeStatus ("Humanoid に焼けない: " + GetBakeProblem (), true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_HUMANOID_CANNOT_BAKE", GetBakeProblem ()), true);
                 return false;
             }
             bool ok = true;
@@ -117,10 +118,10 @@ namespace Lilium
         /// <summary>参照を差し替えられない理由（できるなら null）</summary>
         public string GetSwapProblem ()
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return "Play Mode 中は差し替えない";
-            if (bakeOverrides.Count == 0) return "Override が無い";
-            if (gameClip == null) return "ゲームが使っているクリップが分からない（先に元のクリップを焼く）";
-            if (editedClip == null) return "「元＋Override」を焼いていない（Bake で作る）";
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return Tr ("PREVIEW_WINDOW_HUMANOID_NOT_IN_PLAY_MODE");
+            if (bakeOverrides.Count == 0) return Tr ("PREVIEW_WINDOW_HUMANOID_NO_OVERRIDE");
+            if (gameClip == null) return Tr ("PREVIEW_WINDOW_HUMANOID_GAME_CLIP_UNKNOWN");
+            if (editedClip == null) return Tr ("PREVIEW_WINDOW_HUMANOID_EDITED_CLIP_NOT_BAKED");
             return null;
         }
 
@@ -132,36 +133,35 @@ namespace Lilium
         {
             string problem = GetSwapProblem ();
             if (problem != null) {
-                SetBakeStatus ("差し替えられない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_HUMANOID_CANNOT_SWAP", problem), true);
                 return false;
             }
             AnimationClip from = back ? editedClip : gameClip;
             AnimationClip to = back ? gameClip : editedClip;
             ClipReferences.Plan plan = ClipReferences.Find (from);
             if (plan.assets.Count == 0) {
-                string note = "差し替える参照が見つからない: " + from.name;
-                if (plan.skipped.Count > 0) note += "（触らないもの " + plan.skipped.Count + " 件）";
+                string note = Tr ("PREVIEW_WINDOW_HUMANOID_NO_REFERENCES", from.name);
+                if (plan.skipped.Count > 0) note += Tr ("PREVIEW_WINDOW_HUMANOID_SKIPPED_SUFFIX", plan.skipped.Count);
                 SetBakeStatus (note, plan.skipped.Count > 0);
-                if (plan.skipped.Count > 0) Debug.Log ("MotionEditor: 触らないもの:\n- " + string.Join ("\n- ", plan.skipped));
+                if (plan.skipped.Count > 0) Debug.Log (Tr ("PREVIEW_WINDOW_HUMANOID_LOG_SKIPPED", string.Join ("\n- ", plan.skipped)));
                 return false;
             }
 
             const int kShow = 12;
             string list = string.Join ("\n", plan.assets.GetRange (0, Mathf.Min (kShow, plan.assets.Count)));
-            if (plan.assets.Count > kShow) list += "\n… ほか " + (plan.assets.Count - kShow) + " 件";
-            if (plan.skipped.Count > 0) list += "\n\n触らないもの " + plan.skipped.Count + " 件（Console に出す）";
+            if (plan.assets.Count > kShow) list += Tr ("PREVIEW_WINDOW_HUMANOID_MORE", plan.assets.Count - kShow);
+            if (plan.skipped.Count > 0) list += Tr ("PREVIEW_WINDOW_HUMANOID_SKIPPED_LIST", plan.skipped.Count);
             if (!EditorUtility.DisplayDialog ("Motion Editor",
-                from.name + " への参照を " + to.name + " へ差し替えます（Undo では戻せません）。\n"
-                + "保存していない変更があるアセットは見つかりません（先に保存してください）。\n\n" + list, "差し替える", "やめる")) {
+                Tr ("PREVIEW_WINDOW_HUMANOID_SWAP_CONFIRM", from.name, to.name, list), Tr ("PREVIEW_WINDOW_HUMANOID_SWAP"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }
-            if (plan.skipped.Count > 0) Debug.Log ("MotionEditor: 触らないもの:\n- " + string.Join ("\n- ", plan.skipped));
+            if (plan.skipped.Count > 0) Debug.Log (Tr ("PREVIEW_WINDOW_HUMANOID_LOG_SKIPPED", string.Join ("\n- ", plan.skipped)));
 
             List<string> changed = new List<string> ();
             int count = ClipReferences.Replace (from, to, plan.assets, changed);
             AssetDatabase.Refresh ();
-            SetBakeStatus ("参照を差し替えた: " + from.name + " → " + to.name + "（" + count + " 件）", false);
-            if (changed.Count > 0) Debug.Log ("MotionEditor: 参照を差し替えた（" + from.name + " → " + to.name + "）:\n- " + string.Join ("\n- ", changed));
+            SetBakeStatus (Tr ("PREVIEW_WINDOW_HUMANOID_SWAPPED", from.name, to.name, count), false);
+            if (changed.Count > 0) Debug.Log (Tr ("PREVIEW_WINDOW_HUMANOID_LOG_SWAPPED", from.name, to.name, string.Join ("\n- ", changed)));
             return count > 0;
         }
 

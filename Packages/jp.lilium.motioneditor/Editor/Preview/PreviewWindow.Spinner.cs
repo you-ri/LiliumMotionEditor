@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.ShortcutManagement;
 using System.Linq;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -208,7 +209,7 @@ namespace Lilium
             get {
                 PoseLayer humanoid = poseStack_ != null ? poseStack_.Find (LayerKind.HumanoidAnimation) : null;
                 if (humanoidClip_ == null || humanoid == null || !humanoid.enabled || humanoid.clipWeight < 1) return null;
-                return "Humanoid Pose の行のクリップ（" + humanoidClip_.name + "）が表示を上書きしているので、動かしても表示は変わらない（値とキーは入る）";
+                return Tr ("PREVIEW_WINDOW_SPINNER_HUMANOID_CLIP_OVERRIDES_DISPLAY", humanoidClip_.name);
             }
         }
 

@@ -5,6 +5,7 @@ using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -185,7 +186,7 @@ namespace Lilium
             poseGroup.style.alignItems = Align.Center;
             // プロジェクト設定の Auto Key をここでも切り替える（設定のページまで行かずに済むように）。
             // 表示は、保存を受けた窓の stateChanged → Refresh で合わせる（設定のページで変えたときも同じ道を通る）
-            autoKey_ = new Toggle { text = "Auto Key", tooltip = "入: 操作したらキーを打つ。切: 今のフレームにキーがある物しか動かせない（プロジェクト設定の Auto Key と同じ）" };
+            autoKey_ = new Toggle { text = "Auto Key", tooltip = Tr ("TIMELINE_OVERLAY_AUTO_KEY_TOOLTIP") };
             autoKey_.style.marginRight = 6;
             autoKey_.RegisterValueChangedCallback (e => {
                 ProjectSettings settings = ProjectSettings.instance;
@@ -193,10 +194,10 @@ namespace Lilium
                 settings.Save ();
             });
             poseGroup.Add (autoKey_);
-            poseGroup.Add (MiniButton ("Key", "今のフレームで全部（体・手・Rig の重み・表情・任意のプロパティ）にキーを打つ（Stacker の Key All と同じ）", window_.KeyAll));
-            poseGroup.Add (WithShortcut (MiniButton ("Copy", null, window_.CopyPose), "今のフレームのポーズをコピー。骨・点を選んでいれば選んだ物（複数可）だけ、選んでいなければ全体", "Copy Pose"));
-            poseGroup.Add (WithShortcut (MiniButton ("Paste", null, window_.PastePose), "コピーしたポーズを今のフレームに貼る", "Paste Pose"));
-            poseGroup.Add (MiniButton ("Reset", "骨の向きを基準の姿勢に戻してキーを打つ", window_.ResetPose));
+            poseGroup.Add (WithShortcut (MiniButton ("Key", null, window_.KeyAll), Tr ("TIMELINE_OVERLAY_KEY_TOOLTIP"), "Key All"));
+            poseGroup.Add (WithShortcut (MiniButton ("Copy", null, window_.CopyPose), Tr ("TIMELINE_OVERLAY_COPY_POSE_TOOLTIP"), "Copy Pose"));
+            poseGroup.Add (WithShortcut (MiniButton ("Paste", null, window_.PastePose), Tr ("TIMELINE_OVERLAY_PASTE_POSE_TOOLTIP"), "Paste Pose"));
+            poseGroup.Add (MiniButton ("Reset", Tr ("TIMELINE_OVERLAY_RESET_POSE_TOOLTIP"), window_.ResetPose));
             Add (poseGroup);
 
             Add (Spacer ());
@@ -204,12 +205,12 @@ namespace Lilium
             VisualElement transport = new VisualElement ();
             transport.style.flexDirection = FlexDirection.Row;
             // 両端は先頭・末尾（Home / End と同じ）。読み込んだクリップは毎フレームにキーがあり、前後のキーでは端へ行けない
-            transport.Add (WithShortcut (IconButton ("Animation.FirstKey", null, () => window_.SetFrame (0)), "先頭へ", "First Frame"));
-            transport.Add (WithShortcut (IconButton ("Animation.PrevKey", null, () => window_.GoToKey (-1)), "前のキー", "Previous Key"));
-            playButton_ = WithShortcut (IconButton ("PlayButton", null, window_.TogglePlay), "再生 / 停止", "Play");
+            transport.Add (WithShortcut (IconButton ("Animation.FirstKey", null, () => window_.SetFrame (0)), Tr ("TIMELINE_OVERLAY_FIRST_FRAME"), "First Frame"));
+            transport.Add (WithShortcut (IconButton ("Animation.PrevKey", null, () => window_.GoToKey (-1)), Tr ("TIMELINE_OVERLAY_PREVIOUS_KEY"), "Previous Key"));
+            playButton_ = WithShortcut (IconButton ("PlayButton", null, window_.TogglePlay), Tr ("TIMELINE_OVERLAY_PLAY"), "Play");
             transport.Add (playButton_);
-            transport.Add (WithShortcut (IconButton ("Animation.NextKey", null, () => window_.GoToKey (1)), "次のキー", "Next Key"));
-            transport.Add (WithShortcut (IconButton ("Animation.LastKey", null, () => window_.SetFrame (window_.GetLastKeyFrame ())), "末尾へ", "Last Key Frame"));
+            transport.Add (WithShortcut (IconButton ("Animation.NextKey", null, () => window_.GoToKey (1)), Tr ("TIMELINE_OVERLAY_NEXT_KEY"), "Next Key"));
+            transport.Add (WithShortcut (IconButton ("Animation.LastKey", null, () => window_.SetFrame (window_.GetLastKeyFrame ())), Tr ("TIMELINE_OVERLAY_LAST_KEY_FRAME"), "Last Key Frame"));
             Add (transport);
 
             Add (Spacer ());
@@ -242,7 +243,7 @@ namespace Lilium
             });
             info.Add (tracksField_);
 
-            Button fit = new Button (timebar_.FitTimeline) { text = "Fit", tooltip = "キーの範囲が収まるように目盛りを合わせる" };
+            Button fit = new Button (timebar_.FitTimeline) { text = "Fit", tooltip = Tr ("TIMELINE_OVERLAY_FIT_TOOLTIP") };
             fit.style.width = 32;
             info.Add (fit);
             Add (info);
@@ -297,7 +298,7 @@ namespace Lilium
             frameField_.SetValueWithoutNotify (window_.frame);
             if (!clock.onGrid) {
                 fractionLabel_.text = clock.frame.ToString ("0.0");
-                fractionLabel_.tooltip = "今の時刻（フレーム）。キーは " + window_.frame + " に打つ";
+                fractionLabel_.tooltip = Tr ("TIMELINE_OVERLAY_FRACTION_TOOLTIP", window_.frame);
                 fractionLabel_.style.display = DisplayStyle.Flex;
             }
             else {
@@ -312,7 +313,7 @@ namespace Lilium
 
     /// <summary>
     /// 目盛り（ルーラー）とトラック（クリップ全体＋骨ごと）。見た目:
-    /// 黒い目盛り・キーのトラック。キーは通し番号の箱（今のフレームのキーは白）、キーの間は両矢印の線とフレーム数。
+    /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白）、キーの間は両矢印の線とフレーム数。
     /// 今のフレームは白い縦線。目盛りとトラックの上でホイールは横の拡大縮小、中ボタン（Alt+左）ドラッグは横の移動。
     ///
     /// 形は Painter2D（generateVisualContent）で毎回いまの状態から描き直し、数字は使い回す Label を絶対座標で置く
@@ -322,6 +323,7 @@ namespace Lilium
         const float kRulerHeight = 20;
         const float kTrackHeight = 20;
         const float kLabelWidth = 120;
+        const float kKeyWidth = 12;
         const float kKeyHeight = 14;
         const float kMinPixelsPerFrame = 2;
         const float kMaxPixelsPerFrame = 60;
@@ -349,7 +351,6 @@ namespace Lilium
         static readonly Color kKeyColor = new Color (0.73f, 0.73f, 0.73f);
         static readonly Color kCurrentKeyColor = new Color (0.97f, 0.97f, 0.97f);
         static readonly Color kKeyBorderColor = new Color (0.2f, 0.2f, 0.2f);
-        static readonly Color kKeyTextColor = new Color (0.12f, 0.12f, 0.12f);
         static readonly Color kIntervalColor = new Color (0.86f, 0.86f, 0.86f);
         static readonly Color kPlayheadColor = Color.white;
         static readonly Color kDragKeyColor = new Color (1f, 0.72f, 0.25f);
@@ -369,11 +370,9 @@ namespace Lilium
         readonly Label noClipLabel_;
 
         List<PreviewWindow.TimelineTrack> tracks_ = new List<PreviewWindow.TimelineTrack> ();
-        int[] allKeys_ = new int[0];
 
         readonly List<Label> rulerLabels_ = new List<Label> ();
         readonly List<Label> trackNameLabels_ = new List<Label> ();
-        readonly List<Label> keyNumberLabels_ = new List<Label> ();
         readonly List<Label> intervalLabels_ = new List<Label> ();
 
         // キーのドラッグ
@@ -422,7 +421,7 @@ namespace Lilium
             tracksCanvas_.generateVisualContent += OnGenerateTracks;
             trackScroll_.Add (tracksCanvas_);
 
-            noClipLabel_ = new Label ("クリップを開くとキーが出ます");
+            noClipLabel_ = new Label (Tr ("TIMELINE_OVERLAY_NO_CLIP"));
             noClipLabel_.style.position = Position.Absolute;
             noClipLabel_.style.left = kLabelWidth + 8;
             noClipLabel_.style.top = 4;
@@ -476,7 +475,7 @@ namespace Lilium
             copiedSelection_.Clear ();
             copiedSelection_.AddRange (selectedKeys_.Select (k => (k.Item1, k.Item2 - first)));
             int count = window_.CopyKeys (keys);
-            window_.ShowNotification (new GUIContent ("キーをコピー（" + selectedKeys_.Count + " 個）"), 0.8);
+            window_.ShowNotification (new GUIContent (Tr ("TIMELINE_OVERLAY_KEYS_COPIED", selectedKeys_.Count)), 0.8);
             if (count == 0) copiedSelection_.Clear ();
         }
 
@@ -500,7 +499,7 @@ namespace Lilium
         /// </summary>
         public VisualElement CreateResizeHandle (bool fromTop)
         {
-            VisualElement handle = new VisualElement { tooltip = "ドラッグで高さを変更" };
+            VisualElement handle = new VisualElement { tooltip = Tr ("TIMELINE_OVERLAY_RESIZE_HANDLE_TOOLTIP") };
             handle.style.height = kHandleHeight;
             handle.style.flexShrink = 0;
             if (fromTop) handle.style.marginBottom = 1;
@@ -561,7 +560,6 @@ namespace Lilium
             if (window_ == null) return;
 
             tracks_ = window_.BuildTracks ();
-            allKeys_ = tracks_.Count > 0 ? tracks_[0].keys : new int[0];
             // 消えたキー・見えなくなったトラックの選択は捨てる
             selectedKeys_.RemoveWhere (k => !tracks_.Any (t => t.label == k.Item1 && System.Array.IndexOf (t.keys, k.Item2) >= 0));
 
@@ -642,22 +640,24 @@ namespace Lilium
             end = Mathf.FloorToInt (XToFrame (width));
         }
 
-        static int KeyNumber (int[] allKeys, int frame)
+        Rect GetKeyRect (int frame, Rect row)
         {
-            int index = System.Array.BinarySearch (allKeys, frame);
-            return index >= 0 ? index + 1 : 0;
-        }
-
-        Rect GetKeyRect (int frame, Rect row, int number)
-        {
-            float width = Mathf.Max (12, number.ToString ().Length * 6f + 5);
             float x = FrameToX (frame);
-            return new Rect (Mathf.Round (x - width * 0.5f), row.y + (row.height - kKeyHeight) * 0.5f, width, kKeyHeight);
+            return new Rect (Mathf.Round (x - kKeyWidth * 0.5f), row.y + (row.height - kKeyHeight) * 0.5f, kKeyWidth, kKeyHeight);
         }
 
         static float MeasureIntervalText (string text)
         {
             return text.Length * 6f + 2f;
+        }
+
+        /// <summary>
+        /// キーの間（x0〜x1）に出すフレーム数の幅。間が狭くて出さないときは 0（線を切らずに引く）
+        /// </summary>
+        static float IntervalTextWidth (int frames, float x0, float x1)
+        {
+            float width = MeasureIntervalText (frames.ToString ());
+            return x1 - x0 > width + 24 ? width : 0;
         }
 
         // ---- 形（Painter2D）。毎回いまの状態から描き直す ----
@@ -727,13 +727,15 @@ namespace Lilium
 
                 float midY = row.y + row.height * 0.5f;
                 for (int k = 1; k < track.keys.Length; k++) {
-                    Rect prev = GetKeyRect (track.keys[k - 1], row, KeyNumber (allKeys_, track.keys[k - 1]));
-                    Rect next = GetKeyRect (track.keys[k], row, KeyNumber (allKeys_, track.keys[k]));
-                    DrawInterval (painter, Mathf.Max (prev.xMax + 2, keyArea.x), Mathf.Min (next.x - 2, keyArea.xMax), midY);
+                    Rect prev = GetKeyRect (track.keys[k - 1], row);
+                    Rect next = GetKeyRect (track.keys[k], row);
+                    float x0 = Mathf.Max (prev.xMax + 2, keyArea.x);
+                    float x1 = Mathf.Min (next.x - 2, keyArea.xMax);
+                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1));
                 }
 
                 foreach (int frame in track.keys) {
-                    Rect box = GetKeyRect (frame, row, KeyNumber (allKeys_, frame));
+                    Rect box = GetKeyRect (frame, row);
                     if (box.xMax < keyArea.x || box.x > keyArea.xMax) continue;
                     bool isDragged = dragTrack_ == i && dragKeyFrame_ == frame && dragMoved_;
                     Color fill = selectedKeys_.Contains ((track.label, frame)) ? kSelectedKeyColor : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
@@ -741,7 +743,7 @@ namespace Lilium
                 }
                 // ドラッグ中のキーは行き先に描く（トラックの外へ出すと赤＝離すと消える）
                 if (dragTrack_ == i && dragMoved_) {
-                    Rect box = GetKeyRect (dragTargetFrame_, row, KeyNumber (allKeys_, dragKeyFrame_));
+                    Rect box = GetKeyRect (dragTargetFrame_, row);
                     DrawKeyBox (painter, box, dragDelete_ ? kDeleteKeyColor : kDragKeyColor, 1);
                 }
             }
@@ -768,11 +770,20 @@ namespace Lilium
         /// <summary>
         /// キーの間の線と矢じり（数字は LayoutTracks が置く Label）
         /// </summary>
-        static void DrawInterval (Painter2D painter, float x0, float x1, float y)
+        /// <param name="textWidth">真ん中に置くフレーム数の幅。線はそこを空けて引く（数字に線が重なって読みにくい）</param>
+        static void DrawInterval (Painter2D painter, float x0, float x1, float y, float textWidth)
         {
             if (x1 - x0 < 8) return;
             y = Mathf.Round (y);
-            FillRect (painter, new Rect (x0, y, x1 - x0, 1), kIntervalColor);
+            if (textWidth > 0) {
+                float mid = (x0 + x1) * 0.5f;
+                float gap = textWidth * 0.5f + 4;
+                FillRect (painter, Rect.MinMaxRect (x0, y, mid - gap, y + 1), kIntervalColor);
+                FillRect (painter, Rect.MinMaxRect (mid + gap, y, x1, y + 1), kIntervalColor);
+            }
+            else {
+                FillRect (painter, new Rect (x0, y, x1 - x0, 1), kIntervalColor);
+            }
             for (int i = 0; i < 3; i++) {
                 FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), kIntervalColor);
                 FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), kIntervalColor);
@@ -821,7 +832,6 @@ namespace Lilium
         void LayoutTracks ()
         {
             int usedNames = 0;
-            int usedKeys = 0;
             int usedIntervals = 0;
             float width = tracksCanvas_.resolvedStyle.width;
             if (float.IsNaN (width)) width = 0;
@@ -836,49 +846,26 @@ namespace Lilium
                 name.style.top = row.y;
 
                 for (int k = 1; k < track.keys.Length; k++) {
-                    Rect prev = GetKeyRect (track.keys[k - 1], row, KeyNumber (allKeys_, track.keys[k - 1]));
-                    Rect next = GetKeyRect (track.keys[k], row, KeyNumber (allKeys_, track.keys[k]));
+                    Rect prev = GetKeyRect (track.keys[k - 1], row);
+                    Rect next = GetKeyRect (track.keys[k], row);
                     float x0 = Mathf.Max (prev.xMax + 2, keyArea.x);
                     float x1 = Mathf.Min (next.x - 2, keyArea.xMax);
-                    string text = (track.keys[k] - track.keys[k - 1]).ToString ();
-                    float textWidth = MeasureIntervalText (text);
-                    if (x1 - x0 <= textWidth + 24) continue;
+                    int frames = track.keys[k] - track.keys[k - 1];
+                    float textWidth = IntervalTextWidth (frames, x0, x1);
+                    if (textWidth <= 0) continue;
 
                     Label interval = GetPooled (intervalLabels_, ref usedIntervals, tracksCanvas_, StyleIntervalLabel);
-                    interval.text = text;
+                    interval.text = frames.ToString ();
                     float mid = (x0 + x1) * 0.5f;
                     interval.style.left = mid - textWidth * 0.5f - 2;
                     interval.style.top = row.y + row.height * 0.5f - 7;
                     interval.style.width = textWidth + 4;
                 }
 
-                foreach (int frame in track.keys) {
-                    Rect box = GetKeyRect (frame, row, KeyNumber (allKeys_, frame));
-                    if (box.xMax < keyArea.x || box.x > keyArea.xMax) continue;
-                    bool isDragged = dragTrack_ == i && dragKeyFrame_ == frame && dragMoved_;
-                    if (isDragged) continue;
-                    PlaceKeyLabel (box, KeyNumber (allKeys_, frame), ref usedKeys);
-                }
-                if (dragTrack_ == i && dragMoved_) {
-                    Rect box = GetKeyRect (dragTargetFrame_, row, KeyNumber (allKeys_, dragKeyFrame_));
-                    PlaceKeyLabel (box, KeyNumber (allKeys_, dragKeyFrame_), ref usedKeys);
-                }
             }
 
             HideUnused (trackNameLabels_, usedNames);
-            HideUnused (keyNumberLabels_, usedKeys);
             HideUnused (intervalLabels_, usedIntervals);
-        }
-
-        void PlaceKeyLabel (Rect box, int number, ref int used)
-        {
-            if (number <= 0) return;
-            Label label = GetPooled (keyNumberLabels_, ref used, tracksCanvas_, StyleKeyLabel);
-            label.text = number.ToString ();
-            label.style.left = box.x;
-            label.style.top = box.y;
-            label.style.width = box.width;
-            label.style.height = box.height;
         }
 
         static Label GetPooled (List<Label> pool, ref int used, VisualElement parent, System.Action<Label> setup)
@@ -913,13 +900,6 @@ namespace Lilium
             label.style.fontSize = 9;
             label.style.unityTextAlign = TextAnchor.UpperCenter;
             label.style.color = kRulerTextColor;
-        }
-
-        static void StyleKeyLabel (Label label)
-        {
-            label.style.fontSize = 9;
-            label.style.unityTextAlign = TextAnchor.MiddleCenter;
-            label.style.color = kKeyTextColor;
         }
 
         static void StyleIntervalLabel (Label label)
@@ -986,7 +966,7 @@ namespace Lilium
                         tracksCanvas_.MarkDirtyRepaint ();
                     }
                     if (evt.button == 1) {
-                        ShowKeyMenu (frame, filter);
+                        ShowKeyMenu (frame);
                         evt.StopPropagation ();
                         return;
                     }
@@ -1138,7 +1118,7 @@ namespace Lilium
             PreviewWindow.TimelineTrack track = tracks_[row];
             Rect rowRect = new Rect (0, row * kTrackHeight, 0, kTrackHeight);
             foreach (int f in track.keys) {
-                Rect box = GetKeyRect (f, rowRect, KeyNumber (allKeys_, f));
+                Rect box = GetKeyRect (f, rowRect);
                 if (box.Contains (new Vector2 (x, y))) {
                     trackIndex = row;
                     frame = f;
@@ -1167,7 +1147,7 @@ namespace Lilium
                 Rect row = new Rect (0, i * kTrackHeight, 0, kTrackHeight);
                 if (row.yMax < band.yMin || row.yMin > band.yMax) continue;
                 foreach (int frame in tracks_[i].keys) {
-                    if (GetKeyRect (frame, row, KeyNumber (allKeys_, frame)).Overlaps (band)) selectedKeys_.Add ((tracks_[i].label, frame));
+                    if (GetKeyRect (frame, row).Overlaps (band)) selectedKeys_.Add ((tracks_[i].label, frame));
                 }
             }
         }
@@ -1197,16 +1177,13 @@ namespace Lilium
             return keys;
         }
 
+        /// <summary>
+        /// 選んだキーの削除。キーのコピー・貼り付けはメニューに出さない（Ctrl+C / Ctrl+V で足りる。
+        /// 姿勢のコピー・貼り付けは C / V とタイムライン上端の Copy / Paste）
+        /// </summary>
         void AddDeleteSelectedItem (GenericMenu menu)
         {
-            GUIContent copy = new GUIContent ("選んだキーをコピー（" + selectedKeys_.Count + " 個）  Ctrl+C");
-            if (selectedKeys_.Count > 0) menu.AddItem (copy, false, CopySelectedKeys);
-            else menu.AddDisabledItem (copy);
-            GUIContent paste = new GUIContent ("キーを " + window_.frame + "F に貼る  Ctrl+V");
-            if (window_.canPasteKeys) menu.AddItem (paste, false, PasteKeys);
-            else menu.AddDisabledItem (paste);
-            menu.AddSeparator ("");
-            GUIContent item = new GUIContent ("選んだキーを削除（" + selectedKeys_.Count + " 個）");
+            GUIContent item = new GUIContent (Tr ("TIMELINE_OVERLAY_DELETE_SELECTED_KEYS", selectedKeys_.Count));
             if (selectedKeys_.Count > 0) menu.AddItem (item, false, DeleteSelectedKeys);
             else menu.AddDisabledItem (item);
         }
@@ -1218,21 +1195,16 @@ namespace Lilium
             menu.ShowAsContext ();
         }
 
-        void ShowKeyMenu (int frame, System.Predicate<EditorCurveBinding> filter)
+        void ShowKeyMenu (int frame)
         {
             GenericMenu menu = new GenericMenu ();
+            // 押したキーは選ばれているので、そのキーだけ消すのは「キーを削除」で足りる
             AddDeleteSelectedItem (menu);
-            menu.AddSeparator ("");
-            menu.AddItem (new GUIContent ("Go to Frame " + frame), false, () => window_.SetFrame (frame));
-            menu.AddItem (new GUIContent ("Delete Key"), false, () => {
-                window_.RemoveKeys (frame, filter);
-                RebuildTracks ();
-            });
             // 選んでいる骨のキーをまとめて減らす（読込で毎フレームに入ったキーを、指だけ打ち直すときなど）
             menu.AddSeparator ("");
             int selected = window_.selectedTargetCount;
-            GUIContent keepOne = new GUIContent ("選んでいる骨のキーを " + frame + "F の 1 つだけにする（" + selected + " 個）");
-            GUIContent clearAll = new GUIContent ("選んでいる骨のキーを全部消す（" + selected + " 個）");
+            GUIContent keepOne = new GUIContent (Tr ("TIMELINE_OVERLAY_KEEP_ONE_KEY", frame, selected));
+            GUIContent clearAll = new GUIContent (Tr ("TIMELINE_OVERLAY_CLEAR_ALL_KEYS", selected));
             if (selected > 0) {
                 menu.AddItem (keepOne, false, () => {
                     window_.ClearSelectedKeys (frame);

@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using UnityEditor.UIElements;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -102,12 +103,12 @@ namespace Lilium
             VisualElement row = new VisualElement ();
             row.style.flexDirection = FlexDirection.Row;
             row.style.marginBottom = 2;
-            editStructure_ = MakeAddButton ("構造を編集", "Layers の構造（段の追加・削除・移動）を編集する。普段の編集では構造は触らないので、入れている間だけ +Override・+Output・↑ ↓ 削除 を出す",
+            editStructure_ = MakeAddButton (Tr ("LAYERS_OVERLAY_EDIT_STRUCTURE"), Tr ("LAYERS_OVERLAY_EDIT_STRUCTURE_TOOLTIP"),
                 () => window_.layerStructureEditing = !window_.layerStructureEditing);
             row.Add (editStructure_);
-            addOverride_ = MakeAddButton ("+Override", "元のクリップを書き換えずに、上へ Override の段を重ねる（同じフォルダに <名前>.override.anim を作り、書き込み先にする）", () => window_.AddOverride ());
-            addOutput_ = MakeAddButton ("+Output", "焼いて書き出す段を足す（Humanoid Pose の後ろ。段の名前の行の ↑ ↓ で動かすと、その段より上を通った姿勢を焼く）", () => window_.AddOutput ());
-            addHumanoid_ = MakeAddButton ("+Humanoid Pose", "Humanoid Pose の段を足す（ゲームで再生したときと同じ姿勢で見せる。見比べ用の参照と反映もこの段）", () => window_.SetHumanoidPoseLayer (true));
+            addOverride_ = MakeAddButton ("+Override", Tr ("LAYERS_OVERLAY_ADD_OVERRIDE_TOOLTIP"), () => window_.AddOverride ());
+            addOutput_ = MakeAddButton ("+Output", Tr ("LAYERS_OVERLAY_ADD_OUTPUT_TOOLTIP"), () => window_.AddOutput ());
+            addHumanoid_ = MakeAddButton ("+Humanoid Pose", Tr ("LAYERS_OVERLAY_ADD_HUMANOID_POSE_TOOLTIP"), () => window_.SetHumanoidPoseLayer (true));
             row.Add (addOverride_);
             row.Add (addHumanoid_);
             row.Add (addOutput_);
@@ -135,25 +136,25 @@ namespace Lilium
             bool editing = window_.layerStructureEditing;
             editStructure_.style.backgroundColor = editing ? kOnColor : StyleKeyword.Null;
             editStructure_.style.color = editing ? Color.white : StyleKeyword.Null;
-            editStructure_.text = editing ? "構造を編集中" : "構造を編集";
+            editStructure_.text = editing ? Tr ("LAYERS_OVERLAY_EDITING_STRUCTURE") : Tr ("LAYERS_OVERLAY_EDIT_STRUCTURE");
             addOverride_.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
             addOutput_.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
             addHumanoid_.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
             bool canAddHumanoid = window_.isHumanModel && !window_.humanoidPoseLayer;
             addHumanoid_.SetEnabled (canAddHumanoid);
-            addHumanoid_.tooltip = canAddHumanoid ? "Humanoid Pose の段を足す（ゲームで再生したときと同じ姿勢で見せる。見比べ用の参照と反映もこの段）"
-                : "+Humanoid Pose できない: " + (window_.isHumanModel ? "もう置いてある" : "表示モデルが Humanoid でない");
+            addHumanoid_.tooltip = canAddHumanoid ? Tr ("LAYERS_OVERLAY_ADD_HUMANOID_POSE_TOOLTIP")
+                : Tr ("LAYERS_OVERLAY_CANNOT_ADD_HUMANOID_POSE", window_.isHumanModel ? Tr ("LAYERS_OVERLAY_ALREADY_PLACED") : Tr ("LAYERS_OVERLAY_DISPLAY_MODEL_NOT_HUMANOID"));
             string overrideProblem = window_.GetAddOverrideProblem ();
             addOverride_.SetEnabled (overrideProblem == null);
             addOverride_.tooltip = overrideProblem == null
-                ? "元のクリップを書き換えずに、上へ Override の段を重ねる（同じフォルダに <名前>.override.anim を作り、書き込み先にする）"
-                : "+Override できない: " + overrideProblem;
+                ? Tr ("LAYERS_OVERLAY_ADD_OVERRIDE_TOOLTIP")
+                : Tr ("LAYERS_OVERLAY_CANNOT_ADD_OVERRIDE", overrideProblem);
             // 書き出せるのは今は Humanoid のクリップだけ
             bool human = window_.isHumanModel;
             addOutput_.SetEnabled (human);
             addOutput_.tooltip = human
-                ? "焼いて書き出す段を足す（Humanoid Pose の後ろ。段の名前の行の ↑ ↓ で動かすと、その段より上を通った姿勢を焼く）"
-                : "+Output できない: 表示モデルが Humanoid でない";
+                ? Tr ("LAYERS_OVERLAY_ADD_OUTPUT_TOOLTIP")
+                : Tr ("LAYERS_OVERLAY_CANNOT_ADD_OUTPUT", Tr ("LAYERS_OVERLAY_DISPLAY_MODEL_NOT_HUMANOID"));
         }
 
         /// <summary>
@@ -161,7 +162,7 @@ namespace Lilium
         /// </summary>
         VisualElement ResizeHandle ()
         {
-            VisualElement handle = new VisualElement { tooltip = "ドラッグで一覧の高さを変更（幅はパネルの枠で変える）" };
+            VisualElement handle = new VisualElement { tooltip = Tr ("LAYERS_OVERLAY_RESIZE_HANDLE_TOOLTIP") };
             handle.style.height = kHandleHeight;
             handle.style.marginTop = 2;
             handle.style.backgroundColor = kHandleColor;
@@ -215,13 +216,13 @@ namespace Lilium
         {
             PoseStack stack = window_.poseStack;
             if (stack == null || stack.layers.Count == 0) {
-                content_.Add (Note ("キャラが選ばれていない"));
+                content_.Add (Note (Tr ("LAYERS_OVERLAY_NO_CHARACTER")));
                 return;
             }
 
             // Layers の設定はキャラの設定に保存する（S19）。無いときは窓の中だけで、窓を閉じると消える
             if (window_.characterSettings == null && window_.model != null) {
-                Label unsaved = Note ("キャラの設定が無いので、ここの設定は保存されない（上端のツールバーの「作る」で作る）");
+                Label unsaved = Note (Tr ("LAYERS_OVERLAY_SETTINGS_NOT_SAVED"));
                 unsaved.style.color = kApproximateColor;
                 content_.Add (unsaved);
             }
@@ -241,8 +242,8 @@ namespace Lilium
                 string reason;
                 InverseKind path = stack.PathKind (out reason);
                 pathNote.style.display = path == InverseKind.Exact ? DisplayStyle.None : DisplayStyle.Flex;
-                pathNote.text = "つかむ段から書き出す段へ: " + PoseStack.Describe (path)
-                    + (string.IsNullOrEmpty (reason) ? "" : "（" + reason + "）");
+                pathNote.text = Tr ("LAYERS_OVERLAY_PATH_TO_WRITE", PoseStack.Describe (path))
+                    + (string.IsNullOrEmpty (reason) ? "" : Tr ("LAYERS_OVERLAY_REASON_SUFFIX", reason));
                 pathNote.style.color = path == InverseKind.None ? kNoneColor : kApproximateColor;
             };
             refreshPath ();
@@ -306,17 +307,17 @@ namespace Lilium
             head.style.alignItems = Align.Center;
 
             // 書き出すだけの段（Output）は 👁・✏・✋ を出さない（作ったボタンは行に足さないだけ）
-            Button write = Badge (kWriteIcon, "書き出し先: キーを書く段", stack.writeLayer == layer, null, () => window_.SetWriteLayer (layer));
-            Button manipulate = Badge (kManipulateIcon, "つかむ段: 画面でつかむ対象", stack.manipulateLayer == layer, null, () => window_.SetManipulateLayer (layer));
+            Button write = Badge (kWriteIcon, Tr ("LAYERS_OVERLAY_WRITE_BADGE_TOOLTIP"), stack.writeLayer == layer, null, () => window_.SetWriteLayer (layer));
+            Button manipulate = Badge (kManipulateIcon, Tr ("LAYERS_OVERLAY_MANIPULATE_BADGE_TOOLTIP"), stack.manipulateLayer == layer, null, () => window_.SetManipulateLayer (layer));
             if (layer.hasBadges) {
-                head.Add (Badge (kViewIcon, "有効: この段を処理する。落とすと素通し（入力をそのまま次へ渡す）", layer.enabled, null,
+                head.Add (Badge (kViewIcon, Tr ("LAYERS_OVERLAY_ENABLED_BADGE_TOOLTIP"), layer.enabled, null,
                     () => window_.SetLayerEnabled (layer, !layer.enabled)));
                 head.Add (write);
                 head.Add (manipulate);
             }
             else {
                 // 書き出すだけの段（Output）。アイコンの位置に目印を出す（段の名前の位置は他の段とそろえる: アイコン 3 つ分 幅 22＋右の余白 1）
-                Label mark = new Label ("出力") { tooltip = "焼いて書き出す段。この段より上を通った姿勢を焼く（姿勢は変えないので 👁・✏・✋ は無い）" };
+                Label mark = new Label (Tr ("LAYERS_OVERLAY_OUTPUT_MARK")) { tooltip = Tr ("LAYERS_OVERLAY_OUTPUT_MARK_TOOLTIP") };
                 mark.style.width = 3 * 23;
                 mark.style.height = 18;
                 mark.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -355,7 +356,7 @@ namespace Lilium
                     element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
                     string problem = button.problem != null ? button.problem () : null;
                     element.SetEnabled (problem == null);
-                    element.tooltip = problem == null ? button.tooltip : button.label + " できない: " + problem;
+                    element.tooltip = problem == null ? button.tooltip : Tr ("LAYERS_OVERLAY_BUTTON_CANNOT", button.label, problem);
                 };
                 refreshButton ();
                 refreshers_.Add (refreshButton);
@@ -368,10 +369,10 @@ namespace Lilium
             // 説明（note・値の出どころ・子の行）は段の名前の小窓へ移した（LayerHelpPopup）
 
             if (layer.hasWeight) {
-                Slider weight = new Slider ("重み", 0, 1) { value = layer.weight, showInputField = true };
+                Slider weight = new Slider (Tr ("LAYERS_OVERLAY_WEIGHT"), 0, 1) { value = layer.weight, showInputField = true };
                 weight.style.marginLeft = 26;
                 weight.style.fontSize = 10;
-                weight.tooltip = "表示で掛ける重み。0 にするとこの段は素通しになり、逆に通っても戻せる";
+                weight.tooltip = Tr ("LAYERS_OVERLAY_WEIGHT_TOOLTIP");
                 weight.RegisterValueChangedCallback (e => {
                     window_.SetLayerWeight (layer, e.newValue);
                     Refresh ();
@@ -388,13 +389,13 @@ namespace Lilium
             System.Action refreshBadges = () => {
                 string writeReason;
                 bool canWrite = stack.CanWrite (layer, out writeReason);
-                SetBadge (write, "書き出し先: キーを書く段", canWrite ? null : writeReason);
-                SetBlocked (writeBlocked, layer.canWrite && !canWrite, "書き出し先にできない: " + writeReason);
+                SetBadge (write, Tr ("LAYERS_OVERLAY_WRITE_BADGE_TOOLTIP"), canWrite ? null : writeReason);
+                SetBlocked (writeBlocked, layer.canWrite && !canWrite, Tr ("LAYERS_OVERLAY_CANNOT_WRITE", writeReason));
 
                 string manipulateReason;
                 bool canManipulate = stack.CanManipulate (layer, out manipulateReason);
-                SetBadge (manipulate, "つかむ段: 画面でつかむ対象", canManipulate ? null : manipulateReason);
-                SetBlocked (manipulateBlocked, layer.canManipulate && !canManipulate, "つかめない: " + manipulateReason);
+                SetBadge (manipulate, Tr ("LAYERS_OVERLAY_MANIPULATE_BADGE_TOOLTIP"), canManipulate ? null : manipulateReason);
+                SetBlocked (manipulateBlocked, layer.canManipulate && !canManipulate, Tr ("LAYERS_OVERLAY_CANNOT_MANIPULATE", manipulateReason));
             };
             refreshBadges ();
             refreshers_.Add (refreshBadges);
@@ -457,7 +458,7 @@ namespace Lilium
                     element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
                     string problem = button.problem != null ? button.problem () : null;
                     element.SetEnabled (problem == null);
-                    element.tooltip = problem == null ? button.tooltip : button.label + " できない: " + problem;
+                    element.tooltip = problem == null ? button.tooltip : Tr ("LAYERS_OVERLAY_BUTTON_CANNOT", button.label, problem);
                 });
             }
             foreach (LayerClipToggle spec in clip.toggles) {
@@ -472,9 +473,9 @@ namespace Lilium
             box.Add (line);
 
             if (clip.hasWeight) {
-                Slider weight = new Slider ("合成", 0, 1) { value = clip.getWeight (), showInputField = true };
+                Slider weight = new Slider (Tr ("LAYERS_OVERLAY_BLEND"), 0, 1) { value = clip.getWeight (), showInputField = true };
                 weight.style.fontSize = 10;
-                weight.tooltip = "流れてきた姿勢にクリップを混ぜる割合。1 で上書き、0 で合成しない";
+                weight.tooltip = Tr ("LAYERS_OVERLAY_BLEND_TOOLTIP");
                 weight.labelElement.style.minWidth = 28;
                 weight.labelElement.style.width = 28;
                 weight.RegisterValueChangedCallback (e => clip.setWeight (e.newValue));
@@ -602,7 +603,7 @@ namespace Lilium
             down.style.flexGrow = 1;
             down.style.flexBasis = 0;
             down.style.unityTextAlign = TextAnchor.MiddleCenter;
-            down.tooltip = "普段の流れ。上の段の姿勢がこの段へ渡る";
+            down.tooltip = Tr ("LAYERS_OVERLAY_FLOW_TOOLTIP");
             row.Add (down);
 
             Label label = Note ("", kNoteColor);
@@ -615,7 +616,7 @@ namespace Lilium
                 bool onPath = stack.IsOnPath (below);
 
                 string text = "↑ " + PoseStack.Describe (kind);
-                if (onPath && !string.IsNullOrEmpty (reason)) text += "（" + reason + "）";
+                if (onPath && !string.IsNullOrEmpty (reason)) text += Tr ("LAYERS_OVERLAY_REASON_SUFFIX", reason);
 
                 Color color = kind == InverseKind.None ? kNoneColor
                     : kind == InverseKind.Approximate ? kApproximateColor : kExactColor;
@@ -624,14 +625,14 @@ namespace Lilium
                 bool warning;
                 if (onPath && kind == InverseKind.Approximate && window_.TryGetDisplayResidual (out angle, out distance, out warning)) {
                     color = warning ? kApproximateColor : kExactColor;
-                    text += "  残差 " + angle.ToString ("F2") + "° / " + (distance * 1000).ToString ("F1") + "mm";
+                    text += Tr ("LAYERS_OVERLAY_RESIDUAL", angle.ToString ("F2"), (distance * 1000).ToString ("F1"));
                 }
                 if (!onPath) color = new Color (color.r, color.g, color.b, 0.45f);
                 label.text = text;
                 label.style.color = color;
                 // 段を 👁 で切っているときは、流れはその段を素通りする
                 down.style.color = below.enabled ? kNoteColor : new Color (kNoteColor.r, kNoteColor.g, kNoteColor.b, 0.35f);
-                down.tooltip = below.enabled ? "普段の流れ。上の段の姿勢がこの段へ渡る" : "普段の流れ。この段は切っているので素通りする";
+                down.tooltip = below.enabled ? Tr ("LAYERS_OVERLAY_FLOW_TOOLTIP") : Tr ("LAYERS_OVERLAY_FLOW_DISABLED_TOOLTIP");
             };
             refresh ();
             refreshers_.Add (refresh);

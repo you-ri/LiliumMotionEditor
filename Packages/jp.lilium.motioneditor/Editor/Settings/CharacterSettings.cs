@@ -31,7 +31,7 @@ namespace Lilium
         /// <summary>Layers の ✏・✋・👁・重み・合成</summary>
         public LayerState layers = new LayerState ();
 
-        [Tooltip ("物の持ち替え（武器を右手 / 左手 / フリーなど）。ゲームの拘束の重みと握りを、Rig Values のボタンとつかむハンドルで打つ")]
+        [Tooltip ("Parent switches for held objects (a weapon in the right hand / left hand / free, etc.). Key the game's constraint weights and grips with the Rig Values buttons and the grab handles")]
         public List<ParentSwitchDefinition> parentSwitches = new List<ParentSwitchDefinition> ();
     }
 

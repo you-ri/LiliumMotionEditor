@@ -2,6 +2,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -51,16 +52,16 @@ namespace Lilium
                 return false;
             }
         }
-        public override string unavailableReason { get { return "パラメータを見る段（骨はつかめない）"; } }
+        public override string unavailableReason { get { return Tr ("USER_COMPONENT_LAYER_UNAVAILABLE"); } }
         public override InverseKind inverse { get { return inverseAttribute_ != null ? inverseAttribute_.kind : InverseKind.None; } }
-        public override string inverseReason { get { return inverseAttribute_ != null ? inverseAttribute_.reason : "逆が宣言されていない"; } }
+        public override string inverseReason { get { return inverseAttribute_ != null ? inverseAttribute_.reason : Tr ("USER_COMPONENT_LAYER_NO_INVERSE"); } }
 
         protected override string description
         {
             get {
                 if (!string.IsNullOrEmpty (attribute_.note)) return attribute_.note;
                 if (evaluate_ != null) return component_.gameObject.name;
-                return hasGraphHook ? component_.gameObject.name + "（処理はグラフの後段）" : "前進解決が無い（戻り値の無い Evaluate (float) を足すと通る）";
+                return hasGraphHook ? Tr ("USER_COMPONENT_LAYER_GRAPH_HOOK", component_.gameObject.name) : Tr ("USER_COMPONENT_LAYER_NO_EVALUATE");
             }
         }
 

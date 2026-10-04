@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -154,15 +155,15 @@ namespace Lilium
 
                 string name = layer.label;
                 if (string.IsNullOrEmpty (name) || name.IndexOf ('/') >= 0) {
-                    proxies.notes.Add ("Rig の名前がパスに使えないので代理に持たない: '" + name + "'");
+                    proxies.notes.Add (Tr ("RIG_PROXIES_INVALID_RIG_NAME", name));
                     continue;
                 }
                 if (!names.Add (name)) {
-                    proxies.notes.Add ("同じ名前の Rig が複数ある。2 つ目からは代理に持たない: " + name);
+                    proxies.notes.Add (Tr ("RIG_PROXIES_DUPLICATE_RIG_NAME", name));
                     continue;
                 }
                 if (!layer.transform.IsChildOf (displayRoot)) {
-                    proxies.notes.Add ("Animator の外にある Rig は代理に持たない: " + name);
+                    proxies.notes.Add (Tr ("RIG_PROXIES_RIG_OUTSIDE_ANIMATOR", name));
                     continue;
                 }
                 proxies.AddRig (rig, layer, displayRoot, createControl);
@@ -231,12 +232,12 @@ namespace Lilium
         {
             if (source == null || sources_.Exists (s => s.display == source)) return;
             if (!source.IsChildOf (rigTransform)) {
-                notes.Add (constraintLabel + " の " + source.name + " は Rig の外（骨の下など）にあるので代理に持たない。骨と一緒に動く");
+                notes.Add (Tr ("RIG_PROXIES_SOURCE_OUTSIDE_RIG", constraintLabel, source.name));
                 return;
             }
             Transform editing = rig.GetEditingBone (source);
             if (editing == null) {
-                notes.Add (constraintLabel + " の " + source.name + " が編集用の体に無いので代理に持たない");
+                notes.Add (Tr ("RIG_PROXIES_SOURCE_NOT_IN_EDITING_BODY", constraintLabel, source.name));
                 return;
             }
 

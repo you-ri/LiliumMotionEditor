@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -117,10 +118,10 @@ namespace Lilium
         {
             IReadOnlyList<PoseLayer> layers = poseStack_.layers;
             int index = poseStack_.IndexOf (output);
-            if (index < 0) return "段の並びに無い";
-            if (direction < 0 && index - 1 < 1) return "Editing Rig より上には置けない";
-            if (direction < 0 && layers[index - 1] is FullBodyLayer) return "Full Body IK より上には置けない（全身 IK は編集用の体を作る段の一部）";
-            if (direction > 0 && index + 1 >= layers.Count) return "いちばん下";
+            if (index < 0) return Tr ("PREVIEW_WINDOW_OUTPUT_NOT_IN_STACK");
+            if (direction < 0 && index - 1 < 1) return Tr ("PREVIEW_WINDOW_OUTPUT_ABOVE_EDITING_RIG");
+            if (direction < 0 && layers[index - 1] is FullBodyLayer) return Tr ("PREVIEW_WINDOW_OUTPUT_ABOVE_FULL_BODY_IK");
+            if (direction > 0 && index + 1 >= layers.Count) return Tr ("PREVIEW_WINDOW_OUTPUT_AT_BOTTOM");
             return null;
         }
 
@@ -175,11 +176,11 @@ namespace Lilium
         {
             bool rig;
             if (!BakesThroughStack (output, out rig)) {
-                return "Rig などより上なので、編集用の体から焼き、Rig の重みとターゲットは値として焼く。";
+                return Tr ("PREVIEW_WINDOW_OUTPUT_DESCRIBE_FROM_EDITING_BODY");
             }
             return rig
-                ? "Rig を通った後なので、Rig の効果を骨に焼き、Rig の重みとターゲットは焼かない（ゲームで二重に掛からないように）。"
-                : "ゲーム側の段などを通った後の表示モデルの骨から焼く。";
+                ? Tr ("PREVIEW_WINDOW_OUTPUT_DESCRIBE_THROUGH_RIG")
+                : Tr ("PREVIEW_WINDOW_OUTPUT_DESCRIBE_FROM_DISPLAY");
         }
 
         public string GetOutputPath (OutputLayer output)
@@ -192,21 +193,21 @@ namespace Lilium
             bool rig;
             // 元が Humanoid のクリップで Override が無く、Rig なども通らないなら、元そのものがゲームのクリップ（焼くものが無いのは異常ではない）
             if (useHumanoidBase && bakeOverrides.Count == 0 && !BakesThroughStack (output, out rig)) {
-                return new LayerClipStatus (LayerClipState.None, "元の Humanoid のクリップそのまま（+Override で Override を足すと、元＋Override を焼ける）");
+                return new LayerClipStatus (LayerClipState.None, Tr ("PREVIEW_WINDOW_OUTPUT_SOURCE_AS_IS"));
             }
             return HumanoidOutput.GetStatus (bakeSource, model, GetOutputBakeProblem (output), bakeOverrides, output.outputName);
         }
 
         public string GetOutputBakeProblem (OutputLayer output)
         {
-            if (output == null) return "Output の段が無い";
-            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return "キャラが無い";
+            if (output == null) return Tr ("PREVIEW_WINDOW_OUTPUT_NO_OUTPUT_LAYER");
+            if (stage_ == null || stage_.editingRig == null || stage_.editingRig.root == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_CHARACTER");
             AnimationClip source = baseClip;
-            if (source == null) return "クリップが無い";
+            if (source == null) return Tr ("PREVIEW_WINDOW_OUTPUT_NO_CLIP");
             // Humanoid を土台にしているときは、土台のクリップ（ゲームのもの）は編集用クリップの形でなくてよい
             if (!useHumanoidBase && clipProblem_ != null) return clipProblem_;
             bool rig;
-            if (useHumanoidBase && bakeOverrides.Count == 0 && !BakesThroughStack (output, out rig)) return "Override が無いので焼くものが無い（元のクリップそのまま）";
+            if (useHumanoidBase && bakeOverrides.Count == 0 && !BakesThroughStack (output, out rig)) return Tr ("PREVIEW_WINDOW_OUTPUT_NOTHING_TO_BAKE");
             return HumanoidOutput.GetProblem (source, GetOutputPath (output));
         }
 
@@ -217,7 +218,7 @@ namespace Lilium
         {
             string problem = GetOutputBakeProblem (output);
             if (problem != null) {
-                SetBakeStatus ("Humanoid に焼けない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_HUMANOID_CANNOT_BAKE", problem), true);
                 return false;
             }
 
@@ -255,10 +256,10 @@ namespace Lilium
                     baker.bakeRigProxies = !rig;
                     string path;
                     HumanoidBaker.Result result = HumanoidOutput.BakeToAsset (baker, baseClip, stage_.sourcePrefab, overrides, output.outputName, out path);
-                    string text = "Humanoid: " + Path.GetFileName (path) + "（" + result.frameCount + "F・" + result.milliseconds.ToString ("0") + "ms）";
+                    string text = Tr ("PREVIEW_WINDOW_OUTPUT_BAKED", Path.GetFileName (path), result.frameCount, result.milliseconds.ToString ("0"));
                     if (result.notes != null && result.notes.Count > 0) {
-                        text += "  注意 " + result.notes.Count + " 件";
-                        Debug.Log ("MotionEditor: " + path + " を焼いた。注意:\n- " + string.Join ("\n- ", result.notes), AssetDatabase.LoadMainAssetAtPath (path));
+                        text += Tr ("PREVIEW_WINDOW_IMPORT_NOTES_COUNT", result.notes.Count);
+                        Debug.Log (Tr ("PREVIEW_WINDOW_OUTPUT_LOG_BAKED_NOTES", path, string.Join ("\n- ", result.notes)), AssetDatabase.LoadMainAssetAtPath (path));
                     }
                     SetBakeStatus (text, false);
                 }
@@ -266,7 +267,7 @@ namespace Lilium
             }
             catch (System.Exception e) {
                 Debug.LogException (e);
-                SetBakeStatus ("Humanoid に焼けなかった: " + e.Message, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_OUTPUT_BAKE_FAILED", e.Message), true);
                 return false;
             }
             finally {

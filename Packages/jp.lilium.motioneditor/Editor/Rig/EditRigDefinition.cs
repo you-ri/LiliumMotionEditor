@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -470,63 +471,63 @@ namespace Lilium
             List<string> errors = new List<string> ();
 
             foreach (IGrouping<HumanBodyBones, FkControl> group in fkControls.GroupBy (c => c.bone)) {
-                if (group.Count () > 1) errors.Add ("FK の骨が重複している: " + group.Key);
+                if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_FK_BONE", group.Key));
             }
             foreach (FkControl control in fkControls) {
-                if (control.bone < 0 || control.bone >= HumanBodyBones.LastBone) errors.Add ("FK の骨が範囲外: " + control.bone);
-                if (control.stiffness < 0 || control.stiffness > 1) errors.Add ("全身 IK の硬さが 0〜1 の外: " + control.bone);
+                if (control.bone < 0 || control.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_FK_BONE_OUT_OF_RANGE", control.bone));
+                if (control.stiffness < 0 || control.stiffness > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE", control.bone));
             }
             if (fullBody != null) {
-                if (fullBody.iterations < 1) errors.Add ("全身 IK の解く回数が 1 未満");
-                if (fullBody.pull < 0 || fullBody.pull > 1) errors.Add ("全身 IK の引く強さが 0〜1 の外");
-                if (fullBody.hipsPin < 0 || fullBody.hipsPin > 1) errors.Add ("全身 IK の腰を留める強さが 0〜1 の外");
+                if (fullBody.iterations < 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW"));
+                if (fullBody.pull < 0 || fullBody.pull > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE"));
+                if (fullBody.hipsPin < 0 || fullBody.hipsPin > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_HIPS_PIN_OUT_OF_RANGE"));
             }
             if (bodyPoints != null) {
                 foreach (IGrouping<string, BodyPoint> group in bodyPoints.Where (p => p != null).GroupBy (p => p.name)) {
-                    if (group.Count () > 1) errors.Add ("全身 IK の点の名前が重複している: " + group.Key);
+                    if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_POINT_NAME", group.Key));
                 }
                 foreach (BodyPoint point in bodyPoints) {
                     if (point == null) continue;
-                    if (!RigPaths.IsValidName (point.name)) errors.Add ("全身 IK の点の名前がパスに使えない: '" + point.name + "'");
-                    if (point.bone < 0 || point.bone >= HumanBodyBones.LastBone) errors.Add ("全身 IK の点の骨が範囲外: " + point.name);
+                    if (!RigPaths.IsValidName (point.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_POINT_NAME", point.name));
+                    if (point.bone < 0 || point.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
                     bool foot = point.anchor == BodyPointAnchor.Heel || point.anchor == BodyPointAnchor.ToeTip;
                     bool hand = point.anchor == BodyPointAnchor.IndexBase || point.anchor == BodyPointAnchor.LittleBase;
-                    if ((foot || hand) && RigPaths.SideOf (point.bone) == "") errors.Add ("全身 IK の点の基準（" + point.anchor + "）には左右のある骨が要る: " + point.name);
+                    if ((foot || hand) && RigPaths.SideOf (point.bone) == "") errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE", point.anchor, point.name));
                 }
             }
 
             foreach (IGrouping<string, IkChain> group in ikChains.GroupBy (c => c.name)) {
-                if (group.Count () > 1) errors.Add ("IK の名前が重複している: " + group.Key);
+                if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_IK_NAME", group.Key));
             }
             foreach (IkChain chain in ikChains) {
-                if (!RigPaths.IsValidName (chain.name)) errors.Add ("IK の名前がパスに使えない: '" + chain.name + "'");
-                if (chain.root == chain.mid || chain.mid == chain.tip || chain.root == chain.tip) errors.Add ("IK の骨が重複している: " + chain.name);
-                if (chain.defaultHint.sqrMagnitude < 1e-6f) errors.Add ("IK の既定のヒントが 0: " + chain.name);
+                if (!RigPaths.IsValidName (chain.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_IK_NAME", chain.name));
+                if (chain.root == chain.mid || chain.mid == chain.tip || chain.root == chain.tip) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_IK_BONE", chain.name));
+                if (chain.defaultHint.sqrMagnitude < 1e-6f) errors.Add (Tr ("EDIT_RIG_DEFINITION_ZERO_DEFAULT_HINT", chain.name));
                 if (chain.reverseFoot && (chain.toes < 0 || chain.toes >= HumanBodyBones.LastBone || chain.toes == chain.root || chain.toes == chain.mid || chain.toes == chain.tip)) {
-                    errors.Add ("足の転がしのつま先の骨が使えない: " + chain.name + "（" + chain.toes + "）");
+                    errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_TOE_BONE", chain.name, chain.toes));
                 }
-                if (chain.reverseFoot && chain.toeBreak < 0) errors.Add ("足の転がしの折れ角が負: " + chain.name);
+                if (chain.reverseFoot && chain.toeBreak < 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_NEGATIVE_TOE_BREAK", chain.name));
                 if (chain.reverseFoot && chain.pivots != null) {
                     foreach (IGrouping<ReverseFoot.Pivot, FootPivot> group in chain.pivots.GroupBy (p => p.pivot)) {
-                        if (group.Count () > 1) errors.Add ("足の転がしの支点が重複している: " + chain.name + "（" + group.Key + "）");
+                        if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_PIVOT", chain.name, group.Key));
                     }
                 }
             }
 
             foreach (IGrouping<string, ExtraControl> group in extraControls.GroupBy (c => c.name)) {
-                if (group.Count () > 1) errors.Add ("追加コントロールの名前が重複している: " + group.Key);
+                if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_EXTRA_NAME", group.Key));
             }
             foreach (ExtraControl control in extraControls) {
-                if (!RigPaths.IsValidName (control.name)) errors.Add ("追加コントロールの名前がパスに使えない: '" + control.name + "'");
+                if (!RigPaths.IsValidName (control.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_EXTRA_NAME", control.name));
                 if (string.IsNullOrEmpty (control.pattern)) {
-                    errors.Add ("追加コントロールのパターンが空: " + control.name);
+                    errors.Add (Tr ("EDIT_RIG_DEFINITION_EMPTY_EXTRA_PATTERN", control.name));
                     continue;
                 }
                 try {
                     new System.Text.RegularExpressions.Regex (control.pattern);
                 }
                 catch (System.ArgumentException e) {
-                    errors.Add ("追加コントロールのパターンが正規表現として読めない: " + control.name + "（" + e.Message + "）");
+                    errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_EXTRA_PATTERN", control.name, e.Message));
                 }
             }
             return errors;

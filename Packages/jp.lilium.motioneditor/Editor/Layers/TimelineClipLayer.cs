@@ -1,5 +1,6 @@
 using UnityEngine;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -36,7 +37,7 @@ namespace Lilium
         public override LayerKind kind { get { return LayerKind.TimelineClip; } }
         public override int order { get { return PoseStack.kOrderTimelineClip; } }
         public override string label { get { return "Timeline Clip"; } }
-        public override string unavailableReason { get { return "時計の写像なので値を持たない"; } }
+        public override string unavailableReason { get { return Tr ("TIMELINE_CLIP_LAYER_UNAVAILABLE"); } }
 
         public override bool canEvaluate
         {
@@ -77,9 +78,9 @@ namespace Lilium
                 ContextClip current = link;
                 if (current == null) return null;
                 if (current.track != null && !string.IsNullOrEmpty (current.track.editBlock)) return current.track.editBlock;
-                if (current.overrideTrack) return "上書きのトラック（v1 では戻せない）";
-                if (current.hasAvatarMask) return "Avatar Mask で体の一部だけ効く（v1 では戻せない）";
-                if (blending) return "Timeline のブレンド中（" + Mathf.RoundToInt (mix_ * 100) + "%。v1 では混ぜた姿勢を出さず、この区間は編集しない）";
+                if (current.overrideTrack) return Tr ("TIMELINE_CLIP_LAYER_OVERRIDE_TRACK");
+                if (current.hasAvatarMask) return Tr ("TIMELINE_CLIP_LAYER_AVATAR_MASK");
+                if (blending) return Tr ("TIMELINE_CLIP_LAYER_BLENDING", Mathf.RoundToInt (mix_ * 100));
                 return null;
             }
         }
@@ -99,7 +100,7 @@ namespace Lilium
 
         public override string inverseReason
         {
-            get { return blockReason ?? "姿勢には手を加えない（時計の写像だけ）"; }
+            get { return blockReason ?? Tr ("TIMELINE_CLIP_LAYER_INVERSE_REASON"); }
         }
 
         protected override string description
@@ -108,15 +109,14 @@ namespace Lilium
                 ContextClip current = link;
                 if (current == null) {
                     return candidates_ > 0
-                        ? "演出のクリップと結び付けていない（ツールバーの演出の右で選ぶ）。いまは演出の時刻をオフセットで合わせている"
-                        : "演出にアニメーションのクリップが無い";
+                        ? Tr ("TIMELINE_CLIP_LAYER_NOT_LINKED")
+                        : Tr ("TIMELINE_CLIP_LAYER_NO_ANIMATION_CLIPS");
                 }
-                string text = current.label + ": 演出の " + Seconds (current.start) + " から、クリップの " + Seconds (current.clipIn)
-                    + " を " + current.timeScale.ToString ("0.###") + " 倍で再生";
-                if (current.blendIn > 0 || current.blendOut > 0) text += "。ブレンド 入り " + Seconds (current.blendIn) + "・抜け " + Seconds (current.blendOut);
-                if (current.muted) text += "。トラックがミュートなので素通し";
-                if (!string.IsNullOrEmpty (current.offsets)) text += "。オフセット（" + current.offsets + "）はゲームの変換が使わないので当てない";
-                if (outside) text += "。いまの時刻は区間の外（演出ではこのクリップは出ていない）";
+                string text = Tr ("TIMELINE_CLIP_LAYER_MAPPING", current.label, Seconds (current.start), Seconds (current.clipIn), current.timeScale.ToString ("0.###"));
+                if (current.blendIn > 0 || current.blendOut > 0) text += Tr ("TIMELINE_CLIP_LAYER_BLEND", Seconds (current.blendIn), Seconds (current.blendOut));
+                if (current.muted) text += Tr ("TIMELINE_CLIP_LAYER_MUTED");
+                if (!string.IsNullOrEmpty (current.offsets)) text += Tr ("TIMELINE_CLIP_LAYER_OFFSETS", current.offsets);
+                if (outside) text += Tr ("TIMELINE_CLIP_LAYER_OUTSIDE");
                 return text;
             }
         }

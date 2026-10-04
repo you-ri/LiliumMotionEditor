@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -24,8 +25,8 @@ namespace Lilium
                 clip = CreateClip (host);
                 // 構造を編集している間だけ出る（S21。Humanoid Pose は足したり外したりできる段。位置は固定）
                 headButtons.Add (new LayerClipButton {
-                    label = "削除",
-                    tooltip = "Humanoid Pose の段を外す（見比べ用の参照と反映も無くなる。構造を編集の「+Humanoid Pose」で足し直せる）",
+                    label = Tr ("HUMANOID_LAYER_REMOVE"),
+                    tooltip = Tr ("HUMANOID_LAYER_REMOVE_TOOLTIP"),
                     run = () => host.SetHumanoidPoseLayer (false),
                 });
             }
@@ -46,8 +47,8 @@ namespace Lilium
         LayerClip CreateClip (IHumanoidHost host)
         {
             LayerClip result = new LayerClip {
-                label = "参照",
-                tooltip = "見比べる Humanoid のクリップ。流れてきた姿勢に重みで合成して表示するだけで、編集中のクリップは変えない（反映で今のフレームだけキーにできる）",
+                label = Tr ("HUMANOID_LAYER_REFERENCE"),
+                tooltip = Tr ("HUMANOID_LAYER_REFERENCE_TOOLTIP"),
                 getClip = () => host.humanoidClip,
                 assign = host.SetHumanoidClip,
                 getWeight = () => clipWeight,
@@ -55,20 +56,20 @@ namespace Lilium
                 getStatus = () => {
                     AnimationClip humanoid = host.humanoidClip;
                     if (humanoid == null) return new LayerClipStatus (LayerClipState.None, null);
-                    if (!humanoid.humanMotion) return new LayerClipStatus (LayerClipState.Blocked, "Humanoid のクリップではないので合成しない");
-                    return new LayerClipStatus (LayerClipState.Stale, LayerClipText.Blending (clipWeight) + "（見比べ用。編集中のクリップは変えない）");
+                    if (!humanoid.humanMotion) return new LayerClipStatus (LayerClipState.Blocked, Tr ("HUMANOID_LAYER_NOT_HUMANOID_CLIP"));
+                    return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_LAYER_BLENDING_FOR_COMPARISON", LayerClipText.Blending (clipWeight)));
                 },
             };
             result.buttons.Add (new LayerClipButton {
-                label = "反映",
-                tooltip = "今のフレームの姿勢（Humanoid に直した姿勢）を編集用リグの値に直して、そのフレームにキーを打つ",
+                label = Tr ("HUMANOID_LAYER_APPLY"),
+                tooltip = Tr ("HUMANOID_LAYER_APPLY_TOOLTIP"),
                 run = () => host.ApplyHumanoidPoseToRig (),
                 problem = host.GetHumanoidApplyProblem,
             });
             result.buttons.Add (OpenButton (() => host.humanoidClip));
             result.buttons.Add (new LayerClipButton {
                 label = "Clear",
-                tooltip = "合成をやめて、編集中の姿勢だけを表示する",
+                tooltip = Tr ("HUMANOID_LAYER_CLEAR_TOOLTIP"),
                 run = () => host.SetHumanoidClip (null),
                 visible = () => host.humanoidClip != null,
             });
@@ -82,8 +83,8 @@ namespace Lilium
         internal static LayerClipButton OpenButton (System.Func<AnimationClip> getClip)
         {
             return new LayerClipButton {
-                label = "開く",
-                tooltip = "クリップを Project で選んでインスペクターに出す（ループ・ルートの扱いなど）",
+                label = Tr ("HUMANOID_LAYER_OPEN"),
+                tooltip = Tr ("HUMANOID_LAYER_OPEN_TOOLTIP"),
                 run = () => {
                     AnimationClip target = getClip ();
                     if (target == null) return;
@@ -103,17 +104,17 @@ namespace Lilium
         public override int order { get { return PoseStack.kOrderHumanoid; } }
         public override string label { get { return "Humanoid Pose"; } }
         public override PosePhase phase { get { return PosePhase.Body; } }
-        public override string unavailableReason { get { return "設定だけを持つ段"; } }
+        public override string unavailableReason { get { return Tr ("HUMANOID_LAYER_UNAVAILABLE"); } }
         public override InverseKind inverse { get { return InverseKind.Approximate; } }
 
         public override string inverseReason
         {
-            get { return "Humanoid の往復。骨の向き 約 1°・位置 約 1cm ずれ、ねじりは配り直される"; }
+            get { return Tr ("HUMANOID_LAYER_INVERSE_REASON"); }
         }
 
         protected override string description
         {
-            get { return canEvaluate ? "焼いたときの姿勢（可動範囲で丸め、ねじりを配り直す）。目（👁）を落とすと焼く前の姿勢" : "表示モデルが Humanoid でない"; }
+            get { return canEvaluate ? Tr ("HUMANOID_LAYER_DESCRIPTION") : Tr ("HUMANOID_LAYER_NOT_HUMANOID_MODEL"); }
         }
 
         /// <summary>

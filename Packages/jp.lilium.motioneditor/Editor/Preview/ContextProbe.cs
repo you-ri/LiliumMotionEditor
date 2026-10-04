@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -200,7 +201,7 @@ namespace Lilium
 
         public string label
         {
-            get { return (track != null ? track.name + " / " : "") + (clip != null ? clip.name : "(空)"); }
+            get { return (track != null ? track.name + " / " : "") + (clip != null ? clip.name : Tr ("CONTEXT_PROBE_EMPTY_CLIP")); }
         }
 
         /// <summary>演出の時刻 → クリップの時刻（秒）。区間の外も同じ式で延ばす</summary>
@@ -309,7 +310,7 @@ namespace Lilium
             ContextInfo info = prepare != null ? prepare (instance) : null;
             if (info == null) {
                 info = new ContextInfo { instance = instance, label = instance.name };
-                if (!available) info.notes.Add ("Timeline のパッケージが入っていないので、時計は回せない（見た目だけ置いている）");
+                if (!available) info.notes.Add (Tr ("CONTEXT_PROBE_NO_TIMELINE_CLOCK"));
             }
             if (source != null && readShots != null) {
                 try {
@@ -346,7 +347,7 @@ namespace Lilium
 
         public static ExternalClock ReadExternalClock (ContextInfo info, string selfTrack)
         {
-            if (info == null || readExternalClock == null) return new ExternalClock { note = "Timeline のパッケージが入っていない" };
+            if (info == null || readExternalClock == null) return new ExternalClock { note = Tr ("CONTEXT_PROBE_NO_TIMELINE") };
             return readExternalClock (info, selfTrack);
         }
     }

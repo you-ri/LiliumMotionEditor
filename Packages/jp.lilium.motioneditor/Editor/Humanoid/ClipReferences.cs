@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -44,18 +45,18 @@ namespace Lilium
 
                     string extension = Path.GetExtension (found).ToLowerInvariant ();
                     if (extension == ".unity") {
-                        plan.skipped.Add (found + "（シーンは差し替えない。開いて手で直す）");
+                        plan.skipped.Add (Tr ("CLIP_REFERENCES_SKIPPED_SCENE", found));
                         continue;
                     }
                     if (extension == ".fbx" || extension == ".prefab" || extension == ".asset" || extension == ".playable" || extension == ".controller" || extension == ".overridecontroller") {
                         if (extension == ".fbx") {
-                            plan.skipped.Add (found + "（取り込んだファイルは書き換えない）");
+                            plan.skipped.Add (Tr ("CLIP_REFERENCES_SKIPPED_IMPORTED", found));
                             continue;
                         }
                         plan.assets.Add (found);
                         continue;
                     }
-                    plan.skipped.Add (found + "（" + extension + " は差し替えない）");
+                    plan.skipped.Add (Tr ("CLIP_REFERENCES_SKIPPED_EXTENSION", found, extension));
                 }
             }
             plan.assets.Sort ();
@@ -73,7 +74,7 @@ namespace Lilium
             int count = 0;
             for (int i = 0; i < assets.Count; i++) {
                 string path = assets[i];
-                EditorUtility.DisplayProgressBar ("Motion Editor", "参照を差し替え: " + path, (i + 1) / (float)assets.Count);
+                EditorUtility.DisplayProgressBar ("Motion Editor", Tr ("CLIP_REFERENCES_REPLACING", path), (i + 1) / (float)assets.Count);
                 try {
                     bool touched = Path.GetExtension (path).ToLowerInvariant () == ".prefab"
                         ? ReplaceInPrefab (from, to, path)

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -25,7 +26,7 @@ namespace Lilium
         public override string label { get { return "Display Pose"; } }
         public override PosePhase phase { get { return PosePhase.Terminal; } }
         public override GrabTarget grab { get { return GrabTarget.Pose; } }
-        public override string unavailableReason { get { return "出力なので値を持たない"; } }
+        public override string unavailableReason { get { return Tr ("DISPLAY_BONE_LAYER_UNAVAILABLE"); } }
         public override bool canEvaluate { get { return stage_ != null && stage_.canApplyRig; } }
 
         /// <summary>
@@ -39,15 +40,15 @@ namespace Lilium
 
         public override string inverseReason
         {
-            get { return inverse == InverseKind.Approximate ? "人型の骨は muscle で入れるので、骨の軸まわりのねじりは配り直される" : "骨の値をそのまま入れる"; }
+            get { return inverse == InverseKind.Approximate ? Tr ("DISPLAY_BONE_LAYER_INVERSE_APPROXIMATE") : Tr ("DISPLAY_BONE_LAYER_INVERSE_EXACT"); }
         }
 
         protected override string description
         {
             get {
                 return stage_ != null && stage_.canApplyRig
-                    ? "表示モデルの骨（出力）。ここで Rigging とゲームの後段をまとめて通す"
-                    : "表示モデルの骨（出力）";
+                    ? Tr ("DISPLAY_BONE_LAYER_DESCRIPTION_WITH_GRAPH")
+                    : Tr ("DISPLAY_BONE_LAYER_DESCRIPTION");
             }
         }
 

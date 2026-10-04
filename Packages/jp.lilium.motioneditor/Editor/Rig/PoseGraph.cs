@@ -3,6 +3,7 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -363,7 +364,7 @@ namespace Lilium
             handles = ordered.ToArray ();
             sources = targets.ToArray ();
             if (lost.Count > 0) {
-                Debug.LogError ("MotionEditor: muscle の名前を対応させられなかった " + lost.Count + " 本: " + string.Join ("、", lost));
+                Debug.LogError ("MotionEditor: " + Tr ("POSE_GRAPH_UNMAPPED_MUSCLES", lost.Count, string.Join (Tr ("GENERIC_IMPORT_LIST_SEPARATOR"), lost)));
                 handles = new MuscleHandle[0];
                 sources = new int[0];
                 return false;

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -39,7 +40,7 @@ namespace Lilium
         {
             LayerClip result = new LayerClip {
                 label = "Clip",
-                tooltip = "骨を直接動かす Generic のクリップ（旧形式など）。流れてきた姿勢に重みで合成する。Import で合成した姿勢を Editing Rig のクリップへ書く",
+                tooltip = Tr ("GENERIC_POSE_LAYER_CLIP_TOOLTIP"),
                 getClip = () => host.genericClip,
                 assign = host.SetGenericClip,
                 getWeight = () => clipWeight,
@@ -48,24 +49,24 @@ namespace Lilium
                     AnimationClip generic = host.genericClip;
                     if (generic == null) return new LayerClipStatus (LayerClipState.None, null);
                     string problem = GenericImport.GetProblem (generic);
-                    if (problem != null) return new LayerClipStatus (LayerClipState.Blocked, "合成できない: " + problem);
+                    if (problem != null) return new LayerClipStatus (LayerClipState.Blocked, Tr ("GENERIC_POSE_LAYER_CANNOT_BLEND", problem));
                     string text = LayerClipText.Blending (clipWeight);
                     string importProblem = host.GetImportProblem ();
                     return importProblem != null
-                        ? new LayerClipStatus (LayerClipState.Blocked, text + "。取り込めない: " + importProblem)
-                        : new LayerClipStatus (LayerClipState.Stale, text + "。Import で合成した姿勢を Editing Rig のクリップへ書き、ここを空にする");
+                        ? new LayerClipStatus (LayerClipState.Blocked, Tr ("GENERIC_POSE_LAYER_CANNOT_IMPORT", text, importProblem))
+                        : new LayerClipStatus (LayerClipState.Stale, Tr ("GENERIC_POSE_LAYER_IMPORT_HINT", text));
                 },
             };
             result.buttons.Add (new LayerClipButton {
                 label = "Import",
-                tooltip = "この段の出力（クリップを合成した姿勢）を編集用リグの値に直して Editing Rig のクリップへ書く（そのクリップの編集用リグのカーブは置き換える）",
+                tooltip = Tr ("GENERIC_POSE_LAYER_IMPORT_TOOLTIP"),
                 run = () => host.ImportGenericClip (),
                 problem = host.GetImportProblem,
                 visible = () => host.genericClip != null,
             });
             result.buttons.Add (new LayerClipButton {
                 label = "Clear",
-                tooltip = "合成をやめる",
+                tooltip = Tr ("GENERIC_POSE_LAYER_CLEAR_TOOLTIP"),
                 run = () => host.SetGenericClip (null),
                 visible = () => host.genericClip != null,
             });
@@ -82,11 +83,11 @@ namespace Lilium
         public override string label { get { return "Generic Pose"; } }
         public override PosePhase phase { get { return PosePhase.Body; } }
         public override GrabTarget grab { get { return GrabTarget.Pose; } }
-        public override string unavailableReason { get { return "値を持たない（保存は Editing Rig のクリップ）"; } }
+        public override string unavailableReason { get { return Tr ("GENERIC_POSE_LAYER_UNAVAILABLE"); } }
 
         protected override string description
         {
-            get { return "編集用の体（表示モデルへ写す）"; }
+            get { return Tr ("GENERIC_POSE_LAYER_DESCRIPTION"); }
         }
 
         /// <summary>

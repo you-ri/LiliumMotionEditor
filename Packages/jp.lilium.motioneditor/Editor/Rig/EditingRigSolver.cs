@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -150,7 +151,7 @@ namespace Lilium
                 }
                 // 親は子より先に解く（並びは骨の階層の順なので、親が実際の祖先なら満たされる）
                 if (entry.parent != null && !entry.bone.IsChildOf (entry.parent.bone)) {
-                    Debug.LogWarning ("MotionEditor: " + entry.bone.name + " の値の基準にする親 " + entry.parent.bone.name + " が、骨の階層で祖先になっていない");
+                    Debug.LogWarning ("MotionEditor: " + Tr ("EDITING_RIG_SOLVER_PARENT_NOT_ANCESTOR", entry.bone.name, entry.parent.bone.name));
                     entry.parent = null;
                 }
             }

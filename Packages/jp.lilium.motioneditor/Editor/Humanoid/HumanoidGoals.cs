@@ -2,6 +2,7 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -92,12 +93,12 @@ namespace Lilium
         public HumanoidGoals (Animator source)
         {
             if (source == null || source.avatar == null || !source.avatar.isValid || !source.avatar.isHuman) {
-                error = "Humanoid の Avatar が無い";
+                error = Tr ("HUMANOID_GOALS_NO_HUMANOID_AVATAR");
                 return;
             }
             MuscleHandle[] handles;
             if (!PoseGraph.MapMuscles (out handles, out muscleSources_)) {
-                error = "muscle の名前を対応させられない";
+                error = Tr ("HUMANOID_GOALS_CANNOT_MAP_MUSCLES");
                 return;
             }
 

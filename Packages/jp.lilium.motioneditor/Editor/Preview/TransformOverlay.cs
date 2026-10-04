@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -68,21 +69,21 @@ namespace Lilium
             VisualElement modes = new VisualElement ();
             modes.style.flexDirection = FlexDirection.Row;
             modes_ = new Button[3];
-            modes_[0] = AddModeButton (modes, PreviewWindow.SpinnerMode.Move, "Move", "位置", "Spinner Move");
-            modes_[1] = AddModeButton (modes, PreviewWindow.SpinnerMode.Rotate, "Rot", "回転", "Spinner Rotate");
-            modes_[2] = AddModeButton (modes, PreviewWindow.SpinnerMode.Scale, "Scale", "大きさ", "Spinner Scale");
+            modes_[0] = AddModeButton (modes, PreviewWindow.SpinnerMode.Move, "Move", Tr ("TRANSFORM_OVERLAY_MODE_MOVE_TOOLTIP"), "Spinner Move");
+            modes_[1] = AddModeButton (modes, PreviewWindow.SpinnerMode.Rotate, "Rot", Tr ("TRANSFORM_OVERLAY_MODE_ROTATE_TOOLTIP"), "Spinner Rotate");
+            modes_[2] = AddModeButton (modes, PreviewWindow.SpinnerMode.Scale, "Scale", Tr ("TRANSFORM_OVERLAY_MODE_SCALE_TOOLTIP"), "Spinner Scale");
             root.Add (modes);
 
             // ビューのギズモの軸（Local = 骨の軸 / World = ワールドの軸）
             VisualElement spaces = new VisualElement ();
             spaces.style.flexDirection = FlexDirection.Row;
             spaces_ = new Button[2];
-            spaces_[0] = AddSpaceButton (spaces, false, "Local", "ギズモの軸を骨の軸にする");
-            spaces_[1] = AddSpaceButton (spaces, true, "World", "ギズモの軸をワールドの軸にする");
+            spaces_[0] = AddSpaceButton (spaces, false, "Local", Tr ("TRANSFORM_OVERLAY_SPACE_LOCAL_TOOLTIP"));
+            spaces_[1] = AddSpaceButton (spaces, true, "World", Tr ("TRANSFORM_OVERLAY_SPACE_WORLD_TOOLTIP"));
             root.Add (spaces);
 
             pole_ = new Toggle ("Pole");
-            ShortcutTooltip.Set (pole_, containerWindow, "IK の目標ではなく、肘・膝の向きを動かす", "Spinner Toggle Pole");
+            ShortcutTooltip.Set (pole_, containerWindow, Tr ("TRANSFORM_OVERLAY_POLE_TOOLTIP"), "Spinner Toggle Pole");
             pole_.RegisterValueChangedCallback (e => window_.spinnerPole = e.newValue);
             root.Add (pole_);
 
@@ -90,21 +91,21 @@ namespace Lilium
             root.Add (spinner_);
 
             rows_ = new ValueRow[3];
-            rows_[0] = AddRow (root, TransformChannels.Position, "Pos", "位置（メートル）。FK は基準姿勢からのずれ、IK の目標はキャラの足元から見た位置、Pole は曲がる向き");
-            rows_[1] = AddRow (root, TransformChannels.Rotation, "Rot", "回転（度）。FK は親から見た基準姿勢からの差、IK の目標はキャラから見た向き");
-            rows_[2] = AddRow (root, TransformChannels.Scale, "Scale", "大きさ。編集用リグの値は大きさを持たない");
+            rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("TRANSFORM_OVERLAY_POSITION_TOOLTIP"));
+            rows_[1] = AddRow (root, TransformChannels.Rotation, "Rot", Tr ("TRANSFORM_OVERLAY_ROTATION_TOOLTIP"));
+            rows_[2] = AddRow (root, TransformChannels.Scale, "Scale", Tr ("TRANSFORM_OVERLAY_SCALE_TOOLTIP"));
             foot_ = AddRow (root, TransformChannels.None, "Foot",
-                "足の転がし（度）。R = roll（正で踵が上がる・負でつま先が上がる）、B = bank（左右の縁で傾ける）、T = twist（母趾球でひねる）。" +
-                "入れると IK になる", kFootNames, kFootColors, "roll（前後に転がす）", "bank（左右の縁で傾ける）", "twist（母趾球でひねる）");
+                Tr ("TRANSFORM_OVERLAY_FOOT_TOOLTIP"), kFootNames, kFootColors,
+                Tr ("TRANSFORM_OVERLAY_FOOT_ROLL_TOOLTIP"), Tr ("TRANSFORM_OVERLAY_FOOT_BANK_TOOLTIP"), Tr ("TRANSFORM_OVERLAY_FOOT_TWIST_TOOLTIP"));
 
             // 全身 IK の点を選んでいる間だけ出す。いくつか選んでいれば、まとめて変える
             pointStates_ = new VisualElement ();
             pointStates_.style.flexDirection = FlexDirection.Row;
             pointStates_.style.marginTop = 4;
             pointStateButtons_ = new Button[3];
-            pointStateButtons_[0] = AddPointStateButton (BodyPointState.Free, "Free", "体に付いて動く点にする（青）");
-            pointStateButtons_[1] = AddPointStateButton (BodyPointState.Pin, "Pin", "今の場所に留める（オレンジ）。手を離すと、実際の骨の位置へ合わせ直される");
-            pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", "置いた場所から動かさない（赤）。点の右クリック・ショートカットでも付け外しできる");
+            pointStateButtons_[0] = AddPointStateButton (BodyPointState.Free, "Free", Tr ("TRANSFORM_OVERLAY_POINT_FREE_TOOLTIP"));
+            pointStateButtons_[1] = AddPointStateButton (BodyPointState.Pin, "Pin", Tr ("TRANSFORM_OVERLAY_POINT_PIN_TOOLTIP"));
+            pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", Tr ("TRANSFORM_OVERLAY_POINT_LOCK_TOOLTIP"));
             ShortcutTooltip.Set (pointStateButtons_[2], containerWindow, pointStateButtons_[2].tooltip, "Toggle Point Lock");
             root.Add (pointStates_);
 
@@ -242,8 +243,8 @@ namespace Lilium
             }
 
             row.reset = channel == TransformChannels.None
-                ? new Button (() => window_.ResetFootAngles ()) { text = "↺", tooltip = "足の転がしを 0 に戻す" }
-                : new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = "この行だけ基準姿勢の値へ戻す" };
+                ? new Button (() => window_.ResetFootAngles ()) { text = "↺", tooltip = Tr ("TRANSFORM_OVERLAY_RESET_FOOT_TOOLTIP") }
+                : new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = Tr ("TRANSFORM_OVERLAY_RESET_ROW_TOOLTIP") };
             row.reset.style.width = 18;
             row.reset.style.marginLeft = 1;
             row.reset.style.marginRight = 0;
@@ -318,8 +319,8 @@ namespace Lilium
             warning_.text = warning ?? "";
             warning_.style.display = warning != null ? DisplayStyle.Flex : DisplayStyle.None;
             mirror_.tooltip = mirror == null
-                ? "左右の相手が無い物は反転できない"
-                : mirror == selected ? "体の中心の骨なので、自分を左右反転する" : "今の見た目を左右反転して " + mirror.label + " へ写す";
+                ? Tr ("TRANSFORM_OVERLAY_MIRROR_NO_PAIR")
+                : mirror == selected ? Tr ("TRANSFORM_OVERLAY_MIRROR_SELF") : Tr ("TRANSFORM_OVERLAY_MIRROR_TO", mirror.label);
             RefreshValues ();
         }
 
@@ -520,8 +521,8 @@ namespace Lilium
         {
             if (window_ == null) return "";
             switch (window_.spinnerMode) {
-                case PreviewWindow.SpinnerMode.Rotate: return "多軸";
-                case PreviewWindow.SpinnerMode.Scale: return "全軸";
+                case PreviewWindow.SpinnerMode.Rotate: return Tr ("TRANSFORM_OVERLAY_MULTI_AXIS");
+                case PreviewWindow.SpinnerMode.Scale: return Tr ("TRANSFORM_OVERLAY_ALL_AXES");
                 default: return "";
             }
         }
@@ -549,7 +550,7 @@ namespace Lilium
         void ShowIdleReadout ()
         {
             string target = window_ != null ? window_.spinTargetLabel : null;
-            readout_.text = target ?? "骨を選んでください";
+            readout_.text = target ?? Tr ("TRANSFORM_OVERLAY_SELECT_BONE");
         }
 
         void OnGenerateVisualContent (MeshGenerationContext context)
@@ -669,7 +670,7 @@ namespace Lilium
                 Vector2 amount = new Vector2 (evt.deltaPosition.x, evt.deltaPosition.y) * kRotatePerPixel * fine;
                 totalView_ += amount;
                 window_.SpinRotateView (amount);
-                readout_.text = string.Format ("多軸 {0:+0;-0}° {1:+0;-0}°", totalView_.x, totalView_.y);
+                readout_.text = Tr ("TRANSFORM_OVERLAY_MULTI_AXIS_READOUT", totalView_.x.ToString ("+0;-0"), totalView_.y.ToString ("+0;-0"));
             }
             else {
                 // 上へドラッグで増やす
@@ -747,7 +748,7 @@ namespace Lilium
 
         string Readout ()
         {
-            string axis = dragZone_ == kZoneCenter ? "全軸" : ZoneNames ()[dragZone_];
+            string axis = dragZone_ == kZoneCenter ? Tr ("TRANSFORM_OVERLAY_ALL_AXES") : ZoneNames ()[dragZone_];
             switch (window_.spinnerMode) {
                 case PreviewWindow.SpinnerMode.Move: return string.Format ("{0} {1:+0.0;-0.0} cm", axis, applied_ * 100);
                 case PreviewWindow.SpinnerMode.Scale: return string.Format ("{0} {1:+0.00;-0.00}", axis, applied_);

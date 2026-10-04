@@ -5,6 +5,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -75,7 +76,7 @@ namespace Lilium
                 if (animationTrack != null) {
                     ReadClips (animationTrack, entry);
                     if (entry.binding != null) {
-                        entry.editBlock = "トラック（" + track.name + "）が " + entry.binding.name + " にバインドされていて、Timeline がそのキャラを動かす。自キャラのトラックはバインドを外して使う（それまで編集しない）";
+                        entry.editBlock = Tr ("CONTEXT_PROBE_TIMELINE_BOUND_TRACK", track.name, entry.binding.name);
                     }
                     foreach (ContextClip clip in entry.clips) {
                         signature.Append (';').Append (clip.clip != null ? clip.clip.GetHashCode () : 0).Append (',').Append (clip.start).Append (',').Append (clip.duration)
@@ -106,7 +107,7 @@ namespace Lilium
                 foreach (TrackAsset track in timeline.GetOutputTracks ()) {
                     if (track.GetType ().Name != "CinemachineTrack") continue;
                     if (track.mutedInHierarchy) {
-                        info.notes.Add ("カメラ割りのトラック（" + track.name + "）はミュートなので使わない（ゲームでも切り替わらない）");
+                        info.notes.Add (Tr ("CONTEXT_PROBE_TIMELINE_MUTED_CAMERA_TRACK", track.name));
                         continue;
                     }
                     foreach (TimelineClip clip in track.GetClips ()) {
@@ -134,7 +135,7 @@ namespace Lilium
 
             List<string> unresolved = shots.Where (s => s.camera == null).Select (s => s.name).ToList ();
             if (unresolved.Count > 0) {
-                info.notes.Add ("カメラ割りのうち " + unresolved.Count + " ショット（" + string.Join ("、", unresolved) + "）は prefab の外のカメラを指していて読めない（その間はいつもの視点）");
+                info.notes.Add (Tr ("CONTEXT_PROBE_TIMELINE_UNRESOLVED_SHOTS", unresolved.Count, string.Join (Tr ("CONTEXT_PROBE_TIMELINE_LIST_SEPARATOR"), unresolved)));
             }
         }
 
@@ -184,22 +185,22 @@ namespace Lilium
             List<PlayableDirector> mine = Directors (info != null ? info.instance : null);
             TimelineAsset timeline = mine.Select (d => d.playableAsset as TimelineAsset).FirstOrDefault (t => t != null);
             if (timeline == null) {
-                result.note = "演出に Timeline が無い";
+                result.note = Tr ("CONTEXT_PROBE_TIMELINE_NO_TIMELINE");
                 return result;
             }
 
             TimelineAsset inspected = UnityEditor.Timeline.TimelineEditor.inspectedAsset;
             PlayableDirector director = UnityEditor.Timeline.TimelineEditor.inspectedDirector;
             if (inspected == null) {
-                result.note = "Timeline 窓で演出（" + timeline.name + "）を開いていない";
+                result.note = Tr ("CONTEXT_PROBE_TIMELINE_NOT_OPEN", timeline.name);
                 return result;
             }
             if (inspected != timeline) {
-                result.note = "Timeline 窓は別の演出（" + inspected.name + "）を開いている";
+                result.note = Tr ("CONTEXT_PROBE_TIMELINE_OTHER_OPEN", inspected.name);
                 return result;
             }
             if (director == null) {
-                result.note = "Timeline 窓がアセットだけを開いている（演出の prefab の Director を選ぶと時刻を読める）";
+                result.note = Tr ("CONTEXT_PROBE_TIMELINE_ASSET_ONLY");
                 return result;
             }
 
@@ -214,7 +215,7 @@ namespace Lilium
                     if (track.name != selfTrack) continue;
                     Object bound = own.GetGenericBinding (track);
                     if (bound != null) {
-                        result.note = "プレビューの演出で自キャラのトラック（" + selfTrack + "）が " + bound.name + " にバインドされている。編集中の姿勢を上書きする";
+                        result.note = Tr ("CONTEXT_PROBE_TIMELINE_SELF_BOUND_PREVIEW", selfTrack, bound.name);
                         result.warning = true;
                         return result;
                     }
@@ -224,7 +225,7 @@ namespace Lilium
                 if (track.name != selfTrack) continue;
                 Object bound = director.GetGenericBinding (track);
                 if (bound != null) {
-                    result.note = "Timeline 窓の側で自キャラのトラック（" + selfTrack + "）が " + bound.name + " にバインドされている。向こうではそのキャラが動く（こちらは編集中の姿勢）";
+                    result.note = Tr ("CONTEXT_PROBE_TIMELINE_SELF_BOUND_WINDOW", selfTrack, bound.name);
                     result.warning = true;
                 }
             }
@@ -239,7 +240,7 @@ namespace Lilium
             ContextInfo info = new ContextInfo { instance = instance, label = instance.name };
             List<PlayableDirector> directors = Directors (instance);
             if (directors.Count == 0) {
-                info.notes.Add ("Director が無いので時計は回さない（見た目だけ置いている）");
+                info.notes.Add (Tr ("CONTEXT_PROBE_TIMELINE_NO_DIRECTOR"));
                 return info;
             }
 
@@ -248,7 +249,7 @@ namespace Lilium
                 director.timeUpdateMode = DirectorUpdateMode.Manual;
                 TimelineAsset timeline = director.playableAsset as TimelineAsset;
                 if (timeline == null) {
-                    info.notes.Add (director.name + ": Timeline ではない演出なので出せない");
+                    info.notes.Add (Tr ("CONTEXT_PROBE_TIMELINE_NOT_TIMELINE", director.name));
                     continue;
                 }
                 info.duration = System.Math.Max (info.duration, timeline.duration);
@@ -261,7 +262,7 @@ namespace Lilium
                     };
                     if (track is AudioTrack && entry.binding != null) {
                         entry.Bind (null);
-                        entry.note = "音は鳴らさないのでバインドを外した";
+                        entry.note = Tr ("CONTEXT_PROBE_TIMELINE_AUDIO_UNBOUND");
                     }
                     AnimationTrack animationTrack = track as AnimationTrack;
                     if (animationTrack != null) ReadClips (animationTrack, entry);
@@ -285,8 +286,11 @@ namespace Lilium
                 TimelineClip captured = timelineClip;
                 string clipOffsets = asset != null ? DescribeOffsets (asset.position, asset.rotation) : null;
                 string offsets = null;
-                if (trackOffsets != null) offsets = "トラック " + trackOffsets + "（" + track.trackOffset + "）";
-                if (clipOffsets != null) offsets = (offsets != null ? offsets + "・" : "") + "クリップ " + clipOffsets;
+                if (trackOffsets != null) offsets = Tr ("CONTEXT_PROBE_TIMELINE_TRACK_OFFSETS", trackOffsets, track.trackOffset);
+                if (clipOffsets != null) {
+                    string clipText = Tr ("CONTEXT_PROBE_TIMELINE_CLIP_OFFSETS", clipOffsets);
+                    offsets = offsets != null ? Tr ("CONTEXT_PROBE_TIMELINE_JOIN", offsets, clipText) : clipText;
+                }
                 entry.clips.Add (new ContextClip {
                     track = entry,
                     index = index++,
@@ -312,8 +316,11 @@ namespace Lilium
             bool moved = position.sqrMagnitude > 1e-8f;
             bool turned = Quaternion.Angle (Quaternion.identity, rotation) > 0.01f;
             if (!moved && !turned) return null;
-            string text = moved ? "位置 " + position.ToString ("F2") : "";
-            if (turned) text += (moved ? "・" : "") + "回転 " + rotation.eulerAngles.ToString ("F0");
+            string text = moved ? Tr ("CONTEXT_PROBE_TIMELINE_POSITION", position.ToString ("F2")) : "";
+            if (turned) {
+                string rotationText = Tr ("CONTEXT_PROBE_TIMELINE_ROTATION", rotation.eulerAngles.ToString ("F0"));
+                text = moved ? Tr ("CONTEXT_PROBE_TIMELINE_JOIN", text, rotationText) : rotationText;
+            }
             return text;
         }
 

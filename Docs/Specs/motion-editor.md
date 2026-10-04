@@ -1485,6 +1485,24 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 評価指標: コンパイルエラー 0 / モーションエディタのテスト失敗 0 / 既定の定義で点の場所の差 ≤ 0.1mm / 回転の中心の残差 ≤ 1mm。
 対象: `Packages/jp.lilium.motioneditor`（Editor・Runtime/FullBodyIk・Tests）。
 
+### S27: 画面の文字の多言語対応（英語・日本語）（2026-10-04）
+
+**公開に合わせ、画面の文字を英語と日本語で出せるようにする。**（10-04 ユーザー指示）仕組みは LiveStudio（jp.lilium.remotecontrol）の LocalizationSystem と同じ形にする（ユーザー指示）。
+
+決めたこと（10-04）:
+- 文字はキー（`LAYERS_OVERLAY_EDIT_STRUCTURE` など。ファイル名を頭に付ける）で引き、言語ごとの JSON（`Editor/Localization/MotionEditorLocales/en.json`・`ja.json`）に持つ。今の言語に無いキーは英語へ、英語にも無ければキーのまま出す（RemoteControlEditorLocalization と同じ）。
+- `LocalizationSystem` と `MotionEditorLocalization`（RemoteControlEditorLocalization に当たる）はパッケージの中へ写す（RemoteControl には依存しない）。元との違い: 言語は PlayerPrefs ではなく EditorPrefs に持つ（エディタだけの道具なので、ゲームの PlayerPrefs を汚さない）。JSON は自前で読む（Newtonsoft のためにパッケージの依存を増やさない。ユーザー決定）。
+- 言語は `Preferences > Lilium Motion Editor` の Language で選ぶ（人ごとの設定）。既定は OS の言語（LocalizationSystem と同じ）。切り替えるとスクリプトを読み直す（文字は窓・オーバーレイを作るときに入れているので、作り直して切り替える）。
+- 訳すのは日本語で書いていた文字（ラベル・説明・状態・問題の文・ダイアログ・Undo の名前・ログ）。もとから英語のボタン名（`+Override`・`Key All` など）と段の名前はそのまま。Unity の `[Tooltip]` 属性は定数しか書けないので英語にした（持ち替えの定義・キャラの設定）。
+- テストは日本語で走らせる（`JapaneseTestLanguage`。メッセージの中身を日本語で確かめているテストがあるため）。
+
+機能（受け入れ条件）:
+- Preferences で English / 日本語 を切り替えると、プレビュー窓・オーバーレイ・Motion Scene・取込の窓・プロジェクト設定の文字がその言語になる。
+- コードに日本語の文字列が残っていない（画面に出さない文字は行に `noloc` を書く）。コードで引くキーがどれも言語ファイルにあり、使っていないキーが無い。en と ja が同じキーと同じ `{0}` を持ち、en に日本語が残っていない（`LocalizationTests`）。
+
+評価指標: コンパイルエラー 0（6.0・6.6）/ モーションエディタのテスト失敗 0 / `LocalizationTests` 通過。
+対象: `Packages/jp.lilium.motioneditor`（Editor・Tests）。
+
 ## スプリント計画（1スプリント = 1機能）
 
 | # | 機能 | ゴール | 完了基準 |
@@ -1521,6 +1539,7 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 | S24 | キー操作の改善と小不具合 2 件（09-29 追加） | 誤ってキーを作らない・キーの選択削除と全部打ち | 上の受け入れ条件 |
 | S25 | 全身 IK（PBIK）モード（09-30 追加。a-1 配線 → a-2 PBIK 本体（Burst）→ b 引っ張り道具 → c 自然さ → d 補間の改善） | リグ定義で今の 2 本骨 IK と全身 IK を選べる。関節の点を引っ張ると全身が付いてくる。触った点はキーで固定され、再生も全身 IK で解く | 上の受け入れ条件（案） |
 | S26 | 全身 IK の点の一般化（10-02 追加。a 解き方 → b 定義 → c 画面とコード） | 点を骨の上の好きな場所に置け、全部同じ解き方で、同じ骨の点どうしが剛体として拘束しあう | S26 の受け入れ条件 |
+| S27 | 画面の文字の多言語対応（10-04 追加） | 画面の文字を英語と日本語で出せる | S27 の受け入れ条件 |
 
 ## 評価指標と閾値
 - 共通: コンパイルエラー0 / エディタ上の例外0 / **Console 警告 0**（Rigging は拘束が invalid だと警告を出す）/ テスト失敗0。
@@ -1744,3 +1763,4 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
   - 既知の問題: 付け根から離れた点を中心に骨を回す置き方（頭の 2 点で頭を横へずらすなど）は、解く回数 48 では 1cm ほど外れる（200 回で 2.6mm、1000 回で 0。仕上げの合わせ直しを 3→12 回に増やしても 6.6mm）。頭の形と向きは合っていて、位置だけが追いつかない。仕上げの合わせ直し（手前の骨を順に回す）を直すまでは残る
   - 10-03 修正: 腰を位置だけ固定して足首を持ち上げる（まっすぐな脚の足を上げる・つま先の先を Locked にしてかかとを上げる）と、腰が 1〜2° 回って上半身が傾いていた（頭が 1〜2cm 動く）。部位で解き方は分けず、蝶番（肘・膝）を届くのに要るだけ直に曲げる拘束（SolveBends。蝶番の骨か子の付け根が動かないとき、膝を余弦定理の円の上の点へ寄せる）を足した。まっすぐな脚では関節を 1 つずつ満たすだけだと膝が曲がり始めず、ずれの取り分で腰が回っていた。腰の回り 0.00°・頭 ≤0.02mm、つま先の骨があるキャラでつま先の先が 2〜6cm 外れていたのも ≤0.01mm になった。真上に上げるなど足だけで届かない配置の差は残る（骨の長さは変えない）
 - 10-04: クラス名の頭の `Mkt` を外した（ユーザー指示。名前空間 `Lilium` で分けているので要らない）。`IMkt...` は `I...`、属性は `[PoseLayer]` など。Unity の型とぶつかるものなどは別の名前（`MktRigDefinition` → `EditRigDefinition`、`MktEditorUtility` → `ClipKeyUtility`、`MktHandles` → `PoseHandles`、`MktHandleUtility` → `PoseHandleUtility`、`MktSlider` → `AxisSlider`、`MktSettings` → `SettingsLookup`、`MktUserLayer` → `UserComponentLayer`）。この仕様書の 10-04 より前の記述は旧名のまま
+- [ ] S27 画面の文字の多言語対応（英語・日本語）: 実装済み（10-04）。LiveStudio の LocalizationSystem を写し、日本語の文字列 589 キーを en.json / ja.json へ移した。Preferences に言語の選択を追加。残り: テストの実行・窓での表示の確認（英語のボタンの幅など）

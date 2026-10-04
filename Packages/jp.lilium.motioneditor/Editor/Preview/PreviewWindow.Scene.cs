@@ -1,6 +1,7 @@
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -37,11 +38,11 @@ namespace Lilium
         {
             get {
                 if (sceneTarget_ == null) {
-                    return sceneTargetLost_ ? sceneTargetName_ + " が見つからない（そのシーンを開くと続きから編集する）" : null;
+                    return sceneTargetLost_ ? Tr ("PREVIEW_WINDOW_SCENE_TARGET_LOST", sceneTargetName_) : null;
                 }
-                if (sceneMirror_.target == null) return sceneTarget_.name + ": Humanoid の Animator が無いので写せない";
-                string text = sceneTarget_.name + " を編集中" + (sceneMirror_.ownsMode ? "" : "（Timeline のプレビューに相乗り）");
-                if (sceneMirror_.missing > 0) text += "。対応する骨が無いものが " + sceneMirror_.missing + " 本";
+                if (sceneMirror_.target == null) return Tr ("PREVIEW_WINDOW_SCENE_NO_HUMANOID_ANIMATOR", sceneTarget_.name);
+                string text = Tr ("PREVIEW_WINDOW_SCENE_EDITING", sceneTarget_.name) + (sceneMirror_.ownsMode ? "" : Tr ("PREVIEW_WINDOW_SCENE_SHARING_TIMELINE_PREVIEW"));
+                if (sceneMirror_.missing > 0) text += Tr ("PREVIEW_WINDOW_SCENE_MISSING_BONES", sceneMirror_.missing);
                 return text;
             }
         }

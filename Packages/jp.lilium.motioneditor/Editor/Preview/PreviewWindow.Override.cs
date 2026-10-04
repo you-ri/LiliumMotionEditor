@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -189,8 +190,8 @@ namespace Lilium
         public string GetAddOverrideProblem ()
         {
             AnimationClip source = baseClip;
-            if (source == null) return "元のクリップを開いてください";
-            if (!EditorUtility.IsPersistent (source)) return "保存したクリップにだけ重ねられる";
+            if (source == null) return Tr ("PREVIEW_WINDOW_OVERRIDE_OPEN_SOURCE_CLIP");
+            if (!EditorUtility.IsPersistent (source)) return Tr ("PREVIEW_WINDOW_OVERRIDE_ONLY_SAVED_CLIP");
             return useHumanoidBase ? null : clipProblem_;
         }
 
@@ -239,14 +240,14 @@ namespace Lilium
             AnimationClip clip = overrides_[index].clip;
             string path = clip != null ? AssetDatabase.GetAssetPath (clip) : null;
             if (deleteAsset && !string.IsNullOrEmpty (path)) {
-                if (!EditorUtility.DisplayDialog ("Motion Editor", path + " を消します（Undo では戻せません）。", "消す", "やめる")) return;
+                if (!EditorUtility.DisplayDialog ("Motion Editor", Tr ("PREVIEW_WINDOW_OVERRIDE_DELETE_CONFIRM", path), Tr ("PREVIEW_WINDOW_DELETE"), Tr ("PREVIEW_WINDOW_CANCEL"))) return;
             }
             OverrideFiles.Unlink (clip);
             overrides_.RemoveAt (index);
             SaveOverrides ();
             if (deleteAsset && !string.IsNullOrEmpty (path)) AssetDatabase.DeleteAsset (path);
             AfterOverrideChange (true);
-            SetBakeStatus (deleteAsset ? "Override を消した: " + path : "Override を外した（ファイルは残る）: " + path, false);
+            SetBakeStatus (deleteAsset ? Tr ("PREVIEW_WINDOW_OVERRIDE_DELETED", path) : Tr ("PREVIEW_WINDOW_OVERRIDE_REMOVED", path), false);
         }
 
         /// <summary>
@@ -255,9 +256,9 @@ namespace Lilium
         /// </summary>
         public string GetMoveOverrideProblem (int index, int direction)
         {
-            if (index < 0 || index >= overrides_.Count) return "段が無い";
-            if (index + direction < 0) return "Editing Rig より上には置けない（Override は元のクリップに重ねる）";
-            if (index + direction >= overrides_.Count) return "Humanoid Pose より下には置けない（Override は編集用リグの値に重ねる段なので、値のある Humanoid Pose より上だけ）";
+            if (index < 0 || index >= overrides_.Count) return Tr ("PREVIEW_WINDOW_OVERRIDE_NO_LAYER");
+            if (index + direction < 0) return Tr ("PREVIEW_WINDOW_OVERRIDE_ABOVE_EDITING_RIG");
+            if (index + direction >= overrides_.Count) return Tr ("PREVIEW_WINDOW_OVERRIDE_BELOW_HUMANOID_POSE");
             return null;
         }
 
@@ -389,12 +390,12 @@ namespace Lilium
         /// <summary>統合できない理由（できるなら null）</summary>
         public string GetMergeOverridesProblem ()
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return "Play Mode 中は統合しない";
-            if (useHumanoidBase) return "元が Humanoid のクリップ（読み取り専用）なので統合できない。Bake で新しいクリップに出すか、取込で編集用クリップにする";
-            if (editingClip_ == null) return "元のクリップが無い";
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return Tr ("PREVIEW_WINDOW_OVERRIDE_NOT_IN_PLAY_MODE");
+            if (useHumanoidBase) return Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE_HUMANOID_BASE");
+            if (editingClip_ == null) return Tr ("PREVIEW_WINDOW_OVERRIDE_NO_SOURCE_CLIP");
             if (clipProblem_ != null) return clipProblem_;
-            if (!EditorUtility.IsPersistent (editingClip_)) return "保存したクリップにだけ統合できる";
-            if (bakeOverrides.Count == 0) return "効いている Override が無い";
+            if (!EditorUtility.IsPersistent (editingClip_)) return Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE_ONLY_SAVED_CLIP");
+            if (bakeOverrides.Count == 0) return Tr ("PREVIEW_WINDOW_OVERRIDE_NO_ACTIVE_OVERRIDE");
             return null;
         }
 
@@ -412,7 +413,7 @@ namespace Lilium
         {
             string problem = GetMergeOverridesProblem ();
             if (problem != null) {
-                SetBakeStatus ("統合できない: " + problem, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_OVERRIDE_CANNOT_MERGE", problem), true);
                 return false;
             }
 
@@ -424,8 +425,7 @@ namespace Lilium
             }
             string names = string.Join ("\n", merged.ConvertAll (c => AssetDatabase.GetAssetPath (c)));
             if (confirm && !EditorUtility.DisplayDialog ("Motion Editor",
-                merged.Count + " 枚の Override を " + editingClip_.name + " へ焼き込みます（0〜" + last + "F を打ち直します）。\n"
-                + "焼き込んだ Override のクリップは消えます（Undo では戻せません）。\n\n" + names, "統合する", "やめる")) {
+                Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE_CONFIRM", merged.Count, editingClip_.name, last, names), Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }
 
@@ -461,7 +461,7 @@ namespace Lilium
             }
             catch (System.Exception exception) {
                 Debug.LogException (exception);
-                SetBakeStatus ("統合できなかった: " + exception.Message, true);
+                SetBakeStatus (Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE_FAILED", exception.Message), true);
                 return false;
             }
 
@@ -476,14 +476,14 @@ namespace Lilium
             LoadOverrides ();
             AssetDatabase.SaveAssetIfDirty (editingClip_);
             AfterOverrideChange (true);
-            SetBakeStatus ("統合: " + merged.Count + " 枚を " + editingClip_.name + " へ焼き込んだ（0〜" + last + "F を打ち直し、要らないキーを " + removed + " 本削った）", false);
+            SetBakeStatus (Tr ("PREVIEW_WINDOW_OVERRIDE_MERGED", merged.Count, editingClip_.name, last, removed), false);
             return true;
         }
 
         /// <summary>元のクリップへ書く操作（取り込み・プロパティ）を、書き込み先が Override のときに止める理由</summary>
         string overrideBlocksBaseWrite
         {
-            get { return overrideWriteLayer != null ? "書き込み先が Override なので使えない（元のクリップへ書く操作。書き込み先を元に戻すと使える）" : null; }
+            get { return overrideWriteLayer != null ? Tr ("PREVIEW_WINDOW_OVERRIDE_BLOCKS_BASE_WRITE") : null; }
         }
     }
 

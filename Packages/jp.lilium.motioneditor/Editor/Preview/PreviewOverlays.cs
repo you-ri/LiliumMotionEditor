@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using UnityEditor.Toolbars;
 using UnityEditor.UIElements;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -39,19 +40,18 @@ namespace Lilium
             window_ = OverlayWindows.Resolve (containerWindow);
             if (window_ == null) return toolbar;
 
-            model_ = new ObjectField { objectType = typeof (GameObject), allowSceneObjects = false, tooltip = "編集するキャラクターの prefab" };
+            model_ = new ObjectField { objectType = typeof (GameObject), allowSceneObjects = false, tooltip = Tr ("PREVIEW_OVERLAYS_MODEL_TOOLTIP") };
             model_.style.width = 180;
             model_.RegisterValueChangedCallback (e => window_.SetModel (e.newValue as GameObject));
             toolbar.Add (model_);
 
-            toolbar.Add (new EditorToolbarButton ("Reload", window_.RebuildStage) { tooltip = "キャラを読み込み直す" });
+            toolbar.Add (new EditorToolbarButton ("Reload", window_.RebuildStage) { tooltip = Tr ("PREVIEW_OVERLAYS_RELOAD_TOOLTIP") });
 
             // このキャラの設定（S19）。無ければ作れる。既にある設定を入れると、それをこのキャラに結び付ける
             settings_ = new ObjectField {
                 objectType = typeof (CharacterSettings),
                 allowSceneObjects = false,
-                tooltip = "このキャラの設定（Layers・AnimBank / PoseBank のフォルダ・リグの定義・Auto）。無いときはプロジェクト設定の値で、Layers の変更は保存されない。" +
-                    "既にある設定のアセットを入れると、このキャラの設定になる（1 キャラ 1 設定）",
+                tooltip = Tr ("PREVIEW_OVERLAYS_SETTINGS_TOOLTIP"),
             };
             settings_.style.width = 160;
             // 設定は prefab から引き当てる。入れたアセットはこのキャラに結び付け、空にしたとき・やめたときは今のアセットに戻す
@@ -60,40 +60,40 @@ namespace Lilium
                 settings_.SetValueWithoutNotify (window_.characterSettings);
             });
             toolbar.Add (settings_);
-            createSettings_ = new EditorToolbarButton ("作る", () => window_.CreateCharacterSettings ()) { tooltip = "このキャラの設定を作る（今の値を取り込む）" };
+            createSettings_ = new EditorToolbarButton (Tr ("PREVIEW_OVERLAYS_CREATE_SETTINGS"), () => window_.CreateCharacterSettings ()) { tooltip = Tr ("PREVIEW_OVERLAYS_CREATE_SETTINGS_TOOLTIP") };
             toolbar.Add (createSettings_);
 
             // 一緒に見る演出（Timeline を持つ prefab）。時計は窓が正で、フレームを動かすと演出もそのフレームになる
             context_ = new ObjectField {
                 objectType = typeof (GameObject),
                 allowSceneObjects = false,
-                tooltip = "一緒に見る演出の prefab（Timeline を持つもの）。自キャラの姿勢は編集中のものが出る",
+                tooltip = Tr ("PREVIEW_OVERLAYS_CONTEXT_TOOLTIP"),
             };
             context_.style.width = 160;
             context_.RegisterValueChangedCallback (e => window_.SetContext (e.newValue as GameObject));
             toolbar.Add (context_);
 
-            contextOffset_ = new IntegerField { tooltip = "演出の何フレーム目を、編集しているクリップの 0F に合わせるか" };
+            contextOffset_ = new IntegerField { tooltip = Tr ("PREVIEW_OVERLAYS_CONTEXT_OFFSET_TOOLTIP") };
             contextOffset_.style.width = 44;
             contextOffset_.RegisterValueChangedCallback (e => window_.SetContextOffset (e.newValue));
             toolbar.Add (contextOffset_);
 
             // 演出のどのクリップとして見るか（S15b）。結び付けると、演出の時刻はそのクリップの置き方（開始・頭出し・速さ）で決まる
             timelineClip_ = new EditorToolbarDropdown ("Clip", ShowTimelineClipMenu) {
-                tooltip = "演出のどのクリップとして見るか。自動なら、編集中のクリップ（焼いた版・Humanoid Pose のクリップ）と同じものを探す",
+                tooltip = Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_TOOLTIP"),
             };
             toolbar.Add (timelineClip_);
 
-            masterFrame_ = new IntegerField { tooltip = "演出の時刻（演出のフレーム）。スローの区間ではクリップの時刻が端数になり、キーは丸めたフレームに打つ" };
+            masterFrame_ = new IntegerField { tooltip = Tr ("PREVIEW_OVERLAYS_MASTER_FRAME_TOOLTIP") };
             masterFrame_.style.width = 44;
             masterFrame_.RegisterValueChangedCallback (e => window_.SetMasterFrame (e.newValue));
             toolbar.Add (masterFrame_);
 
             // 演出のカメラ割りで見る・Timeline 窓の再生位置に付いていく（S15c）
-            contextCamera_ = new EditorToolbarToggle { text = "Cam", tooltip = "演出のカメラ割りで見る。視点を動かすと、その位置からいつもの視点に戻る" };
+            contextCamera_ = new EditorToolbarToggle { text = "Cam", tooltip = Tr ("PREVIEW_OVERLAYS_CAM_TOOLTIP") };
             contextCamera_.RegisterValueChangedCallback (e => window_.SetUseContextCamera (e.newValue));
             toolbar.Add (contextCamera_);
-            followTimeline_ = new EditorToolbarToggle { text = "Follow", tooltip = "Unity の Timeline 窓で同じ演出を開いていれば、その再生位置に付いていく" };
+            followTimeline_ = new EditorToolbarToggle { text = "Follow", tooltip = Tr ("PREVIEW_OVERLAYS_FOLLOW_TOOLTIP") };
             followTimeline_.RegisterValueChangedCallback (e => window_.SetFollowTimelineWindow (e.newValue));
             toolbar.Add (followTimeline_);
 
@@ -119,13 +119,13 @@ namespace Lilium
             if (window_ == null) return;
             GenericMenu menu = new GenericMenu ();
             ContextClip current = window_.timelineClip;
-            menu.AddItem (new GUIContent ("自動（編集中のクリップと同じもの）"), window_.timelineClipAuto, () => window_.SetTimelineClip (null));
-            menu.AddItem (new GUIContent ("結び付けない（オフセットで合わせる）"), !window_.timelineClipAuto && current == null, window_.SetTimelineClipNone);
+            menu.AddItem (new GUIContent (Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_AUTO")), window_.timelineClipAuto, () => window_.SetTimelineClip (null));
+            menu.AddItem (new GUIContent (Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_UNLINKED")), !window_.timelineClipAuto && current == null, window_.SetTimelineClipNone);
             menu.AddSeparator ("");
             double rate = window_.contextFrameRate;
             foreach (ContextClip candidate in window_.timelineClipCandidates) {
                 ContextClip item = candidate;
-                string text = item.label + "  " + Mathf.RoundToInt ((float)(item.start * rate)) + "F〜" + Mathf.RoundToInt ((float)(item.end * rate)) + "F"
+                string text = Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_ITEM", item.label, Mathf.RoundToInt ((float)(item.start * rate)), Mathf.RoundToInt ((float)(item.end * rate)))
                     + (System.Math.Abs (item.timeScale - 1) > 1e-6 ? "  ×" + item.timeScale.ToString ("0.###") : "");
                 // メニューの「/」は階層になるので置き換える
                 menu.AddItem (new GUIContent (text.Replace ("/", "∕")), !window_.timelineClipAuto && current == item, () => window_.SetTimelineClip (item.key));
@@ -167,7 +167,7 @@ namespace Lilium
             bool follows = window_.followsTimelineClip;
             ContextClip current = window_.timelineClip;
             timelineClip_.style.display = hasCandidates ? DisplayStyle.Flex : DisplayStyle.None;
-            timelineClip_.text = current != null && current.clip != null ? current.clip.name : "Clip: なし";
+            timelineClip_.text = current != null && current.clip != null ? current.clip.name : Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_NONE");
             // 結び付けていればオフセットは写像が決めるので隠し、代わりに演出の時刻を出す
             contextOffset_.style.display = follows || (window_.contextPrefab == null && !inScene) ? DisplayStyle.None : DisplayStyle.Flex;
             masterFrame_.style.display = follows ? DisplayStyle.Flex : DisplayStyle.None;
@@ -200,7 +200,7 @@ namespace Lilium
             root.Add (bones);
 
             Toggle ik = new Toggle ("IK") {
-                tooltip = "手足の IK のコントロールを、Bones を切っていても出す。全身 IK の点（固定の印も）の表示も兼ね、切ると選んでいる点だけ出す",
+                tooltip = Tr ("PREVIEW_OVERLAYS_IK_TOOLTIP"),
                 value = window.showIk,
             };
             ik.RegisterValueChangedCallback (e => window.showIk = e.newValue);
@@ -211,22 +211,22 @@ namespace Lilium
             root.Add (floor);
 
             // 大きさ・倍率は非線形のスライダー（UE のカメラの移動速度と同じく、つまみの位置で値が倍々に変わる）
-            LogSlider handleSize = new LogSlider ("Handle", 0.005f, 0.2f, window.handleSize) { tooltip = "ハンドルの大きさ" };
+            LogSlider handleSize = new LogSlider ("Handle", 0.005f, 0.2f, window.handleSize) { tooltip = Tr ("PREVIEW_OVERLAYS_HANDLE_TOOLTIP") };
             handleSize.valueChanged += v => window.handleSize = v;
             root.Add (handleSize);
 
             LogSlider moveScale = new LogSlider ("Move ×", 0.05f, 20f, window.spinMoveScale) {
-                tooltip = "Transform パネルの Spinner の Move で、ドラッグ量に掛ける倍率。1 で 1 ピクセル 2.5mm（Shift で細かくなるのは今までどおり）",
+                tooltip = Tr ("PREVIEW_OVERLAYS_MOVE_SCALE_TOOLTIP"),
             };
             moveScale.valueChanged += v => window.spinMoveScale = v;
             root.Add (moveScale);
 
             VisualElement views = new VisualElement ();
             views.style.flexDirection = FlexDirection.Row;
-            views.Add (ViewButton (window, "Front", "正面から見る", "Front View", () => window.LookFrom (PreviewWindow.ViewPreset.Front)));
-            views.Add (ViewButton (window, "Side", "横から見る", "Side View", () => window.LookFrom (PreviewWindow.ViewPreset.Side)));
-            views.Add (ViewButton (window, "Top", "上から見る", "Top View", () => window.LookFrom (PreviewWindow.ViewPreset.Top)));
-            views.Add (ViewButton (window, "Frame", "選んでいる骨（無ければキャラ全体）を画面に収める", "Frame Selected", window.FrameSelection));
+            views.Add (ViewButton (window, "Front", Tr ("PREVIEW_OVERLAYS_FRONT_TOOLTIP"), "Front View", () => window.LookFrom (PreviewWindow.ViewPreset.Front)));
+            views.Add (ViewButton (window, "Side", Tr ("PREVIEW_OVERLAYS_SIDE_TOOLTIP"), "Side View", () => window.LookFrom (PreviewWindow.ViewPreset.Side)));
+            views.Add (ViewButton (window, "Top", Tr ("PREVIEW_OVERLAYS_TOP_TOOLTIP"), "Top View", () => window.LookFrom (PreviewWindow.ViewPreset.Top)));
+            views.Add (ViewButton (window, "Frame", Tr ("PREVIEW_OVERLAYS_FRAME_TOOLTIP"), "Frame Selected", window.FrameSelection));
             root.Add (views);
 
             return root;

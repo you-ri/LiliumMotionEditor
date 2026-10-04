@@ -3,6 +3,7 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.UIElements;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -18,22 +19,20 @@ namespace Lilium
         {
             VisualElement root = new VisualElement ();
             root.Add (new HelpBox (
-                "骨は HumanBodyBones で書き、キャラへは Avatar で割り当てる。キャラに無い骨のコントロールは無効になるだけ。" +
-                "直すと、この定義を使っているモーションエディタの編集用リグがすぐ作り直される。",
+                Tr ("EDIT_RIG_DEFINITION_EDITOR_INFO"),
                 HelpBoxMessageType.Info));
 
             // パッケージの既定は、パッケージを更新すると戻る（git から入れたときは書き換えもできない）
             if (target == EditRigDefinition.packageDefault) {
                 root.Add (new HelpBox (
-                    "パッケージの既定の定義。直すときは Create > Lilium Motion Editor > Rig Definition で作り、" +
-                    "Project Settings > Lilium Motion Editor の Rig Definition（全キャラ）かキャラの設定に入れる。",
+                    Tr ("EDIT_RIG_DEFINITION_EDITOR_PACKAGE_DEFAULT"),
                     HelpBoxMessageType.Warning));
             }
 
             HelpBox errors = new HelpBox ("", HelpBoxMessageType.Error);
             root.Add (errors);
 
-            Button reset = new Button (ResetToDefault) { text = "既定に戻す", tooltip = "人型の骨すべての FK と、両腕・両脚の IK（脚は足の転がし付き）に戻す" };
+            Button reset = new Button (ResetToDefault) { text = Tr ("EDIT_RIG_DEFINITION_EDITOR_RESET"), tooltip = Tr ("EDIT_RIG_DEFINITION_EDITOR_RESET_TOOLTIP") };
             reset.style.alignSelf = Align.FlexStart;
             root.Add (reset);
 
@@ -85,7 +84,7 @@ namespace Lilium
 
             VisualElement foot = new VisualElement ();
             foot.style.paddingLeft = 12;
-            foot.Add (new Label ("足の転がし（支点は足首から見た 右・上・前、メートル。無い支点は骨と Avatar から見積もる）") {
+            foot.Add (new Label (Tr ("EDIT_RIG_DEFINITION_EDITOR_FOOT_ROLL_HELP")) {
                 style = { fontSize = 10, whiteSpace = WhiteSpace.Normal, color = new Color (0.7f, 0.7f, 0.7f) },
             });
             foreach (string field in kFootFields) {
@@ -94,7 +93,7 @@ namespace Lilium
             foldout.Add (foot);
 
             System.Action update = () => {
-                foldout.text = string.IsNullOrEmpty (name.stringValue) ? "(名前なし)" : name.stringValue;
+                foldout.text = string.IsNullOrEmpty (name.stringValue) ? Tr ("EDIT_RIG_DEFINITION_EDITOR_UNNAMED") : name.stringValue;
                 foot.style.display = reverseFoot.boolValue ? DisplayStyle.Flex : DisplayStyle.None;
             };
             update ();

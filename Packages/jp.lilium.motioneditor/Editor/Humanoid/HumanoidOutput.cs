@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.IO;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -117,17 +118,17 @@ namespace Lilium
         /// </summary>
         public static string GetProblem (AnimationClip source, string outputPath)
         {
-            if (string.IsNullOrEmpty (outputPath)) return "クリップがアセットでないので置き場所が決まらない（保存してから焼く）";
-            if (AssetDatabase.GetAssetPath (source) == outputPath) return "出力先が元のクリップと同じ";
+            if (string.IsNullOrEmpty (outputPath)) return Tr ("HUMANOID_OUTPUT_NOT_AN_ASSET");
+            if (AssetDatabase.GetAssetPath (source) == outputPath) return Tr ("HUMANOID_OUTPUT_SAME_AS_SOURCE");
 
             Object existing = AssetDatabase.LoadMainAssetAtPath (outputPath);
             if (existing == null) return null;
-            if (!(existing is AnimationClip)) return "出力先に別の種類のアセットがある: " + outputPath;
+            if (!(existing is AnimationClip)) return Tr ("HUMANOID_OUTPUT_OTHER_ASSET_TYPE", outputPath);
 
             Link link = ReadLink (outputPath);
             string sourceGuid = AssetDatabase.AssetPathToGUID (AssetDatabase.GetAssetPath (source));
-            if (link == null) return "出力先にエディタが作っていないクリップがあるので上書きしない: " + outputPath;
-            if (link.source != sourceGuid) return "出力先は別のクリップから作られたもの: " + outputPath;
+            if (link == null) return Tr ("HUMANOID_OUTPUT_NOT_CREATED_BY_EDITOR", outputPath);
+            if (link.source != sourceGuid) return Tr ("HUMANOID_OUTPUT_FROM_OTHER_CLIP", outputPath);
             return null;
         }
 
@@ -237,49 +238,49 @@ namespace Lilium
         /// <param name="definitionHash">今のリグの定義の、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
         public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides, string outputName, string definitionHash = null)
         {
-            if (source == null) return new LayerClipStatus (LayerClipState.None, "編集するクリップが無い");
+            if (source == null) return new LayerClipStatus (LayerClipState.None, Tr ("HUMANOID_OUTPUT_NO_SOURCE_CLIP"));
             bool edited = overrides != null && overrides.Count > 0;
             string outputPath = GetOutputPath (source, edited, outputName);
-            if (string.IsNullOrEmpty (outputPath)) return new LayerClipStatus (LayerClipState.None, "編集するクリップを保存すると置き場所が決まる");
+            if (string.IsNullOrEmpty (outputPath)) return new LayerClipStatus (LayerClipState.None, Tr ("HUMANOID_OUTPUT_SAVE_TO_DECIDE_PATH"));
 
             string name = Path.GetFileName (outputPath);
             string problem = GetProblem (source, outputPath);
-            if (problem != null) return new LayerClipStatus (LayerClipState.Blocked, "焼けない: " + problem);
+            if (problem != null) return new LayerClipStatus (LayerClipState.Blocked, Tr ("HUMANOID_OUTPUT_CANNOT_BAKE", problem));
             if (AssetDatabase.LoadAssetAtPath<AnimationClip> (outputPath) == null) {
                 return bakeProblem != null
-                    ? new LayerClipStatus (LayerClipState.Blocked, "未作成: " + name + "（焼けない: " + bakeProblem + "）")
-                    : new LayerClipStatus (LayerClipState.None, "未作成: " + name + "（Bake で作る）");
+                    ? new LayerClipStatus (LayerClipState.Blocked, Tr ("HUMANOID_OUTPUT_NOT_CREATED_CANNOT_BAKE", name, bakeProblem))
+                    : new LayerClipStatus (LayerClipState.None, Tr ("HUMANOID_OUTPUT_NOT_CREATED", name));
             }
 
             Link link = ReadLink (outputPath);
             string overridesHash = OverridesHash (overrides);
             if (link != null && overridesHash == kUnsaved) {
-                return new LayerClipStatus (LayerClipState.Stale, "Override に保存していない変更がある（保存か Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_UNSAVED_OVERRIDE"));
             }
             if (link != null && (link.overridesHash ?? "") != overridesHash) {
-                return new LayerClipStatus (LayerClipState.Stale, "Override が変わった（Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_OVERRIDE_CHANGED"));
             }
             string modelGuid = model != null ? AssetDatabase.AssetPathToGUID (AssetDatabase.GetAssetPath (model)) : "";
             if (!string.IsNullOrEmpty (link.model) && !string.IsNullOrEmpty (modelGuid) && link.model != modelGuid) {
                 GameObject baked = AssetDatabase.LoadAssetAtPath<GameObject> (AssetDatabase.GUIDToAssetPath (link.model));
-                return new LayerClipStatus (LayerClipState.Stale, "別のキャラ（" + (baked != null ? baked.name : "不明") + "）で焼いた");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_OTHER_CHARACTER", baked != null ? baked.name : Tr ("HUMANOID_OUTPUT_UNKNOWN")));
             }
             if ((link.definition ?? "") != (definitionHash ?? "")) {
-                return new LayerClipStatus (LayerClipState.Stale, "リグの定義（全身 IK の設定）が変わった（Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_DEFINITION_CHANGED"));
             }
             if (EditorUtility.IsDirty (source)) {
-                return new LayerClipStatus (LayerClipState.Stale, "保存していない変更がある（保存か Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_UNSAVED_CHANGES"));
             }
             if (string.IsNullOrEmpty (link.sourceHash)) {
-                return new LayerClipStatus (LayerClipState.Stale, "いつの内容で焼いたか分からない（Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_UNKNOWN_SOURCE_STATE"));
             }
             if (link.sourceHash == kUnsaved) {
-                return new LayerClipStatus (LayerClipState.Stale, "保存前の内容で焼いた（保存か Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_BAKED_BEFORE_SAVE"));
             }
             if (link.sourceHash != ComputeFileHash (AssetDatabase.GetAssetPath (source))) {
-                return new LayerClipStatus (LayerClipState.Stale, "焼いた後に編集するクリップが変わった（Bake で焼き直す）");
+                return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_SOURCE_CHANGED"));
             }
-            return new LayerClipStatus (LayerClipState.Ready, "最新");
+            return new LayerClipStatus (LayerClipState.Ready, Tr ("HUMANOID_OUTPUT_UP_TO_DATE"));
         }
 
         /// <summary>

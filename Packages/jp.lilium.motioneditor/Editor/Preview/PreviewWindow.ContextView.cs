@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -98,10 +99,10 @@ namespace Lilium
             foreach (ContextInfo info in stage_.contextInfos) {
                 string name;
                 bool found = info.TryGetShot (master, out pose, out fieldOfView, out name);
-                if (name != null) contextCameraName_ = found ? name : name + "（読めないのでいつもの視点）";
+                if (name != null) contextCameraName_ = found ? name : Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_SHOT_UNREADABLE", name);
                 if (found) return true;
             }
-            if (contextCameraName_ == null) contextCameraName_ = "この時刻はショットが無い（いつもの視点）";
+            if (contextCameraName_ == null) contextCameraName_ = Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_NO_SHOT");
             return false;
         }
 
@@ -135,8 +136,8 @@ namespace Lilium
             IReadOnlyList<ContextInfo> infos = contextInfos;
             if (!follow || stage_ == null || infos.Count == 0) {
                 string idle = null;
-                if (sceneTarget_ != null) idle = "Timeline 窓でこのシーンの演出（Director）を開くと、その時刻に付いていく";
-                else if (followTimelineWindow_) idle = "演出を置いていないので Timeline 窓に付いていけない";
+                if (sceneTarget_ != null) idle = Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_OPEN_DIRECTOR");
+                else if (followTimelineWindow_) idle = Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_NO_DIRECTOR");
                 SetFollowStatus (idle, false);
                 return;
             }
@@ -145,7 +146,7 @@ namespace Lilium
             ContextClip link = activeTimelineClip;
             ExternalClock external = ContextProbe.ReadExternalClock (infos[0], link != null && link.track != null ? link.track.name : null);
             if (!external.available) {
-                SetFollowStatus ("Timeline 窓に付いていけない: " + external.note, false);
+                SetFollowStatus (Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_CANNOT_FOLLOW", external.note), false);
                 return;
             }
             // 最初の 1 回（NaN との比較は常に偽になるので分けて見る）と、向こうの時刻が動いたときだけ当てる
@@ -156,13 +157,13 @@ namespace Lilium
                 SamplePose ();
                 RaiseStateChanged ();
             }
-            string status = "Timeline 窓に付いていっている（演出 " + masterFrame + "F）";
+            string status = Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_FOLLOWING", masterFrame);
             if (link == null) {
                 status += sceneTarget_ != null
-                    ? "。演出の中に編集中のクリップが無いので、演出の時刻 ＝ クリップの時刻 ＋ オフセットで合わせている"
-                    : "。演出のクリップと結び付けていないので、自キャラのトラックのバインドは確かめていない";
+                    ? Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_CLIP_NOT_IN_DIRECTOR")
+                    : Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_NOT_LINKED");
             }
-            if (!string.IsNullOrEmpty (external.note)) status += "。" + external.note;
+            if (!string.IsNullOrEmpty (external.note)) status += Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_APPEND_NOTE", external.note);
             SetFollowStatus (status, external.warning);
         }
 
@@ -192,7 +193,7 @@ namespace Lilium
         {
             float y = rect.y + 6;
             if (useContextCamera_ && contextCameraName_ != null) {
-                GUI.Label (new Rect (rect.x + 8, y, rect.width - 16, 18), "カメラ: " + contextCameraName_, EditorStyles.whiteLabel);
+                GUI.Label (new Rect (rect.x + 8, y, rect.width - 16, 18), Tr ("PREVIEW_WINDOW_CONTEXT_VIEW_CAMERA", contextCameraName_), EditorStyles.whiteLabel);
                 y += 18;
             }
             if (followStatus_ != null) {

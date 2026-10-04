@@ -30,6 +30,13 @@ namespace Lilium
             if (window != null) window.CopyPose ();
         }
 
+        [Shortcut ("Lilium Motion Editor (Scene)/Key All", typeof (SceneWindow), KeyCode.K)]
+        static void SceneKeyAllShortcut (ShortcutArguments args)
+        {
+            PreviewWindow window = SceneSource (args);
+            if (window != null) window.KeyAll ();
+        }
+
         [Shortcut ("Lilium Motion Editor (Scene)/Previous Frame", typeof (SceneWindow), KeyCode.LeftArrow)]
         static void ScenePreviousFrameShortcut (ShortcutArguments args)
         {

@@ -1,22 +1,24 @@
 # Lilium Motion Editor (Experimental)
 
-Unity エディタの中でキャラクターのモーションを作るためのエディタ拡張です。
+English | [日本語](README.ja.md)
 
-+ キャラクターの骨を複製した「編集用リグ」を通してポーズを付け、リグの値をアニメーションクリップへ保存します。
-+ FK・手足の 2 ボーン IK・全身 IK・Animation Rigging の値を扱えます。
-+ 体型の違うキャラクターでも、同じ編集用リグのクリップを使い回せます。
-+ 開発中です。将来のバージョンで仕様が変わります。
+An editor extension for creating character motions inside the Unity Editor.
+
++ You pose a character through an "editing rig" that duplicates its bones, and the rig values are saved to an animation clip.
++ Handles FK, two-bone IK for arms and legs, full-body IK, and Animation Rigging values.
++ Clips made with the same editing rig can be shared between characters with different body proportions.
++ Under development. The specification will change in future versions.
 
 ## Dependencies
 
-+ Unity 6000.0 以降（6000.6 以降では、プレビュー窓の骨ハンドルが Unity のツールの仕組みに乗り、Tools オーバーレイから道具を選べます）
-+ Burst / Mathematics（パッケージの依存として自動で入ります）
-+ Animation Rigging（任意。入っていると Animation Rigging の値を編集できます）
-+ Timeline（任意。入っていると Timeline のクリップを編集できます）
++ Unity 6000.0 or later (on 6000.6 or later, the bone handles in the preview window use Unity's tool system, and you can pick tools from the Tools overlay)
++ Burst / Mathematics (installed automatically as package dependencies)
++ Animation Rigging (optional. When installed, Animation Rigging values can be edited)
++ Timeline (optional. When installed, Timeline clips can be edited)
 
 ## Install
 
-Package Manager の `Install package from git URL...` に次を入力します。
+Enter the following in the Package Manager's `Install package from git URL...`.
 
 ```
 https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motioneditor
@@ -24,23 +26,24 @@ https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motion
 
 ## How to use
 
-1. `Window > Motion Editor (Preview)` を開きます。
-2. Animator の付いたキャラクターの prefab を選びます。
-3. ポーズを付けてキーを打ち、クリップへ保存します。
+1. Open `Window > Lilium Motion Editor > Motion Editor`.
+2. Pick a character prefab that has an Animator.
+3. Pose it, set keys, and save to a clip.
 
-+ プロジェクト全体の設定は `Project Settings > Lilium Motion Editor` にあります。
-+ 編集用リグの定義は `Create > Lilium Motion Editor > Rig Definition` で作れます。
++ Project-wide settings are in `Project Settings > Lilium Motion Editor`.
++ Editing rig definitions can be created with `Create > Lilium Motion Editor > Rig Definition`.
++ The UI language (English / 日本語) can be chosen with Language in `Preferences > Lilium Motion Editor`. It follows the OS language by default.
 
 ### Demo
 
-Package Manager でこのパッケージを選び、Samples の `Demo` をインポートします。
+Select this package in the Package Manager and import the `Demo` sample.
 
-デモのモデルは Quaternius の [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html)（CC0）の男女 2 体です。
+The demo models are the male and female characters from Quaternius' [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) (CC0).
 
-`Demo/Poses` には手の形の姿勢（Fist・Open・Point など 8 つ）が入っています。PoseBank に出すには、`Project Settings > Lilium Motion Editor` の PoseBank Folders に、`{prefabFolder}/Poses` と、インポートした `Demo/Poses` のフォルダ（例 `Assets/Samples/Lilium Motion Editor/0.1.0/Demo/Poses`）を足します。Humanoid の指の値なので、指の骨のある Humanoid のキャラクターならそのまま貼れます。
+`Demo/Poses` contains eight hand poses (Fist, Open, Point, and more). To show them in the PoseBank, add `{prefabFolder}/Poses` and the imported `Demo/Poses` folder (e.g. `Assets/Samples/Lilium Motion Editor/0.1.0/Demo/Poses`) to PoseBank Folders in `Project Settings > Lilium Motion Editor`. They are Humanoid finger values, so they can be pasted onto any Humanoid character with finger bones.
 
 ## License
 
 [MIT](LICENSE)
 
-アイコンには Google の [Material Icons](https://github.com/google/material-design-icons)（Apache License 2.0）を、デモのモデルには Quaternius の Universal Base Characters（CC0）を使っています。詳しくはパッケージの `Third-Party Notices.txt` を見てください。
+Icons use Google's [Material Icons](https://github.com/google/material-design-icons) (Apache License 2.0), and the demo models use Quaternius' Universal Base Characters (CC0). See `Third-Party Notices.txt` in the package for details.

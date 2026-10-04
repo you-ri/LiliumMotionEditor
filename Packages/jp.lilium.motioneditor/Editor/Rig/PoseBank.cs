@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -252,16 +253,16 @@ namespace Lilium
         public static string Rename (AnimationClip pose, string newBaseName)
         {
             string path = AssetDatabase.GetAssetPath (pose);
-            if (string.IsNullOrEmpty (path)) return "アセットでない姿勢";
+            if (string.IsNullOrEmpty (path)) return Tr ("POSE_BANK_NOT_AN_ASSET_POSE");
             newBaseName = newBaseName != null ? newBaseName.Trim () : "";
             if (newBaseName.EndsWith (kSuffix, System.StringComparison.OrdinalIgnoreCase)) {
                 newBaseName = newBaseName.Substring (0, newBaseName.Length - kSuffix.Length);
             }
-            if (newBaseName.Length == 0) return "名前が空";
-            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return "ファイル名に使えない文字がある";
+            if (newBaseName.Length == 0) return Tr ("ANIM_BANK_NAME_EMPTY");
+            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return Tr ("ANIM_BANK_INVALID_FILE_NAME_CHARS");
             if (newBaseName == BaseName (path)) return null;
             string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
-            if (Exists (folder, newBaseName)) return "同じ名前の姿勢がある";
+            if (Exists (folder, newBaseName)) return Tr ("POSE_BANK_DUPLICATE_NAME");
             string error = AssetDatabase.RenameAsset (path, newBaseName + kSuffix);
             return string.IsNullOrEmpty (error) ? null : error;
         }

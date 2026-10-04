@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -38,7 +39,7 @@ namespace Lilium
         public string parentSwitchBlockReason
         {
             get {
-                if (!CanEditClip () || propertyRoot == null) return "クリップを編集できない";
+                if (!CanEditClip () || propertyRoot == null) return Tr ("PREVIEW_WINDOW_PARENT_SWITCH_CANNOT_EDIT_CLIP");
                 if (overrideBlocksBaseWrite != null) return overrideBlocksBaseWrite;
                 if (ParentSwitch.blockReason != null && stage_ != null) return ParentSwitch.blockReason (stage_.model);
                 return null;

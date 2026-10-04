@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -98,8 +99,8 @@ namespace Lilium
         public static string Blending (float weight)
         {
             return weight >= 1
-                ? "このクリップで上書き中（カーブのある骨。上の段の編集はそこに出ない）"
-                : "このクリップを " + Mathf.RoundToInt (weight * 100) + "% で合成中";
+                ? Tr ("LAYER_CLIP_OVERRIDING")
+                : Tr ("LAYER_CLIP_BLENDING", Mathf.RoundToInt (weight * 100));
         }
     }
 

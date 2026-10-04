@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.IO;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -55,7 +56,7 @@ namespace Lilium
             folder_.style.unityTextAlign = TextAnchor.MiddleLeft;
             folder_.style.fontSize = 10;
             header.Add (folder_);
-            Button choose = new Button (ChooseFolder) { text = "…", tooltip = "このキャラの姿勢を作る場所を選ぶ（キャラの設定に書く。取り消すとプロジェクト設定の値に戻す）" };
+            Button choose = new Button (ChooseFolder) { text = "…", tooltip = Tr ("POSE_BANK_OVERLAY_CHOOSE_FOLDER_TOOLTIP") };
             choose.style.width = 20;
             header.Add (choose);
             root.Add (header);
@@ -77,10 +78,10 @@ namespace Lilium
 
             VisualElement buttons = new VisualElement ();
             buttons.style.flexDirection = FlexDirection.Row;
-            AddButton (buttons, "Save", "今の姿勢（全部）を新しい姿勢として保存する", SavePose);
-            AddButton (buttons, "Update", "一覧で選んでいる姿勢を、今の姿勢（全部）で置き換える", UpdatePose);
-            AddButton (buttons, "Rename", "一覧で選んでいる姿勢の名前を変える", BeginRename);
-            AddButton (buttons, "Del", "一覧で選んでいる姿勢をゴミ箱へ移す", DeletePose);
+            AddButton (buttons, "Save", Tr ("POSE_BANK_OVERLAY_SAVE_TOOLTIP"), SavePose);
+            AddButton (buttons, "Update", Tr ("POSE_BANK_OVERLAY_UPDATE_TOOLTIP"), UpdatePose);
+            AddButton (buttons, "Rename", Tr ("POSE_BANK_OVERLAY_RENAME_TOOLTIP"), BeginRename);
+            AddButton (buttons, "Del", Tr ("POSE_BANK_OVERLAY_DELETE_TOOLTIP"), DeletePose);
             root.Add (buttons);
 
             rename_ = new TextField { isDelayed = true };
@@ -147,7 +148,7 @@ namespace Lilium
             label.style.paddingLeft = 2 + row.depth * 10;
             label.style.unityFontStyleAndWeight = row.path == null ? FontStyle.Italic : FontStyle.Normal;
             label.style.color = row.path == null ? new StyleColor (new Color (0.65f, 0.65f, 0.65f)) : new StyleColor (StyleKeyword.Null);
-            label.tooltip = row.path != null ? row.path + "\nクリックで今のフレームへ打つ（骨を選んでいればその骨だけ）" : null;
+            label.tooltip = row.path != null ? Tr ("POSE_BANK_OVERLAY_ROW_TOOLTIP", row.path) : null;
         }
 
         /// <summary>一覧に並べるフォルダ（先頭が作る場所。キャラの設定・プロジェクト設定で決まる）</summary>
@@ -202,8 +203,8 @@ namespace Lilium
             if (window_ == null || list_ == null) return;
             List<string> list = folders;
             string path = list.Count > 0 ? list[0] : null;
-            folder_.text = path ?? "キャラを選んでください";
-            folder_.tooltip = list.Count > 0 ? "作る場所: " + path + (list.Count > 1 ? "\n並べるフォルダ:\n" + string.Join ("\n", list) : "") : null;
+            folder_.text = path ?? Tr ("POSE_BANK_OVERLAY_SELECT_CHARACTER");
+            folder_.tooltip = list.Count > 0 ? (list.Count > 1 ? Tr ("POSE_BANK_OVERLAY_FOLDER_LIST_TOOLTIP", path, string.Join ("\n", list)) : Tr ("POSE_BANK_OVERLAY_FOLDER_TOOLTIP", path)) : null;
 
             int selected = list_.selectedIndex;
             string selectedPath = selected >= 0 && selected < rows_.Count ? rows_[selected].path : null;
@@ -213,7 +214,7 @@ namespace Lilium
             SelectPath (selectedPath);
 
             int count = window_.selectedTargetCount;
-            scope_.text = count > 0 ? "貼る先: 選んでいる " + count + " 個" : "貼る先: 姿勢全部（何も選んでいない）";
+            scope_.text = count > 0 ? Tr ("POSE_BANK_OVERLAY_SCOPE_SELECTED", count) : Tr ("POSE_BANK_OVERLAY_SCOPE_ALL");
         }
 
         void SelectPath (string path)
@@ -229,15 +230,15 @@ namespace Lilium
             AnimationClip pose = AssetDatabase.LoadAssetAtPath<AnimationClip> (rows_[index].path);
             int applied;
             string error = window_.ApplyPose (pose, out applied);
-            if (error != null) ShowMessage ("打てない: " + error, true);
-            else ShowMessage (rows_[index].text + " を打った（" + applied + " カーブ）", false);
+            if (error != null) ShowMessage (Tr ("POSE_BANK_OVERLAY_CANNOT_APPLY", error), true);
+            else ShowMessage (Tr ("POSE_BANK_OVERLAY_APPLIED", rows_[index].text, applied), false);
         }
 
         void ChooseFolder ()
         {
             if (window_.model == null) return;
             if (window_.characterSettings == null
-                && EditorUtility.DisplayDialog ("Motion Editor", "フォルダの指定はキャラの設定に保存します（チームで共有されます）。このキャラの設定を作りますか？\n作らないと、この PC だけに覚えます。", "作る", "作らない")) {
+                && EditorUtility.DisplayDialog ("Motion Editor", Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_CREATE"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_DONT_CREATE"))) {
                 window_.CreateCharacterSettings ();
             }
             string start = folder ?? "Assets";
@@ -249,7 +250,7 @@ namespace Lilium
                 string project = Path.GetFullPath (Application.dataPath + "/..").Replace ('\\', '/').TrimEnd ('/') + "/";
                 chosen = chosen.Replace ('\\', '/');
                 if (!chosen.StartsWith (project)) {
-                    ShowMessage ("プロジェクトの中のフォルダを選んでください", true);
+                    ShowMessage (Tr ("POSE_BANK_OVERLAY_CHOOSE_FOLDER_IN_PROJECT"), true);
                     return;
                 }
                 PoseBank.SetFolder (window_.model, chosen.Substring (project.Length));
@@ -263,7 +264,7 @@ namespace Lilium
             string path = folder;
             Dictionary<EditorCurveBinding, float> values = window_.CapturePose ();
             if (path == null || values == null) {
-                ShowMessage ("キャラを選んでください", true);
+                ShowMessage (Tr ("POSE_BANK_OVERLAY_SELECT_CHARACTER"), true);
                 return;
             }
             AnimationClip pose = PoseBank.Create (path, values);
@@ -278,20 +279,20 @@ namespace Lilium
         {
             AnimationClip pose = selectedPose;
             if (pose == null) {
-                ShowMessage ("一覧で姿勢を選んでください", true);
+                ShowMessage (Tr ("POSE_BANK_OVERLAY_SELECT_POSE_IN_LIST"), true);
                 return;
             }
             if (PoseBank.IsHumanoidPose (pose)) {
                 // 置き換えると編集用リグの値の姿勢になり、他のキャラへ貼れる Humanoid の姿勢が失われる
-                ShowMessage ("Humanoid の姿勢は置き換えられない（Save で新しく保存してください）", true);
+                ShowMessage (Tr ("POSE_BANK_OVERLAY_CANNOT_UPDATE_HUMANOID"), true);
                 return;
             }
             Dictionary<EditorCurveBinding, float> values = window_.CapturePose ();
             if (values == null) return;
             string name = PoseBank.BaseName (AssetDatabase.GetAssetPath (pose));
-            if (!EditorUtility.DisplayDialog ("Update Pose", name + " を今の姿勢で置き換えます。", "Update", "Cancel")) return;
+            if (!EditorUtility.DisplayDialog ("Update Pose", Tr ("POSE_BANK_OVERLAY_UPDATE_DIALOG", name), "Update", "Cancel")) return;
             PoseBank.Overwrite (pose, values);
-            ShowMessage (name + " を置き換えた", false);
+            ShowMessage (Tr ("POSE_BANK_OVERLAY_UPDATED", name), false);
         }
 
         void BeginRename ()
@@ -311,7 +312,7 @@ namespace Lilium
             AnimationClip pose = selectedPose;
             if (rename_.style.display == DisplayStyle.None || pose == null) return;
             string error = PoseBank.Rename (pose, value);
-            ShowMessage (error != null ? "名前を変えられない: " + error : null, true);
+            ShowMessage (error != null ? Tr ("POSE_BANK_OVERLAY_CANNOT_RENAME", error) : null, true);
             EndRename ();
             Refresh ();
             SelectPath (AssetDatabase.GetAssetPath (pose));
@@ -327,8 +328,8 @@ namespace Lilium
             AnimationClip pose = selectedPose;
             if (pose == null) return;
             string path = AssetDatabase.GetAssetPath (pose);
-            if (!EditorUtility.DisplayDialog ("Delete Pose", path + "\n\nをゴミ箱へ移します。", "Delete", "Cancel")) return;
-            if (!PoseBank.Delete (pose)) ShowMessage ("消せなかった: " + path, true);
+            if (!EditorUtility.DisplayDialog ("Delete Pose", Tr ("POSE_BANK_OVERLAY_DELETE_DIALOG", path), "Delete", "Cancel")) return;
+            if (!PoseBank.Delete (pose)) ShowMessage (Tr ("POSE_BANK_OVERLAY_COULD_NOT_DELETE", path), true);
             else ShowMessage (null, false);
             Refresh ();
         }

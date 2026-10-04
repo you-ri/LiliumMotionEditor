@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -60,12 +61,12 @@ namespace Lilium
             DrawParentSwitches ();
             RigProxies proxies = window_ != null ? window_.rigProxies : null;
             if (proxies == null || proxies.rigs.Count == 0) {
-                EditorGUILayout.LabelField ("このキャラに有効な Rig は無い", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField (Tr ("RIG_VALUES_OVERLAY_NO_RIG"), EditorStyles.miniLabel);
                 DrawNotes (proxies);
                 return;
             }
             if (window_.clip == null || window_.isClipReadOnly) {
-                EditorGUILayout.HelpBox ("クリップを編集できないので、動かしてもキーは打たれない", MessageType.None);
+                EditorGUILayout.HelpBox (Tr ("RIG_VALUES_OVERLAY_CLIP_READ_ONLY"), MessageType.None);
             }
 
             scroll_ = EditorGUILayout.BeginScrollView (scroll_);
@@ -73,7 +74,7 @@ namespace Lilium
             EditorGUIUtility.labelWidth = 120;
             foreach (RigProxies.RigEntry rig in proxies.rigs) {
                 EditorGUILayout.LabelField (rig.name, EditorStyles.boldLabel);
-                WeightField ("重み", rig.weight);
+                WeightField (Tr ("RIG_VALUES_OVERLAY_WEIGHT"), rig.weight);
                 foreach (RigProxies.Weight constraint in rig.constraints) {
                     // 拘束の名前は Rig からの相対（Rig と同じ GameObject なら型名）
                     string name = constraint.label.Substring (rig.name.Length + 1);
@@ -82,7 +83,7 @@ namespace Lilium
                 foreach (RigProxies.Source source in rig.sources) {
                     bool selected = window_.IsSelected (source.proxy.gameObject);
                     string name = source.label.Substring (rig.name.Length + 1);
-                    if (GUILayout.Toggle (selected, "ターゲット: " + name, EditorStyles.miniButton) && !selected) {
+                    if (GUILayout.Toggle (selected, Tr ("RIG_VALUES_OVERLAY_TARGET", name), EditorStyles.miniButton) && !selected) {
                         window_.SelectRigSource (source);
                     }
                 }
@@ -101,7 +102,7 @@ namespace Lilium
             if (window_ == null || window_.parentSwitches.Count == 0) return;
             string blocked = window_.parentSwitchBlockReason;
             foreach (ParentSwitchDefinition definition in window_.parentSwitches) {
-                EditorGUILayout.LabelField ("持ち替え: " + definition.name, EditorStyles.boldLabel);
+                EditorGUILayout.LabelField (Tr ("RIG_VALUES_OVERLAY_PARENT_SWITCH", definition.name), EditorStyles.boldLabel);
                 string error;
                 ParentSwitch.Bound bound = window_.BindParentSwitch (definition, out error);
                 if (bound == null) {

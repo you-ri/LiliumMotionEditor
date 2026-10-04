@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.UIElements;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -104,7 +105,7 @@ namespace Lilium
             root.style.paddingTop = 4;
             root.style.paddingBottom = 4;
 
-            searchField_ = new ToolbarSearchField { tooltip = "名前とパスで絞り込む（空白で区切ると、全部を含むものだけ）" };
+            searchField_ = new ToolbarSearchField { tooltip = Tr ("CLIP_IMPORT_WINDOW_SEARCH_TOOLTIP") };
             searchField_.style.width = StyleKeyword.Auto;
             searchField_.style.flexShrink = 0;
             searchField_.SetValueWithoutNotify (search_);
@@ -149,10 +150,10 @@ namespace Lilium
             buttons.style.marginTop = 4;
             buttons.style.flexShrink = 0;
             buttons.style.minHeight = 22;
-            commit_ = new Button (Commit) { text = "取り込む", tooltip = "見ているクリップを編集用クリップ（*.rig.anim）に書き出して開く（そのクリップに重ねた Override があれば込み）" };
+            commit_ = new Button (Commit) { text = Tr ("CLIP_IMPORT_WINDOW_IMPORT"), tooltip = Tr ("CLIP_IMPORT_WINDOW_IMPORT_TOOLTIP") };
             commit_.style.flexGrow = 1;
             buttons.Add (commit_);
-            Button cancel = new Button (Cancel) { text = "やめる", tooltip = "取り込まずに閉じ、元のクリップへ戻す" };
+            Button cancel = new Button (Cancel) { text = Tr ("CLIP_IMPORT_WINDOW_CANCEL"), tooltip = Tr ("CLIP_IMPORT_WINDOW_CANCEL_TOOLTIP") };
             cancel.style.flexGrow = 1;
             buttons.Add (cancel);
             root.Add (buttons);
@@ -188,7 +189,7 @@ namespace Lilium
         {
             if (index < 0 || index >= rows_.Count) return;
             Candidate candidate = rows_[index];
-            element.Q<Label> ("name").text = candidate.clip != null ? candidate.clip.name : "(消えた)";
+            element.Q<Label> ("name").text = candidate.clip != null ? candidate.clip.name : Tr ("CLIP_IMPORT_WINDOW_MISSING_CLIP");
             element.Q<Label> ("file").text = Path.GetFileName (candidate.path);
             element.tooltip = candidate.path;
         }
@@ -224,7 +225,7 @@ namespace Lilium
         {
             if (list_ == null) return;
             if (candidates_ == null) candidates_ = Collect ();
-            string[] words = search_.ToLowerInvariant ().Split (new[] { ' ', '　' }, System.StringSplitOptions.RemoveEmptyEntries);
+            string[] words = search_.ToLowerInvariant ().Split (new[] { ' ', '　' }, System.StringSplitOptions.RemoveEmptyEntries); // noloc: 全角空白も語の区切りにする（表示しない）
             AnimationClip current = owner_ != null && owner_.importPreviewing ? owner_.clip : null;
             rows_.Clear ();
             int selected = -1;
@@ -248,7 +249,7 @@ namespace Lilium
             else {
                 list_.ClearSelection ();
             }
-            count_.text = rows_.Count + " / " + candidates_.Count + " 本（Humanoid のクリップ）";
+            count_.text = Tr ("CLIP_IMPORT_WINDOW_COUNT", rows_.Count, candidates_.Count);
         }
 
         void OnSelectionChanged (IEnumerable<object> selected)
@@ -262,19 +263,18 @@ namespace Lilium
         {
             if (info_ == null) return;
             if (owner_ == null) {
-                info_.text = "Motion Editor が閉じられた";
+                info_.text = Tr ("CLIP_IMPORT_WINDOW_EDITOR_CLOSED");
                 commit_.SetEnabled (false);
                 return;
             }
             AnimationClip clip = owner_.importPreviewing && owner_.useHumanoidBase ? owner_.clip : null;
             commit_.SetEnabled (clip != null);
             if (clip == null) {
-                info_.text = "一覧で選ぶと Motion Editor に出る。タイムラインで好きなコマを見られる（この窓は閉じない）";
+                info_.text = Tr ("CLIP_IMPORT_WINDOW_HINT");
                 return;
             }
             int frames = Mathf.RoundToInt (clip.length * clip.frameRate);
-            info_.text = clip.name + "  " + frames + "F（" + clip.length.ToString ("0.00") + " 秒・" + clip.frameRate.ToString ("0") + "fps）\n"
-                + AssetDatabase.GetAssetPath (clip);
+            info_.text = Tr ("CLIP_IMPORT_WINDOW_CLIP_INFO", clip.name, frames, clip.length.ToString ("0.00"), clip.frameRate.ToString ("0"), AssetDatabase.GetAssetPath (clip));
         }
 
         void Commit ()

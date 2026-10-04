@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -115,7 +116,7 @@ namespace Lilium
             list_.Clear ();
             string problem = window_.GetCurveEditProblem ();
             if (view_.channels.Count == 0) {
-                list_.Add (Note (window_.clip == null ? "クリップを開いてください" : "骨を選ぶと、そのカーブが出る（キーのある物だけ）"));
+                list_.Add (Note (window_.clip == null ? Tr ("CURVE_EDITOR_OVERLAY_OPEN_CLIP") : Tr ("CURVE_EDITOR_OVERLAY_SELECT_BONE")));
             }
             string owner = null;
             foreach (CurveView.Channel channel in view_.channels) {
@@ -140,7 +141,7 @@ namespace Lilium
                 });
                 list_.Add (toggle);
             }
-            if (problem != null && window_.clip != null) list_.Add (Note ("書けない: " + problem));
+            if (problem != null && window_.clip != null) list_.Add (Note (Tr ("CURVE_EDITOR_OVERLAY_CANNOT_WRITE", problem)));
             view_.FrameAll ();
             Repaint ();
         }

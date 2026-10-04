@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -62,15 +63,15 @@ namespace Lilium
 
         public override string unavailableReason
         {
-            get { return info_ != null ? "重みとターゲットは Editing Rig の代理（Rig Values のパネル）で触る" : "Animation Rigging が読み込まれていない"; }
+            get { return info_ != null ? Tr ("RIG_BUILDER_LAYER_UNAVAILABLE") : Tr ("RIG_BUILDER_LAYER_NOT_LOADED"); }
         }
 
         protected override string description
         {
             get {
-                if (info_ == null) return "Animation Rigging が読み込まれていないので中身を読めない";
-                if (stage_ == null || !stage_.canApplyRig) return "値は Controls/Game の代理から受け取る。この表示モデルでは通せない（Humanoid でない・Animation Rigging が無い）";
-                return "値は Controls/Game の代理から受け取る。ゲームと同じく、姿勢の後ろに掛ける（段の重みはその値に掛け算）";
+                if (info_ == null) return Tr ("RIG_BUILDER_LAYER_UNREADABLE");
+                if (stage_ == null || !stage_.canApplyRig) return Tr ("RIG_BUILDER_LAYER_CANNOT_APPLY");
+                return Tr ("RIG_BUILDER_LAYER_DESCRIPTION");
             }
         }
 

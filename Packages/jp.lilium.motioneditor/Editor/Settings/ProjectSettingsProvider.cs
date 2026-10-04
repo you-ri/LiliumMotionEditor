@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -25,9 +26,7 @@ namespace Lilium
                     serialized.Update ();
 
                     EditorGUILayout.HelpBox (
-                        "キャラの設定（Lilium Motion Editor/Character Settings）で上書きしない項目は、ここの値になります。\n"
-                        + "フォルダの置き換え: " + SettingsLookup.kNameToken + "（prefab の名前から下の接尾辞を除いたもの）・" + SettingsLookup.kPrefabFolderToken + "（prefab のあるフォルダ）。"
-                        + "並びの先頭が作る場所で、2 つ目からは実在するフォルダだけを一覧に並べます。",
+                        Tr ("PROJECT_SETTINGS_PROVIDER_HELP", SettingsLookup.kNameToken, SettingsLookup.kPrefabFolderToken),
                         MessageType.None);
                     EditorGUI.BeginChangeCheck ();
                     EditorGUILayout.PropertyField (serialized.FindProperty ("animBankFolders"), new GUIContent ("AnimBank Folders"), true);
@@ -40,11 +39,11 @@ namespace Lilium
                     EditRigDefinition packageDefault = EditRigDefinition.packageDefault;
                     Object shown = rig.objectReferenceValue != null ? rig.objectReferenceValue : packageDefault;
                     Object picked = EditorGUILayout.ObjectField (
-                        new GUIContent ("Rig Definition", "編集用リグの定義。キャラの設定で上書きしないキャラはこれを使う。空ならパッケージの既定（Default Rig Definition）"),
+                        new GUIContent ("Rig Definition", Tr ("PROJECT_SETTINGS_PROVIDER_RIG_DEFINITION_TOOLTIP")),
                         shown, typeof (EditRigDefinition), false);
                     if (picked != shown) rig.objectReferenceValue = picked == packageDefault ? null : picked;
                     EditorGUILayout.PropertyField (serialized.FindProperty ("autoBake"), new GUIContent ("Auto Bake"));
-                    EditorGUILayout.PropertyField (serialized.FindProperty ("autoKey"), new GUIContent ("Auto Key", "入: 操作したらキーを打つ。切: 今のフレームにキーがある物しか動かせない（キーは Stacker の Key All などで打つ）"));
+                    EditorGUILayout.PropertyField (serialized.FindProperty ("autoKey"), new GUIContent ("Auto Key", Tr ("PROJECT_SETTINGS_PROVIDER_AUTO_KEY_TOOLTIP")));
                     if (EditorGUI.EndChangeCheck ()) {
                         serialized.ApplyModifiedProperties ();
                         settings.Save ();

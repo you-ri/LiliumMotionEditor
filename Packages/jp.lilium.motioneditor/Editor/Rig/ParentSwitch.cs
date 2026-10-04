@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -14,28 +15,28 @@ namespace Lilium
     [System.Serializable]
     public sealed class ParentSwitchDefinition
     {
-        [Tooltip ("画面に出す名前（Weapon など）")]
+        [Tooltip ("Display name (e.g. Weapon)")]
         public string name;
-        [Tooltip ("拘束の部品がある GameObject のパス")]
+        [Tooltip ("Path to the GameObject that has the constraint component")]
         public string constraintPath;
-        [Tooltip ("拘束の部品の型の名前（FullName か Name）")]
+        [Tooltip ("Type name of the constraint component (FullName or Name)")]
         public string constraintType;
-        [Tooltip ("親の候補。重みのプロパティで拘束のソースと結び付く")]
+        [Tooltip ("Parent candidates. Each is linked to a constraint source by its weight property")]
         public List<ParentSource> sources = new List<ParentSource> ();
-        [Tooltip ("持っている物（切り替えの瞬間にこのワールド姿勢を保つ）。親が持ち手ノード")]
+        [Tooltip ("The held object (its world pose is kept at the moment of switching). Its parent is the handle node")]
         public string objectPath;
-        [Tooltip ("握りのカーブを書く Transform（持ち手ノードからのローカル姿勢。ゲームがこれを物へ写す）")]
+        [Tooltip ("Transform that the grip curves are written to (local pose relative to the handle node; the game copies it to the object)")]
         public string gripPath;
 
         /// <summary>定義の誤り。空なら使える</summary>
         public List<string> Validate ()
         {
             List<string> errors = new List<string> ();
-            if (string.IsNullOrEmpty (constraintPath) || string.IsNullOrEmpty (constraintType)) errors.Add ("持ち替えの拘束が指定されていない: " + name);
-            if (string.IsNullOrEmpty (objectPath) || string.IsNullOrEmpty (gripPath)) errors.Add ("持ち替えの物・握りのパスが空: " + name);
-            if (sources == null || sources.Count < 2) errors.Add ("持ち替えの親が 2 つ未満: " + name);
+            if (string.IsNullOrEmpty (constraintPath) || string.IsNullOrEmpty (constraintType)) errors.Add (Tr ("PARENT_SWITCH_NO_CONSTRAINT", name));
+            if (string.IsNullOrEmpty (objectPath) || string.IsNullOrEmpty (gripPath)) errors.Add (Tr ("PARENT_SWITCH_EMPTY_OBJECT_OR_GRIP_PATH", name));
+            if (sources == null || sources.Count < 2) errors.Add (Tr ("PARENT_SWITCH_TOO_FEW_PARENTS", name));
             else if (sources.Exists (source => source == null || string.IsNullOrEmpty (source.weightProperty) || string.IsNullOrEmpty (source.parentPath))) {
-                errors.Add ("持ち替えの親の重み・パスが空: " + name);
+                errors.Add (Tr ("PARENT_SWITCH_EMPTY_PARENT_FIELDS", name));
             }
             return errors;
         }
@@ -44,11 +45,11 @@ namespace Lilium
     [System.Serializable]
     public sealed class ParentSource
     {
-        [Tooltip ("画面に出す名前（Left / Right / Free など）")]
+        [Tooltip ("Display name (e.g. Left / Right / Free)")]
         public string label;
-        [Tooltip ("拘束の部品の、このソースの重みのプロパティ（m_Data.m_SourceObjects.m_Item0.weight など）")]
+        [Tooltip ("Weight property of this source on the constraint component (e.g. m_Data.m_SourceObjects.m_Item0.weight)")]
         public string weightProperty;
-        [Tooltip ("このソースの親（置き場）の Transform のパス")]
+        [Tooltip ("Path to the Transform of this source's parent (holder)")]
         public string parentPath;
     }
 
@@ -91,7 +92,7 @@ namespace Lilium
         {
             error = null;
             if (root == null || definition == null) {
-                error = "表示モデルが無い";
+                error = Tr ("PARENT_SWITCH_NO_DISPLAY_MODEL");
                 return null;
             }
             Transform constraintTransform = Find (root, definition.constraintPath);
@@ -107,7 +108,7 @@ namespace Lilium
                 }
             }
             if (constraint == null) {
-                error = "拘束が見つからない: " + definition.constraintPath + " (" + definition.constraintType + ")";
+                error = Tr ("PARENT_SWITCH_CONSTRAINT_NOT_FOUND", definition.constraintPath, definition.constraintType);
                 return null;
             }
             int count = definition.sources != null ? definition.sources.Count : 0;
@@ -120,20 +121,20 @@ namespace Lilium
                 grip = Find (root, definition.gripPath),
             };
             if (bound.obj == null || bound.grip == null) {
-                error = "持っている物・握りが見つからない: " + definition.objectPath + " / " + definition.gripPath;
+                error = Tr ("PARENT_SWITCH_OBJECT_OR_GRIP_NOT_FOUND", definition.objectPath, definition.gripPath);
                 return null;
             }
             for (int i = 0; i < count; i++) {
                 ParentSource source = definition.sources[i];
                 bound.parents[i] = Find (root, source.parentPath);
                 if (bound.parents[i] == null) {
-                    error = "親が見つからない: " + source.parentPath;
+                    error = Tr ("PARENT_SWITCH_PARENT_NOT_FOUND", source.parentPath);
                     return null;
                 }
                 bound.weights[i] = EditorCurveBinding.FloatCurve (definition.constraintPath, constraint.GetType (), source.weightProperty);
                 float ignored;
                 if (!PropertyPlayer.TryGetValue (root, bound.weights[i], out ignored)) {
-                    error = "重みのプロパティが読めない: " + source.weightProperty;
+                    error = Tr ("PARENT_SWITCH_WEIGHT_PROPERTY_UNREADABLE", source.weightProperty);
                     return null;
                 }
             }

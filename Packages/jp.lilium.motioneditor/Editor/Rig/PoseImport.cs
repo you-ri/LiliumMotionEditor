@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -45,7 +46,7 @@ namespace Lilium
             EditingRig rig = options.rig;
             EditingRigSolver solver = options.solver;
             if (destination == null) throw new System.ArgumentNullException ("destination");
-            if (rig == null || rig.root == null || solver == null) throw new System.InvalidOperationException ("編集用リグが無い");
+            if (rig == null || rig.root == null || solver == null) throw new System.InvalidOperationException (Tr ("GENERIC_IMPORT_NO_EDITING_RIG"));
 
             System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew ();
             Result result = new Result { notes = options.notes ?? new List<string> () };

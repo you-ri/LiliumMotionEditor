@@ -5,6 +5,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -1539,7 +1540,7 @@ namespace Lilium
 
             animator = model.GetComponentsInChildren<Animator> (true).FirstOrDefault (a => a.avatar != null && a.avatar.isHuman);
             if (animator == null) {
-                error = "Humanoid の Avatar を持つ Animator がありません: " + prefab.name;
+                error = Tr ("PREVIEW_STAGE_NO_HUMANOID_ANIMATOR", prefab.name);
                 return;
             }
 

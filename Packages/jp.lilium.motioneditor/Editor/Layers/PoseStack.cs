@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -280,8 +281,7 @@ namespace Lilium
                 Add (new RigBuilderLayer (rigs[i], i, stage, shown));
             }
             if (inactive.Count > 0) {
-                notes_.Add ("無効の Rig の層（" + string.Join ("、", inactive) + "）は出していない。"
-                    + "ゲームのコードが有効にする層で、モーションからは有効にできない");
+                notes_.Add (Tr ("POSE_STACK_INACTIVE_RIG_LAYERS", string.Join (Tr ("POSE_STACK_LIST_SEPARATOR"), inactive)));
             }
         }
 
@@ -318,9 +318,9 @@ namespace Lilium
         public static string Describe (InverseKind kind)
         {
             switch (kind) {
-                case InverseKind.Exact: return "そのまま戻せる";
-                case InverseKind.Approximate: return "ずれる";
-                default: return "戻せない";
+                case InverseKind.Exact: return Tr ("POSE_STACK_INVERSE_EXACT");
+                case InverseKind.Approximate: return Tr ("POSE_STACK_INVERSE_APPROXIMATE");
+                default: return Tr ("POSE_STACK_INVERSE_NONE");
             }
         }
 
@@ -389,7 +389,7 @@ namespace Lilium
         public InverseKind StepKind (PoseLayer layer, PoseLayer manipulate, out string reason)
         {
             if (layer == null || layer.passThrough) {
-                reason = layer != null && layer.active ? "重み 0 なので素通し" : "いまは素通し";
+                reason = layer != null && layer.active ? Tr ("POSE_STACK_PASS_THROUGH_ZERO_WEIGHT") : Tr ("POSE_STACK_PASS_THROUGH");
                 return InverseKind.Exact;
             }
             if (layer.bypassOnDisplayGrab && manipulate != null && manipulate.phase == PosePhase.Terminal) {
@@ -400,7 +400,7 @@ namespace Lilium
             return layer.inverse;
         }
 
-        public const string kBypassReason = "表示の骨をつかむ間は、選んでいる骨（か親）を動かす拘束を一時的に切る";
+        public static string kBypassReason => Tr ("POSE_STACK_BYPASS_REASON");
 
         /// <summary>
         /// つかむ段から書き出す段まで、逆に通る段の並び（下から上の順）と、その経路の通りやすさ。
@@ -417,12 +417,12 @@ namespace Lilium
             if (write == null || manipulate == null) return path;
 
             if (!write.isData) {
-                reason = "書き出し先は保存データの段だけ";
+                reason = Tr ("POSE_STACK_WRITE_DATA_ONLY");
                 return path;
             }
             if (manipulate.isData) {
                 if (manipulate != write) {
-                    reason = "別の保存データの段の値はつかめない";
+                    reason = Tr ("POSE_STACK_OTHER_DATA_LAYER");
                     return path;
                 }
                 kind = InverseKind.Exact;
@@ -452,7 +452,7 @@ namespace Lilium
                     return path;
 
                 default:
-                    reason = manipulate.label + ": つかめる物が無い";
+                    reason = Tr ("POSE_STACK_NOTHING_TO_GRAB", manipulate.label);
                     return path;
             }
         }
@@ -487,16 +487,16 @@ namespace Lilium
             reason = null;
             if (layer == null) return false;
             if (!layer.canWrite) {
-                reason = string.IsNullOrEmpty (layer.unavailableReason) ? "この段には書けない" : layer.unavailableReason;
+                reason = string.IsNullOrEmpty (layer.unavailableReason) ? Tr ("POSE_STACK_CANNOT_WRITE") : layer.unavailableReason;
                 return false;
             }
             // 落とした段は値を当てずに素通しするので、画面の姿勢はこの段のクリップから出ていない
             if (!layer.enabled) {
-                reason = "有効（👁）を落としている";
+                reason = Tr ("POSE_STACK_DISABLED");
                 return false;
             }
             if (PathKind (layer, manipulateLayer, out reason) == InverseKind.None) {
-                reason = "いまつかんでいる段から戻せない — " + reason;
+                reason = Tr ("POSE_STACK_NO_PATH_FROM_MANIPULATE", reason);
                 return false;
             }
             reason = null;
@@ -508,11 +508,11 @@ namespace Lilium
             reason = null;
             if (layer == null) return false;
             if (!layer.canManipulate) {
-                reason = string.IsNullOrEmpty (layer.unavailableReason) ? "この段はつかめない" : layer.unavailableReason;
+                reason = string.IsNullOrEmpty (layer.unavailableReason) ? Tr ("POSE_STACK_CANNOT_MANIPULATE") : layer.unavailableReason;
                 return false;
             }
             if (PathKind (writeLayer, layer, out reason) == InverseKind.None) {
-                reason = "書き出す段へ戻せない — " + reason;
+                reason = Tr ("POSE_STACK_NO_PATH_TO_WRITE", reason);
                 return false;
             }
             reason = null;

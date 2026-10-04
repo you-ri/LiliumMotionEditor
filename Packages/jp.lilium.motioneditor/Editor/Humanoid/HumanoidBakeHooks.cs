@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -79,7 +80,7 @@ namespace Lilium
                 }
                 catch (System.Exception e) {
                     Debug.LogException (e);
-                    context.notes.Add ("焼いた後の加工で例外: " + hook.GetType ().Name + ": " + e.Message);
+                    context.notes.Add (Tr ("HUMANOID_BAKE_HOOKS_POST_PROCESS_EXCEPTION", hook.GetType ().Name, e.Message));
                 }
             }
         }

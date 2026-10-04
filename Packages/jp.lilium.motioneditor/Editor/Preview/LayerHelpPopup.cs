@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -129,32 +130,32 @@ namespace Lilium
                 if (!string.IsNullOrEmpty (text)) lines.Add (new KeyValuePair<string, Color> (text, color));
             };
 
-            if (!layer.enabled) add ("👁 を落としているので素通し（入力をそのまま次へ渡す）", kApproximateColor);
-            else if (!layer.canEvaluate) add ("この段はいま通せない（処理が無いか、要るものが揃っていない。素通し）", kNoteColor);
+            if (!layer.enabled) add (Tr ("LAYER_HELP_POPUP_DISABLED"), kApproximateColor);
+            else if (!layer.canEvaluate) add (Tr ("LAYER_HELP_POPUP_CANNOT_EVALUATE"), kNoteColor);
 
-            if (!string.IsNullOrEmpty (layer.failure)) add ("止まっている: " + layer.failure, kNoneColor);
+            if (!string.IsNullOrEmpty (layer.failure)) add (Tr ("LAYER_HELP_POPUP_STOPPED", layer.failure), kNoneColor);
             if (layer.note != layer.failure) add (layer.note, kNoteColor);
             // 保存データの段でない段の値は、保存データから配られた値（GrabTarget.Values）
-            if (!layer.isData && layer.grab == GrabTarget.Values) add ("値は Editing Rig の段のクリップから受け取る", kNoteColor);
+            if (!layer.isData && layer.grab == GrabTarget.Values) add (Tr ("LAYER_HELP_POPUP_VALUES_FROM_EDITING_RIG"), kNoteColor);
             add (layer.unavailableReason, kNoteColor);
-            if (layer.parameters.Any (p => !p.display)) add ("モーションの値はいま表示だけ（キーを打つ受け口が入るまで）", kNoteColor);
+            if (layer.parameters.Any (p => !p.display)) add (Tr ("LAYER_HELP_POPUP_DISPLAY_ONLY"), kNoteColor);
 
             if (layer.isPoseStage) {
                 Color color = layer.inverse == InverseKind.None ? kNoneColor
                     : layer.inverse == InverseKind.Approximate ? kApproximateColor : kExactColor;
-                string text = "逆に通ると: " + PoseStack.Describe (layer.inverse);
-                if (!string.IsNullOrEmpty (layer.inverseReason)) text += "（" + layer.inverseReason + "）";
+                string text = string.IsNullOrEmpty (layer.inverseReason) ? Tr ("LAYER_HELP_POPUP_INVERSE", PoseStack.Describe (layer.inverse))
+                    : Tr ("LAYER_HELP_POPUP_INVERSE_WITH_REASON", PoseStack.Describe (layer.inverse), layer.inverseReason);
                 add (text, color);
             }
 
             if (stack != null) {
                 string reason;
-                if (layer.canWrite && !stack.CanWrite (layer, out reason)) add ("書き出し先にできない: " + reason, kNoneColor);
-                if (layer.canManipulate && !stack.CanManipulate (layer, out reason)) add ("つかめない: " + reason, kNoneColor);
+                if (layer.canWrite && !stack.CanWrite (layer, out reason)) add (Tr ("LAYER_HELP_POPUP_CANNOT_WRITE", reason), kNoneColor);
+                if (layer.canManipulate && !stack.CanManipulate (layer, out reason)) add (Tr ("LAYER_HELP_POPUP_CANNOT_MANIPULATE", reason), kNoneColor);
             }
 
             foreach (string detail in layer.details) add (detail, kNoteColor);
-            if (lines.Count == 0) add ("説明はまだ無い", kNoteColor);
+            if (lines.Count == 0) add (Tr ("LAYER_HELP_POPUP_NO_DESCRIPTION"), kNoteColor);
             return lines;
         }
     }

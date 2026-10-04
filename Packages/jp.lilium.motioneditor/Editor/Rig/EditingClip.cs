@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -269,10 +270,10 @@ namespace Lilium
             if (clip == null) return null;
             // Humanoid のクリップは読み取り専用の土台として開く（書き込みは Override へ。取込で編集用クリップにできる。S20）
             if (clip.humanMotion) {
-                return "Humanoid のクリップ（読み取り専用）。キーは Override へ打つか、取込で編集用クリップにする";
+                return Tr ("EDITING_CLIP_HUMANOID_READ_ONLY");
             }
             if (AssetImporter.GetAtPath (AssetDatabase.GetAssetPath (clip)) is ModelImporter) {
-                return "FBX の中のクリップは書き換えられない";
+                return Tr ("EDITING_CLIP_INSIDE_FBX");
             }
 
             int rig = 0;
@@ -282,7 +283,7 @@ namespace Lilium
                 else other++;
             }
             if (rig == 0 && other > 0) {
-                return "編集用リグのカーブが無い（骨などを指すカーブが " + other + " 本）。旧形式のクリップは開いても姿勢に出ない。取り込みは今後（S7）";
+                return Tr ("EDITING_CLIP_NO_RIG_CURVES", other);
             }
             return null;
         }

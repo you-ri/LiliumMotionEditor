@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -78,7 +79,7 @@ namespace Lilium
                 CharacterSettings first;
                 if (byPrefab_.TryGetValue (prefab, out first)) {
                     if (warned_.Add (path)) {
-                        Debug.LogWarning ("MotionEditor: 同じキャラ（" + settings.prefab.name + "）の設定が 2 つある。" + AssetDatabase.GetAssetPath (first) + " を使い、" + path + " は使わない", settings);
+                        Debug.LogWarning (Tr ("SETTINGS_LOOKUP_DUPLICATE_CHARACTER_SETTINGS", settings.prefab.name, AssetDatabase.GetAssetPath (first), path), settings);
                     }
                     continue;
                 }

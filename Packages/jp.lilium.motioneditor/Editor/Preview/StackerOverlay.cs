@@ -3,6 +3,7 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -43,15 +44,15 @@ namespace Lilium
 
             VisualElement groupRow = new VisualElement ();
             groupRow.style.flexDirection = FlexDirection.Row;
-            group_ = new DropdownField { tooltip = "組（骨のまとまり）。ポーズキーはこの組のカーブのキーをまとめたもの" };
+            group_ = new DropdownField { tooltip = Tr ("STACKER_OVERLAY_GROUP_TOOLTIP") };
             group_.style.flexGrow = 1;
             group_.style.marginLeft = 0;
             group_.RegisterValueChangedCallback (e => window_.stackerGroup = e.newValue);
             groupRow.Add (group_);
-            Button add = new Button (BeginSaveGroup) { text = "+", tooltip = "選んでいる物で組を作る（同じ名前なら中身を置き換える）" };
+            Button add = new Button (BeginSaveGroup) { text = "+", tooltip = Tr ("STACKER_OVERLAY_ADD_GROUP_TOOLTIP") };
             add.style.width = 20;
             groupRow.Add (add);
-            deleteGroup_ = new Button (() => window_.StackerDeleteGroup ()) { text = "−", tooltip = "自分で作った組を消す" };
+            deleteGroup_ = new Button (() => window_.StackerDeleteGroup ()) { text = "−", tooltip = Tr ("STACKER_OVERLAY_DELETE_GROUP_TOOLTIP") };
             deleteGroup_.style.width = 20;
             groupRow.Add (deleteGroup_);
             root.Add (groupRow);
@@ -70,12 +71,12 @@ namespace Lilium
 
             VisualElement toggles = new VisualElement ();
             toggles.style.flexDirection = FlexDirection.Row;
-            ghost_ = new Toggle ("Ghost") { tooltip = "前（青）と後ろ（橙）のフレームの姿を 1 フレームずつ半透明で重ねる（離れるほど薄い）" };
+            ghost_ = new Toggle ("Ghost") { tooltip = Tr ("STACKER_OVERLAY_GHOST_TOOLTIP") };
             ghost_.RegisterValueChangedCallback (e => window_.stackerGhost = e.newValue);
             ghost_.labelElement.style.minWidth = 0;
             ghost_.labelElement.style.width = 38;
             toggles.Add (ghost_);
-            loop_ = new Toggle ("Loop") { tooltip = "先頭のポーズキーを末尾へ写しておく（先頭を直すと末尾も合う）" };
+            loop_ = new Toggle ("Loop") { tooltip = Tr ("STACKER_OVERLAY_LOOP_TOOLTIP") };
             loop_.RegisterValueChangedCallback (e => window_.stackerLoop = e.newValue);
             loop_.labelElement.style.minWidth = 0;
             loop_.labelElement.style.width = 32;
@@ -84,7 +85,7 @@ namespace Lilium
             root.Add (toggles);
 
             // 残像の幅（前後それぞれ何フレームまで）
-            ghostRange_ = new SliderInt ("幅", 1, Stacker.kGhostRangeMax) { showInputField = true, tooltip = "残像を出すフレームの幅（前後それぞれ）" };
+            ghostRange_ = new SliderInt (Tr ("STACKER_OVERLAY_GHOST_RANGE"), 1, Stacker.kGhostRangeMax) { showInputField = true, tooltip = Tr ("STACKER_OVERLAY_GHOST_RANGE_TOOLTIP") };
             ghostRange_.labelElement.style.minWidth = 0;
             ghostRange_.labelElement.style.width = 20;
             ghostRange_.RegisterValueChangedCallback (e => window_.stackerGhostRange = e.newValue);
@@ -102,13 +103,14 @@ namespace Lilium
 
             VisualElement buttons = new VisualElement ();
             buttons.style.flexDirection = FlexDirection.Row;
-            Button keyAll = new Button (() => window_.KeyAll ()) { text = "Key All", tooltip = "組の選択に関係なく、今のフレームで全部（体・手・Rig の重み・表情・任意のプロパティ）にキーを打つ" };
+            Button keyAll = new Button (() => window_.KeyAll ()) { text = "Key All" };
+            ShortcutTooltip.Set (keyAll, containerWindow, Tr ("STACKER_OVERLAY_KEY_ALL_TOOLTIP"), "Key All");
             keyAll.style.flexGrow = 1;
             buttons.Add (keyAll);
-            Button insert = new Button (() => window_.StackerInsert ()) { text = "Insert", tooltip = "今のポーズキーの後ろに同じ姿勢を足して後ろを押し出す（ポーズキーでないフレームでは、組のキーを打つ）" };
+            Button insert = new Button (() => window_.StackerInsert ()) { text = "Insert", tooltip = Tr ("STACKER_OVERLAY_INSERT_TOOLTIP") };
             insert.style.flexGrow = 1;
             buttons.Add (insert);
-            Button delete = new Button (() => window_.StackerDelete ()) { text = "Delete", tooltip = "今のポーズキーを消して後ろを詰める" };
+            Button delete = new Button (() => window_.StackerDelete ()) { text = "Delete", tooltip = Tr ("STACKER_OVERLAY_DELETE_TOOLTIP") };
             delete.style.flexGrow = 1;
             buttons.Add (delete);
             root.Add (buttons);
@@ -148,7 +150,7 @@ namespace Lilium
             label.style.paddingLeft = 4;
             label.style.unityTextAlign = TextAnchor.MiddleLeft;
             row.Add (label);
-            IntegerField interval = new IntegerField { name = "interval", isDelayed = true, tooltip = "次のポーズキーまでのフレーム数。変えると後ろのキーがまとめてずれる" };
+            IntegerField interval = new IntegerField { name = "interval", isDelayed = true, tooltip = Tr ("STACKER_OVERLAY_INTERVAL_TOOLTIP") };
             interval.style.width = 44;
             interval.RegisterValueChangedCallback (e => {
                 int index = (int)interval.userData;
@@ -194,7 +196,7 @@ namespace Lilium
             indices_.Clear ();
             for (int i = 0; i < keys_.Length; i++) indices_.Add (i);
             list_.RefreshItems ();
-            message_.text = window_.clip == null ? "クリップを開いてください" : keys_.Length == 0 ? "この組にはキーが無い" : "";
+            message_.text = window_.clip == null ? Tr ("STACKER_OVERLAY_OPEN_CLIP") : keys_.Length == 0 ? Tr ("STACKER_OVERLAY_NO_KEYS_IN_GROUP") : "";
         }
 
         /// <summary>

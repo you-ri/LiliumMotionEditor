@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -60,7 +61,7 @@ namespace Lilium
             public bool hasRotation;
         }
 
-        public const string kFullBodyIkReason = "全身 IK の定義では使わない";
+        public static string kFullBodyIkReason => Tr ("RIG_BINDING_FULL_BODY_IK_UNUSED");
 
         public readonly List<Fk> fk = new List<Fk> ();
         public readonly List<Ik> ik = new List<Ik> ();
@@ -109,7 +110,7 @@ namespace Lilium
         {
             RigBinding binding = new RigBinding { animator = animator };
             if (definition == null) {
-                binding.errors.Add ("リグの定義が無い");
+                binding.errors.Add (Tr ("RIG_BINDING_NO_DEFINITION"));
                 return binding;
             }
             binding.errors.AddRange (definition.Validate ());
@@ -117,8 +118,8 @@ namespace Lilium
             bool fullBody = definition.solver == RigSolver.FullBodyIk;
 
             bool isHuman = animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman;
-            string humanReason = animator == null ? "Animator が無い"
-                : isHuman ? null : "Humanoid の Avatar が無い";
+            string humanReason = animator == null ? Tr ("RIG_BINDING_NO_ANIMATOR")
+                : isHuman ? null : Tr ("RIG_BINDING_NO_HUMANOID_AVATAR");
             if (humanReason != null) binding.errors.Add (humanReason);
 
             foreach (EditRigDefinition.FkControl control in definition.fkControls) {
@@ -127,7 +128,7 @@ namespace Lilium
                     control = control,
                     path = RigPaths.Fk (control.bone),
                     bone = bone,
-                    disabledReason = humanReason ?? (bone == null ? "このキャラに " + control.bone + " の骨が無い" : null),
+                    disabledReason = humanReason ?? (bone == null ? Tr ("RIG_BINDING_MISSING_BONE", control.bone) : null),
                 });
             }
 
@@ -183,10 +184,10 @@ namespace Lilium
             if (entry.root == null) missing.Add (chain.root.ToString ());
             if (entry.mid == null) missing.Add (chain.mid.ToString ());
             if (entry.tip == null) missing.Add (chain.tip.ToString ());
-            if (missing.Count > 0) return "このキャラに " + string.Join ("・", missing) + " の骨が無い";
+            if (missing.Count > 0) return Tr ("RIG_BINDING_MISSING_CHAIN_BONES", string.Join (Tr ("RIG_BINDING_BONE_SEPARATOR"), missing));
 
-            if (!entry.mid.IsChildOf (entry.root) || entry.mid == entry.root) return chain.mid + " が " + chain.root + " の下に無い";
-            if (!entry.tip.IsChildOf (entry.mid) || entry.tip == entry.mid) return chain.tip + " が " + chain.mid + " の下に無い";
+            if (!entry.mid.IsChildOf (entry.root) || entry.mid == entry.root) return Tr ("RIG_BINDING_NOT_CHILD_OF", chain.mid, chain.root);
+            if (!entry.tip.IsChildOf (entry.mid) || entry.tip == entry.mid) return Tr ("RIG_BINDING_NOT_CHILD_OF", chain.tip, chain.mid);
             return null;
         }
 
@@ -194,7 +195,7 @@ namespace Lilium
         {
             Extra entry = new Extra { control = control, path = RigPaths.Extra (control.name) };
             if (animator == null) {
-                entry.disabledReason = "Animator が無い";
+                entry.disabledReason = Tr ("RIG_BINDING_NO_ANIMATOR");
                 return entry;
             }
 
@@ -203,7 +204,7 @@ namespace Lilium
                 regex = new Regex (control.pattern ?? "");
             }
             catch (System.ArgumentException) {
-                entry.disabledReason = "パターンが正規表現として読めない";
+                entry.disabledReason = Tr ("RIG_BINDING_INVALID_PATTERN");
                 return entry;
             }
 
@@ -212,12 +213,12 @@ namespace Lilium
                 .Where (t => t != animator.transform && !string.IsNullOrEmpty (control.pattern) && regex.IsMatch (t.name))
                 .ToList ();
             if (matches.Count == 0) {
-                entry.disabledReason = "このキャラに '" + control.pattern + "' に当たる骨が無い";
+                entry.disabledReason = Tr ("RIG_BINDING_NO_MATCHING_BONE", control.pattern);
                 return entry;
             }
             entry.bone = matches[0];
             if (matches.Count > 1) {
-                binding.notes.Add (control.name + ": '" + control.pattern + "' に " + matches.Count + " 本の骨が当たったので " + matches[0].name + " を使う");
+                binding.notes.Add (Tr ("RIG_BINDING_MULTIPLE_MATCHES", control.name, control.pattern, matches.Count, matches[0].name));
             }
             return entry;
         }

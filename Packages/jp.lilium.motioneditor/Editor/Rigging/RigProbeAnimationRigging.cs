@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEditor.Animations.Rigging;
 using UnityEngine.Animations.Rigging;
 using Lilium;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -95,16 +96,16 @@ namespace Lilium
             TwoBoneIKConstraint twoBone = component as TwoBoneIKConstraint;
             if (twoBone != null) {
                 bool hasHint = twoBone.data.hint != null;
-                info.label += hasHint ? "" : "（ヒント無し）";
+                if (!hasHint) info.label = Tr ("RIG_PROBE_ANIMATION_RIGGING_NO_HINT_LABEL", info.label);
                 info.inverse = hasHint ? InverseKind.Exact : InverseKind.Approximate;
-                info.reason = hasHint ? "骨の位置から目標とヒントを求め直せる"
-                    : "ヒントが無いので、肘・膝の向きは入ってくる姿勢しだい";
+                info.reason = hasHint ? Tr ("RIG_PROBE_ANIMATION_RIGGING_HINT_INVERSE")
+                    : Tr ("RIG_PROBE_ANIMATION_RIGGING_NO_HINT_INVERSE");
                 return info;
             }
 
             bool hasInverse = HasInverse (component.GetType ());
             info.inverse = hasInverse ? InverseKind.Approximate : InverseKind.None;
-            info.reason = hasInverse ? "逆が用意されている（解は 1 つに定まらない）" : "逆が用意されていない";
+            info.reason = hasInverse ? Tr ("RIG_PROBE_ANIMATION_RIGGING_HAS_INVERSE") : Tr ("RIG_PROBE_ANIMATION_RIGGING_NO_INVERSE");
             return info;
         }
 

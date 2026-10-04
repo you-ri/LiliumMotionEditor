@@ -1,4 +1,5 @@
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -59,8 +60,8 @@ namespace Lilium
         public override bool canWrite { get { return overrideClip != null; } }
         public override bool hasWeight { get { return true; } }
         public override GrabTarget grab { get { return GrabTarget.Values; } }
-        public override string unavailableReason { get { return overrideClip == null ? "クリップが無い" : null; } }
-        public override string inverseReason { get { return "差分を書き戻せる（元の値は重ねる直前に控える）"; } }
+        public override string unavailableReason { get { return overrideClip == null ? Tr ("OVERRIDE_LAYER_NO_CLIP") : null; } }
+        public override string inverseReason { get { return Tr ("OVERRIDE_LAYER_INVERSE_REASON"); } }
 
         /// <summary>編集中に効かせない（✏ の段より下）か</summary>
         bool belowWriteLayer
@@ -74,9 +75,9 @@ namespace Lilium
         protected override string description
         {
             get {
-                if (overrideClip == null) return "重ねるクリップが無い（欄で選ぶ）";
-                string text = mode == OverrideMode.Additive ? "元に差分を足す（元を直せば付いていく）" : "キーのある値を置き換える";
-                if (belowWriteLayer) text += "。書き出し先（✏）より下なので、編集中は効かせていない";
+                if (overrideClip == null) return Tr ("OVERRIDE_LAYER_NO_CLIP_DESCRIPTION");
+                string text = mode == OverrideMode.Additive ? Tr ("OVERRIDE_LAYER_ADDITIVE_DESCRIPTION") : Tr ("OVERRIDE_LAYER_OVERRIDE_DESCRIPTION");
+                if (belowWriteLayer) text += Tr ("OVERRIDE_LAYER_BELOW_WRITE_SUFFIX");
                 return text;
             }
         }
@@ -86,42 +87,42 @@ namespace Lilium
             OverrideMode next = mode == OverrideMode.Additive ? OverrideMode.Override : OverrideMode.Additive;
             LayerClip result = new LayerClip {
                 label = "Clip",
-                tooltip = "重ねる差分のクリップ（<元の名前>.override.anim）。欄を空にするとこの段を外す（ファイルは残る）",
+                tooltip = Tr ("OVERRIDE_LAYER_CLIP_TOOLTIP"),
                 getClip = () => overrideClip,
                 assign = value => host_.SetOverrideClip (index_, value),
                 getStatus = () => {
-                    if (overrideClip == null) return new LayerClipStatus (LayerClipState.None, "クリップが無い");
-                    if (belowWriteLayer) return new LayerClipStatus (LayerClipState.Stale, "書き出し先（✏）より下なので、編集中は効かせていない");
+                    if (overrideClip == null) return new LayerClipStatus (LayerClipState.None, Tr ("OVERRIDE_LAYER_NO_CLIP"));
+                    if (belowWriteLayer) return new LayerClipStatus (LayerClipState.Stale, Tr ("OVERRIDE_LAYER_BELOW_WRITE"));
                     return new LayerClipStatus (LayerClipState.Ready, mode.ToString ());
                 },
             };
             // 並べ替えと外すのは段の名前の行（Output の段と同じ）。ファイルごと消すのはクリップの行
             headButtons.Add (new LayerClipButton {
                 label = "↑",
-                tooltip = "1 つ上の Override と入れ替える（Editing Rig と Humanoid Pose の間で並べ替える）",
+                tooltip = Tr ("OVERRIDE_LAYER_MOVE_UP_TOOLTIP"),
                 run = () => host_.MoveOverride (index_, -1),
                 problem = () => host_.GetMoveOverrideProblem (index_, -1),
             });
             headButtons.Add (new LayerClipButton {
                 label = "↓",
-                tooltip = "1 つ下の Override と入れ替える（Editing Rig と Humanoid Pose の間で並べ替える）",
+                tooltip = Tr ("OVERRIDE_LAYER_MOVE_DOWN_TOOLTIP"),
                 run = () => host_.MoveOverride (index_, 1),
                 problem = () => host_.GetMoveOverrideProblem (index_, 1),
             });
             headButtons.Add (new LayerClipButton {
-                label = "削除",
-                tooltip = "この段を外す（クリップのファイルは残る。あとで欄へ入れ直せる）",
+                label = Tr ("HUMANOID_LAYER_REMOVE"),
+                tooltip = Tr ("OVERRIDE_LAYER_REMOVE_TOOLTIP"),
                 run = () => host_.RemoveOverride (index_, false),
             });
             result.buttons.Add (new LayerClipButton {
-                label = "ファイル削除",
-                tooltip = "この段を外して、クリップのファイルも消す（Undo では戻せない）",
+                label = Tr ("OVERRIDE_LAYER_DELETE_FILE"),
+                tooltip = Tr ("OVERRIDE_LAYER_DELETE_FILE_TOOLTIP"),
                 run = () => host_.RemoveOverride (index_, true),
                 visible = () => host_.layerStructureEditing,
             });
             result.buttons.Add (new LayerClipButton {
                 label = mode.ToString (),
-                tooltip = "合成の仕方を " + next + " に切り替える。Additive は元に差分を足す（元を直せば付いていく）。Override はキーのある値を置き換える",
+                tooltip = Tr ("OVERRIDE_LAYER_MODE_TOOLTIP", next),
                 run = () => host_.SetOverrideMode (index_, next),
             });
             return result;

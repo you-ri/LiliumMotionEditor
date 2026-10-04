@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
 using System.Linq;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -72,19 +73,19 @@ namespace Lilium
             column.style.marginBottom = 2;
 
             VisualElement sides = MakeButtonRow ();
-            sides.Add (MakeSelectButton ("All", "骨と IK を全部選ぶ", () => window_.SelectPickerAll ()));
-            sides.Add (MakeSelectButton ("Right", "右半身（名前が Right で始まる骨と IK）を選ぶ", () => window_.SelectPickerSide (true)));
-            sides.Add (MakeSelectButton ("Left", "左半身（名前が Left で始まる骨と IK）を選ぶ", () => window_.SelectPickerSide (false)));
+            sides.Add (MakeSelectButton ("All", Tr ("PICKER_OVERLAY_ALL_TOOLTIP"), () => window_.SelectPickerAll ()));
+            sides.Add (MakeSelectButton ("Right", Tr ("PICKER_OVERLAY_RIGHT_TOOLTIP"), () => window_.SelectPickerSide (true)));
+            sides.Add (MakeSelectButton ("Left", Tr ("PICKER_OVERLAY_LEFT_TOOLTIP"), () => window_.SelectPickerSide (false)));
             column.Add (sides);
 
             VisualElement body = MakeButtonRow ();
-            body.Add (MakeSelectButton ("上半身", "背骨から上（首・頭・腕・指と腕の IK）を選ぶ", () => window_.SelectPickerBody (true)));
-            body.Add (MakeSelectButton ("下半身", "腰と脚（脚の IK も）を選ぶ", () => window_.SelectPickerBody (false)));
+            body.Add (MakeSelectButton (Tr ("PICKER_OVERLAY_UPPER_BODY"), Tr ("PICKER_OVERLAY_UPPER_BODY_TOOLTIP"), () => window_.SelectPickerBody (true)));
+            body.Add (MakeSelectButton (Tr ("PICKER_OVERLAY_LOWER_BODY"), Tr ("PICKER_OVERLAY_LOWER_BODY_TOOLTIP"), () => window_.SelectPickerBody (false)));
             column.Add (body);
 
             VisualElement fingers = MakeButtonRow ();
-            fingers.Add (MakeSelectButton ("右指", "右手の指の骨を全部選ぶ", () => window_.SelectPickerFingers (true)));
-            fingers.Add (MakeSelectButton ("左指", "左手の指の骨を全部選ぶ", () => window_.SelectPickerFingers (false)));
+            fingers.Add (MakeSelectButton (Tr ("PICKER_OVERLAY_RIGHT_FINGERS"), Tr ("PICKER_OVERLAY_RIGHT_FINGERS_TOOLTIP"), () => window_.SelectPickerFingers (true)));
+            fingers.Add (MakeSelectButton (Tr ("PICKER_OVERLAY_LEFT_FINGERS"), Tr ("PICKER_OVERLAY_LEFT_FINGERS_TOOLTIP"), () => window_.SelectPickerFingers (false)));
             column.Add (fingers);
 
             return column;
