@@ -563,6 +563,15 @@ namespace Lilium
 
         public void Select (GameObject go)
         {
+            // ハンドルを押したときだけ、Shift（今の選択に足す）と Ctrl（子階層もまとめて選ぶ）を見る。
+            // ハンドルはドラッグの間も押した物を選び直すので、押した後は、選んでいる物の 1 つなら選択を保つ（まとめて選んだまま動かせる）
+            if (handlesDrawing_ && go != null) {
+                if (handlePressed_ && (handleModifiers_ & (EventModifiers.Shift | EventModifiers.Control | EventModifiers.Command)) != 0) {
+                    SelectWithModifiers (go, handleModifiers_);
+                    return;
+                }
+                if (!handlePressed_ && selection_.Contains (go)) return;
+            }
             if (selection_.Count == 1 && selection_[0] == go) return;
             // いくつか選んでいる全身 IK の点の 1 つを押したときは、選択を保つ（そのままつかんで、まとめて動かせる）。
             // 1 つだけにするときは、何も無い所を押すか、枠で選び直す
@@ -581,6 +590,64 @@ namespace Lilium
             RefreshGrabMute ();
             // 選んだ物で表示が変わるオーバーレイ（Spinner）に知らせる
             RaiseStateChanged ();
+        }
+
+        // ハンドルを描いている間か・その出来事がマウスを押したところか・そのときの修飾キー（DoHandles が入れる）
+        bool handlesDrawing_;
+        bool handlePressed_;
+        EventModifiers handleModifiers_;
+
+        /// <summary>
+        /// 修飾キーを見て選ぶ。Shift なら今の選択に足す（押した物が選んであっても外さない）、Ctrl（Mac は Command）なら押した物の子階層の物もまとめて選ぶ。
+        /// 押した物が先頭（今の対象）になり、全身 IK の点なら中心の点になる
+        /// </summary>
+        void SelectWithModifiers (GameObject go, EventModifiers modifiers)
+        {
+            List<GameObject> selected = new List<GameObject> ();
+            if ((modifiers & EventModifiers.Shift) != 0) selected.AddRange (selection_);
+            selected.Remove (go);
+            selected.Insert (0, go);
+            if ((modifiers & (EventModifiers.Control | EventModifiers.Command)) != 0) {
+                foreach (PoseTarget child in ChildTargets (targets_, FindTarget (go), IsPickable)) {
+                    if (!selected.Contains (child.gameObject)) selected.Add (child.gameObject);
+                }
+            }
+            SelectObjects (selected);
+            if (selected.Count > 1 && FindTarget (go) is BodyPointTarget) {
+                pivotPoint_ = go;
+                RaiseStateChanged ();
+            }
+        }
+
+        /// <summary>
+        /// parent の子階層にある物（表示モデルの骨の階層で、parent の骨より先に付いている物）。pickable で今つかめる物に絞る。
+        /// 骨の付け根の点・骨（FK）なら、同じ骨に付いているほかの物（骨の上の点・その骨から始まる IK）も含む。
+        /// 骨の付け根から離れた点（かかと・顔の前など）なら、その骨より先の物だけ
+        /// </summary>
+        internal static List<PoseTarget> ChildTargets (IList<PoseTarget> targets, PoseTarget parent, System.Func<PoseTarget, bool> pickable)
+        {
+            List<PoseTarget> children = new List<PoseTarget> ();
+            Transform anchor = parent != null ? parent.anchor : null;
+            if (anchor == null) return children;
+            BodyPointTarget parentPoint = parent as BodyPointTarget;
+            bool sameBone = parentPoint == null || parentPoint.isOnBoneOrigin;
+            foreach (PoseTarget target in targets) {
+                if (target == parent || target.gameObject == null || target.anchor == null) continue;
+                bool below = target.anchor == anchor ? sameBone : target.anchor.IsChildOf (anchor);
+                if (below && (pickable == null || pickable (target))) children.Add (target);
+            }
+            return children;
+        }
+
+        /// <summary>今ハンドルを出していてつかめる物か（DoHandles の出し分けと同じ）</summary>
+        bool IsPickable (PoseTarget target)
+        {
+            if (target is BodyPointTarget) return isPointGrab && !isDisplayGrab && showIk_ && CanEditPoints ();
+            FkTarget fk = target as FkTarget;
+            if (isPointGrab && fk != null && !fk.fullBodyHandle) return false;
+            if (!showBones_ && !(showIk_ && target is IkTarget)) return false;
+            if (isDisplayGrab && !target.supportsDisplayHandles && !(target is RigSourceTarget)) return false;
+            return CanEditTarget (target);
         }
 
         /// <summary>
@@ -912,13 +979,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 別の窓で、どのハンドルにも当たらなかったクリック。メッシュを指していればその骨を選び、何も無ければ選択を外す
+        /// 別の窓で、どのハンドルにも当たらなかったクリック。メッシュを指していればその骨を選び、何も無ければ選択を外す。
+        /// Shift・Ctrl は表示域のクリックと同じ
         /// </summary>
-        internal void SelectByRay (Ray ray)
+        internal void SelectByRay (Ray ray, EventModifiers modifiers)
         {
             if (stage_ == null) return;
-            PoseTarget target = FindPickTarget (stage_.PickBone (ray));
-            Select (target != null ? target.gameObject : null);
+            SelectPicked (FindPickTarget (stage_.PickBone (ray)), modifiers);
             RepaintView ();
         }
 
@@ -1389,6 +1456,10 @@ namespace Lilium
             // キーの自動追加が切なら、今のフレームにキーの無い物のハンドルは薄く描いてつかめなくする（動かしてもキーを打てない）。
             // 入なら触ればキーを打つので、そのまま出す
             bool pointsLocked = !CanEditPoints ();
+            // 押したときの修飾キーで選び方を変える（Select）。ハンドルが押した出来事を使うと種類が Used に変わるので、先に控える
+            handlesDrawing_ = true;
+            handlePressed_ = ev.type == EventType.MouseDown;
+            handleModifiers_ = ev.modifiers;
             EditorGUI.BeginChangeCheck ();
             try {
                 foreach (PoseTarget target in targets_) {
@@ -1410,11 +1481,11 @@ namespace Lilium
                                     if (other != point) other.MoveBy (dragged);
                                 }
                             }
-                            // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回して子の点ごと
+                            // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（固定している点は付いて回らない）
                             Quaternion turned = point.ConsumeRotateDelta ();
                             if (turned != Quaternion.identity) {
                                 if (selected && selection_.Count > 1) RotateSelectedPoints (point, turned);
-                                else RotatePointFk (point, turned);
+                                else RotatePointFk (targets_, point, turned);
                                 pointTurned = true;
                             }
                         }
@@ -1445,6 +1516,7 @@ namespace Lilium
             }
             finally {
                 PoseHandles.locked = false;
+                handlesDrawing_ = false;
             }
             bool changed = EditorGUI.EndChangeCheck ();
             if (displayGrab && ev.type == EventType.Repaint) DrawAimGhost ();
@@ -1588,16 +1660,16 @@ namespace Lilium
 
         /// <summary>
         /// 点を 1 つ選んで回した: その点を中心に、点が乗る骨を回す（S26。点の種類で変えない）。
-        /// 骨は FK で回すので、子の骨と、骨に付いて動く子の点は一緒に回る。固定している子の点（同じ骨の上の点を含む）は、置いた場所と向きを同じだけ回す
-        /// （回さないと、解いたときに子が元の場所へ引き戻される）。
+        /// 骨は FK で回すので、子の骨と、骨に付いて動く Free の点は一緒に回る。固定している点（Pin・Locked。同じ骨の上の点も）は回さず、
+        /// 置いた場所と向きのまま（S29。移動と同じく、ほかの点の操作に連動しない。全身 IK が手足を曲げて届かせる）。
         /// 付け根から離れた点は、FK だけでは中心が骨の付け根になるので、選んだ点をその場に留め（Pin）、骨の付け根は全身 IK で点に合わせて動かす。
         /// 骨を FK で回せないとき（FK の対象が無い）は、向きを持つ点の向きだけ回す
         /// </summary>
-        void RotatePointFk (BodyPointTarget point, Quaternion delta)
+        internal static void RotatePointFk (IList<PoseTarget> targets, BodyPointTarget point, Quaternion delta)
         {
             Transform bone = point.editingBone;
             FkTarget fk = null;
-            foreach (PoseTarget target in targets_) {
+            foreach (PoseTarget target in targets) {
                 FkTarget candidate = target as FkTarget;
                 if (candidate != null && candidate.bone == bone) {
                     fk = candidate;
@@ -1608,14 +1680,8 @@ namespace Lilium
                 point.RotateAround (point.framePosition, delta, true);
                 return;
             }
-            // 中心は選んだ点の目標（固定していなければ骨の上の点）。子の点は、今の骨の上の点を中心に重ねて回す（届いていない分の食い違いを持ち越さない）
+            // 中心は選んだ点の目標（固定していなければ骨の上の点）
             Vector3 pivot = point.isOnBoneOrigin ? bone.position : point.framePosition;
-            Vector3 pivotOnBone = point.isOnBoneOrigin ? bone.position : point.bonePosition;
-            foreach (PoseTarget target in targets_) {
-                BodyPointTarget child = target as BodyPointTarget;
-                if (child == null || child == point || child.editingBone == null || !child.pinned) continue;
-                if (child.editingBone == bone || child.editingBone.IsChildOf (bone)) child.RotateBodyAround (pivot, pivotOnBone, delta, false);
-            }
             fk.SpinRotateWorld (delta, false);
             if (point.isOnBoneOrigin) point.RotateAround (pivot, delta, false);
             else point.RotateAround (pivot, delta, true);
@@ -1921,7 +1987,7 @@ namespace Lilium
                     }
                     // ハンドルに当たらなかった左クリック。メッシュを指していればその骨を選び、何も無ければ選択を外す
                     else if (ev.button == 0) {
-                        SelectByMeshClick (ev.mousePosition, rect);
+                        SelectByMeshClick (ev.mousePosition, rect, ev.modifiers);
                         PoseHandleUtility.focusControl = 0;
                         ev.Use ();
                         RepaintView ();
@@ -1977,8 +2043,8 @@ namespace Lilium
                         EndCameraDrag ();
                         if (boxSelecting_) {
                             boxSelecting_ = false;
-                            if (boxMoved_) SelectPointsInBox (rect, ev.shift || ev.control || ev.command);
-                            else SelectByMeshClick (boxStart_, rect);
+                            if (boxMoved_) SelectPointsInBox (rect, ev.modifiers);
+                            else SelectByMeshClick (boxStart_, rect, ev.modifiers);
                             PoseHandleUtility.focusControl = 0;
                             RepaintView ();
                         }
@@ -2011,10 +2077,12 @@ namespace Lilium
         Vector2 boxEnd_;
 
         /// <summary>
-        /// 枠の中にある全身 IK の点をまとめて選ぶ。add なら今の選択に足す（Shift / Ctrl）
+        /// 枠の中にある全身 IK の点をまとめて選ぶ。Shift なら今の選択に足す。Ctrl（Mac は Command）なら、枠の中の点の子階層の物も選ぶ
         /// </summary>
-        void SelectPointsInBox (Rect rect, bool add)
+        void SelectPointsInBox (Rect rect, EventModifiers modifiers)
         {
+            bool add = (modifiers & EventModifiers.Shift) != 0;
+            bool children = (modifiers & (EventModifiers.Control | EventModifiers.Command)) != 0;
             if (stage_ == null || rect.width < 1 || rect.height < 1) return;
             Rect box = Rect.MinMaxRect (Mathf.Min (boxStart_.x, boxEnd_.x), Mathf.Min (boxStart_.y, boxEnd_.y), Mathf.Max (boxStart_.x, boxEnd_.x), Mathf.Max (boxStart_.y, boxEnd_.y));
             Camera camera = stage_.camera;
@@ -2028,6 +2096,13 @@ namespace Lilium
                 BodyPointTarget point = target as BodyPointTarget;
                 if (!canEdit || point == null || point.gameObject == null) continue;
                 if (IsInBox (camera, rect, box, point.framePosition) && !selected.Contains (point.gameObject)) selected.Add (point.gameObject);
+            }
+            if (children) {
+                foreach (GameObject go in selected.ToArray ()) {
+                    foreach (PoseTarget child in ChildTargets (targets_, FindTarget (go), IsPickable)) {
+                        if (!selected.Contains (child.gameObject)) selected.Add (child.gameObject);
+                    }
+                }
             }
             SelectObjects (selected);
         }

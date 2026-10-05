@@ -32,7 +32,9 @@ namespace Lilium
     /// 強さ 1 なら、その点を position に置いて動かない物にする（骨はその点まわりに回るだけ）。rotationWeight が 1 なら、骨の向きも rotation に留める。
     /// 同じ骨の上の点どうしは剛体として拘束しあう: 2 つ目の固定した点は、1 つ目の点まわりに骨を回して 2 つ目の点の方へ向け、
     /// 3 つ目は、先の 2 点を結ぶ軸まわりに回して向ける（点どうしの距離は変わらないので、届かない分は残る）。
-    /// 固定した点が 1 つだけなら、骨の向きは決めない（その点まわりに回れる）
+    /// 固定した点が 1 つだけなら、骨の向きは決めない（その点まわりに回れる）。
+    ///
+    /// aim が 1 の点（向けるだけの点。S28）は、骨を回して点を position の方へ向けるだけで、ほかの骨を引かない（点と position の距離は合わせない）
     /// </summary>
     public struct FullBodyIkEffector
     {
@@ -52,6 +54,15 @@ namespace Lilium
         public float positionWeight;
         /// <summary>向きを寄せる強さ（0〜1）</summary>
         public float rotationWeight;
+        /// <summary>
+        /// 1 なら向けるだけの点（S28。リグ定義の「引く強さ」0）。ほかの点で解き終わってから、骨を付け根まわりに回して、
+        /// 骨の上の点を position の方へ向ける。骨の付け根は親に付いて動き、ほかの骨を引かない（根の側の骨は、この点が無いときと同じ）。
+        /// 骨より先に位置を固定した点（胸を向けたときの手）があれば、手足を曲げて合わせ直す。rotation / rotationWeight は使わない。
+        /// 同じ骨に 2 つあるとき、並びで後ろの方は、前の方の点の向きまわりにだけ回す（顔の前で向きを決め、頭のてっぺんでかしげを決める）。
+        /// 骨の向きがほかの点で決まっている（位置を固定した点が 2 つ以上・向きの固定）・付け根から離れた所で位置を固定している骨では効かない。
+        /// 骨の付け根そのものの点（offset が 0）は向ける腕が無いので、0 と同じに扱う
+        /// </summary>
+        public int aim;
     }
 
     /// <summary>
@@ -80,7 +91,7 @@ namespace Lilium
         public NativeArray<FullBodyIkEffector> effectors;
         /// <summary>effectors のうち、先頭から何個を使うか</summary>
         public int effectorCount;
-        /// <summary>出力。目標ごとの届かなかった差（メートル）</summary>
+        /// <summary>出力。目標ごとの届かなかった差（メートル）。向けるだけの点は、骨の付け根から点へ向かう線と目標の離れ</summary>
         public NativeArray<float> residuals;
         /// <summary>出力。[kStatusBurst] Burst で動いたら 1／[kStatusDefaultBend] 曲がる向きを既定から決めた蝶番の数</summary>
         public NativeArray<int> status;
@@ -125,6 +136,8 @@ namespace Lilium
         internal NativeArray<float3> effectorPoint;
         /// <summary>1 なら、強さ 1 の目標だが、骨がもうほかの点で動かない物になっているので、その点まわりに骨を回して寄せる</summary>
         internal NativeArray<int> effectorHard;
+        /// <summary>1 なら、向けるだけの点が向きを決める骨（ほかの点で解き終わってから向ける）</summary>
+        internal NativeArray<int> aimed;
 
         public bool isCreated
         {
@@ -173,6 +186,7 @@ namespace Lilium
             d.effectorBody = new NativeArray<int> (math.max (1, maxEffectors), allocator);
             d.effectorPoint = new NativeArray<float3> (math.max (1, maxEffectors), allocator);
             d.effectorHard = new NativeArray<int> (math.max (1, maxEffectors), allocator);
+            d.aimed = new NativeArray<int> (boneCount, allocator);
             return d;
         }
 
@@ -217,6 +231,7 @@ namespace Lilium
             effectorBody.Dispose ();
             effectorPoint.Dispose ();
             effectorHard.Dispose ();
+            aimed.Dispose ();
         }
     }
 
@@ -349,6 +364,7 @@ namespace Lilium
                 d.effectorsBelow[i] = 0;
                 d.pinnedOrigin[i] = 0;
                 d.pinCount[i] = 0;
+                d.aimed[i] = 0;
             }
 
             // 付け根の位置（親の枠で）と、親から見た向き
@@ -476,10 +492,11 @@ namespace Lilium
                 d.effectorBody[e] = -1;
                 d.effectorPoint[e] = float3.zero;
                 d.effectorHard[e] = 0;
-                if (!IsUsed (ref d, e, n)) continue;
+                // 向けるだけの点は数えない（解き終わってから向けるので、ほかの点の解き方を変えない）
+                if (!IsUsed (ref d, e, n) || IsAim (ref d, e)) continue;
                 // 同じ骨の目標（付け根の点・骨の上の点）は 1 つと数える
                 bool counted = false;
-                for (int k = 0; k < e && !counted; k++) counted = IsUsed (ref d, k, n) && d.effectors[k].bone == d.effectors[e].bone;
+                for (int k = 0; k < e && !counted; k++) counted = IsUsed (ref d, k, n) && !IsAim (ref d, k) && d.effectors[k].bone == d.effectors[e].bone;
                 if (counted) continue;
                 for (int i = d.effectors[e].bone; i >= 0; i = d.bones[i].parent) d.effectorsBelow[i] = d.effectorsBelow[i] + 1;
             }
@@ -489,7 +506,7 @@ namespace Lilium
             // どちらを 1 つ目にするかは priority（高い方が先。動かさないと決めた点を、つかんで動かしている点より優先する）、同じなら並びの順
             for (int pass = 0; pass < 2; pass++) {
                 for (int e = 0; e < effectorCount; e++) {
-                    if (!IsUsed (ref d, e, n) || (d.effectors[e].priority != 0) != (pass == 0)) continue;
+                    if (!IsUsed (ref d, e, n) || IsAim (ref d, e) || (d.effectors[e].priority != 0) != (pass == 0)) continue;
                     bool offset = IsOffset (ref d, e);
                     if (!offset && IsOnParent (ref d, e, n, effectorCount)) continue;
                     FullBodyIkEffector effector = d.effectors[e];
@@ -554,12 +571,27 @@ namespace Lilium
                     d.inverseMass[i] = 0;
                 }
             }
+
+            // 最後に、向けるだけの点。解く物には入れず、ほかの点で解き終わってから骨を向ける（Finish）。
+            // 反復の中で向けると、骨の先の固定した点（胸を向けたときの手）との押し合いが根の側へ漏れ、腰まで動く（10-05 実測 8.6mm）。
+            // 骨の向きがもう決まっている（位置を固定した点が 2 つ以上・向きの固定・動かさない骨）なら効かない
+            for (int e = 0; e < effectorCount; e++) {
+                if (!IsUsed (ref d, e, n) || !IsAim (ref d, e)) continue;
+                int bone = d.effectors[e].bone;
+                if (d.aimed[bone] == 0) {
+                    if (d.fixedBones[bone] != 0 || (d.active[bone] != 0 && d.inverseInertia[bone] <= 0)) continue;
+                    d.aimed[bone] = 1;
+                }
+                d.effectorBody[e] = bone;
+                d.effectorPoint[e] = d.effectors[e].offset;
+            }
         }
 
         static bool IsUsed (ref FullBodyIkData d, int e, int n)
         {
             FullBodyIkEffector effector = d.effectors[e];
-            return effector.bone >= 0 && effector.bone < n && (effector.positionWeight > 0 || effector.rotationWeight > 0);
+            // 向けるだけの点は向きの強さを使わない
+            return effector.bone >= 0 && effector.bone < n && (effector.positionWeight > 0 || (effector.rotationWeight > 0 && !IsAim (ref d, e)));
         }
 
         /// <summary>骨の付け根から離れた「骨の上の点」に掛かる目標か（offset が 0 でない）</summary>
@@ -568,13 +600,29 @@ namespace Lilium
             return math.lengthsq (d.effectors[e].offset) > 1e-12f;
         }
 
+        /// <summary>向けるだけの点か（S28。骨の付け根そのものの点は向ける腕が無いので、ふつうの点として扱う）</summary>
+        static bool IsAim (ref FullBodyIkData d, int e)
+        {
+            return d.effectors[e].aim != 0 && IsOffset (ref d, e);
+        }
+
+        /// <summary>骨 bone より先の骨（bone 自身は含まない）に、ほかの点（向けるだけの点でない物）があるか</summary>
+        static bool HasPointBelow (ref FullBodyIkData d, int bone, int n, int effectorCount)
+        {
+            for (int k = 0; k < effectorCount; k++) {
+                int b = d.effectors[k].bone;
+                if (b != bone && IsUsed (ref d, k, n) && !IsAim (ref d, k) && IsInside (ref d, b, bone)) return true;
+            }
+            return false;
+        }
+
         static bool IsOnParent (ref FullBodyIkData d, int e, int n, int effectorCount)
         {
             FullBodyIkEffector effector = d.effectors[e];
             if (effector.rotationWeight > 0 || d.bones[effector.bone].parent < 0 || d.effectorsBelow[effector.bone] != 1) return false;
             // 同じ骨に骨の上の点（かかとなど）があるときは、骨そのものを解く
             for (int k = 0; k < effectorCount; k++) {
-                if (k != e && IsUsed (ref d, k, n) && d.effectors[k].bone == effector.bone && IsOffset (ref d, k)) return false;
+                if (k != e && IsUsed (ref d, k, n) && d.effectors[k].bone == effector.bone && IsOffset (ref d, k) && !IsAim (ref d, k)) return false;
             }
             return true;
         }
@@ -677,7 +725,7 @@ namespace Lilium
         {
             FullBodyIkEffector effector = d.effectors[e];
             int body = d.effectorBody[e];
-            if (body < 0 || effector.positionWeight < 1 || d.effectorHard[e] != 0) return;
+            if (body < 0 || effector.positionWeight < 1 || d.effectorHard[e] != 0 || IsAim (ref d, e)) return;
             float reach = math.length (d.effectorPoint[e]);
             for (int i = body; d.bones[i].parent >= 0; i = d.bones[i].parent) {
                 int p = d.bones[i].parent;
@@ -806,6 +854,8 @@ namespace Lilium
             FullBodyIkEffector effector = d.effectors[e];
             int b = d.effectorBody[e];
             if (b < 0) return;
+            // 向けるだけの点は、解き終わってから向ける（Finish）
+            if (IsAim (ref d, e)) return;
             float2 lambda = d.effectorLambda[e];
 
             if (d.effectorHard[e] != 0) {
@@ -856,6 +906,52 @@ namespace Lilium
             d.effectorLambda[e] = lambda;
         }
 
+        /// <summary>向けるだけの点の骨を回す中心（骨の枠で）。位置を固定した点があればその点（重心を移してある）、無ければ付け根</summary>
+        static float3 AimPivot (ref FullBodyIkData d, int b)
+        {
+            return d.inverseMass[b] <= 0 ? d.centerLocal[b] : float3.zero;
+        }
+
+        /// <summary>
+        /// 向けるだけの点 e を目標へ向けた骨の向き。pivot は回す中心（ワールド）、pivotLocal はその骨の枠での場所。
+        /// 骨の 1 つ目の点は、親に付いた元の姿勢の向き（根なら元の姿勢の向き）から近い側で回して向ける（点の方向まわりのねじりは親に付いたまま）。
+        /// 同じ骨の 2 つ目の点は、今の向きから、1 つ目の点の向きまわりにだけ回す。強さが 1 未満なら、回す量を強さで減らす
+        /// </summary>
+        static quaternion AimRotation (ref FullBodyIkData d, int e, float3 pivot, float3 pivotLocal)
+        {
+            FullBodyIkEffector effector = d.effectors[e];
+            int b = d.effectorBody[e];
+            float weight = math.saturate (effector.positionWeight);
+            int first = -1;
+            for (int k = 0; k < e && first < 0; k++) {
+                if (d.effectorBody[k] == b && IsAim (ref d, k)) first = k;
+            }
+            if (first < 0) {
+                int p = d.bones[b].parent;
+                quaternion rest = p >= 0 ? math.mul (d.rotations[p], d.restRelative[b]) : d.inputRotations[b];
+                quaternion aimed = math.mul (FromTo (math.rotate (rest, effector.offset - pivotLocal), effector.position - pivot), rest);
+                return math.normalizesafe (weight >= 1 ? aimed : math.slerp (rest, aimed, weight), rest);
+            }
+            quaternion current = d.rotations[b];
+            float3 axis = math.normalizesafe (math.rotate (current, d.effectors[first].offset - pivotLocal));
+            float3 from = math.rotate (current, effector.offset - pivotLocal);
+            float3 to = effector.position - pivot;
+            from -= axis * math.dot (from, axis);
+            to -= axis * math.dot (to, axis);
+            if (math.lengthsq (axis) < 0.5f || math.lengthsq (from) < 1e-12f || math.lengthsq (to) < 1e-12f) return current;
+            float turn = SignedAngle (math.normalize (from), math.normalize (to), axis) * weight;
+            return math.normalizesafe (math.mul (quaternion.AxisAngle (axis, turn), current), current);
+        }
+
+        /// <summary>骨 i が骨 bone 自身かその先にあるか</summary>
+        static bool IsInside (ref FullBodyIkData d, int i, int bone)
+        {
+            for (int k = i; k >= 0; k = d.bones[k].parent) {
+                if (k == bone) return true;
+            }
+            return false;
+        }
+
         // ---- 仕上げ ----
 
         /// <summary>
@@ -870,13 +966,30 @@ namespace Lilium
                 if (d.bones[i].parent < 0 && d.active[i] != 0) d.positions[i] = d.centers[i] - math.rotate (d.rotations[i], d.centerLocal[i]);
             }
             Rebuild (ref d, n, false);
+            // 向けるだけの点の骨は、ここから自分の向きを持つ（解かなかった骨なら、今は親に付いた元の姿勢の向き）。
+            // ほかの点の合わせ直しでは回さない（手前の骨を回すときも、ここで止まる）
+            for (int e = 0; e < effectorCount; e++) {
+                int b = d.effectorBody[e];
+                if (b < 0 || !IsAim (ref d, e)) continue;
+                d.active[b] = 1;
+                d.inverseInertia[b] = 0;
+            }
+            // 向けるだけの点 → 位置を固定した点 → 向けるだけの点（その骨より先にほかの点が無いものだけ）の順に合わせる。
+            // 向けるだけの点は骨をその場で回すので、その骨より先の点（胸を向けたときの手）がずれる。先に回しておき、後から先の点を合わせる
+            // （手足を曲げて届かせる）。位置を固定した点を合わせると手前の骨が回って向きがずれるので、先にほかの点が無い骨は最後にもう一度向ける
+            for (int e = 0; e < effectorCount; e++) {
+                if (SnapAim (ref d, n, e, effectorCount, false)) Rebuild (ref d, n, false);
+            }
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapToEffector (ref d, n, e)) Rebuild (ref d, n, false);
+            }
+            for (int e = 0; e < effectorCount; e++) {
+                if (SnapAim (ref d, n, e, effectorCount, true)) Rebuild (ref d, n, false);
             }
             // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す
             for (int e = 0; e < effectorCount; e++) {
                 FullBodyIkEffector effector = d.effectors[e];
-                if (effector.bone < 0 || effector.bone >= n || effector.rotationWeight < 1) continue;
+                if (effector.bone < 0 || effector.bone >= n || effector.rotationWeight < 1 || IsAim (ref d, e)) continue;
                 // 骨の上の点（向きも留めた物）は、合わせ直しのときに向きを戻してある。ここで回すと、点が目標から外れる
                 if (IsOffset (ref d, e)) continue;
                 d.rotations[effector.bone] = math.normalizesafe (effector.rotation, d.rotations[effector.bone]);
@@ -885,8 +998,35 @@ namespace Lilium
             for (int e = 0; e < effectorCount; e++) {
                 FullBodyIkEffector effector = d.effectors[e];
                 if (effector.bone < 0 || effector.bone >= n) continue;
-                d.residuals[e] = math.distance (effector.position, d.positions[effector.bone] + math.rotate (d.rotations[effector.bone], effector.offset));
+                float3 point = d.positions[effector.bone] + math.rotate (d.rotations[effector.bone], effector.offset);
+                if (IsAim (ref d, e)) {
+                    // 向けるだけの点は距離を合わせないので、付け根から点へ向かう線と目標の離れ
+                    float3 origin = d.positions[effector.bone];
+                    float3 along = math.normalizesafe (point - origin);
+                    float3 toTarget = effector.position - origin;
+                    d.residuals[e] = math.length (toTarget - along * math.max (0, math.dot (toTarget, along)));
+                    continue;
+                }
+                d.residuals[e] = math.distance (effector.position, point);
             }
+        }
+
+        /// <summary>
+        /// 向けるだけの点の骨を、今の付け根の位置から向ける（骨とその先を付け根まわりに回す）。onlyLeaf なら、その骨より先にほかの点が無いものだけ、
+        /// そうでなければ、先にほかの点があるものだけ。骨の上に位置を固定した点（付け根以外）があるときは、付け根まわりに回すとその点が外れるので回さない。
+        /// 回したら true
+        /// </summary>
+        static bool SnapAim (ref FullBodyIkData d, int n, int e, int effectorCount, bool onlyLeaf)
+        {
+            int b = d.effectorBody[e];
+            if (b < 0 || !IsAim (ref d, e) || HasPointBelow (ref d, b, n, effectorCount) == onlyLeaf) return false;
+            float3 pivotLocal = AimPivot (ref d, b);
+            if (math.lengthsq (pivotLocal) > 1e-12f) return false;
+            quaternion wanted = AimRotation (ref d, e, d.positions[b], pivotLocal);
+            quaternion turn = math.mul (wanted, math.inverse (d.rotations[b]));
+            if (math.lengthsq (RotationVector (turn)) < 1e-14f) return false;
+            RotateSubtree (ref d, n, b, turn);
+            return true;
         }
 
         /// <summary>
@@ -913,7 +1053,7 @@ namespace Lilium
         {
             FullBodyIkEffector effector = d.effectors[e];
             int b = effector.bone;
-            if (b < 0 || b >= n || effector.positionWeight < 1) return false;
+            if (b < 0 || b >= n || effector.positionWeight < 1 || IsAim (ref d, e)) return false;
             // 同じ骨の 2 つ目以降の点は動かさない（1 つ目の点が外れる。骨の向きは、準備のときに 2 つ目以降の点の方へ向けてある）
             if (d.effectorHard[e] != 0) return false;
             quaternion rotation = d.rotations[b];

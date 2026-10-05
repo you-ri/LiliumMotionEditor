@@ -169,6 +169,13 @@ namespace Lilium
             public Vector3 offset;
             /// <summary>向きも持つか（向きを固定すると、骨の向きも留まる）</summary>
             public bool rotation;
+            /// <summary>
+            /// 引く強さ（0 か 1。S28）。1 は点を引くと骨ごと動き、ほかの骨も付いてくる。0 は乗る骨を回して点を目標の方へ向けるだけで、
+            /// ほかの骨を引かない（向きの点の既定）。骨の付け根そのものの点は 0 にできない。項目の無い古い定義は 1 で読まれる
+            /// </summary>
+            [Range (0, 1)]
+            [Tooltip ("1: dragging the point pulls its bone and the rest of the body along. 0: the point only turns its bone to face the target and never pulls other bones (default for direction points).")]
+            public int pullStrength = 1;
         }
 
         public const float kDefaultStiffness = 0.2f;
@@ -295,7 +302,11 @@ namespace Lilium
             if (version_ < 3) {
                 // 版 3: 点を一覧で持つようにした（S26）。版 2 までの「骨ごとに点を置くか・向きの点・骨の上の点」の設定から一覧を作る
                 if (bodyPoints == null) bodyPoints = new List<BodyPoint> ();
-                if (bodyPoints.Count == 0) bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
+                if (bodyPoints.Count == 0) {
+                    bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
+                    // 今まで作った定義は、向きの点も骨ごと引く（S28 の引く強さ 0 は新しく作る定義の既定だけ。今のクリップの姿勢を変えない）
+                    foreach (BodyPoint point in bodyPoints) point.pullStrength = 1;
+                }
             }
             if (version_ >= 1 && version_ < 4) {
                 // 版 4: 全身 IK の点をつかむ間も出す骨を選べるようにした。今の定義で解かない骨（点が無い骨）を出す（版 0 からは SetFullBodyDefaults が入れる）
@@ -340,6 +351,8 @@ namespace Lilium
                     text.Append ("|p").Append (point.name).Append (',').Append ((int)point.bone).Append (',').Append ((int)point.anchor).Append (',')
                         .Append (point.offset.x.ToString ("R", culture)).Append (',').Append (point.offset.y.ToString ("R", culture)).Append (',')
                         .Append (point.offset.z.ToString ("R", culture)).Append (point.rotation ? 'r' : '-');
+                    // 引く強さ 0 の点（S28）だけ足す（1 の点だけの定義は、項目を足す前と同じハッシュのまま。焼き直しが要る扱いにしない）
+                    if (point.pullStrength <= 0) text.Append ('a');
                 }
             }
             foreach (IkChain chain in ikChains) {
@@ -374,7 +387,8 @@ namespace Lilium
         /// <summary>
         /// 既定の点の一覧。名前は版 2 までのコントロールのパスと同じにする（今までの編集用クリップのキーをそのまま読む）:
         /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）
-        /// - 腰・胸・頭の前の点と頭のてっぺんの点（directionPoints）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る
+        /// - 腰・胸・頭の前の点と頭のてっぺんの点（directionPoints）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
+        ///   引く強さは 0（骨を回して向けるだけ。S28）
         /// - 左右のかかと・つま先の先・人差し指と小指の付け根（contactPoints）。つま先の先はつま先の骨に置き、無いキャラでは足へ乗る
         /// </summary>
         public static List<BodyPoint> CreateDefaultBodyPoints (IEnumerable<FkControl> fk, FullBodySettings settings)
@@ -386,10 +400,11 @@ namespace Lilium
                 points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone) });
             }
             if (settings.directionPoints) {
+                // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
                 foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
-                    points.Add (new BodyPoint { name = bone + "Direction", bone = bone, offset = GetDirectionOffset (bone, settings.directionLength) });
+                    points.Add (new BodyPoint { name = bone + "Direction", bone = bone, offset = GetDirectionOffset (bone, settings.directionLength), pullStrength = 0 });
                 }
-                points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, settings.directionLength, 0) });
+                points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, settings.directionLength, 0), pullStrength = 0 });
             }
             if (settings.contactPoints) {
                 foreach (string side in new[] { "Left", "Right" }) {
@@ -507,6 +522,9 @@ namespace Lilium
                     bool foot = point.anchor == BodyPointAnchor.Heel || point.anchor == BodyPointAnchor.ToeTip;
                     bool hand = point.anchor == BodyPointAnchor.IndexBase || point.anchor == BodyPointAnchor.LittleBase;
                     if ((foot || hand) && RigPaths.SideOf (point.bone) == "") errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE", point.anchor, point.name));
+                    if (point.pullStrength <= 0 && point.anchor == BodyPointAnchor.BoneOrigin && point.offset == Vector3.zero) {
+                        errors.Add (Tr ("EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL", point.name));
+                    }
                 }
             }
 

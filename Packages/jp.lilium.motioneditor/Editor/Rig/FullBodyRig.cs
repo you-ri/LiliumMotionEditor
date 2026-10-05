@@ -94,7 +94,8 @@ namespace Lilium
     ///
     /// 点はどれも「骨の上の点」（骨の付け根から決まった分だけ離れた所。関節の点は 0）。種類で解き方を変えない（S26）:
     /// その点を目標へ寄せるだけで、同じ骨の上の点どうしは剛体として拘束しあう（2 点で骨が置かれ、3 点で向きまで決まる）。
-    /// 固定した点が 1 つだけの骨は、その点まわりに回れる（向きを留めたいときは、点の向きを固定するか、同じ骨にもう 1 点固定する）
+    /// 固定した点が 1 つだけの骨は、その点まわりに回れる（向きを留めたいときは、点の向きを固定するか、同じ骨にもう 1 点固定する）。
+    /// 定義の「引く強さ」が 0 の点（S28。既定では向きの点）は、骨を回して点を目標の方へ向けるだけで、ほかの骨を引かない
     ///
     /// 毎回、受け取った元の姿勢から解く（前に解いた結果を引き継がない）。値を直に動かして解き直すときのために、
     /// 受け取った姿勢を控えておき（CaptureInput）、解き直す前に戻す（RestoreInput）。
@@ -118,6 +119,8 @@ namespace Lilium
             public BodyPoint values;
             public Transform bone;
             public bool hasRotation;
+            /// <summary>向けるだけの点か（定義の引く強さが 0）</summary>
+            public bool aim;
             public Quaternion restRootRotation;
             public Vector3 restRootPosition;
             /// <summary>骨の階層での深さ</summary>
@@ -165,6 +168,7 @@ namespace Lilium
                         values = values,
                         bone = bone,
                         hasRotation = point.hasRotation,
+                        aim = point.definition != null && point.definition.pullStrength <= 0,
                         restRootRotation = restRotation,
                         restRootPosition = rig.GetRestRootPosition (bone) + offset,
                         depth = Depth (bone, rig.root.transform),
@@ -700,6 +704,7 @@ namespace Lilium
                     rotation = point.control.localRotation * point.restRootRotation,
                     positionWeight = positionWeight,
                     rotationWeight = rotationWeight,
+                    aim = point.aim ? 1 : 0,
                 };
             }
             if (count == 0) return false;

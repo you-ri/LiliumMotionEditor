@@ -397,201 +397,235 @@ MonoBehaviour:
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightUpperLeg
     bone: 2
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightLowerLeg
     bone: 4
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftFoot
     bone: 5
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: RightFoot
     bone: 6
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: Spine
     bone: 7
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: Chest
     bone: 8
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: Neck
     bone: 9
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: Head
     bone: 10
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: LeftShoulder
     bone: 11
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightShoulder
     bone: 12
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftUpperArm
     bone: 13
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightUpperArm
     bone: 14
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftLowerArm
     bone: 15
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightLowerArm
     bone: 16
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftHand
     bone: 17
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: RightHand
     bone: 18
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
+    pullStrength: 1
   - enabled: 1
     name: LeftToes
     bone: 19
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightToes
     bone: 20
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: UpperChest
     bone: 54
     anchor: 0
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: HipsDirection
     bone: 0
     anchor: 0
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
+    pullStrength: 0
   - enabled: 1
     name: UpperChestDirection
     bone: 54
     anchor: 0
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
+    pullStrength: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
     anchor: 0
     offset: {x: 0, y: 0.075, z: 0.25}
     rotation: 0
+    pullStrength: 0
   - enabled: 1
     name: HeadTop
     bone: 10
     anchor: 0
     offset: {x: 0, y: 0.25, z: 0}
     rotation: 0
+    pullStrength: 0
   - enabled: 1
     name: LeftHeel
     bone: 5
     anchor: 1
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftToeTip
     bone: 19
     anchor: 2
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
     anchor: 3
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
     anchor: 4
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightHeel
     bone: 6
     anchor: 1
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightToeTip
     bone: 20
     anchor: 2
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightPalmIndex
     bone: 18
     anchor: 3
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1
   - enabled: 1
     name: RightPalmLittle
     bone: 18
     anchor: 4
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
+    pullStrength: 1

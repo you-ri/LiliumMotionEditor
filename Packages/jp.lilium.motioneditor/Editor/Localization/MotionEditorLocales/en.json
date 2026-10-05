@@ -98,6 +98,7 @@
     "EDIT_RIG_DEFINITION_INVALID_TOE_BONE": "Foot roll toe bone cannot be used: {0} ({1})",
     "EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW": "Full-body IK iterations are less than 1",
     "EDIT_RIG_DEFINITION_NEGATIVE_TOE_BREAK": "Foot roll toe break angle is negative: {0}",
+    "EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL": "A full-body IK point on the bone origin cannot have pull strength 0 (it has nothing to aim): {0}",
     "EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE": "Full-body IK point anchor ({0}) requires a left or right bone: {1}",
     "EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE": "Full-body IK point bone is out of range: {0}",
     "EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE": "Full-body IK pull strength is outside 0-1",

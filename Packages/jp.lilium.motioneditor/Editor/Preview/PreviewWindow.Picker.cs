@@ -213,13 +213,14 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 表示域のクリック。メッシュに当たればその場所を一番動かしている骨、当たらなければ選択を外す
+        /// 表示域のクリック。メッシュに当たればその場所を一番動かしている骨、当たらなければ選択を外す（Shift なら外さない）。
+        /// Shift・Ctrl はハンドルを押したときと同じ（SelectWithModifiers）
         /// </summary>
         /// <param name="point">表示域の中の位置</param>
-        void SelectByMeshClick (Vector2 point, Rect rect)
+        void SelectByMeshClick (Vector2 point, Rect rect, EventModifiers modifiers)
         {
             if (stage_ == null || rect.width < 1 || rect.height < 1) {
-                Select (null);
+                SelectPicked (null, modifiers);
                 return;
             }
 
@@ -233,7 +234,20 @@ namespace Lilium
             PoseTarget target = FindPickTarget (bone);
             // キーの自動追加が切で、今のフレームにキーの無い物は選ばない（ハンドルも薄く出してつかめなくしている）
             if (target != null && !CanEditTarget (target)) target = null;
-            Select (target != null ? target.gameObject : null);
+            SelectPicked (target, modifiers);
+        }
+
+        /// <summary>メッシュのクリックで当たった物を選ぶ。修飾キーが無ければ 1 つだけ選ぶ（null なら外す）</summary>
+        void SelectPicked (PoseTarget target, EventModifiers modifiers)
+        {
+            bool shift = (modifiers & EventModifiers.Shift) != 0;
+            bool children = (modifiers & (EventModifiers.Control | EventModifiers.Command)) != 0;
+            if (target == null) {
+                if (!shift) Select (null);
+                return;
+            }
+            if (shift || children) SelectWithModifiers (target.gameObject, modifiers);
+            else Select (target.gameObject);
         }
 
         /// <summary>

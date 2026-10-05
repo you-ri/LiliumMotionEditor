@@ -763,6 +763,66 @@ namespace Lilium
         }
 
         [Test]
+        public void RotatingPoint_DoesNotCarryPinnedPoints ()
+        {
+            // 点を 1 つ選んで回すと骨を FK で回すだけで、固定している点（Pin・Locked）は付いて回らない（移動と同じ。S29）
+            Setup s = Create ();
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
+            BodyPointTarget shoulder = PointTarget (targets, HumanBodyBones.LeftUpperArm);
+            BodyPointTarget elbow = PointTarget (targets, HumanBodyBones.LeftLowerArm);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            elbow.SetState (BodyPointState.Pin);
+            hand.SetState (BodyPointState.Locked);
+            Vector3 elbowPosition, handPosition;
+            Quaternion elbowRotation, handRotation;
+            s.body.TryGetPointWorld (elbow.id, out elbowPosition, out elbowRotation);
+            s.body.TryGetPointWorld (hand.id, out handPosition, out handRotation);
+            Transform fk = s.rig.FindControl (RigPaths.Fk (HumanBodyBones.LeftUpperArm));
+            Quaternion fkRotation = fk.localRotation;
+
+            PreviewWindow.RotatePointFk (targets, shoulder, Quaternion.AngleAxis (30, Vector3.up));
+            Assert.Greater (Quaternion.Angle (fkRotation, fk.localRotation), 29f, "回した点の骨は FK で回る");
+            Vector3 position;
+            Quaternion rotation;
+            s.body.TryGetPointWorld (elbow.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (elbowPosition, position), 1e-5f, "Pin の肘は付いて回らない");
+            Assert.LessOrEqual (Quaternion.Angle (elbowRotation, rotation), 0.01f);
+            s.body.TryGetPointWorld (hand.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (handPosition, position), 1e-5f, "Locked の手は付いて回らない");
+            Assert.LessOrEqual (Quaternion.Angle (handRotation, rotation), 0.01f);
+        }
+
+        [Test]
+        public void ChildTargets_FollowBoneHierarchy ()
+        {
+            // Ctrl で押した物の子階層（S30）: 骨の付け根の点・骨は、その骨より先と同じ骨の上の物。付け根から離れた点は、その骨より先の物だけ
+            Setup s = Create ();
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
+            System.Func<string, BodyPointTarget> named = name => targets.OfType<BodyPointTarget> ().FirstOrDefault (t => t.id.name == name);
+            System.Func<PoseTarget, bool> points = t => t is BodyPointTarget;
+
+            List<PoseTarget> arm = PreviewWindow.ChildTargets (targets, PointTarget (targets, HumanBodyBones.LeftUpperArm), points);
+            foreach (string name in new[] { "LeftLowerArm", "LeftHand" }) Assert.Contains (named (name), arm, name);
+            // 手のひらの点は、このキャラに置ける物だけ
+            foreach (BodyPointTarget palm in new[] { named ("LeftPalmIndex"), named ("LeftPalmLittle") }.Where (p => p != null)) Assert.Contains (palm, arm, palm.id.name);
+            foreach (string name in new[] { "LeftUpperArm", "RightHand", "RightLowerArm", "Head", "Hips" }) Assert.IsFalse (arm.Contains (named (name)), name + " は子階層でない");
+
+            List<PoseTarget> head = PreviewWindow.ChildTargets (targets, PointTarget (targets, HumanBodyBones.Head), points);
+            Assert.Contains (named ("HeadDirection"), head, "付け根の点は、同じ骨の上の点も子");
+            Assert.Contains (named ("HeadTop"), head);
+            Assert.IsEmpty (PreviewWindow.ChildTargets (targets, named ("HeadDirection"), points), "付け根から離れた点は、同じ骨の上の点を子にしない");
+
+            // 骨（FK）も、表示モデルの骨の階層でたどる。pickable で今つかめる物に絞る
+            FkTarget elbow = targets.OfType<FkTarget> ().First (t => t.bone == Bone (s, HumanBodyBones.LeftLowerArm));
+            List<PoseTarget> bones = PreviewWindow.ChildTargets (targets, elbow, t => t is FkTarget);
+            Assert.IsTrue (bones.OfType<FkTarget> ().Any (t => t.bone == Bone (s, HumanBodyBones.LeftHand)), "手の骨は肘の子");
+            Assert.IsFalse (bones.OfType<FkTarget> ().Any (t => t.bone == Bone (s, HumanBodyBones.LeftUpperArm)), "上腕は肘の子でない");
+            Assert.IsTrue (bones.All (t => t is FkTarget), "pickable に合う物だけ");
+        }
+
+        [Test]
         public void DirectionTarget_PinsOnBonePoint_AndSyncsBackToFixedDistance ()
         {
             Setup s = Create ();
@@ -784,7 +844,7 @@ namespace Lilium
             head.SetState (BodyPointState.Pin);
             Assert.LessOrEqual (s.body.GetResidual (id), kPositionTolerance);
 
-            // 遠くへ動かして解くと、ほかの点と同じく体ごと引かれる。手を離すと、点は骨の上の点（骨から決まった距離）へ合わせ直される
+            // 遠くへ動かして解く（既定の引く強さ 0 では、頭が点の方を向くだけ。S28）。手を離すと、点は骨の上の点（骨から決まった距離）へ合わせ直される
             Vector3 side = Vector3.Cross (Vector3.up, onBone - bone.position).normalized;
             head.MoveBy (side * 1.5f);
             s.body.CaptureInput ();

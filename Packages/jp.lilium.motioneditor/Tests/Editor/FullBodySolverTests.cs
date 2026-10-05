@@ -421,6 +421,152 @@ namespace Lilium
             return Vector3.Angle (onBone - origin, target - origin);
         }
 
+        /// <summary>向きの点（名前が Direction・Top で終わる点）の引く強さを決める（S28。既定は 0）。Create の前に呼ぶ</summary>
+        void SetDirectionPull (int pullStrength)
+        {
+            foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
+                if (point.name.EndsWith ("Direction") || point.name.EndsWith ("Top")) point.pullStrength = pullStrength;
+            }
+        }
+
+        /// <summary>骨の位置と向きを控える</summary>
+        static Pose[] Poses (Transform[] bones)
+        {
+            return bones.Select (b => new Pose (b.position, b.rotation)).ToArray ();
+        }
+
+        /// <summary>skip に当たらない骨が、控えた位置と向きのままか</summary>
+        static void AssertUnchanged (Transform[] bones, Pose[] expected, float position, float angle, string message, System.Func<Transform, bool> skip = null)
+        {
+            for (int i = 0; i < bones.Length; i++) {
+                if (skip != null && skip (bones[i])) continue;
+                Assert.LessOrEqual (Vector3.Distance (expected[i].position, bones[i].position), position, message + ": " + bones[i].name + " の位置");
+                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, bones[i].rotation), angle, message + ": " + bones[i].name + " の向き");
+            }
+        }
+
+        // ---- 引く強さ 0 の点（向けるだけ。S28） ----
+
+        [Test]
+        public void DirectionPoints_DefaultToPullStrengthZero ()
+        {
+            // 既定の一覧では、向きの点は引く強さ 0、ほかの点は 1
+            foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
+                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop";
+                Assert.AreEqual (direction ? 0 : 1, point.pullStrength, point.name);
+            }
+            Assert.IsEmpty (definition_.Validate ());
+        }
+
+        [Test]
+        public void AimPoint_TurnsOnlyItsBone ()
+        {
+            // 顔の前の点（引く強さ 0）を横へ: 頭が付け根まわりに回って点の方を向く。首から根の側は動かない
+            Setup s = Create ();
+            Solve (s);
+            Transform head = Bone (s, HumanBodyBones.Head);
+            Transform[] bones = s.rig.editingBones.ToArray ();
+            Pose[] rest = Poses (bones);
+            BodyPointId id = BodyPointId.Direction (HumanBodyBones.Head);
+            Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
+            PinDirection (s, id, side * 0.3f + s.up * 0.1f);
+            Solve (s);
+            Assert.LessOrEqual (AimError (s, id), 0.5f, "顔の前の点が目標の方を向く");
+            Assert.Greater (Quaternion.Angle (rest[System.Array.IndexOf (bones, head)].rotation, head.rotation), 20f, "頭が回った");
+            AssertUnchanged (bones, rest, 1e-4f, 0.01f, "首から根の側", b => b == head || b.IsChildOf (head));
+        }
+
+        [Test]
+        public void AimPoints_FrontAndTop_TiltHeadAroundFront ()
+        {
+            // 顔の前とてっぺん（どちらも引く強さ 0）: 顔の前で向きが決まり、てっぺんで顔の前の向きまわりのかしげが決まる
+            Setup s = Create ();
+            BodyPointId front = BodyPointId.Direction (HumanBodyBones.Head);
+            BodyPointId top = BodyPointId.Top (HumanBodyBones.Head);
+            Transform head = Bone (s, HumanBodyBones.Head);
+            Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
+            PinDirection (s, front, side * 0.2f);
+            Solve (s);
+            Quaternion frontOnly = head.rotation;
+
+            PinDirection (s, top, side * 0.1f);
+            Solve (s);
+            Assert.LessOrEqual (AimError (s, front), 0.5f, "顔の前の点は目標の方を向いたまま");
+            Assert.Greater (Quaternion.Angle (frontOnly, head.rotation), 5f, "頭がかしいだ");
+            // てっぺんは、顔の前の向きに直交する面の中で、点の方を向く
+            Vector3 frontPoint, topPoint, topTarget;
+            Quaternion rotation;
+            s.body.TryGetBonePointWorld (front, out frontPoint);
+            s.body.TryGetBonePointWorld (top, out topPoint);
+            s.body.TryGetPointWorld (top, out topTarget, out rotation);
+            Vector3 axis = (frontPoint - head.position).normalized;
+            float tilt = Vector3.Angle (Vector3.ProjectOnPlane (topPoint - head.position, axis), Vector3.ProjectOnPlane (topTarget - head.position, axis));
+            Assert.LessOrEqual (tilt, 0.5f, "てっぺんがかしげの面で点の方を向く");
+        }
+
+        [Test]
+        public void AimPoint_FollowsBody_PulledByOtherPoints ()
+        {
+            // 手を Pin して胴ごと引いたとき、顔の前の点（引く強さ 0）は頭の付け根を引かない。
+            // 頭は首に付いたまま目標の方を向き、頭より根の側の骨は、顔の前の点が無いときと同じ
+            Setup s = Create ();
+            Solve (s);
+            Transform head = Bone (s, HumanBodyBones.Head);
+            Transform[] bones = s.rig.editingBones.ToArray ();
+            Vector3 neckRest = Bone (s, HumanBodyBones.Neck).position;
+            Pin (s, HumanBodyBones.RightHand, s.forward * 0.6f - s.up * 0.3f);
+            Solve (s);
+            Pose[] pulled = Poses (bones);
+            Assert.Greater (Vector3.Distance (neckRest, Bone (s, HumanBodyBones.Neck).position), 0.01f, "手に引かれて胴が動く");
+
+            BodyPointId id = BodyPointId.Direction (HumanBodyBones.Head);
+            Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
+            PinDirection (s, id, side * 0.3f);
+            Solve (s);
+            Assert.LessOrEqual (AimError (s, id), 0.5f, "顔の前の点が目標の方を向く");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "手は点に届いたまま");
+            AssertUnchanged (bones, pulled, 1e-4f, 0.01f, "頭より根の側は顔の前の点が無いときと同じ", b => b == head || b.IsChildOf (head));
+        }
+
+        [Test]
+        public void AimPoint_OnChest_TurnsChest_KeepsLowerBody ([Values (false, true)] bool pinnedHands)
+        {
+            // 胸の前の点（引く強さ 0）を横へ: 胸が付け根まわりに回り、背骨・腰・脚は、胸の前の点が無いときのまま。
+            // 両手を Pin していれば、胸は向きを譲らず、腕が曲がって手は点に留まる（T ポーズの伸びきった腕では届かないので、手を体の前へ寄せておく）
+            Setup s = Create ();
+            if (pinnedHands) {
+                Pin (s, HumanBodyBones.LeftHand, -ArmDirection (s, false) * 0.15f + s.forward * 0.2f);
+                Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.15f + s.forward * 0.2f);
+            }
+            Solve (s);
+            BodyPointId id = ChestDirection (s);
+            Transform chest = s.body.GetBone (id);
+            Transform[] bones = s.rig.editingBones.ToArray ();
+            Pose[] before = Poses (bones);
+            Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
+            PinDirection (s, id, side * 0.1f);
+            Solve (s);
+            Assert.LessOrEqual (AimError (s, id), 0.5f, "胸の前の点が目標の方を向く");
+            Assert.Greater (Quaternion.Angle (before[System.Array.IndexOf (bones, chest)].rotation, chest.rotation), 10f, "胸が回った");
+            AssertUnchanged (bones, before, 1e-4f, 0.01f, "背骨・腰・脚", b => b == chest || b.IsChildOf (chest));
+            if (pinnedHands) {
+                Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kReach, "左手は点に留まる");
+                Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "右手は点に留まる");
+            }
+        }
+
+        [Test]
+        public void OriginPoint_WithPullStrengthZero_IsAnError ()
+        {
+            // 骨の付け根そのものの点は、向ける先が無いので引く強さ 0 にできない（解くときは 1 として扱う）
+            definition_.bodyPoints.First (p => p.name == "Head").pullStrength = 0;
+            Assert.IsNotEmpty (definition_.Validate ());
+            Setup s = Create ();
+            Pin (s, HumanBodyBones.Head, s.forward * 0.05f);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Head), kReach, "ふつうの点として届く");
+        }
+
         [Test]
         public void DirectionPoints_AreCreatedForHipsChestAndHead ([Values (true, false)] bool withChest)
         {
@@ -449,7 +595,8 @@ namespace Lilium
         [Test]
         public void DirectionPoint_PullsBone_LikeAnyPoint ([Values (HumanBodyBones.Hips, HumanBodyBones.Chest, HumanBodyBones.Head)] HumanBodyBones which)
         {
-            // 向きの点も、骨の上の点の 1 つ（S26）。動かすと点が目標へ届くように骨ごと引かれ、遠くへ置けば体も引かれる
+            // 引く強さ 1 の向きの点も、骨の上の点の 1 つ（S26）。動かすと点が目標へ届くように骨ごと引かれ、遠くへ置けば体も引かれる
+            SetDirectionPull (1);
             Setup s = Create ();
             BodyPointId id = which == HumanBodyBones.Chest ? ChestDirection (s) : BodyPointId.Direction (which);
             Dictionary<Transform, float> lengths = Lengths (s);
@@ -470,7 +617,8 @@ namespace Lilium
         [Test]
         public void HeadPoints_OnSameBone_AreRigid ()
         {
-            // 頭の点（付け根）と顔の前の点は同じ骨の上: 付け根を固定して顔の前の点を付け根まわりに回した所へ置くと、2 点とも届き頭が回る
+            // 頭の点（付け根）と顔の前の点（引く強さ 1）は同じ骨の上: 付け根を固定して顔の前の点を付け根まわりに回した所へ置くと、2 点とも届き頭が回る
+            SetDirectionPull (1);
             Setup s = Create ();
             BodyPointId id = BodyPointId.Direction (HumanBodyBones.Head);
             Transform head = Bone (s, HumanBodyBones.Head);
@@ -489,6 +637,8 @@ namespace Lilium
         [Test]
         public void HeadTop_TiltsHead_AndWithFrontPointOnlySetsRoll ()
         {
+            // 引く強さ 1 の頭の点（S26 の動き）
+            SetDirectionPull (1);
             Setup s = Create ();
             BodyPointId top = BodyPointId.Top (HumanBodyBones.Head);
             BodyPointId front = BodyPointId.Direction (HumanBodyBones.Head);
@@ -532,8 +682,9 @@ namespace Lilium
         }
 
         [Test]
-        public void HipsDirection_WithPinnedFeet_TurnsHipsAndKeepsFeet ()
+        public void HipsDirection_WithPinnedFeet_TurnsHipsAndKeepsFeet ([Values (0, 1)] int pull)
         {
+            SetDirectionPull (pull);
             Setup s = Create ();
             BodyPointId id = BodyPointId.Direction (HumanBodyBones.Hips);
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
@@ -547,12 +698,17 @@ namespace Lilium
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), 2 * kReach, "左足は動かない");
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightFoot), 2 * kReach, "右足は動かない");
             Assert.Greater (Quaternion.Angle (rotation, Bone (s, HumanBodyBones.Hips).rotation), 10f, "腰が回った");
+            if (pull == 0) {
+                Assert.LessOrEqual (AimError (s, id), 0.5f, "腰の前の点が目標の方を向く（引く強さ 0）");
+                Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰の付け根は点に留まり、その場で回る");
+            }
         }
 
         [Test]
         public void ChestPoint_PullsChest_LikeAnyPoint ()
         {
-            // 胸の前の点を横へ: ほかの点と同じく、点が目標へ届くように胸ごと引かれる（向くだけにしない。S26）
+            // 引く強さ 1 の胸の前の点を横へ: ほかの点と同じく、点が目標へ届くように胸ごと引かれる（向くだけにしない。S26）
+            SetDirectionPull (1);
             Setup s = Create ();
             BodyPointId id = ChestDirection (s);
             Transform chest = s.body.GetBone (id);
@@ -576,8 +732,9 @@ namespace Lilium
         }
 
         [Test]
-        public void DirectionPoint_AtRest_LeavesPoseUntouched ()
+        public void DirectionPoint_AtRest_LeavesPoseUntouched ([Values (0, 1)] int pull)
         {
+            SetDirectionPull (pull);
             Setup s = Create ();
             Solve (s);
             Vector3[] positions = s.rig.editingBones.Select (b => b.position).ToArray ();
@@ -592,8 +749,9 @@ namespace Lilium
         }
 
         [Test]
-        public void DirectionPoints_BurstMatchesManaged ()
+        public void DirectionPoints_BurstMatchesManaged ([Values (0, 1)] int pull)
         {
+            SetDirectionPull (pull);
             Setup s = Create ();
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
@@ -668,6 +826,34 @@ namespace Lilium
                 Assert.Greater (math.distance (data.positions[2], new float3 (0, 1, 0)), 0.05f, "付け根が引かれる");
                 Assert.LessOrEqual (data.residuals[0], 1e-3f, "点は目標に届く");
                 Assert.AreEqual (0.5f, math.distance (data.positions[1], data.positions[2]), 1e-4f, "骨の長さ");
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        [Test]
+        public void Solver_AimPoint_TurnsOnlyItsBone_WithoutTransforms ([Values (1f, 0.5f)] float weight)
+        {
+            // 向けるだけの点（aim）: 先の骨の前（z）に出した点を、遠くの横へ。骨は付け根まわりに回って点を目標の方へ向けるだけで、
+            // 付け根も手前の骨も動かない。強さが 1 未満なら、回す量が強さの分だけになる
+            FullBodyIkData data = CreateChain (1);
+            try {
+                float3 origin = new float3 (0, 1, 0);
+                float3 target = new float3 (2, 1, 0.5f);
+                data.effectors[0] = new FullBodyIkEffector { bone = 2, offset = new float3 (0, 0, 0.3f), position = target, rotation = quaternion.identity, positionWeight = weight, aim = 1 };
+                data.effectorCount = 1;
+                FullBodyIk.Solve (ref data);
+                float3 aimed = math.rotate (data.rotations[2], new float3 (0, 0, 1));
+                float full = math.degrees (math.acos (math.dot (new float3 (0, 0, 1), math.normalize (target - origin))));
+                float turned = math.degrees (math.acos (math.clamp (aimed.z, -1, 1)));
+                Assert.AreEqual (full * weight, turned, 0.05f, "回した角度");
+                if (weight >= 1) {
+                    Assert.LessOrEqual (math.distance (aimed, math.normalize (target - origin)), 1e-3f, "前の点が目標の方を向く");
+                    Assert.LessOrEqual (data.residuals[0], 1e-3f, "残りは線と目標の離れ（距離は合わせない）");
+                }
+                Assert.LessOrEqual (math.distance (data.positions[2], origin), 1e-5f, "付け根は動かない");
+                for (int i = 0; i < 2; i++) Assert.Greater (math.abs (math.dot (data.rotations[i].value, quaternion.identity.value)), 0.9999999f, "手前の骨 " + i + " は回らない");
             }
             finally {
                 data.Dispose ();
@@ -781,6 +967,17 @@ namespace Lilium
             Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "LeftHeel"), "骨の上の点は作る");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name.EndsWith ("Direction")), "向きの点を置かない設定だった");
             Assert.IsEmpty (definition_.Validate ());
+        }
+
+        [Test]
+        public void Version2Definition_KeepsPullStrengthOne ()
+        {
+            // 今まで作った定義は、向きの点も骨ごと引く（S28 の引く強さ 0 は、新しく作る定義の既定だけ）
+            definition_.bodyPoints.Clear ();
+            definition_.version = 2;
+            definition_.UpgradeIfNeeded ();
+            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "HeadDirection"));
+            Assert.IsTrue (definition_.bodyPoints.All (p => p.pullStrength == 1), "全部の点が 1");
         }
 
         [Test]

@@ -98,6 +98,7 @@
     "EDIT_RIG_DEFINITION_INVALID_TOE_BONE": "足の転がしのつま先の骨が使えない: {0}（{1}）",
     "EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW": "全身 IK の解く回数が 1 未満",
     "EDIT_RIG_DEFINITION_NEGATIVE_TOE_BREAK": "足の転がしの折れ角が負: {0}",
+    "EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL": "骨の付け根そのものの全身 IK の点は、点の引く強さを 0 にできない（向ける先が無い）: {0}",
     "EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE": "全身 IK の点の基準（{0}）には左右のある骨が要る: {1}",
     "EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE": "全身 IK の点の骨が範囲外: {0}",
     "EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE": "全身 IK の引く強さが 0〜1 の外",

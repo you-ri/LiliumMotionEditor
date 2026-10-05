@@ -152,7 +152,7 @@ namespace Lilium
             int id = GUIUtility.GetControlID (FocusType.Passive);
             HandleUtility.AddDefaultControl (id);
             if (editing && ev.GetTypeForControl (id) == EventType.MouseDown && ev.button == 0 && !ev.alt && HandleUtility.nearestControl == id) {
-                source_.SelectByRay (HandleUtility.GUIPointToWorldRay (ev.mousePosition));
+                source_.SelectByRay (HandleUtility.GUIPointToWorldRay (ev.mousePosition), ev.modifiers);
                 ev.Use ();
             }
 
