@@ -314,7 +314,7 @@ namespace Lilium
 
     /// <summary>
     /// 目盛り（ルーラー）とトラック（クリップ全体＋骨ごと）。見た目:
-    /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白）、キーの間は両矢印の線とフレーム数。
+    /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白、サイクルキーは青緑に Material Icons の loop のアイコン・目盛りに三角）、キーの間は両矢印の線とフレーム数。
     /// 今のフレームは白い縦線。目盛りとトラックの上でホイールは横の拡大縮小、中ボタン（Alt+左）ドラッグは横の移動。
     ///
     /// 形は Painter2D（generateVisualContent）で毎回いまの状態から描き直し、数字は使い回す Label を絶対座標で置く
@@ -356,6 +356,10 @@ namespace Lilium
         static readonly Color kPlayheadColor = Color.white;
         static readonly Color kDragKeyColor = new Color (1f, 0.72f, 0.25f);
         static readonly Color kDeleteKeyColor = new Color (0.95f, 0.3f, 0.25f);
+        /// <summary>サイクルキー（S32。先頭のキーを写した最後のキー）。キーの上に Material Icons の loop のアイコンも重ねる（選んで色が変わっても分かるように）</summary>
+        static readonly Color kCycleKeyColor = new Color (0.4f, 0.78f, 0.72f);
+        static readonly Color kCurrentCycleKeyColor = new Color (0.72f, 0.95f, 0.9f);
+        static readonly Color kCycleMarkColor = new Color (0.1f, 0.25f, 0.23f);
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
         // 選んだキー・枠選択の枠の不透明度。色はアクセントの色
         const float kBoxFillAlpha = 0.15f;
@@ -377,6 +381,10 @@ namespace Lilium
         readonly List<Label> rulerLabels_ = new List<Label> ();
         readonly List<Label> trackNameLabels_ = new List<Label> ();
         readonly List<Label> intervalLabels_ = new List<Label> ();
+        /// <summary>サイクルキーのアイコン（Label と同じく使い回し、キーの上に絶対座標で置く）</summary>
+        readonly List<Image> cycleIcons_ = new List<Image> ();
+        const float kCycleIconSize = 10;
+        const float kDraggedIconAlpha = 0.35f;
 
         // キーのドラッグ
         int dragTrack_ = -1;
@@ -682,6 +690,7 @@ namespace Lilium
                 FillRect (painter, Rect.MinMaxRect (ruler.x, ruler.y, Mathf.Min (FrameToX (0), ruler.xMax), ruler.yMax), kNegativeTimeColor);
             }
             DrawTimelineRange (painter, ruler);
+            DrawCycleMarker (painter, ruler);
 
             int start, end, labelStep;
             RulerRange (width, out start, out end, out labelStep);
@@ -716,6 +725,24 @@ namespace Lilium
             if (blendOutStart < end) band (blendOutStart, end, kTimelineBlendColor);
         }
 
+        /// <summary>
+        /// サイクルキーのフレームに、目盛りの上から下向きの三角を出す（S32）
+        /// </summary>
+        void DrawCycleMarker (Painter2D painter, Rect ruler)
+        {
+            int frame = window_.cycleFrame;
+            if (frame < 0) return;
+            float x = Mathf.Round (FrameToX (frame)) + 0.5f;
+            if (x < ruler.x || x > ruler.xMax) return;
+            painter.fillColor = kCycleKeyColor;
+            painter.BeginPath ();
+            painter.MoveTo (new Vector2 (x - 5, ruler.y + 4));
+            painter.LineTo (new Vector2 (x + 5, ruler.y + 4));
+            painter.LineTo (new Vector2 (x, ruler.y + 10));
+            painter.ClosePath ();
+            painter.Fill ();
+        }
+
         void OnGenerateTracks (MeshGenerationContext ctx)
         {
             Painter2D painter = ctx.painter2D;
@@ -724,6 +751,7 @@ namespace Lilium
             if (float.IsNaN (width) || float.IsNaN (height)) return;
 
             FillRect (painter, new Rect (0, 0, kLabelWidth, height), kLabelColor);
+            int cycleFrame = window_.cycleFrame;
 
             for (int i = 0; i < tracks_.Count; i++) {
                 PreviewWindow.TimelineTrack track = tracks_[i];
@@ -746,7 +774,10 @@ namespace Lilium
                     Rect box = GetKeyRect (frame, row);
                     if (box.xMax < keyArea.x || box.x > keyArea.xMax) continue;
                     bool isDragged = dragTrack_ == i && dragKeyFrame_ == frame && dragMoved_;
-                    Color fill = selectedKeys_.Contains ((track.label, frame)) ? accent_ : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
+                    bool isCycle = frame == cycleFrame;
+                    Color fill = selectedKeys_.Contains ((track.label, frame)) ? accent_
+                        : isCycle ? (frame == window_.frame ? kCurrentCycleKeyColor : kCycleKeyColor)
+                        : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
                     DrawKeyBox (painter, box, fill, isDragged ? 0.35f : 1);
                 }
                 // ドラッグ中のキーは行き先に描く（トラックの外へ出すと赤＝離すと消える）
@@ -848,8 +879,10 @@ namespace Lilium
         {
             int usedNames = 0;
             int usedIntervals = 0;
+            int usedIcons = 0;
             float width = tracksCanvas_.resolvedStyle.width;
             if (float.IsNaN (width)) width = 0;
+            int cycleFrame = window_.cycleFrame;
 
             for (int i = 0; i < tracks_.Count; i++) {
                 PreviewWindow.TimelineTrack track = tracks_[i];
@@ -877,10 +910,42 @@ namespace Lilium
                     interval.style.width = textWidth + 4;
                 }
 
+                // サイクルキーのアイコン。ドラッグ中は元の場所を薄くし、行き先にも出す（消すときは出さない）
+                if (cycleFrame >= 0 && System.Array.IndexOf (track.keys, cycleFrame) >= 0) {
+                    bool dragged = dragTrack_ == i && dragKeyFrame_ == cycleFrame && dragMoved_;
+                    PlaceCycleIcon (GetKeyRect (cycleFrame, row), keyArea, dragged ? kDraggedIconAlpha : 1, ref usedIcons);
+                    if (dragged && !dragDelete_) PlaceCycleIcon (GetKeyRect (dragTargetFrame_, row), keyArea, 1, ref usedIcons);
+                }
             }
 
             HideUnused (trackNameLabels_, usedNames);
             HideUnused (intervalLabels_, usedIntervals);
+            for (int i = usedIcons; i < cycleIcons_.Count; i++) cycleIcons_[i].style.display = DisplayStyle.None;
+        }
+
+        /// <summary>キーの箱の真ん中にサイクルキーのアイコンを置く（キーが名前の欄や右端からはみ出す所には出さない）</summary>
+        void PlaceCycleIcon (Rect box, Rect keyArea, float alpha, ref int used)
+        {
+            if (box.xMax < keyArea.x || box.x > keyArea.xMax) return;
+            Image icon;
+            if (used < cycleIcons_.Count) {
+                icon = cycleIcons_[used];
+            }
+            else {
+                icon = new Image { image = Icons.LoadTintable ("Cycle"), scaleMode = ScaleMode.ScaleToFit, pickingMode = PickingMode.Ignore };
+                icon.style.position = Position.Absolute;
+                icon.style.width = kCycleIconSize;
+                icon.style.height = kCycleIconSize;
+                tracksCanvas_.Add (icon);
+                cycleIcons_.Add (icon);
+            }
+            used++;
+            Color tint = kCycleMarkColor;
+            tint.a *= alpha;
+            icon.tintColor = tint;
+            icon.style.left = Mathf.Round (box.center.x - kCycleIconSize * 0.5f);
+            icon.style.top = Mathf.Round (box.center.y - kCycleIconSize * 0.5f);
+            icon.style.display = DisplayStyle.Flex;
         }
 
         static Label GetPooled (List<Label> pool, ref int used, VisualElement parent, System.Action<Label> setup)
@@ -1233,6 +1298,19 @@ namespace Lilium
             else {
                 menu.AddDisabledItem (keepOne);
                 menu.AddDisabledItem (clearAll);
+            }
+            // サイクルキー（S32）: 最後のキーに付け外しする。付いていればチェックを出す
+            menu.AddSeparator ("");
+            bool cycle = window_.cycle;
+            GUIContent cycleItem = new GUIContent (Tr ("TIMELINE_OVERLAY_CYCLE_KEY"));
+            if (window_.CanSetCycle (frame)) {
+                menu.AddItem (cycleItem, cycle, () => {
+                    window_.SetCycle (!cycle);
+                    RebuildTracks ();
+                });
+            }
+            else {
+                menu.AddDisabledItem (cycleItem, cycle);
             }
             menu.ShowAsContext ();
         }

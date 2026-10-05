@@ -968,11 +968,13 @@ namespace Lilium
             Rebuild (ref d, n, false);
             // 向けるだけの点の骨は、ここから自分の向きを持つ（解かなかった骨なら、今は親に付いた元の姿勢の向き）。
             // ほかの点の合わせ直しでは回さない（手前の骨を回すときも、ここで止まる）
+            // 膝・肘の Pole（IsPole）は、先の点を合わせるときに上の骨も回せるよう、ここでは止めない
             for (int e = 0; e < effectorCount; e++) {
                 int b = d.effectorBody[e];
                 if (b < 0 || !IsAim (ref d, e)) continue;
                 d.active[b] = 1;
-                d.inverseInertia[b] = 0;
+                int hinge, end;
+                if (!IsPole (ref d, n, e, effectorCount, out hinge, out end)) d.inverseInertia[b] = 0;
             }
             // 向けるだけの点 → 位置を固定した点 → 向けるだけの点（その骨より先にほかの点が無いものだけ）の順に合わせる。
             // 向けるだけの点は骨をその場で回すので、その骨より先の点（胸を向けたときの手）がずれる。先に回しておき、後から先の点を合わせる
@@ -982,6 +984,10 @@ namespace Lilium
             }
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapToEffector (ref d, n, e)) Rebuild (ref d, n, false);
+            }
+            // 膝・肘の Pole は、手足の先を合わせ終わってから、付け根と先を結ぶ軸まわりに回す（先の点は軸の上なので外れない）
+            for (int e = 0; e < effectorCount; e++) {
+                if (SnapPole (ref d, n, e, effectorCount)) Rebuild (ref d, n, false);
             }
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapAim (ref d, n, e, effectorCount, true)) Rebuild (ref d, n, false);
@@ -1020,12 +1026,68 @@ namespace Lilium
         {
             int b = d.effectorBody[e];
             if (b < 0 || !IsAim (ref d, e) || HasPointBelow (ref d, b, n, effectorCount) == onlyLeaf) return false;
+            int hinge, end;
+            if (IsPole (ref d, n, e, effectorCount, out hinge, out end)) return false;
             float3 pivotLocal = AimPivot (ref d, b);
             if (math.lengthsq (pivotLocal) > 1e-12f) return false;
             quaternion wanted = AimRotation (ref d, e, d.positions[b], pivotLocal);
             quaternion turn = math.mul (wanted, math.inverse (d.rotations[b]));
             if (math.lengthsq (RotationVector (turn)) < 1e-14f) return false;
             RotateSubtree (ref d, n, b, turn);
+            return true;
+        }
+
+        /// <summary>
+        /// 向けるだけの点 e が、膝・肘の Pole か。点の骨（太もも・上腕）の子が蝶番（膝・肘）で、その先（足首・手首）の骨か
+        /// さらに先に、ほかの点がある。そのときは骨を向ける代わりに、手足の先を動かさずに膝・肘の向きだけ変える（SnapPole）。
+        /// 点の骨と蝶番の骨に、ほかの点（膝の点など）があるときは、膝・肘の場所がその点で決まるので Pole にしない（ふつうに向ける）。
+        /// hinge は蝶番の骨、end は手足の先の骨
+        /// </summary>
+        static bool IsPole (ref FullBodyIkData d, int n, int e, int effectorCount, out int hinge, out int end)
+        {
+            hinge = -1;
+            end = -1;
+            int b = d.effectorBody[e];
+            if (b < 0 || !IsAim (ref d, e)) return false;
+            for (int c = b + 1; c < n && hinge < 0; c++) {
+                if (d.bones[c].parent == b && d.hingeOn[c] != 0) hinge = c;
+            }
+            if (hinge < 0) return false;
+            for (int k = 0; k < effectorCount; k++) {
+                int kb = d.effectors[k].bone;
+                if (!IsUsed (ref d, k, n) || IsAim (ref d, k)) continue;
+                if (kb == b || kb == hinge) return false;
+                if (end < 0 && IsInside (ref d, kb, hinge)) {
+                    for (end = kb; d.bones[end].parent != hinge; end = d.bones[end].parent) { }
+                }
+            }
+            return end >= 0;
+        }
+
+        /// <summary>
+        /// 膝・肘の Pole（IsPole）。付け根（点の骨の付け根）と手足の先（end の付け根）を結ぶ軸まわりに、点の骨と蝶番の骨を回して、
+        /// 点を目標の方へ向ける。手足の先は軸の上にあるので動かず、手足の先から先の骨の向きも戻す（足の向き・足の点を変えない）。
+        /// 強さが 1 未満なら回す量を減らす。回したら true
+        /// </summary>
+        static bool SnapPole (ref FullBodyIkData d, int n, int e, int effectorCount)
+        {
+            int hinge, end;
+            if (!IsPole (ref d, n, e, effectorCount, out hinge, out end)) return false;
+            FullBodyIkEffector effector = d.effectors[e];
+            int b = d.effectorBody[e];
+            float3 top = d.positions[b];
+            float3 axis = math.normalizesafe (d.positions[end] - top);
+            if (math.lengthsq (axis) < 0.5f) return false;
+            float3 from = math.rotate (d.rotations[b], effector.offset);
+            float3 to = effector.position - top;
+            from -= axis * math.dot (from, axis);
+            to -= axis * math.dot (to, axis);
+            if (math.lengthsq (from) < 1e-12f || math.lengthsq (to) < 1e-12f) return false;
+            float turn = SignedAngle (math.normalize (from), math.normalize (to), axis) * math.saturate (effector.positionWeight);
+            if (math.abs (turn) < 1e-7f) return false;
+            quaternion q = quaternion.AxisAngle (axis, turn);
+            RotateSubtree (ref d, n, b, q);
+            RotateSubtree (ref d, n, end, math.inverse (q));
             return true;
         }
 
@@ -1082,7 +1144,9 @@ namespace Lilium
             float3 end = d.positions[b];
 
             int g = d.bones[p].parent;
-            bool twoBone = g >= 0 && d.hingeOn[p] != 0 && d.pinnedOrigin[p] == 0 && d.inverseInertia[p] > 0 && d.inverseInertia[g] > 0;
+            // 膝・肘の付け根を点で固定していても 2 本骨の IK で合わせる。手足の先の点（足首・足裏・手首）を優先し、
+            // 両立しないときは膝・肘の点が譲る（残差は膝・肘の点に出る。10-05）。両立していれば、ほぼ回さずに済む
+            bool twoBone = g >= 0 && d.hingeOn[p] != 0 && d.inverseInertia[p] > 0 && d.inverseInertia[g] > 0;
             // 手足の先だけに点があるとき（肘・膝やその先にほかの点が無い）は、手足の形をいつも元の姿勢から決め直す
             bool freeLimb = twoBone && d.effectorsBelow[p] == 1;
             if (!freeLimb && math.distancesq (target, end) < 1e-14f) return false;

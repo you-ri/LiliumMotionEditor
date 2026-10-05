@@ -6,7 +6,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Stacker（S12）のキー操作: 組のポーズキーの挿入・削除・間隔の変更・ループ。組の外のキーは動かない
+    /// Stacker（S12）のキー操作: 組のポーズキーの挿入・削除・間隔の変更。組の外のキーは動かない（ループはサイクルキー。ClipCycleTests）
     /// </summary>
     public class StackerTests
     {
@@ -93,16 +93,6 @@ namespace Lilium
         }
 
         [Test]
-        public void LoopCopiesFirstPoseToLast ()
-        {
-            Assert.IsTrue (Stacker.SyncLoop (clip_, kBody));
-            Assert.AreEqual (0.1f, Value (kArm, 30), 1e-5f);
-            Assert.AreEqual (1f, Value (kLeg, 30), 1e-5f);
-            Assert.AreEqual (7f, Value (kHand, 20), 1e-5f, "組の外は触らない");
-            Assert.IsFalse (Stacker.SyncLoop (clip_, kBody), "同じなら書かない");
-        }
-
-        [Test]
         public void SettingsAreStoredInTheMeta ()
         {
             AssetDatabase.CreateFolder ("Assets", "__MktStackerTest");
@@ -111,11 +101,11 @@ namespace Lilium
             Stacker.Settings settings = Stacker.Load (clip);
             Assert.AreEqual ("All", settings.selected);
             settings.groups.Add (new Stacker.Group { name = "Arms", targets = { "LeftUpperArm", "IK LeftArm" } });
-            settings.loop = true;
+            settings.ghost = true;
             Assert.IsTrue (Stacker.Save (clip, settings));
 
             Stacker.Settings loaded = Stacker.Load (clip);
-            Assert.IsTrue (loaded.loop);
+            Assert.IsTrue (loaded.ghost);
             Assert.AreEqual ("Arms", loaded.groups[0].name);
             Assert.AreEqual (2, loaded.groups[0].targets.Count);
             Assert.IsFalse (Stacker.Save (new AnimationClip (), settings), "アセットでないクリップ");

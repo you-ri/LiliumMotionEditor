@@ -34,6 +34,16 @@ namespace Lilium
         IndexBase,
         /// <summary>同じ側の小指の付け根（指の骨が無ければ、前腕の向きから見積もる）</summary>
         LittleBase,
+        /// <summary>母趾球の列の足裏の中心（同じ側の脚の IK の組の、足の転がしの支点。足の転がしの上書きも効く）</summary>
+        SoleBall,
+        /// <summary>母趾球の列の小指側の縁（同じ側の脚の IK の組の、足の転がしの支点。足の転がしの上書きも効く）</summary>
+        LittleToeSide,
+        /// <summary>同じ側の膝（下腿の骨の付け根）</summary>
+        Knee,
+        /// <summary>
+        /// 目の高さ（頭の骨の付け根の真上）。目の骨があればその高さ、無ければ頭に付いたメッシュから見積もる（EditingRig.GetEyeHeight）
+        /// </summary>
+        Eyes,
     }
 
     /// <summary>
@@ -141,13 +151,13 @@ namespace Lilium
             [Range (0, 1)]
             public float hipsPin = 0.6f;
             // 以下の 3 つは版 2 までの設定（版 3 で点の一覧 bodyPoints へ移した。古い定義から一覧を作るときと、既定の一覧を作るときだけ読む）
-            /// <summary>向きの点（腰・胸・頭の前に出した点と、頭のてっぺんの点）を置くか</summary>
+            /// <summary>向きの点（腰・胸・頭の前に出した点と、頭のてっぺんの点、膝の Pole）を置くか</summary>
             [HideInInspector]
             public bool directionPoints = true;
             /// <summary>向きの点を、骨からどれだけ前へ離して置くか（体の大きさ humanScale に対する割合）</summary>
             [HideInInspector]
             public float directionLength = 0.25f;
-            /// <summary>骨の上の点（足のかかと・つま先の先、手の人差し指側と小指側の 2 点）を置くか</summary>
+            /// <summary>骨の上の点（足の踵・足裏の中心・小指側・つま先の先、手の人差し指側と小指側の 2 点）を置くか</summary>
             [HideInInspector]
             public bool contactPoints = true;
         }
@@ -176,11 +186,17 @@ namespace Lilium
             [Range (0, 1)]
             [Tooltip ("1: dragging the point pulls its bone and the rest of the body along. 0: the point only turns its bone to face the target and never pulls other bones (default for direction points).")]
             public int pullStrength = 1;
+            /// <summary>
+            /// 線でつなぐ相手の点の名前（表示だけ。解き方は変わらない）。空なら骨の階層から決める
+            /// （関節の点は上の関節の点、骨の上の点はその骨の関節の点）
+            /// </summary>
+            [Tooltip ("Name of the point to draw a line to (display only). Empty: the joint point above it in the bone hierarchy.")]
+            public string link;
         }
 
         public const float kDefaultStiffness = 0.2f;
         /// <summary>定義の形の版。古い版のアセットを読んだら、足りない項目を既定値で埋める</summary>
-        public const int kVersion = 4;
+        public const int kVersion = 6;
 
         [SerializeField, HideInInspector]
         int version_;
@@ -299,14 +315,10 @@ namespace Lilium
                     if (shoulder && Mathf.Approximately (control.stiffness, 0.3f)) control.stiffness = DefaultStiffness (control.bone);
                 }
             }
-            if (version_ < 3) {
-                // 版 3: 点を一覧で持つようにした（S26）。版 2 までの「骨ごとに点を置くか・向きの点・骨の上の点」の設定から一覧を作る
-                if (bodyPoints == null) bodyPoints = new List<BodyPoint> ();
-                if (bodyPoints.Count == 0) {
-                    bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
-                    // 今まで作った定義は、向きの点も骨ごと引く（S28 の引く強さ 0 は新しく作る定義の既定だけ。今のクリップの姿勢を変えない）
-                    foreach (BodyPoint point in bodyPoints) point.pullStrength = 1;
-                }
+            if (version_ < 6) {
+                // 版 5: 足の点を踵・足裏の中心・小指側・つま先の先にし、膝の Pole を足した（10-05）。版 6: 顔の前の点を目の高さに置いた（10-05）。
+                // 後方互換は保たない方針なので、点の一覧は今の既定で作り直す（一覧を直していた定義も既定に戻る。今までのクリップの Toes の点のキーは当たらなくなる）
+                bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
             }
             if (version_ >= 1 && version_ < 4) {
                 // 版 4: 全身 IK の点をつかむ間も出す骨を選べるようにした。今の定義で解かない骨（点が無い骨）を出す（版 0 からは SetFullBodyDefaults が入れる）
@@ -385,11 +397,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 既定の点の一覧。名前は版 2 までのコントロールのパスと同じにする（今までの編集用クリップのキーをそのまま読む）:
-        /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）
-        /// - 腰・胸・頭の前の点と頭のてっぺんの点（directionPoints）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
-        ///   引く強さは 0（骨を回して向けるだけ。S28）
-        /// - 左右のかかと・つま先の先・人差し指と小指の付け根（contactPoints）。つま先の先はつま先の骨に置き、無いキャラでは足へ乗る
+        /// 既定の点の一覧:
+        /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨には置かない（足の点で足りる。contactPoints のとき）
+        /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝の Pole（directionPoints）。顔の前の点は目の高さ（Eyes）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
+        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前に置き、太ももを回して膝の向きを決める
+        /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根（contactPoints）。踵と足裏の中心は足に乗り、足首とつなぐ。
+        ///   小指側は足に乗る向けるだけの点（引く強さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
+        ///   つま先の先はつま先の骨に置き（無いキャラでは足へ乗る）、足裏の中心とつなぐ
         /// </summary>
         public static List<BodyPoint> CreateDefaultBodyPoints (IEnumerable<FkControl> fk, FullBodySettings settings)
         {
@@ -397,14 +411,28 @@ namespace Lilium
             List<BodyPoint> points = new List<BodyPoint> ();
             foreach (FkControl control in fk) {
                 if (control == null || !control.fullBodySolve || !control.fullBodyPoint) continue;
+                bool toes = control.bone == HumanBodyBones.LeftToes || control.bone == HumanBodyBones.RightToes;
+                if (toes && settings.contactPoints) continue;
                 points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone) });
             }
             if (settings.directionPoints) {
                 // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
                 foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
-                    points.Add (new BodyPoint { name = bone + "Direction", bone = bone, offset = GetDirectionOffset (bone, settings.directionLength), pullStrength = 0 });
+                    // 顔の前の点は目の高さ（頭を目線で向ける）
+                    points.Add (new BodyPoint {
+                        name = bone + "Direction", bone = bone, anchor = bone == HumanBodyBones.Head ? BodyPointAnchor.Eyes : BodyPointAnchor.BoneOrigin,
+                        offset = GetDirectionOffset (bone, settings.directionLength), pullStrength = 0,
+                    });
                 }
                 points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, settings.directionLength, 0), pullStrength = 0 });
+                foreach (string side in new[] { "Left", "Right" }) {
+                    HumanBodyBones thigh = side == "Left" ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg;
+                    HumanBodyBones shin = side == "Left" ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
+                    points.Add (new BodyPoint {
+                        name = side + "KneePole", bone = thigh, anchor = BodyPointAnchor.Knee, offset = new Vector3 (0, 0, settings.directionLength),
+                        pullStrength = 0, link = shin.ToString (),
+                    });
+                }
             }
             if (settings.contactPoints) {
                 foreach (string side in new[] { "Left", "Right" }) {
@@ -412,7 +440,11 @@ namespace Lilium
                     HumanBodyBones toes = side == "Left" ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
                     HumanBodyBones hand = side == "Left" ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
                     points.Add (new BodyPoint { name = side + "Heel", bone = foot, anchor = BodyPointAnchor.Heel });
-                    points.Add (new BodyPoint { name = side + "ToeTip", bone = toes, anchor = BodyPointAnchor.ToeTip });
+                    points.Add (new BodyPoint { name = side + "SoleBall", bone = foot, anchor = BodyPointAnchor.SoleBall });
+                    points.Add (new BodyPoint {
+                        name = side + "LittleToeSide", bone = foot, anchor = BodyPointAnchor.LittleToeSide, pullStrength = 0, link = side + "SoleBall",
+                    });
+                    points.Add (new BodyPoint { name = side + "ToeTip", bone = toes, anchor = BodyPointAnchor.ToeTip, link = side + "SoleBall" });
                     points.Add (new BodyPoint { name = side + "PalmIndex", bone = hand, anchor = BodyPointAnchor.IndexBase });
                     points.Add (new BodyPoint { name = side + "PalmLittle", bone = hand, anchor = BodyPointAnchor.LittleBase });
                 }
@@ -436,11 +468,11 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 向きの点の、骨からの位置（体の向き x 右・y 上・z 前。humanScale に対する割合）。頭は目の高さあたりへ少し上げる
+        /// 向きの点の、骨からの位置（体の向き x 右・y 上・z 前。humanScale に対する割合）。顔の前の点の高さは置き場所の基準（目の高さ）で決める
         /// </summary>
         public static Vector3 GetDirectionOffset (HumanBodyBones bone, float length)
         {
-            return bone == HumanBodyBones.Head ? new Vector3 (0, length * 0.3f, length) : new Vector3 (0, 0, length);
+            return new Vector3 (0, 0, length);
         }
 
         static float DefaultStiffness (HumanBodyBones bone)
@@ -519,9 +551,9 @@ namespace Lilium
                     if (point == null) continue;
                     if (!RigPaths.IsValidName (point.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_POINT_NAME", point.name));
                     if (point.bone < 0 || point.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
-                    bool foot = point.anchor == BodyPointAnchor.Heel || point.anchor == BodyPointAnchor.ToeTip;
-                    bool hand = point.anchor == BodyPointAnchor.IndexBase || point.anchor == BodyPointAnchor.LittleBase;
-                    if ((foot || hand) && RigPaths.SideOf (point.bone) == "") errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE", point.anchor, point.name));
+                    if (point.anchor != BodyPointAnchor.BoneOrigin && point.anchor != BodyPointAnchor.Eyes && RigPaths.SideOf (point.bone) == "") {
+                        errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE", point.anchor, point.name));
+                    }
                     if (point.pullStrength <= 0 && point.anchor == BodyPointAnchor.BoneOrigin && point.offset == Vector3.zero) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL", point.name));
                     }

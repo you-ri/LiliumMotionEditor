@@ -23,15 +23,15 @@ namespace Lilium
         /// <param name="size">骨の長さの倍率（体の大きさ。Avatar の humanScale が変わる）</param>
         public static Animator CreateHumanoid (List<Object> created, bool withChest, float size, params string[] extraBones)
         {
-            return Build (created, withChest, size, false, false, extraBones);
+            return Build (created, withChest, size, false, false, 0, false, extraBones);
         }
 
         /// <summary>
-        /// 胸と首と、両足のつま先を持つ人型（足の転がしを試すとき）
+        /// 胸と首と、両足のつま先を持つ人型（足の転がしを試すとき）。toeOut だけ、つま先の付け根を体の外へずらす（つま先が外を向いた足）
         /// </summary>
-        public static Animator CreateHumanoidWithToes (List<Object> created, float size = 1)
+        public static Animator CreateHumanoidWithToes (List<Object> created, float size = 1, float toeOut = 0)
         {
-            return Build (created, true, size, false, true);
+            return Build (created, true, size, false, true, toeOut, false);
         }
 
         /// <summary>
@@ -39,10 +39,18 @@ namespace Lilium
         /// </summary>
         public static Animator CreateHumanoidWithFingers (List<Object> created)
         {
-            return Build (created, true, 1, true, false);
+            return Build (created, true, 1, true, false, 0, false);
         }
 
-        static Animator Build (List<Object> created, bool withChest, float size, bool fingers, bool toes, params string[] extraBones)
+        /// <summary>
+        /// 胸と首と、両目を持つ人型（目の高さを試すとき）。目は頭の付け根から上へ 8cm・前へ 8cm
+        /// </summary>
+        public static Animator CreateHumanoidWithEyes (List<Object> created)
+        {
+            return Build (created, true, 1, false, false, 0, true);
+        }
+
+        static Animator Build (List<Object> created, bool withChest, float size, bool fingers, bool toes, float toeOut, bool eyes, params string[] extraBones)
         {
             GameObject root = new GameObject ("Character");
             created.Add (root);
@@ -66,8 +74,8 @@ namespace Lilium
             Transform rightFoot = Add (HumanBodyBones.RightFoot, rightKnee, new Vector3 (0, -0.45f, 0));
             if (toes) {
                 // つま先の付け根は足首の前 12cm・下 3cm（足首は床から 5cm）
-                Add (HumanBodyBones.LeftToes, leftFoot, new Vector3 (0, -0.03f, 0.12f));
-                Add (HumanBodyBones.RightToes, rightFoot, new Vector3 (0, -0.03f, 0.12f));
+                Add (HumanBodyBones.LeftToes, leftFoot, new Vector3 (-toeOut, -0.03f, 0.12f));
+                Add (HumanBodyBones.RightToes, rightFoot, new Vector3 (toeOut, -0.03f, 0.12f));
             }
 
             Transform spine = Add (HumanBodyBones.Spine, hips, new Vector3 (0, 0.15f, 0));
@@ -77,7 +85,11 @@ namespace Lilium
                 upper = Add (HumanBodyBones.Chest, spine, new Vector3 (0, 0.15f, 0));
                 headParent = Add (HumanBodyBones.Neck, upper, new Vector3 (0, 0.2f, 0));
             }
-            Add (HumanBodyBones.Head, headParent, new Vector3 (0, withChest ? 0.1f : 0.45f, 0));
+            Transform headBone = Add (HumanBodyBones.Head, headParent, new Vector3 (0, withChest ? 0.1f : 0.45f, 0));
+            if (eyes) {
+                Add (HumanBodyBones.LeftEye, headBone, new Vector3 (-0.03f, 0.08f, 0.08f));
+                Add (HumanBodyBones.RightEye, headBone, new Vector3 (0.03f, 0.08f, 0.08f));
+            }
 
             float armY = withChest ? 0.15f : 0.3f;
             Transform leftArm = Add (HumanBodyBones.LeftUpperArm, upper, new Vector3 (-0.2f, armY, 0));

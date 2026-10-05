@@ -13,7 +13,7 @@ namespace Lilium
         public static readonly Color StandardColor = new Color (0, 1, 0, 0.1f);
         public static int focusControl = 0;
         /// <summary>
-        /// IK の目標を選んでいる間に出すギズモを回転にするか（Transform パネルのモードが Rot。ビューのギズモはモードに従う）。
+        /// IK の目標を選んでいる間に出すギズモを回転にするか（Controller パネルのモードが Rot。ビューのギズモはモードに従う）。
         /// 窓がハンドルを描く前に入れる
         /// </summary>
         public static bool goalRotate = false;
@@ -77,7 +77,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// IK の目標のギズモ。Transform パネルのモードが Rot なら回転（軸は axes）、それ以外なら移動。
+        /// IK の目標のギズモ。Controller パネルのモードが Rot なら回転（軸は axes）、それ以外なら移動。
         /// 回したら、回した差を rotation に前から掛けて返す（axes と rotation の向きが違っても同じだけ回る）
         /// </summary>
         /// <param name="axes">ギズモの軸の向き（骨の見た目の軸。FK の骨の回転ギズモとそろえる）</param>
@@ -97,7 +97,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// ギズモの軸をワールドにするか（Transform パネルの Local / World。false なら骨の軸）。窓がハンドルを描く前に入れる
+        /// ギズモの軸をワールドにするか（Controller パネルの Local / World。false なら骨の軸）。窓がハンドルを描く前に入れる
         /// </summary>
         public static bool gizmoWorld = false;
 

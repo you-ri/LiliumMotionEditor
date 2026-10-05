@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
   m_Name: Default Rig Definition
   m_EditorClassIdentifier: 
-  version_: 4
+  version_: 6
   solver: 1
   fullBody:
     iterations: 48
@@ -398,6 +398,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
@@ -405,6 +406,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightUpperLeg
     bone: 2
@@ -412,6 +414,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
@@ -419,6 +422,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightLowerLeg
     bone: 4
@@ -426,6 +430,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftFoot
     bone: 5
@@ -433,6 +438,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -440,6 +446,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
+    link: 
   - enabled: 1
     name: Spine
     bone: 7
@@ -447,6 +454,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: Chest
     bone: 8
@@ -454,6 +462,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: Neck
     bone: 9
@@ -461,6 +470,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: Head
     bone: 10
@@ -468,6 +478,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftShoulder
     bone: 11
@@ -475,6 +486,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightShoulder
     bone: 12
@@ -482,6 +494,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftUpperArm
     bone: 13
@@ -489,6 +502,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightUpperArm
     bone: 14
@@ -496,6 +510,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftLowerArm
     bone: 15
@@ -503,6 +518,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -510,6 +526,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftHand
     bone: 17
@@ -517,6 +534,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightHand
     bone: 18
@@ -524,20 +542,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
-  - enabled: 1
-    name: LeftToes
-    bone: 19
-    anchor: 0
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
-    pullStrength: 1
-  - enabled: 1
-    name: RightToes
-    bone: 20
-    anchor: 0
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
-    pullStrength: 1
+    link: 
   - enabled: 1
     name: UpperChest
     bone: 54
@@ -545,6 +550,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: HipsDirection
     bone: 0
@@ -552,6 +558,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
+    link: 
   - enabled: 1
     name: UpperChestDirection
     bone: 54
@@ -559,13 +566,15 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
+    link: 
   - enabled: 1
     name: HeadDirection
     bone: 10
-    anchor: 0
-    offset: {x: 0, y: 0.075, z: 0.25}
+    anchor: 8
+    offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
+    link: 
   - enabled: 1
     name: HeadTop
     bone: 10
@@ -573,6 +582,23 @@ MonoBehaviour:
     offset: {x: 0, y: 0.25, z: 0}
     rotation: 0
     pullStrength: 0
+    link: 
+  - enabled: 1
+    name: LeftKneePole
+    bone: 1
+    anchor: 7
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+    pullStrength: 0
+    link: LeftLowerLeg
+  - enabled: 1
+    name: RightKneePole
+    bone: 2
+    anchor: 7
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+    pullStrength: 0
+    link: RightLowerLeg
   - enabled: 1
     name: LeftHeel
     bone: 5
@@ -580,6 +606,23 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
+  - enabled: 1
+    name: LeftSoleBall
+    bone: 5
+    anchor: 5
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+  - enabled: 1
+    name: LeftLittleToeSide
+    bone: 5
+    anchor: 6
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 0
+    link: LeftSoleBall
   - enabled: 1
     name: LeftToeTip
     bone: 19
@@ -587,6 +630,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: LeftSoleBall
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
@@ -594,6 +638,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
@@ -601,6 +646,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightHeel
     bone: 6
@@ -608,6 +654,23 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
+  - enabled: 1
+    name: RightSoleBall
+    bone: 6
+    anchor: 5
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+  - enabled: 1
+    name: RightLittleToeSide
+    bone: 6
+    anchor: 6
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 0
+    link: RightSoleBall
   - enabled: 1
     name: RightToeTip
     bone: 20
@@ -615,6 +678,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: RightSoleBall
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -622,6 +686,7 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -629,3 +694,4 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
+    link: 

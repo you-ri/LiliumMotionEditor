@@ -49,12 +49,14 @@ namespace Lilium
             public Vector3 up;
         }
 
-        Setup Create (bool withChest = true, float size = 1, bool toes = false)
+        Setup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, System.Action<Animator> decorate = null)
         {
             Setup s = new Setup ();
             GameObject prefab = new GameObject ("Prefab");
             created_.Add (prefab);
-            Animator display = toes ? TestSkeleton.CreateHumanoidWithToes (created_, size) : TestSkeleton.CreateHumanoid (created_, withChest, size);
+            Animator display = eyes ? TestSkeleton.CreateHumanoidWithEyes (created_)
+                : toes ? TestSkeleton.CreateHumanoidWithToes (created_, size, toeOut) : TestSkeleton.CreateHumanoid (created_, withChest, size);
+            if (decorate != null) decorate (display);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             display.transform.SetParent (prefab.transform, false);
             display.transform.localRotation = Quaternion.Euler (0, 270, 0);
@@ -450,9 +452,9 @@ namespace Lilium
         [Test]
         public void DirectionPoints_DefaultToPullStrengthZero ()
         {
-            // 既定の一覧では、向きの点は引く強さ 0、ほかの点は 1
+            // 既定の一覧では、向きの点（膝の Pole・足の小指側も）は引く強さ 0、ほかの点は 1
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
-                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop";
+                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole") || point.name.EndsWith ("LittleToeSide");
                 Assert.AreEqual (direction ? 0 : 1, point.pullStrength, point.name);
             }
             Assert.IsEmpty (definition_.Validate ());
@@ -752,6 +754,11 @@ namespace Lilium
         public void DirectionPoints_BurstMatchesManaged ([Values (0, 1)] int pull)
         {
             SetDirectionPull (pull);
+            // 顔の前の点は、目の高さ（S31）にする前の置き方で比べる。引く強さ 1 で点どうしが引き合うこの組み合わせは、
+            // Burst とマネージドの数学関数のわずかな差が広がり、点の高さで差が 0.009〜0.14mm と揺れる（10-05 実測。引く強さ 0 は 0）
+            EditRigDefinition.BodyPoint face = definition_.bodyPoints.First (p => p.name == "HeadDirection");
+            face.anchor = BodyPointAnchor.BoneOrigin;
+            face.offset = new Vector3 (0, 0.075f, 0.25f);
             Setup s = Create ();
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
@@ -880,10 +887,28 @@ namespace Lilium
                 Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.ToeTip (foot), out toe), foot + " のつま先の先");
                 Assert.Less (heel.y, ankle.y + 1e-4f, "かかとは足首より下");
                 Assert.Less (Vector3.Dot (heel - ankle, s.forward), 0, "かかとは足首より後ろ");
+                Assert.Less (Vector3.ProjectOnPlane (heel - ankle, s.up).magnitude, 0.04f, "かかとは足首の真下の近く（踵を支点に回す）");
                 Assert.Greater (Vector3.Dot (toe - ankle, s.forward), 0.05f, "つま先の先は足首より前");
                 Assert.AreEqual (heel.y, toe.y, 1e-3f, "かかととつま先の先は同じ高さ（足裏）");
                 Assert.IsFalse (s.body.PointHasRotation (BodyPointId.Heel (foot)));
+
+                // 足裏の中心と小指側は足の骨に乗り、足首とつま先の先の間。足裏の中心は足首の真正面、小指側はそこから体の外へ
+                Vector3 ball, side;
+                Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.SoleBall (foot), out ball), foot + " の足裏の中心");
+                Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.LittleToeSide (foot), out side), foot + " の小指側");
+                Assert.AreEqual (Bone (s, foot), s.body.GetBone (BodyPointId.SoleBall (foot)), "足裏の中心は足に乗る");
+                Assert.AreEqual (Bone (s, foot), s.body.GetBone (BodyPointId.LittleToeSide (foot)), "小指側は足に乗る");
+                Assert.Greater (Vector3.Dot (ball - ankle, s.forward), 0.02f, "足裏の中心は足首より前");
+                Assert.Less (Vector3.Dot (ball - toe, s.forward), -0.02f, "足裏の中心はつま先の先より後ろ");
+                Vector3 outside = Vector3.ProjectOnPlane (ankle - Bone (s, HumanBodyBones.Hips).position, s.up).normalized;
+                Assert.AreEqual (0, Vector3.Dot (ball - ankle, outside), 1e-3f, "足裏の中心は足首の真正面（左右にずれない）");
+                Assert.Greater (Vector3.Dot (side - ball, outside), 0.02f, "小指側は体の外");
+                Assert.AreEqual (0, Vector3.Dot (side - ball, s.forward), 1e-3f, "小指側は足裏の中心の真横");
+                // 4 点（踵・足裏の中心・小指側・つま先の先）は地面（基準姿勢のルートの高さ）
+                float ground = s.rig.root.transform.position.y;
+                foreach (Vector3 p in new[] { heel, ball, side, toe }) Assert.AreEqual (ground, p.y, 1e-4f, "地面からの高さは 0");
             }
+            Assert.IsFalse (s.body.HasPoint (HumanBodyBones.LeftToes), "つま先の骨の付け根には点を置かない（球とつま先の先で足りる）");
             foreach (HumanBodyBones hand in new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand }) {
                 Vector3 palm;
                 Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.PalmIndex (hand), out palm), hand + " の手のひら");
@@ -898,6 +923,41 @@ namespace Lilium
             Setup none = Create ();
             Assert.IsFalse (none.body.HasPoint (BodyPointId.Heel (HumanBodyBones.LeftFoot)), "定義の一覧から消すと無くなる");
             Assert.IsFalse (none.body.HasPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand)));
+        }
+
+        /// <summary>
+        /// しゃがんだ姿勢で膝と足首を Pin、足裏の中心・つま先の先を Locked にし、腰だけ前へ動かす:
+        /// 膝の点は保てなくても、足首と足の点は留まる（Pin はなるべく留まるが、両立しないときは膝・肘より手足の先を優先。10-05）
+        /// </summary>
+        [Test]
+        public void HipsMovedForward_WithKneesAndFeetPinned_KeepsFeet_LetsKneesYield ([Values (0.02f, 0.05f, 0.1f)] float forward)
+        {
+            Setup s = Create (toes: true);
+            Dictionary<Transform, float> lengths = Lengths (s);
+            HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
+            HumanBodyBones[] knees = { HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg };
+            foreach (HumanBodyBones foot in feet) Pin (s, foot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.Hips, -s.up * 0.15f);
+            s.body.SetLocked (HumanBodyBones.Hips, true);
+            Solve (s);
+            Vector3[] ankles = feet.Select (f => Bone (s, f).position).ToArray ();
+            foreach (HumanBodyBones knee in knees) Pin (s, knee, Vector3.zero);
+            foreach (HumanBodyBones foot in feet) {
+                LockPoint (s, BodyPointId.SoleBall (foot), Vector3.zero);
+                LockPoint (s, BodyPointId.ToeTip (foot), Vector3.zero);
+            }
+            PinDirection (s, BodyPointId.LittleToeSide (HumanBodyBones.LeftFoot), Vector3.zero);
+
+            s.body.SetPointPositionWorld (HumanBodyBones.Hips, Bone (s, HumanBodyBones.Hips).position + s.forward * forward);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰は点に届く");
+            for (int i = 0; i < feet.Length; i++) {
+                Assert.LessOrEqual (s.body.GetResidual (feet[i]), kReach, feet[i] + " の足首は動かない");
+                Assert.LessOrEqual (s.body.GetResidual (BodyPointId.SoleBall (feet[i])), kReach, feet[i] + " の足裏の中心は動かない");
+                Assert.LessOrEqual (s.body.GetResidual (BodyPointId.ToeTip (feet[i])), kReach, feet[i] + " のつま先の先は動かない");
+                Assert.LessOrEqual (Vector3.Distance (ankles[i], Bone (s, feet[i]).position), kReach, feet[i] + " の足首は元の場所");
+            }
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
         }
 
         [Test]
@@ -943,17 +1003,18 @@ namespace Lilium
         // ---- 点の一覧（S26b） ----
 
         [Test]
-        public void DefaultBodyPoints_KeepVersion2Names ()
+        public void DefaultBodyPoints_Names ()
         {
-            // 既定の一覧の名前は、版 2 までのコントロールのパスと同じ（今までの編集用クリップのキーを読む）
             string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
             foreach (string name in new[] { "Hips", "Head", "LeftHand", "RightFoot", "HipsDirection", "UpperChestDirection", "HeadDirection", "HeadTop",
-                "LeftHeel", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
+                "LeftKneePole", "RightKneePole", "LeftHeel", "RightSoleBall", "LeftLittleToeSide", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
                 Assert.Contains (name, names, name);
             }
             Assert.IsTrue (definition_.bodyPoints.First (p => p.name == "LeftHand").rotation, "手は向きを持つ");
             Assert.IsFalse (definition_.bodyPoints.First (p => p.name == "LeftLowerArm").rotation, "肘は位置だけ");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Jaw"), "解かない骨には置かない");
+            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftToes" || p.name == "RightToes"), "つま先の骨の付け根には置かない");
+            Assert.IsEmpty (definition_.Validate ());
         }
 
         [Test]
@@ -970,14 +1031,156 @@ namespace Lilium
         }
 
         [Test]
-        public void Version2Definition_KeepsPullStrengthOne ()
+        public void Version4Definition_ResetsBodyPointsToDefault ()
         {
-            // 今まで作った定義は、向きの点も骨ごと引く（S28 の引く強さ 0 は、新しく作る定義の既定だけ）
-            definition_.bodyPoints.Clear ();
-            definition_.version = 2;
+            // 版 5 で足の点を作り直した。後方互換は保たないので、版 4 までの点の一覧は今の既定に置き換わる（足した点も消える）
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "LeftToes", bone = HumanBodyBones.LeftToes });
+            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("SoleBall") || p.name.EndsWith ("LittleToeSide") || p.name.EndsWith ("KneePole"));
+            definition_.version = 4;
             definition_.UpgradeIfNeeded ();
-            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "HeadDirection"));
-            Assert.IsTrue (definition_.bodyPoints.All (p => p.pullStrength == 1), "全部の点が 1");
+            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
+            string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
+            Assert.Contains ("LeftSoleBall", names);
+            Assert.Contains ("RightLittleToeSide", names);
+            Assert.Contains ("RightKneePole", names);
+            Assert.IsFalse (names.Contains ("Nose"), "足した点は消える");
+            Assert.IsFalse (names.Contains ("LeftToes"), "つま先の骨の付け根の点は消える");
+            Assert.AreEqual (0, definition_.bodyPoints.First (p => p.name == "HeadDirection").pullStrength, "向きの点は今の既定（引く強さ 0）");
+            Assert.IsEmpty (definition_.Validate ());
+        }
+
+        [Test]
+        public void FootPoints_LieOnFootCenterLine_WhenToesTurnOut ()
+        {
+            // つま先が外を向いた足（つま先の付け根を外へ 5cm）。踵・足裏の中心・つま先の先は、足首からつま先の付け根へ向かう線の上に並ぶ
+            // （足裏の中心を支点に回すと足の真ん中で回る）。小指側は足裏の中心から、その線の真横の外
+            Setup s = Create (toes: true, toeOut: 0.05f);
+            foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
+                Vector3 ankle = Bone (s, foot).position;
+                Vector3 toes = Bone (s, foot == HumanBodyBones.LeftFoot ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes).position;
+                Vector3 along = Vector3.ProjectOnPlane (toes - ankle, s.up).normalized;
+                Vector3 across = Vector3.Cross (s.up, along).normalized;
+                Assert.Greater (Vector3.Angle (along, s.forward), 10f, "つま先が外を向いている");
+                Vector3 heel, ball, tip, side;
+                s.body.TryGetBonePointWorld (BodyPointId.Heel (foot), out heel);
+                s.body.TryGetBonePointWorld (BodyPointId.SoleBall (foot), out ball);
+                s.body.TryGetBonePointWorld (BodyPointId.ToeTip (foot), out tip);
+                s.body.TryGetBonePointWorld (BodyPointId.LittleToeSide (foot), out side);
+                foreach (Vector3 p in new[] { heel, ball, tip }) {
+                    Assert.AreEqual (0, Vector3.Dot (p - ankle, across), 1e-3f, foot + " の足の点が中心線の上");
+                }
+                Assert.AreEqual (0, Vector3.Dot (ball - toes, across), 1e-3f, "足裏の中心はつま先の付け根の真下");
+                Assert.AreEqual (0, Vector3.Dot (ball - toes, along), 1e-3f, "足裏の中心はつま先の付け根の真下");
+                Assert.AreEqual (0, Vector3.Dot (side - ball, along), 1e-3f, "小指側は足裏の中心の真横");
+                Vector3 outside = Vector3.ProjectOnPlane (ankle - Bone (s, HumanBodyBones.Hips).position, s.up);
+                Assert.Greater (Vector3.Dot (side - ball, outside), 0, "小指側は体の外");
+            }
+        }
+
+        [Test]
+        public void LittleToeSide_TiltsFootAroundAnkle_WithoutPulling ()
+        {
+            // 足首の位置を固定し、小指側の点（引く強さ 0）を下へ: 足が足首まわりに回って小指側が下がる。脛から根の側は動かない
+            Setup s = Create ();
+            Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
+            Solve (s);
+            Transform foot = Bone (s, HumanBodyBones.LeftFoot);
+            Transform[] bones = s.rig.editingBones.ToArray ();
+            Pose[] before = Poses (bones);
+            BodyPointId side = BodyPointId.LittleToeSide (HumanBodyBones.LeftFoot);
+            Vector3 start;
+            s.body.TryGetBonePointWorld (side, out start);
+            PinDirection (s, side, -s.up * 0.03f);
+            Solve (s);
+            Vector3 now;
+            s.body.TryGetBonePointWorld (side, out now);
+            Assert.LessOrEqual (AimError (s, side), 0.5f, "小指側の点が目標の方を向く");
+            Assert.Less (now.y, start.y - 0.01f, "小指側が下がる");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), kReach, "足首は動かない");
+            AssertUnchanged (bones, before, 1e-4f, 0.01f, "脛から根の側", b => b == foot || b.IsChildOf (foot));
+        }
+
+        // ---- 顔の前の点の高さ ----
+
+        /// <summary>
+        /// 頭に付いたメッシュを足す（頭の付け根から上へ 0.2m の頂点を頭に、腰の頂点を腰に付ける）。表示モデルは T ポーズのまま、
+        /// メッシュは 2 倍の大きさで作る（バインドポーズの長さを基準姿勢の長さへ直すかを確かめる）
+        /// </summary>
+        void AddHeadMesh (Animator display)
+        {
+            Transform head = display.GetBoneTransform (HumanBodyBones.Head);
+            Transform hips = display.GetBoneTransform (HumanBodyBones.Hips);
+            GameObject body = new GameObject ("Body");
+            body.transform.SetParent (display.transform, false);
+            body.transform.localScale = Vector3.one * 0.5f;
+            SkinnedMeshRenderer renderer = body.AddComponent<SkinnedMeshRenderer> ();
+            Mesh mesh = new Mesh ();
+            created_.Add (mesh);
+            Matrix4x4 toMesh = body.transform.worldToLocalMatrix;
+            mesh.vertices = new[] { toMesh.MultiplyPoint3x4 (head.position + Vector3.up * 0.2f), toMesh.MultiplyPoint3x4 (hips.position) };
+            mesh.boneWeights = new[] { new BoneWeight { boneIndex0 = 0, weight0 = 1 }, new BoneWeight { boneIndex0 = 1, weight0 = 1 } };
+            mesh.bindposes = new[] { head.worldToLocalMatrix * body.transform.localToWorldMatrix, hips.worldToLocalMatrix * body.transform.localToWorldMatrix };
+            renderer.sharedMesh = mesh;
+            renderer.bones = new[] { head, hips };
+        }
+
+        [Test]
+        public void HeadDirection_IsAtEyeHeight ([Values ("eyes", "mesh", "none")] string source)
+        {
+            // 顔の前の点は、頭の付け根の真上の目の高さに置き、そこから前へ出す。目の高さは目の骨・頭のメッシュ・体の大きさの順に決める
+            Setup s = Create (eyes: source == "eyes", decorate: source == "mesh" ? (System.Action<Animator>)AddHeadMesh : null);
+            Transform head = Bone (s, HumanBodyBones.Head);
+            float expected = source == "eyes" ? 0.08f : source == "mesh" ? 0.2f * 0.47f : s.rig.humanScale * 0.095f;
+            Assert.AreEqual (expected, s.rig.GetEyeHeight (), 1e-4f, "目の高さ");
+            Vector3 onBone;
+            Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.Direction (HumanBodyBones.Head), out onBone));
+            Assert.AreEqual (head.position.y + expected, onBone.y, 1e-4f, "顔の前の点は目の高さ");
+            Assert.Greater (Vector3.Dot (onBone - head.position, s.forward), 0.2f * s.rig.humanScale, "顔の前に出ている");
+            Assert.IsEmpty (definition_.Validate ());
+        }
+
+        // ---- 膝の Pole ----
+
+        [Test]
+        public void KneePole_IsPlacedInFrontOfKnee_OnThigh ()
+        {
+            Setup s = Create ();
+            foreach (HumanBodyBones thigh in new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg }) {
+                BodyPointId pole = BodyPointId.KneePole (thigh);
+                Transform knee = Bone (s, thigh == HumanBodyBones.LeftUpperLeg ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg);
+                Vector3 onBone;
+                Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), thigh + " の膝の Pole");
+                Assert.AreEqual (Bone (s, thigh), s.body.GetBone (pole), "太ももに乗る");
+                Vector3 expected = knee.position + s.forward * definition_.fullBody.directionLength * s.rig.humanScale;
+                Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "膝の前");
+                Assert.AreEqual (0, definition_.bodyPoints.First (p => p.name == pole.name).pullStrength, "向けるだけの点");
+            }
+        }
+
+        [Test]
+        public void KneePole_TurnsKneeOutward_WithFeetPinned ()
+        {
+            // 足を固定して腰を下げる（膝は前へ曲がる）。左の膝の Pole を外へ動かすと、足首は動かずに膝が外を向く
+            Setup s = Create ();
+            Dictionary<Transform, float> lengths = Lengths (s);
+            Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
+            Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.Hips, -s.up * 0.15f);
+            Solve (s);
+            Vector3 bent = knee.position;
+            Vector3 rightKnee = Bone (s, HumanBodyBones.RightLowerLeg).position;
+            Vector3 outside = Vector3.ProjectOnPlane (Bone (s, HumanBodyBones.LeftFoot).position - Bone (s, HumanBodyBones.Hips).position, s.up).normalized;
+
+            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            PinDirection (s, pole, outside * 0.3f);
+            Solve (s);
+            Assert.Greater (Vector3.Dot (knee.position - bent, outside), 0.02f, "左膝が外へ向く");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), kReach, "左足首は動かない");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰は動かない");
+            Assert.LessOrEqual (Vector3.Distance (rightKnee, Bone (s, HumanBodyBones.RightLowerLeg).position), 1e-4f, "右膝は変わらない");
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
         }
 
         [Test]

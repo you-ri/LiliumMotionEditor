@@ -8,7 +8,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Transform のパネル（S9）: 数値欄の値の読み書き・行ごとの Reset・左右反転
+    /// Controller のパネル（S9）: 数値欄の値の読み書き・行ごとの Reset・左右反転
     /// </summary>
     public class MirrorValuesTests
     {

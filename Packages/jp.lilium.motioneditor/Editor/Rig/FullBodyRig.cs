@@ -45,6 +45,24 @@ namespace Lilium
             return new BodyPointId (RigPaths.SideOf (foot) + "ToeTip");
         }
 
+        /// <summary>母趾球の列の足裏の中心（foot は足首の骨。既定の一覧での名前）</summary>
+        public static BodyPointId SoleBall (HumanBodyBones foot)
+        {
+            return new BodyPointId (RigPaths.SideOf (foot) + "SoleBall");
+        }
+
+        /// <summary>小指側の、足を回す点（foot は足首の骨。既定の一覧での名前）</summary>
+        public static BodyPointId LittleToeSide (HumanBodyBones foot)
+        {
+            return new BodyPointId (RigPaths.SideOf (foot) + "LittleToeSide");
+        }
+
+        /// <summary>膝の Pole（thigh は太ももの骨。既定の一覧での名前）</summary>
+        public static BodyPointId KneePole (HumanBodyBones thigh)
+        {
+            return new BodyPointId (RigPaths.SideOf (thigh) + "KneePole");
+        }
+
         /// <summary>人差し指の付け根の点（hand は手首の骨。既定の一覧での名前）</summary>
         public static BodyPointId PalmIndex (HumanBodyBones hand)
         {

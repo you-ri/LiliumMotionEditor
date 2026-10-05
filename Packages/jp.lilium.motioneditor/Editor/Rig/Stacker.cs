@@ -8,7 +8,7 @@ namespace Lilium
 
     /// <summary>
     /// Stacker（S12）のキー操作。組（骨のまとまり）のカーブのキーのフレームをまとめたものを「ポーズキー」として扱い、
-    /// 挿入・削除・間隔の変更で、組の中の後ろのキーを一緒にずらす。ループは先頭のポーズキーを末尾へ写しておく。
+    /// 挿入・削除・間隔の変更で、組の中の後ろのキーを一緒にずらす。ループ（Loop）はサイクルキー（S32。ClipCycle）が受け持つ。
     /// どれも組のカーブ（filter）だけに効き、ほかの組のキーは動かさない。Undo の記録は呼ぶ側
     /// </summary>
     public static class Stacker
@@ -67,38 +67,7 @@ namespace Lilium
             return true;
         }
 
-        /// <summary>
-        /// ループ: 先頭のポーズキーの値を末尾のポーズキーへ写す（末尾が先頭と同じなら、先頭の後ろ既定の間隔に末尾を作る）。
-        /// 値が変わらなければ何もしない（書くと keysChanged が出て、また呼ばれるため）。書いたら true
-        /// </summary>
-        public static bool SyncLoop (AnimationClip clip, System.Predicate<EditorCurveBinding> filter)
-        {
-            int[] keys = GetPoseKeys (clip, filter);
-            if (keys.Length == 0) return false;
-            int first = keys[0];
-            int last = keys.Length > 1 ? keys[keys.Length - 1] : first + kDefaultInterval;
-            float rate = clip.frameRate;
-            bool changed = false;
-            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
-                if (filter != null && !filter (binding)) continue;
-                AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, binding);
-                int from = ClipKeyUtility.FindKeyAtFrame (curve, rate, first);
-                float value = from >= 0 ? curve.keys[from].value : curve.Evaluate (first / rate);
-                int to = ClipKeyUtility.FindKeyAtFrame (curve, rate, last);
-                if (to >= 0 && Mathf.Approximately (curve.keys[to].value, value)) continue;
-                Keyframe key = from >= 0 ? curve.keys[from] : new Keyframe (0, value);
-                key.time = last / rate;
-                key.value = value;
-                if (to >= 0) curve.MoveKey (to, key);
-                else curve.AddKey (key);
-                CurveEdit.AutoTangentsNear (curve, key.time);
-                AnimationUtility.SetEditorCurve (clip, binding, curve);
-                changed = true;
-            }
-            return changed;
-        }
-
-        // ---- クリップごとの設定（組・ループ）。AnimationClip は利用者のデータを持てないので .meta の userData に持つ ----
+        // ---- クリップごとの設定（組・残像）。AnimationClip は利用者のデータを持てないので .meta の userData に持つ ----
 
         [System.Serializable]
         public sealed class Group
@@ -114,6 +83,7 @@ namespace Lilium
             /// <summary>自分で作った組（組み込みの組 All / Body / Hands / Rig は持たない）</summary>
             public List<Group> groups = new List<Group> ();
             public string selected = "All";
+            /// <summary>前の Loop（組ごとに先頭のポーズキーを末尾へ写した）。読むときにサイクルキーの印へ移し、false にする（ClipUserData.Load）</summary>
             public bool loop;
             public bool ghost;
             /// <summary>残像を出す幅（前後それぞれ何フレームまで）</summary>
@@ -129,39 +99,17 @@ namespace Lilium
             return range <= 0 ? kGhostRangeDefault : Mathf.Min (range, kGhostRangeMax);
         }
 
-        [System.Serializable]
-        sealed class Envelope
-        {
-            public Settings stacker;
-        }
-
         public static Settings Load (AnimationClip clip)
         {
-            string path = clip != null ? AssetDatabase.GetAssetPath (clip) : null;
-            AssetImporter importer = string.IsNullOrEmpty (path) ? null : AssetImporter.GetAtPath (path);
-            if (importer == null || string.IsNullOrEmpty (importer.userData)) return new Settings ();
-            try {
-                Envelope envelope = JsonUtility.FromJson<Envelope> (importer.userData);
-                return envelope != null && envelope.stacker != null ? envelope.stacker : new Settings ();
-            }
-            catch (System.ArgumentException) {
-                return new Settings ();
-            }
+            return ClipUserData.Load (clip).stacker ?? new Settings ();
         }
 
         /// <summary>
-        /// 保存する。アセットでないクリップには保存しない（false）
+        /// 保存する（サイクルキーの印など、.meta のほかの項目は残す）。アセットでないクリップには保存しない（false）
         /// </summary>
         public static bool Save (AnimationClip clip, Settings settings)
         {
-            string path = clip != null ? AssetDatabase.GetAssetPath (clip) : null;
-            AssetImporter importer = string.IsNullOrEmpty (path) ? null : AssetImporter.GetAtPath (path);
-            if (importer == null) return false;
-            string json = JsonUtility.ToJson (new Envelope { stacker = settings });
-            if (importer.userData == json) return true;
-            importer.userData = json;
-            AssetDatabase.WriteImportSettingsIfDirty (path);
-            return true;
+            return ClipUserData.Save (clip, data => data.stacker = settings);
         }
     }
 

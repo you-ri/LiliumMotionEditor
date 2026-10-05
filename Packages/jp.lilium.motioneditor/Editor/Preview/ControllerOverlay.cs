@@ -8,15 +8,16 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Spinner と Transform を 1 枚にしたパネル（S8 + S9）。
+    /// 選んでいるコントローラーのパネル（S8 + S9。Spinner と数値欄を 1 枚にしたもの。10-05 に Transform から改名）。
     /// 上から、動かす物の名前と Pole の切替・モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）。
     /// 数値欄は保存している値（位置はメートル、回転はオイラー角）を出し、入力 1 回で今のフレームにキーを打つ
     /// </summary>
-    // 右の列の View の下に置く。下寄せにするとタイムラインに重なる
-    [Icon (Icons.kFolder + "Transform.png")]
-    [Overlay (typeof (PreviewWindow), "mkt-transform", "Transform", defaultDisplay = true,
+    // 右の列の View の下に置く。下寄せにするとタイムラインに重なる。
+    // ID は改名前の "mkt-transform" のまま（変えると、窓に保存してあるパネルの置き場所・開閉が引き継がれない）
+    [Icon (Icons.kFolder + "Controller.png")]
+    [Overlay (typeof (PreviewWindow), "mkt-transform", "Controller", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
-    class TransformOverlay : Overlay
+    class ControllerOverlay : Overlay
     {
         static readonly Color[] kAxisColors = {
             new Color (0.93f, 0.4f, 0.36f),
@@ -36,6 +37,7 @@ namespace Lilium
         ValueRow[] rows_;
         /// <summary>足の転がし（roll / bank / twist）の行。足の転がしを持つ脚の IK を選んでいるときだけ出す</summary>
         ValueRow foot_;
+        Button resetAll_;
         Label warning_;
         PoseTarget shownTarget_;
         bool shownPole_;
@@ -67,21 +69,21 @@ namespace Lilium
             VisualElement modes = new VisualElement ();
             modes.style.flexDirection = FlexDirection.Row;
             modes_ = new Button[3];
-            modes_[0] = AddModeButton (modes, PreviewWindow.SpinnerMode.Move, "Move", Tr ("TRANSFORM_OVERLAY_MODE_MOVE_TOOLTIP"), "Spinner Move");
-            modes_[1] = AddModeButton (modes, PreviewWindow.SpinnerMode.Rotate, "Rot", Tr ("TRANSFORM_OVERLAY_MODE_ROTATE_TOOLTIP"), "Spinner Rotate");
-            modes_[2] = AddModeButton (modes, PreviewWindow.SpinnerMode.Scale, "Scale", Tr ("TRANSFORM_OVERLAY_MODE_SCALE_TOOLTIP"), "Spinner Scale");
+            modes_[0] = AddModeButton (modes, PreviewWindow.SpinnerMode.Move, "Move", Tr ("CONTROLLER_OVERLAY_MODE_MOVE_TOOLTIP"), "Spinner Move");
+            modes_[1] = AddModeButton (modes, PreviewWindow.SpinnerMode.Rotate, "Rot", Tr ("CONTROLLER_OVERLAY_MODE_ROTATE_TOOLTIP"), "Spinner Rotate");
+            modes_[2] = AddModeButton (modes, PreviewWindow.SpinnerMode.Scale, "Scale", Tr ("CONTROLLER_OVERLAY_MODE_SCALE_TOOLTIP"), "Spinner Scale");
             root.Add (modes);
 
             // ビューのギズモの軸（Local = 骨の軸 / World = ワールドの軸）
             VisualElement spaces = new VisualElement ();
             spaces.style.flexDirection = FlexDirection.Row;
             spaces_ = new Button[2];
-            spaces_[0] = AddSpaceButton (spaces, false, "Local", Tr ("TRANSFORM_OVERLAY_SPACE_LOCAL_TOOLTIP"));
-            spaces_[1] = AddSpaceButton (spaces, true, "World", Tr ("TRANSFORM_OVERLAY_SPACE_WORLD_TOOLTIP"));
+            spaces_[0] = AddSpaceButton (spaces, false, "Local", Tr ("CONTROLLER_OVERLAY_SPACE_LOCAL_TOOLTIP"));
+            spaces_[1] = AddSpaceButton (spaces, true, "World", Tr ("CONTROLLER_OVERLAY_SPACE_WORLD_TOOLTIP"));
             root.Add (spaces);
 
             pole_ = new Toggle ("Pole");
-            ShortcutTooltip.Set (pole_, containerWindow, Tr ("TRANSFORM_OVERLAY_POLE_TOOLTIP"), "Spinner Toggle Pole");
+            ShortcutTooltip.Set (pole_, containerWindow, Tr ("CONTROLLER_OVERLAY_POLE_TOOLTIP"), "Spinner Toggle Pole");
             pole_.RegisterValueChangedCallback (e => window_.spinnerPole = e.newValue);
             root.Add (pole_);
 
@@ -89,21 +91,28 @@ namespace Lilium
             root.Add (spinner_);
 
             rows_ = new ValueRow[3];
-            rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("TRANSFORM_OVERLAY_POSITION_TOOLTIP"));
-            rows_[1] = AddRow (root, TransformChannels.Rotation, "Rot", Tr ("TRANSFORM_OVERLAY_ROTATION_TOOLTIP"));
-            rows_[2] = AddRow (root, TransformChannels.Scale, "Scale", Tr ("TRANSFORM_OVERLAY_SCALE_TOOLTIP"));
+            rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("CONTROLLER_OVERLAY_POSITION_TOOLTIP"));
+            rows_[1] = AddRow (root, TransformChannels.Rotation, "Rot", Tr ("CONTROLLER_OVERLAY_ROTATION_TOOLTIP"));
+            rows_[2] = AddRow (root, TransformChannels.Scale, "Scale", Tr ("CONTROLLER_OVERLAY_SCALE_TOOLTIP"));
             foot_ = AddRow (root, TransformChannels.None, "Foot",
-                Tr ("TRANSFORM_OVERLAY_FOOT_TOOLTIP"), kFootNames, kFootColors,
-                Tr ("TRANSFORM_OVERLAY_FOOT_ROLL_TOOLTIP"), Tr ("TRANSFORM_OVERLAY_FOOT_BANK_TOOLTIP"), Tr ("TRANSFORM_OVERLAY_FOOT_TWIST_TOOLTIP"));
+                Tr ("CONTROLLER_OVERLAY_FOOT_TOOLTIP"), kFootNames, kFootColors,
+                Tr ("CONTROLLER_OVERLAY_FOOT_ROLL_TOOLTIP"), Tr ("CONTROLLER_OVERLAY_FOOT_BANK_TOOLTIP"), Tr ("CONTROLLER_OVERLAY_FOOT_TWIST_TOOLTIP"));
+
+            // 行の ↺ は 1 行だけ。こちらは選んでいる物すべての値をまとめて戻す
+            resetAll_ = new Button (() => window_.ResetSelectedValues ()) { text = "Reset", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_SELECTION_TOOLTIP") };
+            resetAll_.style.marginTop = 2;
+            resetAll_.style.marginLeft = 0;
+            resetAll_.style.marginRight = 0;
+            root.Add (resetAll_);
 
             // 全身 IK の点を選んでいる間だけ出す。いくつか選んでいれば、まとめて変える
             pointStates_ = new VisualElement ();
             pointStates_.style.flexDirection = FlexDirection.Row;
             pointStates_.style.marginTop = 4;
             pointStateButtons_ = new Button[3];
-            pointStateButtons_[0] = AddPointStateButton (BodyPointState.Free, "Free", Tr ("TRANSFORM_OVERLAY_POINT_FREE_TOOLTIP"));
-            pointStateButtons_[1] = AddPointStateButton (BodyPointState.Pin, "Pin", Tr ("TRANSFORM_OVERLAY_POINT_PIN_TOOLTIP"));
-            pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", Tr ("TRANSFORM_OVERLAY_POINT_LOCK_TOOLTIP"));
+            pointStateButtons_[0] = AddPointStateButton (BodyPointState.Free, "Free", Tr ("CONTROLLER_OVERLAY_POINT_FREE_TOOLTIP"));
+            pointStateButtons_[1] = AddPointStateButton (BodyPointState.Pin, "Pin", Tr ("CONTROLLER_OVERLAY_POINT_PIN_TOOLTIP"));
+            pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", Tr ("CONTROLLER_OVERLAY_POINT_LOCK_TOOLTIP"));
             ShortcutTooltip.Set (pointStateButtons_[2], containerWindow, pointStateButtons_[2].tooltip, "Toggle Point Lock");
             root.Add (pointStates_);
 
@@ -237,8 +246,8 @@ namespace Lilium
             }
 
             row.reset = channel == TransformChannels.None
-                ? new Button (() => window_.ResetFootAngles ()) { text = "↺", tooltip = Tr ("TRANSFORM_OVERLAY_RESET_FOOT_TOOLTIP") }
-                : new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = Tr ("TRANSFORM_OVERLAY_RESET_ROW_TOOLTIP") };
+                ? new Button (() => window_.ResetFootAngles ()) { text = "↺", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_FOOT_TOOLTIP") }
+                : new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_ROW_TOOLTIP") };
             row.reset.style.width = 18;
             row.reset.style.marginLeft = 1;
             row.reset.style.marginRight = 0;
@@ -361,6 +370,7 @@ namespace Lilium
                 foot_.root.SetEnabled (window_.CanEditFootAngles ());
                 SetFieldsWithoutNotify (foot_, angles, TransformChannels.Rotation);
             }
+            resetAll_.SetEnabled (window_.CanResetSelectedValues ());
         }
 
         /// <summary>
@@ -509,8 +519,8 @@ namespace Lilium
         {
             if (window_ == null) return "";
             switch (window_.spinnerMode) {
-                case PreviewWindow.SpinnerMode.Rotate: return Tr ("TRANSFORM_OVERLAY_MULTI_AXIS");
-                case PreviewWindow.SpinnerMode.Scale: return Tr ("TRANSFORM_OVERLAY_ALL_AXES");
+                case PreviewWindow.SpinnerMode.Rotate: return Tr ("CONTROLLER_OVERLAY_MULTI_AXIS");
+                case PreviewWindow.SpinnerMode.Scale: return Tr ("CONTROLLER_OVERLAY_ALL_AXES");
                 default: return "";
             }
         }
@@ -658,7 +668,7 @@ namespace Lilium
                 Vector2 amount = new Vector2 (evt.deltaPosition.x, evt.deltaPosition.y) * kRotatePerPixel * fine;
                 totalView_ += amount;
                 window_.SpinRotateView (amount);
-                readout_.text = Tr ("TRANSFORM_OVERLAY_MULTI_AXIS_READOUT", totalView_.x.ToString ("+0;-0"), totalView_.y.ToString ("+0;-0"));
+                readout_.text = Tr ("CONTROLLER_OVERLAY_MULTI_AXIS_READOUT", totalView_.x.ToString ("+0;-0"), totalView_.y.ToString ("+0;-0"));
             }
             else {
                 // 上へドラッグで増やす
@@ -736,7 +746,7 @@ namespace Lilium
 
         string Readout ()
         {
-            string axis = dragZone_ == kZoneCenter ? Tr ("TRANSFORM_OVERLAY_ALL_AXES") : ZoneNames ()[dragZone_];
+            string axis = dragZone_ == kZoneCenter ? Tr ("CONTROLLER_OVERLAY_ALL_AXES") : ZoneNames ()[dragZone_];
             switch (window_.spinnerMode) {
                 case PreviewWindow.SpinnerMode.Move: return string.Format ("{0} {1:+0.0;-0.0} cm", axis, applied_ * 100);
                 case PreviewWindow.SpinnerMode.Scale: return string.Format ("{0} {1:+0.00;-0.00}", axis, applied_);
@@ -747,10 +757,10 @@ namespace Lilium
 
 
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Transform.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-transform", "Transform", defaultDisplay = true,
+    [Icon (Icons.kFolder + "Controller.png")]
+    [Overlay (typeof (SceneWindow), "mkt-scene-transform", "Controller", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
-    sealed class TransformOverlayScene : TransformOverlay
+    sealed class ControllerOverlayScene : ControllerOverlay
     {
     }
 

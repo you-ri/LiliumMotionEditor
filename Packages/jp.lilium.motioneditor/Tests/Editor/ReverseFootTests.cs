@@ -325,7 +325,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// Transform パネルの roll / bank / twist の行（S22b）が使う対象の口。脚だけが持ち、FK の脚に入れると IK になって効く
+        /// Controller パネルの roll / bank / twist の行（S22b）が使う対象の口。脚だけが持ち、FK の脚に入れると IK になって効く
         /// </summary>
         [Test]
         public void IkTargetSetsFootAnglesAndSwitchesToIk ()
@@ -443,7 +443,8 @@ namespace Lilium
             // 足裏の高さは Avatar の値（実寸）。無ければ足首の高さ（床はルートの高さ）
             float bottom = rig.displayAnimator.leftFeetBottomHeight;
             float floor = bottom > 1e-4f ? ankle.y - bottom : 0;
-            foreach (ReverseFoot.Pivot pivot in new[] { ReverseFoot.Pivot.Heel, ReverseFoot.Pivot.ToeTip, ReverseFoot.Pivot.LeftEdge, ReverseFoot.Pivot.RightEdge }) {
+            foreach (ReverseFoot.Pivot pivot in new[] { ReverseFoot.Pivot.Heel, ReverseFoot.Pivot.ToeTip, ReverseFoot.Pivot.LeftEdge, ReverseFoot.Pivot.RightEdge,
+                ReverseFoot.Pivot.SoleBall, ReverseFoot.Pivot.LittleToeSide }) {
                 Vector3 p = root.InverseTransformPoint (Pivot (solver, kLeft, pivot));
                 Assert.That (p.y, Is.EqualTo (floor).Within (1e-3f), pivot + " の高さ");
                 Assert.That (new Vector2 (p.x - ankle.x, p.z - ankle.z).magnitude, Is.LessThan (1.2f), pivot + " が足首から離れすぎ");

@@ -27,9 +27,13 @@ namespace Lilium
             ToeTip,
             LeftEdge,
             RightEdge,
+            /// <summary>母趾球の列の足裏の中心（母趾球の真下）。転がしでは使わず、全身 IK の点の置き場所にする</summary>
+            SoleBall,
+            /// <summary>母趾球の列の小指側の縁（足裏）。転がしでは使わず、全身 IK の点の置き場所にする</summary>
+            LittleToeSide,
         }
 
-        public const int kPivotCount = 5;
+        public const int kPivotCount = 7;
 
         /// <summary>
         /// 転がした足。目標の枠の中で、足首が position へ動き rotation だけ回る。ballRotation はそのうち母趾球まわりの分（つま先を戻す分）
@@ -95,7 +99,10 @@ namespace Lilium
 
         /// <summary>
         /// 基準姿勢から支点を見積もる。母趾球はつま先の骨（無ければ脛の長さの比）、足裏の高さは Avatar の値（無ければ足首の高さ）。
-        /// 踵・つま先の先・左右の縁は、足首から母趾球までの長さの比で置く（足の形からの検出は後で上書きする）
+        /// 踵・つま先の先・左右の縁は、足首から母趾球までの長さの比で、足の向き（足首から母趾球へ。つま先の骨が無ければ体の前）に並べる
+        /// （足の形からの検出は後で上書きする。回す軸は体の向きのまま）。
+        /// 足裏の中心と小指側の縁（全身 IK の点）は、母趾球の真下の足裏と、そこから小指側へ開いた所。
+        /// 足の幅がいちばん広い所なので、縁は左右の縁より外に置く
         /// </summary>
         /// <param name="mid">膝（脛の長さを測る）</param>
         /// <param name="tip">足首（足の骨）</param>
@@ -112,26 +119,40 @@ namespace Lilium
             Vector3 sole = ankle - up * FootBottom (rig, foot, ankle, up);
             float shin = Vector3.Distance (rig.GetRestRootPosition (mid), ankle);
 
+            // 支点は足の向き（足首から母趾球へ。地面に沿わせる）に並べる。体の前に並べると、つま先が外を向いたキャラで
+            // つま先の先・踵が足の中心線から外れる（足裏の中心を支点に回したときに、足の真ん中で回らない）
             float reach = 0;
             Vector3 ball = Vector3.zero;
+            Vector3 along = forward;
             if (toes != null) {
                 ball = rig.GetRestRootPosition (toes);
-                reach = Vector3.Dot (ball - ankle, forward);
+                Vector3 flat = Vector3.ProjectOnPlane (ball - ankle, up);
+                if (Vector3.Dot (flat, forward) > 1e-6f) along = flat.normalized;
+                reach = Vector3.Dot (ball - ankle, along);
             }
             if (toes == null || reach < shin * 0.05f) {
+                along = forward;
                 reach = shin * 0.42f;
                 ball = sole + forward * reach;
             }
-            Vector3 middle = sole + forward * reach * 0.5f;
+            // 足の右（Unity は左手系なので、上 × 前 が右）
+            Vector3 side = Vector3.Cross (up, along).normalized;
+            Vector3 middle = sole + along * reach * 0.5f;
             float halfWidth = reach * 0.3f;
+            Vector3 ballSole = ball - up * Vector3.Dot (ball - sole, up);
+            // 外側（小指側）は体の外の向き。左足なら左
+            Vector3 outside = foot == HumanBodyBones.LeftFoot ? -side : side;
 
             ReverseFoot result = new ReverseFoot ();
             Quaternion inverse = Quaternion.Inverse (rest);
-            result.pivots_[(int)Pivot.Heel] = inverse * (sole - forward * reach * 0.35f - ankle);
+            // 踵は足首の真下から少しだけ後ろ。踵を支点に足を回すこともあるので、足首から離しすぎない（離すと回したときに足首が大きく振れる）
+            result.pivots_[(int)Pivot.Heel] = inverse * (sole - along * reach * 0.15f - ankle);
             result.pivots_[(int)Pivot.Ball] = inverse * (ball - ankle);
-            result.pivots_[(int)Pivot.ToeTip] = inverse * (sole + forward * reach * 1.45f - ankle);
-            result.pivots_[(int)Pivot.LeftEdge] = inverse * (middle - right * halfWidth - ankle);
-            result.pivots_[(int)Pivot.RightEdge] = inverse * (middle + right * halfWidth - ankle);
+            result.pivots_[(int)Pivot.ToeTip] = inverse * (sole + along * reach * 1.45f - ankle);
+            result.pivots_[(int)Pivot.LeftEdge] = inverse * (middle - side * halfWidth - ankle);
+            result.pivots_[(int)Pivot.RightEdge] = inverse * (middle + side * halfWidth - ankle);
+            result.pivots_[(int)Pivot.SoleBall] = inverse * (ballSole - ankle);
+            result.pivots_[(int)Pivot.LittleToeSide] = inverse * (ballSole + outside * reach * 0.35f - ankle);
             result.rollAxis_ = inverse * right;
             result.bankAxis_ = inverse * forward;
             result.twistAxis_ = inverse * up;

@@ -84,7 +84,7 @@ namespace Lilium
         /// </summary>
         [SerializeField] Clock clock_ = new Clock ();
         [SerializeField] float handleSize_ = 0.03f;
-        /// <summary>Transform パネルの Spinner の Move で、ドラッグ量に掛ける倍率（1 で 1 ピクセル 2.5mm）</summary>
+        /// <summary>Controller パネルの Spinner の Move で、ドラッグ量に掛ける倍率（1 で 1 ピクセル 2.5mm）</summary>
         [SerializeField] float spinMoveScale_ = 1;
         [SerializeField] bool showBones_ = true;
         /// <summary>手足の IK のコントロールを常に出すか（骨を隠していても残す）。全身 IK の点も、切ると選んでいる物だけになる</summary>
@@ -473,7 +473,7 @@ namespace Lilium
             }
         }
 
-        /// <summary>Transform パネルの Spinner の Move で、ドラッグ量に掛ける倍率（窓ごとの設定）</summary>
+        /// <summary>Controller パネルの Spinner の Move で、ドラッグ量に掛ける倍率（窓ごとの設定）</summary>
         public float spinMoveScale
         {
             get { return spinMoveScale_ > 0 ? spinMoveScale_ : 1; }
@@ -709,8 +709,8 @@ namespace Lilium
         CurveWriter BeginCurves (string undoName, bool edit = false)
         {
             Transform root = stage_ != null && stage_.editingRig != null && stage_.editingRig.root != null ? stage_.editingRig.root.transform : null;
-            // 書き込み先が Override なら、そのクリップへ元からの差分として書く（S14）
-            CurveWriter writer = CurveWriter.Begin (targetClip, root, currentFrame, undoName);
+            // 書き込み先が Override なら、そのクリップへ元からの差分として書く（S14）。サイクルキーのフレームなら先頭のキーへ打つ（S32）
+            CurveWriter writer = CurveWriter.Begin (targetClip, root, KeyFrameToWrite (), undoName);
             writer.onlyExistingKeys = edit && !autoKey;
             AttachOverrideStore (writer);
             return writer;
@@ -739,6 +739,7 @@ namespace Lilium
         public bool CanEditTarget (PoseTarget target)
         {
             if (target == null) return false;
+            if (IsPastCycleKey ()) return false;
             if (autoKey || !CanEditClip ()) return true;
             // 全身 IK の点は、離すと解いた全身の姿勢を打つ（S25）。点ごとのキーではなくフレームで見て、姿勢のキーがあるフレームでだけ動かす
             if (target is BodyPointTarget) return HasPoseKeyAtCurrentFrame ();
@@ -751,6 +752,7 @@ namespace Lilium
         /// </summary>
         bool CanEditPoints ()
         {
+            if (IsPastCycleKey ()) return false;
             return autoKey || !CanEditClip () || HasPoseKeyAtCurrentFrame ();
         }
 
@@ -770,6 +772,7 @@ namespace Lilium
         /// </summary>
         bool CanEditSelectedTargets ()
         {
+            if (IsPastCycleKey ()) return false;
             if (autoKey || !CanEditClip ()) return true;
             foreach (PoseTarget target in targets_) {
                 if (IsSelected (target.gameObject) && !CanEditTarget (target)) return false;
@@ -778,11 +781,11 @@ namespace Lilium
         }
 
         /// <summary>
-        /// キーが無くて動かせなかったことを知らせる（キーの自動追加が切のとき）
+        /// キーが無くて動かせなかったことを知らせる（キーの自動追加が切のとき）。サイクルキーより後ろで動かせなかったときは、そのことを知らせる
         /// </summary>
         void NotifyNoKey ()
         {
-            ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_NO_KEY_CANNOT_MOVE")), 1.5);
+            ShowNotification (new GUIContent (IsPastCycleKey () ? Tr ("PREVIEW_WINDOW_PAST_CYCLE_KEY") : Tr ("PREVIEW_WINDOW_NO_KEY_CANNOT_MOVE")), 1.5);
         }
 
         /// <summary>
@@ -1288,6 +1291,7 @@ namespace Lilium
         void OnUndoRedo ()
         {
             keyFrames_ = null;
+            RestoreCycleAfterUndo ();
             RefreshClipState ();
             if (stage_ != null) stage_.InvalidateClipCurves ();
             // 段の選択もキャラの設定（無ければ窓）に入っているので、戻った値をスタックへ入れ直す
@@ -1305,6 +1309,7 @@ namespace Lilium
                 keyFrames_ = null;
                 ghostsDirty_ = true;
                 if (stage_ != null) stage_.InvalidateClipCurves ();
+                if (clip == targetClip) MarkCycleDirty ();
                 QueueKeysChanged ();
                 RepaintView ();
             }
@@ -1320,8 +1325,8 @@ namespace Lilium
         void RaiseKeysChanged ()
         {
             keysChangedQueued_ = false;
-            // Stacker のループ: 先頭のポーズキーを直したら末尾も合わせる（同じ値なら何もしないので、ここから書いても繰り返さない）
-            SyncStackerLoop ("Stacker Loop");
+            // サイクルキー: 先頭のキーを直したら最後のキーも合わせる（S32。合わせて書いた分の知らせでは合わせ直さない）
+            SyncCycleAfterKeysChanged ();
             if (keysChanged != null) keysChanged ();
         }
 
@@ -1433,7 +1438,7 @@ namespace Lilium
         {
             // 窓が複数開いていると入れ替わるので、描く直前に自分を入れる
             EditorHost.current = this;
-            // IK の目標のギズモは Transform パネルのモードに従う（Rot なら回転、それ以外は移動）
+            // IK の目標のギズモは Controller パネルのモードに従う（Rot なら回転、それ以外は移動）
             PoseHandleUtility.goalRotate = spinnerMode_ == SpinnerMode.Rotate;
             PoseHandleUtility.gizmoWorld = gizmoWorld_;
             bool displayGrab = isDisplayGrab;
@@ -1721,7 +1726,7 @@ namespace Lilium
             CommitFullBodyPose ();
         }
 
-        /// <summary>選んでいる全身 IK の点の数（Transform のパネルが、状態のボタンを出すかどうかに使う）</summary>
+        /// <summary>選んでいる全身 IK の点の数（Controller のパネルが、状態のボタンを出すかどうかに使う）</summary>
         public int selectedPointCount
         {
             get { return stage_ != null && stage_.fullBody != null ? GetSelectedPoints ().Count : 0; }
@@ -1739,7 +1744,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 選んでいる点をまとめてその状態にして、今のフレームにキーを打つ（Transform のパネルの Free / Pin / Lock）
+        /// 選んでいる点をまとめてその状態にして、今のフレームにキーを打つ（Controller のパネルの Free / Pin / Lock）
         /// </summary>
         public void SetSelectedPointsState (BodyPointState state)
         {

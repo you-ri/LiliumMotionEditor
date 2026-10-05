@@ -7,7 +7,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Stacker（S12）の窓の側。組（骨のまとまり）ごとのポーズキーの一覧・挿入・削除・間隔、ループ、前後のフレームの残像（ゴースト）。
+    /// Stacker（S12）の窓の側。組（骨のまとまり）ごとのポーズキーの一覧・挿入・削除・間隔、ループ（サイクルキー。S32）、前後のフレームの残像（ゴースト）。
     /// 組と設定はクリップごとに .meta へ保存する（Stacker.Settings）。パネルは StackerOverlay
     /// </summary>
     public partial class PreviewWindow
@@ -98,14 +98,16 @@ namespace Lilium
             get { return FindCustomGroup (stackerGroup) != null; }
         }
 
+        /// <summary>
+        /// Loop のトグル。サイクルキー（S32）の付け外しと同じ（タイムラインの最後のキーの右クリックと同じ印）。
+        /// キーが 2 フレーム未満などで付けられなかったときも、パネルを今の印に合わせ直す
+        /// </summary>
         public bool stackerLoop
         {
-            get { return stacker.loop; }
+            get { return cycle; }
             set {
-                if (stacker.loop == value) return;
-                stacker.loop = value;
-                SaveStacker ();
-                if (value) SyncStackerLoop ("Stacker Loop");
+                SetCycle (value);
+                if (stackerChanged != null) stackerChanged ();
             }
         }
 
@@ -263,7 +265,6 @@ namespace Lilium
 
         void AfterStackerEdit (string undoName)
         {
-            if (stacker.loop) Stacker.SyncLoop (targetClip, GroupFilter (stackerGroup));
             keyFrames_ = null;
             ghostsDirty_ = true;
             if (stage_ != null) stage_.InvalidateClipCurves ();
@@ -293,21 +294,6 @@ namespace Lilium
             stacker.groups.Remove (group);
             stacker.selected = kGroupAll;
             SaveStacker ();
-        }
-
-        /// <summary>
-        /// ループが入っていれば、先頭のポーズキーを末尾へ写す（キーが変わるたびに呼ぶ。値が同じなら何もしない）
-        /// </summary>
-        void SyncStackerLoop (string undoName)
-        {
-            if (!stackerLoaded_ || editingClip_ == null || !stacker.loop || !CanEditClip ()) return;
-            System.Predicate<EditorCurveBinding> filter = GroupFilter (stackerGroup);
-            RecordClipUndo (undoName);
-            if (Stacker.SyncLoop (targetClip, filter)) {
-                keyFrames_ = null;
-                if (stage_ != null) stage_.InvalidateClipCurves ();
-                SamplePose ();
-            }
         }
 
         // ---- ゴースト（前後のフレームの残像。オニオンスキン） ----

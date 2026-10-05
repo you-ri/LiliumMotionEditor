@@ -61,6 +61,8 @@ namespace Lilium
         readonly BodyPointId human_;
         /// <summary>線でつなぐ相手の点（無ければ null。腰など）</summary>
         BodyPointTarget link_;
+        /// <summary>定義で指した、線でつなぐ相手の点の名前（空なら骨の階層から決める）</summary>
+        readonly string linkName_;
         /// <summary>関節の点でないか（骨の付け根から離れた、骨の上の点。骨から線でつないで描く）</summary>
         readonly bool offsetPoint_;
         readonly HumanBodyBones humanBone_;
@@ -180,14 +182,18 @@ namespace Lilium
                 if (!point.enabled || !body.HasPoint (new BodyPointId (point.name))) continue;
                 targets.Add (new BodyPointTarget (rig, body, shapes, point));
             }
-            // 線でつなぐ相手。関節の点は、骨の階層を上へたどって最初に当たる関節の点。骨の上の点は、その骨の関節の点
+            // 線でつなぐ相手。定義で名前を指していればその点（つま先の先 → 母趾球など）。
+            // 無ければ、関節の点は骨の階層を上へたどって最初に当たる関節の点、骨の上の点はその骨の関節の点
             Dictionary<Transform, BodyPointTarget> joints = new Dictionary<Transform, BodyPointTarget> ();
+            Dictionary<string, BodyPointTarget> byName = new Dictionary<string, BodyPointTarget> ();
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
                 if (!point.offsetPoint_) joints[point.bone_] = point;
+                byName[point.human_.name] = point;
             }
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
+                if (!string.IsNullOrEmpty (point.linkName_)) byName.TryGetValue (point.linkName_, out point.link_);
                 Transform root = rig.root.transform;
                 for (Transform t = point.offsetPoint_ ? point.bone_ : point.bone_.parent; t != null && t != root && point.link_ == null; t = t.parent) {
                     joints.TryGetValue (t, out point.link_);
@@ -203,6 +209,7 @@ namespace Lilium
             shapes_ = shapes;
             human_ = new BodyPointId (point.name);
             humanBone_ = point.humanBone;
+            linkName_ = point.definition != null ? point.definition.link : null;
             offsetPoint_ = rig.GetPointRestOffset (point).sqrMagnitude > 1e-10f;
             control_ = body.GetControl (human_);
             bone_ = body.GetBone (human_);
@@ -221,6 +228,12 @@ namespace Lilium
         public BodyPointId id
         {
             get { return human_; }
+        }
+
+        /// <summary>線でつなぐ相手の点（無ければ null。テスト用）</summary>
+        internal BodyPointTarget link
+        {
+            get { return link_; }
         }
 
         /// <summary>点が付いている「骨の上の点」の今の位置（付け根の点は骨の位置、離れた点は定義の場所）</summary>
@@ -527,7 +540,7 @@ namespace Lilium
                 GUI.changed = true;
             }
 
-            // 選んでいる間はギズモ（Transform パネルのモードで移動 / 回転）。
+            // 選んでいる間はギズモ（Controller パネルのモードで移動 / 回転）。
             // 動かした量は丸をつかんだときと同じく窓へ渡す（いくつか選んでいれば、ほかの選んでいる点も同じだけ動かす）。
             // 回した量は窓へ渡すだけで、ここでは回さない（位置だけの点も、骨を FK で回して回せる）
             if (selected && showGizmo && PoseHandleUtility.goalRotate) {

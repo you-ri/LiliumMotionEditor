@@ -662,7 +662,7 @@ namespace Lilium
                 }
             }
 
-            // 選んでいる間は手首・足首にギズモ（Transform パネルのモードで移動 / 回転。骨の形のハンドルは出さない）
+            // 選んでいる間は手首・足首にギズモ（Controller パネルのモードで移動 / 回転。骨の形のハンドルは出さない）
             if (ShowGizmo (selected)) {
                 Vector3 gizmoPosition = position;
                 Quaternion gizmoRotation = rotation;
@@ -887,7 +887,7 @@ namespace Lilium
             if ((channels & TransformChannels.Rotation) != 0) targetControl.localRotation = rotation;
         }
 
-        /// <summary>足の転がしを持つ脚か（Transform パネルに roll / bank / twist の行を出す）</summary>
+        /// <summary>足の転がしを持つ脚か（Controller パネルに roll / bank / twist の行を出す）</summary>
         public bool hasFootAngles
         {
             get { return reverseFoot; }

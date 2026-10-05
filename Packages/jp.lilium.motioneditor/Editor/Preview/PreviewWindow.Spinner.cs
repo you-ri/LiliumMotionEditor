@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.ShortcutManagement;
+using System.Collections.Generic;
 using System.Linq;
 using Lilium;
 using static Lilium.MotionEditorLocalization;
@@ -10,7 +11,7 @@ namespace Lilium
 
     /// <summary>
     /// Spinner（2D の操作パネル）が使う、選んでいる物を動かしてキーを打つところ。
-    /// パネルの見た目と操作は TransformOverlay（Spinner と数値欄を 1 枚にしたもの）
+    /// パネルの見た目と操作は ControllerOverlay（Spinner と数値欄を 1 枚にしたもの）
     /// </summary>
     public partial class PreviewWindow
     {
@@ -254,7 +255,7 @@ namespace Lilium
             ApplyValueEdit (target, "Reset " + target.label, () => target.ResetValues (spinnerPole_, channels));
         }
 
-        // ---- 足の転がし（S22b。Transform パネルの roll / bank / twist の行） ----
+        // ---- 足の転がし（S22b。Controller パネルの roll / bank / twist の行） ----
 
         /// <summary>選んでいる物が足の転がしを持つ脚の IK なら、その対象。違えば null</summary>
         IkTarget selectedFoot
@@ -325,6 +326,43 @@ namespace Lilium
             ApplyValueEdit (target, "Reset Foot " + target.label, () => target.SetFootAngles (Vector3.zero));
         }
 
+        /// <summary>選んでいる物のうち、今のフレームで値を入れられる物（いくつ選んでいても全部）</summary>
+        List<PoseTarget> GetEditableSelectedTargets ()
+        {
+            return selection_.Select (FindTarget).Where (t => t != null && CanEditTarget (t)).Distinct ().ToList ();
+        }
+
+        /// <summary>選んでいる物のどれかの値を戻せるか（Controller パネルの Reset）</summary>
+        public bool CanResetSelectedValues ()
+        {
+            // 再生中も毎フレーム聞かれるので、1 つ見つかれば止める
+            return selection_.Select (FindTarget).Any (t => t != null && CanEditTarget (t));
+        }
+
+        /// <summary>
+        /// 選んでいる物すべての値を基準姿勢へ戻して、今のフレームにキーを打つ（Controller パネルの Reset）。
+        /// 行の ↺ と違い、Pole の切替によらず IK は目標・Pole・足の転がしまで戻す。
+        /// 全身 IK の点は値だけ戻し、固定の強さ（Free / Pin / Lock）は変えない（変えるのは窓の ResetPose）
+        /// </summary>
+        public void ResetSelectedValues ()
+        {
+            List<PoseTarget> targets = GetEditableSelectedTargets ();
+            if (targets.Count == 0) {
+                if (selectedTarget != null) NotifyNoKey ();
+                return;
+            }
+            string undoName = targets.Count == 1 ? "Reset " + targets[0].label : "Reset Selection";
+            ApplyValueEdit (targets, undoName, () => {
+                foreach (PoseTarget target in targets) {
+                    target.ResetValues (false, TransformChannels.All);
+                    IkTarget ik = target as IkTarget;
+                    if (ik == null) continue;
+                    ik.ResetValues (true, TransformChannels.Position);
+                    if (ik.hasFootAngles) ik.SetFootAngles (Vector3.zero);
+                }
+            });
+        }
+
         /// <summary>
         /// 選んでいる物の左右の相手（体の中心の骨なら自分）。反転できなければ null
         /// </summary>
@@ -360,12 +398,18 @@ namespace Lilium
         /// </summary>
         void ApplyValueEdit (PoseTarget target, string undoName, System.Action edit)
         {
+            ApplyValueEdit (new[] { target }, undoName, edit);
+        }
+
+        /// <summary>いくつかの対象の値をまとめて入れたとき（キーは入れた対象すべてに打つ）</summary>
+        void ApplyValueEdit (IList<PoseTarget> targets, string undoName, System.Action edit)
+        {
             if (stage_ == null) return;
             Undo.IncrementCurrentGroup ();
             int group = Undo.GetCurrentGroup ();
             edit ();
             SolveAfterManipulate ();
-            if (target is BodyPointTarget || hasActivePoints) {
+            if (targets.Any (t => t is BodyPointTarget) || hasActivePoints) {
                 CommitFullBodyPose ();
                 Undo.SetCurrentGroupName (undoName);
                 Undo.CollapseUndoOperations (group);
@@ -373,7 +417,7 @@ namespace Lilium
             }
             if (CanEditClip ()) {
                 using (CurveWriter writer = BeginCurves (undoName, true)) {
-                    target.WriteKeys (writer);
+                    foreach (PoseTarget target in targets) target.WriteKeys (writer);
                 }
                 AddKeyAllCurves (true);
             }

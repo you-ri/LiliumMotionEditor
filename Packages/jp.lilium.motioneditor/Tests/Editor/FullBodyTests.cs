@@ -538,6 +538,24 @@ namespace Lilium
         }
 
         [Test]
+        public void FootAndKneePoints_AreLinkedLikeAFootRig ()
+        {
+            // 踵・足裏の中心は足首へ、小指側とつま先の先は足裏の中心へ、膝の Pole は膝へ線でつなぐ
+            Setup s = Create ();
+            List<BodyPointTarget> points = BodyPointTarget.Create (s.rig, s.body).OfType<BodyPointTarget> ().ToList ();
+            System.Func<string, BodyPointTarget> named = name => points.Single (p => p.id.name == name);
+            foreach (string side in new[] { "Left", "Right" }) {
+                BodyPointTarget ankle = named (side + "Foot");
+                BodyPointTarget ball = named (side + "SoleBall");
+                Assert.AreSame (ankle, named (side + "Heel").link, side + " 踵 → 足首");
+                Assert.AreSame (ankle, ball.link, side + " 足裏の中心 → 足首");
+                Assert.AreSame (ball, named (side + "LittleToeSide").link, side + " 小指側 → 足裏の中心");
+                Assert.AreSame (ball, named (side + "ToeTip").link, side + " つま先の先 → 足裏の中心");
+                Assert.AreSame (named (side + "LowerLeg"), named (side + "KneePole").link, side + " 膝の Pole → 膝");
+            }
+        }
+
+        [Test]
         public void MovingPoint_PinsPosition_AndKeysOnlyThatPoint ()
         {
             Setup s = Create ();

@@ -20,16 +20,9 @@ description: jp.lilium.motioneditor の CHANGELOG.md に、今の版のエント
 
 ## どちらのファイルを書くか
 
-パッケージは extrival（`C:\Work\Uracrasta\extrival`）が正。**extrival 側を書いてから、このリポジトリへ同じ中身を写す**。
+パッケージはこのリポジトリが正（2026-10-05 から。それまでは extrival が正だった）。**このリポジトリの CHANGELOG だけを書く。**
+extrival へは写さない。写すのはユーザーが `/sync-to-extrival` を指示したとき。
 
-```bash
-E=C:/Work/Uracrasta/extrival/Packages/jp.lilium.motioneditor/CHANGELOG.md
-cp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md
-cmp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md && echo same
-```
-
-- 写すスクリプト（`sync-lilium-package.ps1`）は、写す先に未コミットの変更があると止まるので、CHANGELOG だけなら `cp` で写す
-- 書く前に両方を比べる（`diff <(tr -d '\r' < A) <(tr -d '\r' < B)`）。こちらだけ行が欠けている・違うときは、extrival 側をもとにしてユーザーに伝える
 - 改行は LF（`.gitattributes`）。Write で書けば LF になる
 
 ## 書き方
@@ -38,7 +31,7 @@ cmp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md && echo same
 # Changelog
 
 ## [0.1.1-exp.1] - 2026-10-04
-<!-- changelog-sha: <extrival の HEAD の 40 文字> -->
+<!-- changelog-sha: <このリポジトリの HEAD の 40 文字> -->
 
 ### Added
 
@@ -83,7 +76,8 @@ cmp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md && echo same
 
 ## 前回の位置の記録（changelog-sha）
 
-- 入れるのは **extrival の HEAD**（`git -C C:/Work/Uracrasta/extrival rev-parse HEAD` の 40 文字）。パッケージを作っているのは extrival なので、次に比べるのも extrival の履歴
+- 入れるのは **このリポジトリの HEAD**（`git rev-parse HEAD` の 40 文字）
+- `0.1.1-exp.1` までの `changelog-sha` は extrival の sha（そのころは extrival が正だった）。このリポジトリに無い sha（`git cat-file -e <sha>` が失敗する）は extrival のものとして扱う（下の「差分の拾い方」）
 - HTML のコメントなので、表示にも Unity の取り込みにも出ない
 
 ## 差分の拾い方
@@ -91,13 +85,19 @@ cmp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md && echo same
 1. 起点を決める
    - 一番上の版の `changelog-sha` があれば、それを起点にする
    - 無ければ、ひとつ下の版の `changelog-sha`。それも無ければ、このリポジトリでその版を出したコミット（`[0.1.0]` は Initial commit `6fa3121`。比べるのはこのリポジトリのパッケージ）
-2. 起点から**今の作業コピー**までを見る。extrival ではコミットしていない変更が多いので、`<sha>..HEAD` ではなく作業コピーと比べ、追跡していないファイルも見る
+2. 起点から**今の作業コピー**までを見る。`<sha>..HEAD` ではなく作業コピーと比べ、追跡していないファイルも見る
    ```bash
-   X=C:/Work/Uracrasta/extrival; P=Packages/jp.lilium.motioneditor
-   git -C $X log --oneline <sha>..HEAD -- $P
-   git -C $X diff --stat <sha> -- $P
-   git -C $X status --short -- $P      # ?? は新しいファイル、D は消したファイル
+   P=Packages/jp.lilium.motioneditor
+   git log --oneline <sha>..HEAD -- $P
+   git diff --stat <sha> -- $P
+   git status --short -- $P      # ?? は新しいファイル、D は消したファイル
    ```
+   - 起点が extrival の sha のとき: 向きを逆にした時点（このリポジトリの `9cf7c8b`。このとき extrival の作業コピーと同じ中身だった）までは extrival で、そこからはこのリポジトリで見る
+     ```bash
+     X=C:/Work/Uracrasta/extrival
+     git -C $X log --oneline <sha>..HEAD -- $P; git -C $X diff --stat <sha> -- $P   # 9cf7c8b までの分（extrival の作業コピーとの差）
+     git log --oneline 9cf7c8b..HEAD -- $P; git diff --stat 9cf7c8b -- $P           # それ以降
+     ```
 3. 意味のある変更だけを読む。次は除く: `.meta`、`package.json` の version の行、CHANGELOG そのもの、改行だけの差
    - 画面の文字を翻訳のキー（`Tr ("...")`・`Loc.`）へ移しただけの行が多いときは、日本語の文字・`Tr (`・`MotionEditorLocalization` を含む行を除いて残りを見る（`LC_ALL=C.UTF-8` で `grep -P "[\x{3040}-\x{30ff}\x{4e00}-\x{9fff}]"`）
    - 見るとよい変更: `[MenuItem]`・`[Shortcut]` の追加・変更、public の型やメソッドの追加・削除、ファイルの追加・削除、設定の項目、メニュー・ボタンの増減
@@ -110,6 +110,5 @@ cmp "$E" Packages/jp.lilium.motioneditor/CHANGELOG.md && echo same
 
 ## 終わったら
 
-- 両方のファイルが同じことを `cmp` で確かめる
 - 足した項目・入れた `changelog-sha`・書いた版の見出しを表で返す。差分から拾って足した項目（元の CHANGELOG に無かったもの）は分けて示す
-- コミットはしない。extrival 側とこのリポジトリは、コミットするなら別々に（CLAUDE.md）
+- コミットはしない。extrival へも写さない（どちらもユーザーが指示したときだけ）

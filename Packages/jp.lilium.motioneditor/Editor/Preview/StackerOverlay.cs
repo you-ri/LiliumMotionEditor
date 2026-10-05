@@ -11,7 +11,7 @@ namespace Lilium
     /// <summary>
     /// Stacker（S12）。組（All・Body・Hands・Rig と自分で作った組）ごとのポーズキーを並べ、
     /// 次までの間隔（フレーム）を直すと後ろのキーがまとめてずれる。Insert は今のポーズキーの後ろに同じ姿勢を足して押し出し、
-    /// Delete は消して詰める。Ghost で前後のフレームの残像（1 フレームずつ、幅は 1〜16）、Loop で先頭のポーズキーを末尾へ写す
+    /// Delete は消して詰める。Ghost で前後のフレームの残像（1 フレームずつ、幅は 1〜16）、Loop でサイクルキー（S32。最後のキーを先頭のキーに合わせ続ける）
     /// </summary>
     [Icon (Icons.kFolder + "Stacker.png")]
     [Overlay (typeof (PreviewWindow), "mkt-stacker", "Stacker", defaultDisplay = true,

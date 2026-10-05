@@ -138,8 +138,10 @@ namespace Lilium
             EditRigDefinition packageDefault = EditRigDefinition.packageDefault;
             Assert.IsNotNull (packageDefault, EditRigDefinition.kPackageDefaultPath + " が読めない");
             EditRigDefinition expected = EditRigDefinition.CreateDefault ();
+            // 型の名前（m_EditorClassIdentifier）は比べない。6.6 は新しく作った物に入れるが、6.0 で保存したアセットは空のまま
+            System.Func<Object, string> json = o => Regex.Replace (EditorJsonUtility.ToJson (o), "\"m_EditorClassIdentifier\":\"[^\"]*\",", "");
             try {
-                Assert.AreEqual (EditorJsonUtility.ToJson (expected), EditorJsonUtility.ToJson (packageDefault));
+                Assert.AreEqual (json (expected), json (packageDefault));
             } finally {
                 Object.DestroyImmediate (expected);
             }
