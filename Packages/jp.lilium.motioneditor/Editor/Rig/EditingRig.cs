@@ -456,6 +456,20 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 基準姿勢での骨のローカル位置
+        /// </summary>
+        public bool TryGetRestPosition (Transform editingBone, out Vector3 position)
+        {
+            int index;
+            if (editingBone != null && indexByEditing_.TryGetValue (editingBone, out index)) {
+                position = bones_[index].restPosition;
+                return true;
+            }
+            position = Vector3.zero;
+            return false;
+        }
+
+        /// <summary>
         /// 編集用の骨の値を表示モデルの骨へ写す（humanoid / rig builder を素通しにしたときの前進解決）
         /// </summary>
         public void SyncToDisplay ()

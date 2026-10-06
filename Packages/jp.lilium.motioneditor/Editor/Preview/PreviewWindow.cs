@@ -2569,7 +2569,20 @@ namespace Lilium
             // Rig の重みとターゲットは prefab の値へ
             if (rigProxies != null) rigProxies.ResetToDefaults ();
             SolveAfterManipulate ();
-            AddKeyAllCurves ();
+            // 全身 IK の点は、基準へ戻して固定を外した値（強さ 0）もキーに打つ（点を離したときと同じ流れ）。
+            // 姿勢全体のキーは固定している点しか打たないので、打たずにおくと、クリップに残った点のキー（元の場所に固定）で
+            // 読み直したとき、骨は基準姿勢なのに点は元の場所に固定されたまま残る
+            if (stage_.fullBody != null && CanEditClip ()) {
+                CommitFullBodyPose ();
+            }
+            else {
+                AddKeyAllCurves ();
+                // 打てなかった点の印は捨てる（残すと、後でほかのフレームでキーを打つときに一緒に打たれる）
+                foreach (PoseTarget target in targets_) {
+                    BodyPointTarget point = target as BodyPointTarget;
+                    if (point != null) point.ClearPendingKeys ();
+                }
+            }
             RepaintView ();
         }
 

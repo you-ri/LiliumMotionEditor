@@ -352,8 +352,16 @@ namespace Lilium
                 return;
             }
             string undoName = targets.Count == 1 ? "Reset " + targets[0].label : "Reset Selection";
+            // 全身 IK の点は、選んだ点の骨をまとめて戻す（子の点は、戻した親の骨に付いて動いた所へ）。
+            // 値を入れても骨は解き直すまで動かないので、どの点も戻す前の骨の姿勢から求まる
+            HashSet<Transform> pointBones = new HashSet<Transform> (targets.OfType<BodyPointTarget> ().Select (p => p.editingBone).Where (b => b != null));
             ApplyValueEdit (targets, undoName, () => {
                 foreach (PoseTarget target in targets) {
+                    BodyPointTarget point = target as BodyPointTarget;
+                    if (point != null) {
+                        point.ResetValues (TransformChannels.All, pointBones);
+                        continue;
+                    }
                     target.ResetValues (false, TransformChannels.All);
                     IkTarget ik = target as IkTarget;
                     if (ik == null) continue;

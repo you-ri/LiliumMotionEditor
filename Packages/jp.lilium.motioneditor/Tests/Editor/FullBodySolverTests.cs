@@ -368,6 +368,62 @@ namespace Lilium
             AssertLengths (lengths, 1e-4f, "骨の長さ");
         }
 
+        /// <summary>
+        /// まっすぐな脚の足を固定したまま、腰を位置だけ固定して後ろへ引く（脚が伸びきって足に届かない）:
+        /// 腰は点に届き、上半身は傾かない（届かない分は足に残る）。
+        /// 以前は、届かない足へ寄せようと腰を固定した点まわりに回し、上半身が倒れこんでいた（このテストの体で 12〜19°、デモのキャラで 31°。10-06）
+        /// </summary>
+        [Test]
+        public void HipsPulledBack_BeyondLegReach_KeepsUpperBodyUpright ([Values (false, true)] bool contactPoints, [Values (0.2f, 0.3f)] float back)
+        {
+            Setup s = Create ();
+            Dictionary<Transform, float> lengths = Lengths (s);
+            Transform hips = Bone (s, HumanBodyBones.Hips);
+            Quaternion hipsRotation = hips.rotation;
+            HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
+            Quaternion[] footRotations = feet.Select (f => Bone (s, f).rotation).ToArray ();
+            foreach (HumanBodyBones foot in feet) {
+                if (contactPoints) {
+                    LockPoint (s, BodyPointId.Heel (foot), Vector3.zero);
+                    LockPoint (s, BodyPointId.ToeTip (foot), Vector3.zero);
+                }
+                else {
+                    Pin (s, foot, Vector3.zero, true);
+                }
+            }
+            Pin (s, HumanBodyBones.Hips, -s.forward * back);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰は点に届く");
+            Assert.LessOrEqual (Quaternion.Angle (hipsRotation, hips.rotation), 2f, "腰は回らない（上半身が倒れこまない）");
+            if (!contactPoints) {
+                for (int i = 0; i < feet.Length; i++) {
+                    Assert.LessOrEqual (Quaternion.Angle (footRotations[i], Bone (s, feet[i]).rotation), 0.01f, feet[i] + " は向きを固定したまま");
+                }
+            }
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
+        }
+
+        /// <summary>
+        /// 腰と足を位置で固定したまま、背骨を曲げれば届く前下へ手を引く: 手は届く。
+        /// 固定した腰を SolveReach で回さなくした（10-06）後も、背骨が曲がって届く
+        /// </summary>
+        [Test]
+        public void HandPulledForwardDown_WithHipsAndFeetPinned_StillReaches ()
+        {
+            Setup s = Create ();
+            Dictionary<Transform, float> lengths = Lengths (s);
+            Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.Hips, Vector3.zero);
+            Pin (s, HumanBodyBones.RightHand, s.forward * 0.3f - s.up * 0.4f - ArmDirection (s, true) * 0.3f);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "手が点に届く");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), kReach, "左足");
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightFoot), kReach, "右足");
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
+        }
+
         [Test]
         public void PositionWeight_FadesInContinuously ()
         {

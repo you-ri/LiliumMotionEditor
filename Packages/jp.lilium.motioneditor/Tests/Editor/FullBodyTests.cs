@@ -720,6 +720,93 @@ namespace Lilium
         }
 
         [Test]
+        public void ResetValues_ReturnsPointToLocalRest_NotRootRest ()
+        {
+            // 点の Reset は、点の骨を親から見た基準姿勢に戻した所へ置く（ルートから見た基準の値へは飛ばない）
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget headOffset = targets.OfType<BodyPointTarget> ().First (t => t.bone == HumanBodyBones.Head && !t.isOnBoneOrigin);
+            Transform hips = Bone (s, HumanBodyBones.Hips);
+            Transform head = Bone (s, HumanBodyBones.Head);
+            Transform handBone = Bone (s, HumanBodyBones.LeftHand);
+
+            // 体を回して下げ、腕・手首・頭を曲げた姿勢（しゃがんで振り向いたような姿勢）
+            hips.localPosition += new Vector3 (0, -0.3f, 0.2f);
+            hips.localRotation *= Quaternion.Euler (0, 90, 0);
+            Bone (s, HumanBodyBones.LeftLowerArm).localRotation *= Quaternion.Euler (0, 0, 40);
+            handBone.localRotation *= Quaternion.Euler (30, 0, 0);
+            head.localRotation *= Quaternion.Euler (40, 0, 0);
+            Vector3 handBefore = handBone.position;
+
+            hand.SetState (BodyPointState.Pin);
+            headOffset.SetState (BodyPointState.Pin);
+            hand.ResetValues (false, TransformChannels.All);
+            headOffset.ResetValues (false, TransformChannels.All);
+            Vector3 handPoint, headPoint;
+            Quaternion handRotation, headRotation;
+            s.body.TryGetPointWorld (HumanBodyBones.LeftHand, out handPoint, out handRotation);
+            s.body.TryGetPointWorld (headOffset.id, out headPoint, out headRotation);
+            Assert.IsTrue (hand.hasPendingKeys);
+            Assert.IsTrue (hand.positionPinned, "固定の強さは変えない");
+            Assert.LessOrEqual (Vector3.Distance (handBefore, handPoint), kPositionTolerance, "骨の付け根の点は、今の場所から動かない");
+
+            // 骨を親から見た基準姿勢へ戻すと、点と骨が重なる
+            foreach (Transform bone in new[] { handBone, head }) {
+                Quaternion rest;
+                Assert.IsTrue (s.rig.TryGetRestRotation (bone, out rest));
+                bone.localRotation = rest;
+            }
+            Assert.Less (Quaternion.Angle (handBone.rotation, handRotation), kAngleTolerance, "手首はまっすぐ（前腕から見た基準）");
+            Vector3 headBonePoint;
+            s.body.TryGetBonePointWorld (headOffset.id, out headBonePoint);
+            Assert.LessOrEqual (Vector3.Distance (headBonePoint, headPoint), kPositionTolerance, "頭の点は、首から見た基準の向きの頭の上");
+            Vector3 rootRest;
+            Quaternion unused;
+            s.body.TryGetPointRestValues (HumanBodyBones.LeftHand, out rootRest, out unused);
+            Assert.Greater (Vector3.Distance (s.rig.root.transform.TransformPoint (rootRest * s.rig.humanScale), handPoint), 0.1f, "ルートから見た基準の値（体から離れた所）へは置かない");
+        }
+
+        [Test]
+        public void ResetValues_OfWholeLeg_MatchesLegResetFromRoot ()
+        {
+            // 脚の点（股関節・膝・膝の Pole・足首・足の点）をまとめて戻すと、太もも・脛・足を根から順に基準へ戻した脚の上にそろう
+            Setup s = Create ();
+            HumanBodyBones[] legBones = { HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot };
+            List<BodyPointTarget> leg = BodyPointTarget.Create (s.rig, s.body).OfType<BodyPointTarget> ()
+                .Where (p => legBones.Contains (p.bone)).ToList ();
+            Assert.Greater (leg.Count (p => !p.isOnBoneOrigin), 2, "足の点・膝の Pole がある");
+
+            Bone (s, HumanBodyBones.Hips).localRotation *= Quaternion.Euler (0, 30, 0);
+            Bone (s, HumanBodyBones.LeftUpperLeg).localRotation *= Quaternion.Euler (-60, 20, 0);
+            Bone (s, HumanBodyBones.LeftLowerLeg).localRotation *= Quaternion.Euler (80, 0, 0);
+            Bone (s, HumanBodyBones.LeftFoot).localRotation *= Quaternion.Euler (-20, 0, 15);
+
+            HashSet<Transform> resetBones = new HashSet<Transform> (leg.Select (p => p.editingBone));
+            foreach (BodyPointTarget point in leg) {
+                point.SetState (BodyPointState.Pin);
+                point.ResetValues (TransformChannels.All, resetBones);
+            }
+
+            foreach (HumanBodyBones bone in legBones) {
+                Transform t = Bone (s, bone);
+                Quaternion rest;
+                Assert.IsTrue (s.rig.TryGetRestRotation (t, out rest));
+                t.localRotation = rest;
+            }
+            foreach (BodyPointTarget point in leg) {
+                Vector3 position, bonePoint;
+                Quaternion rotation;
+                s.body.TryGetPointWorld (point.id, out position, out rotation);
+                s.body.TryGetBonePointWorld (point.id, out bonePoint);
+                Assert.LessOrEqual (Vector3.Distance (bonePoint, position), kPositionTolerance, point.label + " の位置");
+                if (s.body.PointHasRotation (point.id)) {
+                    Assert.Less (Quaternion.Angle (point.editingBone.rotation, rotation), kAngleTolerance, point.label + " の向き");
+                }
+            }
+        }
+
+        [Test]
         public void SetLocked_PinsAtBone_AndReleaseClearsEverything ()
         {
             Setup s = Create ();

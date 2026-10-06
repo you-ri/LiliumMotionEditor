@@ -588,6 +588,56 @@ namespace Lilium
             return point != null;
         }
 
+        /// <summary>
+        /// 点の骨を、親の骨から見た基準姿勢（ローカル）に戻したときの点のワールドの位置と向き（骨は動かさない）。
+        /// 点の値はルートから見た値なので、基準の値（TryGetPointRestValues）へ戻すと、今の姿勢の体から離れた所へ飛ぶ。
+        /// こちらは親の骨の今の姿勢に乗せるので、点は体に付いたまま、その骨の曲げだけが無くなる（FK の Reset と同じ）。
+        /// 骨の付け根の点は位置が変わらず（腰は親から見た基準の位置へ戻る）、骨から離れた点は骨の向きと一緒に回る。
+        /// resetBones は一緒に戻す骨（いくつかの点をまとめて戻すとき、その点の骨すべて）。祖先に戻す骨があれば、
+        /// FK で根から順に戻したのと同じく、戻した祖先に付いて動いた所で求める（無ければ点の骨だけ戻す）。
+        /// 祖先を戻さずに点ごとに求めると、脚の点をまとめて戻したとき、足首は曲がったままの脛に、膝の Pole はまっすぐにした太ももに乗り、食い違う
+        /// </summary>
+        public bool TryGetPointLocalRestWorld (BodyPointId bone, ICollection<Transform> resetBones, out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            Point point = Find (bone);
+            if (point == null || point.bone.parent == null) return false;
+            if (resetBones == null) resetBones = new[] { point.bone };
+            else if (!resetBones.Contains (point.bone)) resetBones = new List<Transform> (resetBones) { point.bone };
+            Pose pose = LocalRestPose (point.bone, resetBones);
+            // 点の向きは骨の向きそのもの（CapturePoint と同じ）
+            rotation = pose.rotation;
+            position = pose.position + pose.rotation * point.offset;
+            return true;
+        }
+
+        /// <summary>
+        /// resetBones の骨を親から見た基準姿勢に戻したときの、bone のワールドの位置と向き（骨は動かさない）。
+        /// 戻さない骨は親から見た今の値のまま、戻した祖先に付いて動く
+        /// </summary>
+        Pose LocalRestPose (Transform bone, ICollection<Transform> resetBones)
+        {
+            Transform parent = bone.parent;
+            bool moved = false;
+            foreach (Transform reset in resetBones) {
+                // IsChildOf は自分自身でも true
+                if (reset != null && bone.IsChildOf (reset)) {
+                    moved = true;
+                    break;
+                }
+            }
+            if (!moved || parent == null) return new Pose (bone.position, bone.rotation);
+
+            Pose parentPose = LocalRestPose (parent, resetBones);
+            Vector3 localPosition;
+            Quaternion localRotation;
+            if (!resetBones.Contains (bone) || !rig_.TryGetRestPosition (bone, out localPosition) || !rig_.TryGetRestRotation (bone, out localRotation)) {
+                bone.GetLocalPositionAndRotation (out localPosition, out localRotation);
+            }
+            return new Pose (parentPose.position + parentPose.rotation * Vector3.Scale (parent.lossyScale, localPosition), parentPose.rotation * localRotation);
+        }
+
         /// <summary>届かなかった差（メートル）。固定の強さが 1 の点が、解いた後にどれだけ離れているか</summary>
         public float GetResidual (BodyPointId bone)
         {

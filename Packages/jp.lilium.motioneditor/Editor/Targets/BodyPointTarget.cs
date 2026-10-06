@@ -718,19 +718,30 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 基準の値（基準姿勢の骨の位置・向きの差なし）へ戻す。固定の強さは変えない
+        /// 点の骨を親から見た基準姿勢に戻した所・向きへ点を置く（ローカルで戻す）。固定の強さは変えない。
+        /// 点の値はルートから見た値なので、基準の値そのものへ戻すと、しゃがんだ姿勢などで体から離れた所へ飛ぶ。
+        /// 姿勢全体を基準へ戻すのは ResetPose
         /// </summary>
         public override void ResetValues (bool pole, TransformChannels channels)
         {
+            ResetValues (channels, null);
+        }
+
+        /// <summary>
+        /// いくつかの点をまとめて戻すとき。resetBones は一緒に戻す点の骨（editingBone）すべて。
+        /// 祖先の骨も戻すなら、戻した祖先に付いて動いた所へ置く（FK で根から順に戻したのと同じ）
+        /// </summary>
+        public void ResetValues (TransformChannels channels, ICollection<Transform> resetBones)
+        {
             Vector3 position;
             Quaternion rotation;
-            if (!body_.TryGetPointRestValues (human_, out position, out rotation)) return;
+            if (!body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
             if ((channels & TransformChannels.Position) != 0) {
-                control_.localPosition = position;
+                body_.SetPointPositionWorld (human_, position);
                 positionDirty_ = true;
             }
             if (hasRotation_ && (channels & TransformChannels.Rotation) != 0) {
-                control_.localRotation = rotation;
+                body_.SetPointRotationWorld (human_, rotation);
                 rotationDirty_ = true;
             }
         }

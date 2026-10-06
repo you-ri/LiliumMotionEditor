@@ -719,7 +719,9 @@ namespace Lilium
         /// 位置を強さ 1 で固定した点から根までの骨を、点に届く距離まで直に引き寄せる。
         /// 骨の長さは変わらないので、点から骨 k 本ぶん離れた関節は、その k 本の長さの合計より遠くには居られない。
         /// 関節を 1 つずつ満たすだけだと、引っ張りが根へ伝わるのに反復を多く使う（軽い手足が重い胴を少しずつしか動かせない）。
-        /// 遠すぎる関節を先に寄せておくと、少ない反復で届く（Kim, Chentanez, Müller, "Long Range Attachments", SCA 2012 の考え方）
+        /// 遠すぎる関節を先に寄せておくと、少ない反復で届く（Kim, Chentanez, Müller, "Long Range Attachments", SCA 2012 の考え方）。
+        /// 位置を固定した根（腰）は回さない。根の向きは根を留める硬さと関節の拘束で決める（ここは硬い補正なので、届かないとき硬さを飛び越えて大きく回す）。
+        /// 根でない固定した骨は回す（回さないと、胸を固定して手を引いたとき、胸の回りは変わらず手の届き方だけ悪くなる。10-06 実測 1.9cm）
         /// </summary>
         static void SolveReach (ref FullBodyIkData d, int e)
         {
@@ -729,6 +731,10 @@ namespace Lilium
             float reach = math.length (d.effectorPoint[e]);
             for (int i = body; d.bones[i].parent >= 0; i = d.bones[i].parent) {
                 int p = d.bones[i].parent;
+                // 位置を固定した根は、ここでは動かせず、固定した点まわりに回るだけになる。根の向きは、根を留める硬さ（SolveRoots）と
+                // 関節の拘束の釣り合いで決める。ここで回すと硬さを飛び越え、手足が伸びきって届かないとき、根の付け根から手足の付け根までの
+                // 短い腕で寄せようとして根が大きく回る（足を固定して腰を後ろへ引くと、上半身が前へ倒れこむ。10-06 実測、デモのキャラで 0.2m 引いて 31°）
+                if (d.inverseMass[p] <= 0 && d.bones[p].parent < 0) break;
                 // 親の上の、子の付け根が付く場所
                 float3 arm = math.rotate (d.rotations[p], d.anchorLocal[i] - d.centerLocal[p]);
                 float3 error = effector.position - (d.centers[p] + arm);
