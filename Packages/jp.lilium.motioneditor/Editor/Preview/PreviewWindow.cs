@@ -995,7 +995,10 @@ namespace Lilium
         internal void SelectByRay (Ray ray, EventModifiers modifiers)
         {
             if (stage_ == null) return;
-            SelectPicked (FindPickTarget (stage_.PickBone (ray)), modifiers);
+            PoseTarget target = FindPickTarget (stage_.PickBone (ray));
+            // 表示域のクリック（PickTargetAt）と同じく、キーの自動追加が切で今のフレームにキーの無い物は選ばない
+            if (target != null && !CanEditTarget (target)) target = null;
+            SelectPicked (target, modifiers);
             RepaintView ();
         }
 
@@ -1387,7 +1390,7 @@ namespace Lilium
         /// <summary>この窓のパネル（画面の外へ出たら押し戻す）</summary>
         static readonly string[] kPanelIds = {
             "mkt-preview-toolbar", "mkt-preview-view", "mkt-layers", "mkt-transform", "mkt-picker", "mkt-timeline",
-            "mkt-animbank", "mkt-curves", "mkt-stacker", "mkt-properties", "mkt-rig-values",
+            "mkt-animbank", "mkt-posebank", "mkt-curves", "mkt-stacker", "mkt-properties", "mkt-rig-values",
         };
 
         void OnGUI ()

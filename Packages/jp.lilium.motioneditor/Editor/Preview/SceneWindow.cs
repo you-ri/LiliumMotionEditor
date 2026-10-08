@@ -217,7 +217,7 @@ namespace Lilium
 
         static readonly string[] kPanelIds = {
             "mkt-scene-preview-toolbar", "mkt-scene-layers", "mkt-scene-transform", "mkt-scene-picker", "mkt-scene-timeline",
-            "mkt-scene-animbank", "mkt-scene-curves", "mkt-scene-stacker", "mkt-scene-properties", "mkt-scene-rig-values",
+            "mkt-scene-animbank", "mkt-scene-posebank", "mkt-scene-curves", "mkt-scene-stacker", "mkt-scene-properties", "mkt-scene-rig-values",
         };
 
         void RestoreTools ()
