@@ -40,7 +40,7 @@ Select this package in the Package Manager and import the `Demo` sample.
 
 The demo models are the male and female characters from Quaternius' [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) (CC0).
 
-`Demo/Poses` contains eight hand poses (Fist, Open, Point, and more). To show them in the PoseBank, add `{prefabFolder}/Poses` and the imported `Demo/Poses` folder (e.g. `Assets/Samples/Lilium Motion Editor/0.1.0/Demo/Poses`) to PoseBank Folders in `Project Settings > Lilium Motion Editor`. They are Humanoid finger values, so they can be pasted onto any Humanoid character with finger bones.
+`Demo/Poses` contains eight hand poses (Fist, Open, Point, and more). To show them in the PoseBank, add `{prefabFolder}/Poses` and the imported `Demo/Poses` folder (e.g. `Assets/Samples/Lilium Motion Editor/<version>/Demo/Poses`) to PoseBank Folders in `Project Settings > Lilium Motion Editor`. They are Humanoid finger values, so they can be pasted onto any Humanoid character with finger bones.
 
 ## License
 

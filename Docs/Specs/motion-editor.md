@@ -205,7 +205,7 @@ muscle と RootT / RootQ を定数カーブに書いて Animator に再生させ
 ## 背景・現状（2026-09-15 調査）
 
 ### ベースの MikotoMotionEditor
-- 場所: `Packages/jp.lilium.motioneditor`（embedded package、v0.1.0）。asmdef は `LiliumMotionEditor.Runtime` / `LiliumMotionEditor.Editor`（10-03 に `MktMotionEditor` 系から改名・名前空間は `Lilium`）。依存パッケージなし。
+- 場所: `Packages/jp.lilium.motioneditor`（embedded package、v0.1.0）。asmdef は `LiliumMotionEditor.Runtime` / `LiliumMotionEditor.Editor`（10-03 に `MktMotionEditor` 系から改名・名前空間は `Lilium`）。ほかに、ゲーム側が参照する属性の `LiliumMotionEditor.Attributes`、全身 IK の計算（Burst）の `LiliumMotionEditor.FullBodyIk`、入っているときだけ使う `LiliumMotionEditor.Rigging.Editor`（Animation Rigging）・`LiliumMotionEditor.Timeline.Editor`（Timeline）、テストの `LiliumMotionEditor.Editor.Tests`（10-08 追記）。依存パッケージなし。
 - テストシーン: `test_motioneditor.unity`。モデルはゲームのキャラ prefab。
   - クリップ参照（`.anim`）は `Samples~` 内にしかなく、参照切れ。
   - ライトにゲーム側のコンポーネントが付いていて、ゲーム側コードに依存している。
