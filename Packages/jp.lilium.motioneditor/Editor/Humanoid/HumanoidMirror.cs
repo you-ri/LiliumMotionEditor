@@ -59,23 +59,6 @@ namespace Lilium
             return negate_[muscle];
         }
 
-        public static void Mirror (ref HumanPose pose)
-        {
-            Build ();
-            float[] source = (float[])pose.muscles.Clone ();
-            for (int i = 0; i < source.Length; i++) {
-                float value = source[partner_[i]];
-                pose.muscles[i] = negate_[i] ? -value : value;
-            }
-            pose.bodyPosition = MirrorPosition (pose.bodyPosition);
-            pose.bodyRotation = MirrorRotation (pose.bodyRotation);
-        }
-
-        public static Vector3 MirrorPosition (Vector3 position)
-        {
-            return new Vector3 (-position.x, position.y, position.z);
-        }
-
         public static Quaternion MirrorRotation (Quaternion rotation)
         {
             return new Quaternion (rotation.x, -rotation.y, -rotation.z, rotation.w);

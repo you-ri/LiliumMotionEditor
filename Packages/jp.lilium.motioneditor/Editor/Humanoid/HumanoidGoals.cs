@@ -81,11 +81,6 @@ namespace Lilium
         NativeArray<Quaternion> bodyRotations_;
         int[] muscleSources_;
 
-        /// <summary>最後に求めたときの体の位置（ワールド）・向き・humanScale</summary>
-        public Vector3 bodyPosition { get { return body_[0]; } }
-        public Quaternion bodyRotation { get { return bodyRotations_[0]; } }
-        public float humanScale { get { return body_[1].x; } }
-
         /// <summary>作れない理由（作れたなら null）</summary>
         public string error { get; private set; }
 

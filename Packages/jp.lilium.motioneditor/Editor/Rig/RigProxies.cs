@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -54,7 +53,6 @@ namespace Lilium
         public sealed class Weight
         {
             public string label;
-            public string rigName;
             /// <summary>代理の GameObject（カーブのパス）</summary>
             public Transform owner;
             public System.Type proxyType;
@@ -91,7 +89,6 @@ namespace Lilium
         public sealed class Source
         {
             public string label;
-            public string rigName;
             /// <summary>代理（正規化した値を持つ）</summary>
             public Transform proxy;
             /// <summary>編集用の体の中の複製（表示モデルへはこれが写る）</summary>
@@ -201,7 +198,6 @@ namespace Lilium
         {
             Weight weight = new Weight {
                 label = label,
-                rigName = entry.name,
                 owner = owner,
                 proxyType = component.GetType (),
                 defaultValue = Mathf.Clamp01 (value),
@@ -244,7 +240,6 @@ namespace Lilium
             string relative = PathOf (source, rigTransform);
             Source item = new Source {
                 label = entry.name + "/" + (relative.Length > 0 ? relative : source.name),
-                rigName = entry.name,
                 proxy = createControl (RigPaths.Game (entry.name, relative)),
                 editing = editing,
                 display = source,

@@ -2,8 +2,6 @@
     "name": "LiliumMotionEditor.Timeline.Editor",
     "rootNamespace": "Lilium",
     "references": [
-        "LiliumMotionEditor.Runtime",
-        "LiliumMotionEditor.Attributes",
         "LiliumMotionEditor.Editor",
         "Unity.Timeline",
         "Unity.Timeline.Editor"

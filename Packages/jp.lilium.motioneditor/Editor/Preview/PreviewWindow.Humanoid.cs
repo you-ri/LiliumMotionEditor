@@ -70,30 +70,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 焼けない理由（いちばん上の Output の段。焼けるなら null）
-        /// </summary>
-        public string GetBakeProblem ()
-        {
-            OutputLayer first = poseStack_ != null ? poseStack_.layers.OfType<OutputLayer> ().FirstOrDefault () : null;
-            return first != null ? GetOutputBakeProblem (first) : Tr ("PREVIEW_WINDOW_HUMANOID_NO_OUTPUT_LAYER");
-        }
-
-        /// <summary>
-        /// Output の段を全部焼く（S21）。焼けない段があれば false
-        /// </summary>
-        public bool BakeHumanoid ()
-        {
-            List<OutputLayer> outputs = outputLayers;
-            if (outputs.Count == 0) {
-                SetBakeStatus (Tr ("PREVIEW_WINDOW_HUMANOID_CANNOT_BAKE", GetBakeProblem ()), true);
-                return false;
-            }
-            bool ok = true;
-            foreach (OutputLayer output in outputs) ok &= BakeOutput (output);
-            return ok;
-        }
-
-        /// <summary>
         /// ゲームが使っているクリップ（差し替えの元）。編集用クリップを土台にしているときは「元だけを焼いた版」、
         /// Humanoid のクリップを土台にしているときはそのクリップ
         /// </summary>

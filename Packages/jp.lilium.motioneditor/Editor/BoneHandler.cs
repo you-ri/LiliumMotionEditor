@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
-using Lilium;
 
 namespace Lilium
 {
@@ -67,12 +66,6 @@ namespace Lilium
 
             return position;
         }
-
-        public static bool RaycastHitToJoint (Ray ray, Vector3 basePoint, float size, out HitInfo hitInfo)
-        {
-            return GeometryMath.RaycastToShpere (ray, new Sphere { center = basePoint, radius = size }, out hitInfo);
-        }
-
     }
 
     /// <summary>
@@ -231,8 +224,6 @@ namespace Lilium
         internal static Color zAxisColor = new Color (0.227450982f, 0.478431374f, 0.972549f, 1);
         internal static Color centerColor = new Color (0.8f, 0.8f, 0.8f, 1);
         internal static Color selectedColor = new Color (0.9647059f, 0.9490196f, 0.196078435f, 0.89f);
-        internal static Color secondaryColor = new Color (0.5f, 0.5f, 0.5f, 0.2f);
-
         /// <summary>
         /// 今のフレームにキーが無くて動かせない物のハンドルを描いている間（キーの自動追加が切のとき。窓が立てる）。
         /// 薄く描くだけで、マウスは受けない（Layout で近さを出さないので選ばれない）。ギズモも出さない。

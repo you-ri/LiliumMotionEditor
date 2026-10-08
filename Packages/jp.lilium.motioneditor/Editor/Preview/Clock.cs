@@ -100,18 +100,6 @@ namespace Lilium
             masterRate_ = masterRate > 0 ? masterRate : 0;
         }
 
-        /// <summary>マスターの格子（無ければ 0）</summary>
-        public double masterRate
-        {
-            get { return masterRate_; }
-        }
-
-        /// <summary>1 秒あたり、マスター時刻に対してクリップのローカル秒が進む量</summary>
-        public double speed
-        {
-            get { return speed_; }
-        }
-
         public double LocalFromMaster (double master)
         {
             return (master - masterOffset_) * speed_;

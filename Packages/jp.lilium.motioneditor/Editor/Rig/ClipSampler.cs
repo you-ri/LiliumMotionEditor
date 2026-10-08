@@ -24,11 +24,6 @@ namespace Lilium
             animator_ = animator;
         }
 
-        public bool isValid
-        {
-            get { return graph_.IsValid (); }
-        }
-
         public void Sample (AnimationClip clip, float time)
         {
             if (animator_ == null || clip == null) return;

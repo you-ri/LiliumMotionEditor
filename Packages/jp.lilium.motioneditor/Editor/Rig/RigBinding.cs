@@ -46,7 +46,6 @@ namespace Lilium
             public Transform bone;
         }
 
-        /// <summary>全身 IK の点（S25）。全身 IK の定義のときだけ並ぶ</summary>
         /// <summary>全身 IK の点（リグ定義の点の一覧の 1 つを、このキャラの骨に割り当てたもの）</summary>
         public sealed class Point : Control
         {
@@ -66,6 +65,7 @@ namespace Lilium
         public readonly List<Fk> fk = new List<Fk> ();
         public readonly List<Ik> ik = new List<Ik> ();
         public readonly List<Extra> extras = new List<Extra> ();
+        /// <summary>全身 IK の点（S25）。全身 IK の定義のときだけ並ぶ</summary>
         public readonly List<Point> points = new List<Point> ();
         /// <summary>定義の、手足の位置を保つ仕組み</summary>
         public RigSolver solver { get; private set; }

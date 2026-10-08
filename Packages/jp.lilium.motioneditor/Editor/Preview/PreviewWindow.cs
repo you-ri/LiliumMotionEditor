@@ -7,7 +7,6 @@ using UnityEditor.ShortcutManagement;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -74,9 +73,6 @@ namespace Lilium
 
         [SerializeField] GameObject prefab_;
         [SerializeField] AnimationClip editingClip_;
-        /// <summary>
-        /// 編集用リグの定義。null なら既定の定義
-        /// </summary>
         /// <summary>今の世界（編集用リグ）を作ったときの定義。キャラの設定・プロジェクト設定で差し替えられたら作り直す</summary>
         EditRigDefinition stageRigDefinition_;
         /// <summary>
@@ -442,11 +438,6 @@ namespace Lilium
             return go != null && targetByObject_.TryGetValue (go, out target) ? target : null;
         }
 
-        public OrbitCamera orbitCamera
-        {
-            get { return camera_; }
-        }
-
         /// <summary>
         /// ツールのハンドル用カメラ。ツールの GUI を回す直前に Unity が読むので、ここで描画用のカメラと視点を揃える。
         /// このとき Screen は窓（ホストビュー）の大きさ
@@ -549,11 +540,6 @@ namespace Lilium
         {
             get { return showTracks_; }
             set { showTracks_ = value; }
-        }
-
-        float IEditorHost.currentFrame
-        {
-            get { return currentFrame; }
         }
 
         public bool IsSelected (GameObject go)
@@ -1041,9 +1027,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 段を今のキャラとクリップから作り直し、保存しておいた選択（書き出す段・つかむ段・隠している段）を戻す
-        /// </summary>
-        /// <summary>
         /// 今のフレームの姿勢を作り直して描き直す（段のパラメータなど、値を外から触ったとき）
         /// </summary>
         public void RefreshPose ()
@@ -1052,6 +1035,9 @@ namespace Lilium
             SamplePose ();
         }
 
+        /// <summary>
+        /// 段を今のキャラとクリップから作り直し、保存しておいた選択（書き出す段・つかむ段・隠している段）を戻す
+        /// </summary>
         void BuildStack ()
         {
             poseStack_ = PoseStack.Build (stage_, this);
@@ -1127,17 +1113,6 @@ namespace Lilium
             // ドラッグの刻みごとに Undo を積むと重いので、重みは記録せずに残すだけ
             poseStack_.SaveState (layerState);
             SaveCharacterSettings ();
-            ghostsDirty_ = true;
-            SamplePose ();
-        }
-
-        /// <summary>
-        /// ゲーム側が [LayerParameter] で出した値を変える
-        /// </summary>
-        public void SetLayerParameter (PoseParameter parameter, object value)
-        {
-            if (parameter == null || parameter.setValue == null) return;
-            parameter.setValue (value);
             ghostsDirty_ = true;
             SamplePose ();
         }
@@ -1383,16 +1358,16 @@ namespace Lilium
             RepaintView ();
         }
 
-        /// <summary>
-        /// キャラの絵を表示域に描く。UI Toolkit の要素（ハンドル・タイムライン・オーバーレイ）はこの上に重なる。
-        /// 上端のツールバー帯の分は、OnGUI の原点も rootVisualElement と一緒にずれている
-        /// </summary>
         /// <summary>この窓のパネル（画面の外へ出たら押し戻す）</summary>
         static readonly string[] kPanelIds = {
             "mkt-preview-toolbar", "mkt-preview-view", "mkt-layers", "mkt-transform", "mkt-picker", "mkt-timeline",
             "mkt-animbank", "mkt-posebank", "mkt-curves", "mkt-stacker", "mkt-properties", "mkt-rig-values",
         };
 
+        /// <summary>
+        /// キャラの絵を表示域に描く。UI Toolkit の要素（ハンドル・タイムライン・オーバーレイ）はこの上に重なる。
+        /// 上端のツールバー帯の分は、OnGUI の原点も rootVisualElement と一緒にずれている
+        /// </summary>
         void OnGUI ()
         {
             if (stage_ == null) RebuildStage ();

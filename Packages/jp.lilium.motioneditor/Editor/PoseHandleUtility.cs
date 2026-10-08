@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections;
-using Lilium;
 
 namespace Lilium
 {
@@ -17,7 +16,6 @@ namespace Lilium
         /// 窓がハンドルを描く前に入れる
         /// </summary>
         public static bool goalRotate = false;
-        public static bool isMouseOver = false;
 
         /// <summary>
         /// ハンドルの右クリック（固定の付け外し・IK / FK の切り替え）を、押したときでなく「動かさずに離したとき」に出す。
@@ -49,22 +47,6 @@ namespace Lilium
             return meshHover != null && t != null && t.gameObject == meshHover && GUIUtility.hotControl == 0 ? controlHash : 0;
         }
 
-        public static bool IsSelectedController (GameObject go)
-        {
-            return EditorHost.current.IsSelected (go);
-        }
-
-        public static bool IsFocusedController (GameObject go)
-        {
-            return EditorHost.current.IsSelected (go);
-        }
-
-        public static Vector3 JointHandle (Transform t, Vector3 position, Quaternion rotation)
-        {
-            int controlHash = ("Joint" + t.GetEntityId ()).GetHashCode ();
-            return DoJointHandle (controlHash, t, position, rotation);
-        }
-
         /// <param name="gizmo">押したときに移動のギズモを出すか（出さないなら呼んだ側が DoGoalGizmo で出す）</param>
         /// <param name="selectColor">選んでいる間、選択の色で塗るか（false なら color のまま。色で状態を表す丸は、呼んだ側が選択の色を決める）</param>
         public static Vector3 DoJointHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, bool gizmo = true, bool selectColor = true)
@@ -81,7 +63,6 @@ namespace Lilium
                 EditorHost.current.Select (t.gameObject);
                 focusControl = controlHash;
             }
-            isMouseOver = HandleUtility.nearestControl == controlHash ? true : false;
             if (gizmo && focusControl == controlHash) {
                 outPosition = PoseHandles.PositionHandle (outPosition, GizmoAxes (rotation));
             }
@@ -204,12 +185,6 @@ namespace Lilium
             return result;
         }
 
-        public static Quaternion BoneHandle (Transform t, Vector3 position, Quaternion rotation, float length)
-        {
-            int controlHash = ("Bone" + t.GetEntityId ()).GetHashCode ();
-            return DoBoneHandle (controlHash, t, position, rotation, length);
-        }
-
         public static Quaternion DoBoneHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, float length)
         {
             Event ev = Event.current;
@@ -224,7 +199,6 @@ namespace Lilium
                 EditorHost.current.Select (t.gameObject);
                 focusControl = controlHash;
             }
-            isMouseOver = HandleUtility.nearestControl == controlHash ? true : false;
             if (focusControl == controlHash) {
                 Quaternion delta;
                 if (DoRotateGizmo (controlHash, position, outRotation, out delta)) outRotation = delta * outRotation;

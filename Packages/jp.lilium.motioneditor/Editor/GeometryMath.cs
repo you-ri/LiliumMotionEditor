@@ -24,10 +24,6 @@ public static class GeometryMath
 {
 	static Plane plane_ = new Plane ();
 		
-	static GeometryMath ()
-	{
-	}
-		
 	private static bool SameSide (Vector3 p1, Vector3 p2, Vector3 a, Vector3 b)
 	{
 		Vector3 cp1 = Vector3.Cross (b - a, p1 - a);
@@ -69,14 +65,6 @@ public static class GeometryMath
 	/**
 	  *  線と点との距離を算出
 	  */
-	public static float GetDistanceRayToDot (Vector3 rayOrigin, Vector3 rayDirection, Vector3 dot)
-	{
-		Vector3 dv = dot - rayOrigin;
-		Vector3 rv = rayDirection.normalized;
-		
-		return Vector3.Cross (rv, dv).magnitude;
-	}
-		
 	/**
 	 *  refernece: http://www5.ocn.ne.jp/~tane/prog/resource/3d_doc/3d_memo_apply.html
 	 */

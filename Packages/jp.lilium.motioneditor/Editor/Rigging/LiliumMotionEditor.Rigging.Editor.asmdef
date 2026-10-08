@@ -2,7 +2,6 @@
     "name": "LiliumMotionEditor.Rigging.Editor",
     "rootNamespace": "Lilium",
     "references": [
-        "LiliumMotionEditor.Runtime",
         "LiliumMotionEditor.Attributes",
         "LiliumMotionEditor.Editor",
         "Unity.Animation.Rigging",

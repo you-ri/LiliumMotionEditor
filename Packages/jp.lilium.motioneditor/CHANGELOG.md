@@ -72,6 +72,10 @@
 
 - タイムラインの Reset で姿勢を基準へ戻しても、全身 IK の点が元の場所に固定されたまま残っていたのを直した。戻した点の値（固定を外した値）もキーに打ちます。
 
+### Removed
+
+- どこからも使っていなかった public API を外した。`TrackGUI`、`GLDraw.sceneGUIMaterial` と Scene GUI のシェーダ、`PreviewWindow` の `SetLayerParameter`・`orbitCamera`・`MovePickerSelection`・`BakeHumanoid`・`GetBakeProblem`・`GetMirrorTarget`・`MirrorSpinValues`、`PreviewStage` の `scene`・`contexts`、`IEditorHost.currentFrame`、`Clock` の `masterRate`・`speed`、`ContextHooks.hooks`、`LogSlider.value`、`PoseHandleUtility` の `isMouseOver`・`IsSelectedController`・`IsFocusedController`・`JointHandle`・`BoneHandle`（`Do` の付く版は残す）、`GeometryMath.GetDistanceRayToDot`、`AxisSlider.RaycastHitToJoint`、`ReverseFoot.SetPivot`、`ClipSampler.isValid`、`CurveWriter` の `clip`・`frame`・`count`、`RigProxies` の `Weight.rigName`・`Source.rigName`、`HumanoidGoals` の `bodyPosition`・`bodyRotation`・`humanScale`、`HumanoidMirror` の `Mirror`・`MirrorPosition` です。`PreviewStage.StripPolicy` と `ShortcutTooltip.Format` は private にしました。
+
 ## [0.1.1-exp.1] - 2026-10-04
 <!-- changelog-sha: e5696fb037f9e7db9054e011600b7974bc3b015c -->
 

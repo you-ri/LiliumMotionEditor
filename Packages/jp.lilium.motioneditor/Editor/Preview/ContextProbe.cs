@@ -257,11 +257,6 @@ namespace Lilium
             hooks_.Remove (hook);
         }
 
-        public static IReadOnlyList<IContextHook> hooks
-        {
-            get { return hooks_; }
-        }
-
         internal static void Prepare (ContextInfo context)
         {
             foreach (IContextHook hook in hooks_) {

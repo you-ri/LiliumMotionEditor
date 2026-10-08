@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -381,8 +380,6 @@ namespace Lilium
         {
             ClearFootAngles (entry);
             Transform root = rootTransform;
-            Vector3 a = root.InverseTransformPoint (entry.root.position);
-            Vector3 b = root.InverseTransformPoint (entry.mid.position);
             Vector3 c = root.InverseTransformPoint (entry.tip.position);
 
             entry.target.localPosition = c / humanScale;

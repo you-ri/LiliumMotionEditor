@@ -4,7 +4,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEditor.Animations.Rigging;
 using UnityEngine.Animations.Rigging;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium

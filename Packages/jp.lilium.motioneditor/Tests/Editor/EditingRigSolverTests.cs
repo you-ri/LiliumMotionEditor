@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
 using System.Collections.Generic;
-using Lilium;
 using System.Linq;
 
 namespace Lilium

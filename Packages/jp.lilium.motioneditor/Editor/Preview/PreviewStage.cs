@@ -4,7 +4,6 @@ using UnityEngine.SceneManagement;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -27,7 +26,7 @@ namespace Lilium
         /// <summary>
         /// 置いた物の剥がし方
         /// </summary>
-        public enum StripPolicy
+        enum StripPolicy
         {
             /// <summary>編集するキャラ。見た目と段（Rigging・[PoseLayer]）だけ残す</summary>
             EditTarget,
@@ -135,12 +134,6 @@ namespace Lilium
         public Camera camera
         {
             get { return renderUtility.camera; }
-        }
-
-        /// <summary>プレビューの世界のシーン（Scene ビュー型の窓が映す。S15d）</summary>
-        public Scene scene
-        {
-            get { return scene_; }
         }
 
         public bool showFloor
@@ -255,11 +248,6 @@ namespace Lilium
             ContextInfo info = ContextProbe.Prepare (instance, prefab);
             if (info != null) contextInfos_.Add (info);
             return instance;
-        }
-
-        public IReadOnlyList<GameObject> contexts
-        {
-            get { return contexts_; }
         }
 
         /// <summary>
@@ -1012,11 +1000,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 既存の Humanoid のクリップを、流れてきた姿勢（編集用の体を Humanoid に直したもの）へ重みで合成して表示モデルへ当てる。
-        /// muscle と体の位置・向きを混ぜ、人型でない骨（クリップにカーブのあるもの）は Transform で混ぜる。
-        /// Animator の GameObject は動かさない（ルートモーションは出さない）
-        /// </summary>
-        /// <summary>
         /// Humanoid のクリップをそのフレームの操作値（コントロールの値）にする（S14 の土台）。
         /// クリップを表示モデルへ当て、その骨を編集用の体へ写して操作値として捉える（手足は FK）。ルートの移動は当てない（その場）。
         /// この後 Override を重ねて解くので、元のクリップを直せば土台も付いていく
@@ -1052,6 +1035,11 @@ namespace Lilium
             return PoseBank.ApplyMuscles (editingRig, editingRigSolver, humanoidWriter_, humanoidPose_, muscles);
         }
 
+        /// <summary>
+        /// 既存の Humanoid のクリップを、流れてきた姿勢（編集用の体を Humanoid に直したもの）へ重みで合成して表示モデルへ当てる。
+        /// muscle と体の位置・向きを混ぜ、人型でない骨（クリップにカーブのあるもの）は Transform で混ぜる。
+        /// Animator の GameObject は動かさない（ルートモーションは出さない）
+        /// </summary>
         public void BlendHumanoidClip(AnimationClip clip, float time, float weight)
         {
             if (clip == null || weight <= 0 || !canPreviewHumanoid) return;
@@ -1641,10 +1629,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 外さずに残すもの。見た目（メッシュ・Animator）に加えて、**段として出すもの**（Rigging の部品・[PoseLayer]）。
-        /// 段のコンポーネントを外すと「キャラに付いていない」ことになり、その段がスタックから消えてしまう
-        /// </summary>
-        /// <summary>
         /// 剥がさずに残すものを外から足す受け口。ゲーム固有の設定（左右の対応表など）を読む必要があるコンポーネントを残す。
         /// 残したものは止めてある（こちらから呼ぶときだけ動く）ので、置いても edit-mode で走らない
         /// </summary>
@@ -1667,6 +1651,10 @@ namespace Lilium
             return false;
         }
 
+        /// <summary>
+        /// 外さずに残すもの。見た目（メッシュ・Animator）に加えて、**段として出すもの**（Rigging の部品・[PoseLayer]）。
+        /// 段のコンポーネントを外すと「キャラに付いていない」ことになり、その段がスタックから消えてしまう
+        /// </summary>
         static bool IsKeptComponent (Component component, StripPolicy policy)
         {
             if (IsVisualComponent (component)) return true;

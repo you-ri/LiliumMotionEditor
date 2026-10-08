@@ -157,9 +157,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今の編集用の体の姿勢を HumanPose にする。体の位置・向きは編集用の体のルートから見た値
-        /// </summary>
-        /// <summary>
         /// 今の表示モデルの骨の姿勢を HumanPose にする。編集用の体から読むときと同じく、Animator の GameObject を原点・無回転に置いて読む
         /// </summary>
         public bool ReadDisplayPose (ref HumanPose pose)
@@ -179,6 +176,9 @@ namespace Lilium
             return true;
         }
 
+        /// <summary>
+        /// 今の編集用の体の姿勢を HumanPose にする。体の位置・向きは編集用の体のルートから見た値
+        /// </summary>
         public bool ReadPose (ref HumanPose pose)
         {
             if (handler_ == null) return false;

@@ -1029,8 +1029,7 @@ namespace Lilium
             if (isTracks && (evt.button == 0 || evt.button == 1)) {
                 tracksCanvas_.Focus ();
                 int trackIndex, frame;
-                System.Predicate<EditorCurveBinding> filter;
-                if (HitTestKey (x, y, out trackIndex, out frame, out filter)) {
+                if (HitTestKey (x, y, out trackIndex, out frame)) {
                     (string, int) key = (tracks_[trackIndex].label, frame);
                     // Ctrl（Mac は Cmd）+ クリックは選択に足す・外す
                     if (evt.button == 0 && evt.actionKey) {
@@ -1186,11 +1185,10 @@ namespace Lilium
         /// <summary>
         /// 押した場所（トラック領域のローカル座標）がどれかのキーに当たっているか
         /// </summary>
-        bool HitTestKey (float x, float y, out int trackIndex, out int frame, out System.Predicate<EditorCurveBinding> filter)
+        bool HitTestKey (float x, float y, out int trackIndex, out int frame)
         {
             trackIndex = -1;
             frame = 0;
-            filter = null;
 
             int row = Mathf.FloorToInt (y / kTrackHeight);
             if (row < 0 || row >= tracks_.Count) return false;
@@ -1202,7 +1200,6 @@ namespace Lilium
                 if (box.Contains (new Vector2 (x, y))) {
                     trackIndex = row;
                     frame = f;
-                    filter = track.filter;
                     return true;
                 }
             }

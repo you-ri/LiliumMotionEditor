@@ -80,11 +80,6 @@ namespace Lilium
             return pivots_[(int)pivot];
         }
 
-        public void SetPivot (Pivot pivot, Vector3 position)
-        {
-            pivots_[(int)pivot] = position;
-        }
-
         /// <summary>体の上の向き（目標の枠の中。足元の面の法線）</summary>
         public Vector3 up
         {

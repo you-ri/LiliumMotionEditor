@@ -40,11 +40,6 @@ namespace Lilium
             SetValueWithoutNotify (value);
         }
 
-        public float value
-        {
-            get { return value_; }
-        }
-
         public void SetValueWithoutNotify (float value)
         {
             value_ = Mathf.Max (1e-6f, value);

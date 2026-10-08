@@ -1,7 +1,6 @@
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium

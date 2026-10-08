@@ -3,7 +3,6 @@ using UnityEditor;
 using UnityEditor.ShortcutManagement;
 using System.Collections.Generic;
 using System.Linq;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -409,36 +408,6 @@ namespace Lilium
                     if (ik.hasFootAngles) ik.SetFootAngles (Vector3.zero);
                 }
             });
-        }
-
-        /// <summary>
-        /// 選んでいる物の左右の相手（体の中心の骨なら自分）。反転できなければ null
-        /// </summary>
-        public PoseTarget GetMirrorTarget ()
-        {
-            PoseTarget target = selectedTarget;
-            string key = target != null ? target.mirrorKey : null;
-            if (key == null) return null;
-            string other = MirrorNames.Swap (key) ?? key;
-            foreach (PoseTarget candidate in targets_) {
-                if (candidate.mirrorKey == other && candidate.GetType () == target.GetType ()) return candidate;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// 選んでいる物の今の見た目を左右反転して、相手へ入れる（体の中心の骨は自分を反転する）。相手のフレームにキーを打つ
-        /// </summary>
-        public void MirrorSpinValues ()
-        {
-            PoseTarget source = selectedTarget;
-            PoseTarget target = GetMirrorTarget ();
-            if (source == null || target == null) return;
-            if (!CanEditTarget (target)) {
-                NotifyNoKey ();
-                return;
-            }
-            ApplyValueEdit (target, "Mirror " + source.label, () => target.MirrorFrom (source));
         }
 
         /// <summary>

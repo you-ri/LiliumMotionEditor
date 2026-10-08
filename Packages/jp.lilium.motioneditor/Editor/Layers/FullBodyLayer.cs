@@ -1,4 +1,3 @@
-using Lilium;
 
 using System.Collections.Generic;
 using static Lilium.MotionEditorLocalization;

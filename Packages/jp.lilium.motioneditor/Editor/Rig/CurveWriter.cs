@@ -66,24 +66,6 @@ namespace Lilium
             return new CurveWriter (clip, root, frame);
         }
 
-        public AnimationClip clip
-        {
-            get { return clip_; }
-        }
-
-        public float frame
-        {
-            get { return frame_; }
-        }
-
-        /// <summary>
-        /// 貯めている値の数
-        /// </summary>
-        public int count
-        {
-            get { return values_.Count; }
-        }
-
         /// <summary>
         /// 貯めている値（クリップを渡さずに始めて、値だけを集めるとき）
         /// </summary>
