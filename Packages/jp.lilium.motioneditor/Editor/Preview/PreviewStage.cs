@@ -85,9 +85,8 @@ namespace Lilium
         float[] layerProxyRest_ = new float[0];
         Lilium.RigConstraintProxy[] constraintProxies_ = new Lilium.RigConstraintProxy[0];
         float[] constraintProxyRest_ = new float[0];
-        Vector3[] controlSavedPositions_ = new Vector3[0];
-        Quaternion[] controlSavedRotations_ = new Quaternion[0];
-        Vector3[] controlSavedScales_ = new Vector3[0];
+        /// <summary>SaveControls の控え（毎フレーム使うので使い回す。IK・点の値は持たない）</summary>
+        readonly ControlState savedControls_ = new ControlState ();
         // 焼いた後の姿勢を表示モデルへ当てる道具（Humanoid の段）。初めて使うときに作る
         HumanoidBaker humanoidReader_;
         // ゲームの Rigging を通すグラフ（姿勢を入れる → Rig）。初めて使うときに作る
@@ -541,7 +540,7 @@ namespace Lilium
                 MaskBodyPoints (clip, time);
                 return;
             }
-            RestoreControls ();
+            ResetControlsToRest ();
             if (weight <= 0 || clip == null) return;
 
             SampleClip (clip, time);
@@ -707,65 +706,54 @@ namespace Lilium
 
         public ControlState CaptureControlState ()
         {
-            ControlState state = new ControlState {
-                positions = new Vector3[controlTransforms_.Length],
-                rotations = new Quaternion[controlTransforms_.Length],
-                scales = new Vector3[controlTransforms_.Length],
-                ikValues = ReadIkValues (),
-                pointValues = ReadPointValues (),
-            };
-            for (int i = 0; i < controlTransforms_.Length; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out state.positions[i], out state.rotations[i]);
-                state.scales[i] = t.localScale;
-            }
+            ControlState state = new ControlState { ikValues = ReadIkValues (), pointValues = ReadPointValues () };
+            CaptureTransforms (state);
             return state;
         }
 
         public void RestoreControlState (ControlState state)
         {
             if (state == null || state.positions.Length != controlTransforms_.Length || state.ikValues.Length != ikControls_.Length * Lilium.IkControl.kValueCount) return;
+            RestoreTransforms (state);
+            WriteIkValues (state.ikValues);
+            WritePointValues (state.pointValues);
+        }
+
+        /// <summary>コントロールの Transform を state に控える（配列の長さが合っていれば使い回す）</summary>
+        void CaptureTransforms (ControlState state)
+        {
+            int count = controlTransforms_.Length;
+            if (state.positions == null || state.positions.Length != count) {
+                state.positions = new Vector3[count];
+                state.rotations = new Quaternion[count];
+                state.scales = new Vector3[count];
+            }
+            for (int i = 0; i < count; i++) {
+                Transform t = controlTransforms_[i];
+                if (t == null) continue;
+                t.GetLocalPositionAndRotation (out state.positions[i], out state.rotations[i]);
+                state.scales[i] = t.localScale;
+            }
+        }
+
+        void RestoreTransforms (ControlState state)
+        {
             for (int i = 0; i < controlTransforms_.Length; i++) {
                 Transform t = controlTransforms_[i];
                 if (t == null) continue;
                 t.SetLocalPositionAndRotation (state.positions[i], state.rotations[i]);
                 t.localScale = state.scales[i];
             }
-            WriteIkValues (state.ikValues);
-            WritePointValues (state.pointValues);
         }
 
         void SaveControls ()
         {
-            int count = controlTransforms_.Length;
-            if (controlSavedPositions_.Length != count) {
-                controlSavedPositions_ = new Vector3[count];
-                controlSavedRotations_ = new Quaternion[count];
-                controlSavedScales_ = new Vector3[count];
-            }
-            for (int i = 0; i < count; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out controlSavedPositions_[i], out controlSavedRotations_[i]);
-                controlSavedScales_[i] = t.localScale;
-            }
+            CaptureTransforms (savedControls_);
         }
 
         void LoadControls ()
         {
-            for (int i = 0; i < controlTransforms_.Length; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.SetLocalPositionAndRotation (controlSavedPositions_[i], controlSavedRotations_[i]);
-                t.localScale = controlSavedScales_[i];
-            }
-        }
-
-        /// <summary>コントロールを基準の値へ戻す（焼くときに、フレームごとの値が前のフレームから残らないように）</summary>
-        public void ResetControlsToRest ()
-        {
-            RestoreControls ();
+            RestoreTransforms (savedControls_);
         }
 
         /// <summary>
@@ -959,7 +947,8 @@ namespace Lilium
             lockedSpanPoints_.Clear ();
         }
 
-        void RestoreControls ()
+        /// <summary>コントロールを基準の値へ戻す（焼くときに、フレームごとの値が前のフレームから残らないように）</summary>
+        public void ResetControlsToRest ()
         {
             for (int i = 0; i < controlTransforms_.Length; i++) {
                 Transform t = controlTransforms_[i];

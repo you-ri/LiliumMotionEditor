@@ -8,6 +8,16 @@ using static Lilium.MotionEditorLocalization;
 namespace Lilium
 {
 
+    /// <summary>AnimBank・PoseBank の一覧の 1 行</summary>
+    public struct BankEntry
+    {
+        public string path;
+        /// <summary>表示名（.rig・.pose を除いたもの）</summary>
+        public string name;
+        /// <summary>フォルダから見たサブフォルダ（直下なら空）</summary>
+        public string group;
+    }
+
     /// <summary>
     /// AnimBank（S10）。キャラごとのフォルダにある編集用クリップ（*.rig.anim）の一覧と、作成・複製・名前変更・削除。
     /// フォルダはキャラの設定・プロジェクト設定で決める（S19。SettingsLookup）。どちらにも無ければ拡張点 → 「キャラの prefab のフォルダ/Motions」。
@@ -18,15 +28,6 @@ namespace Lilium
         public const string kDefaultFolderName = "Motions";
         internal const string kPrefsKey = "MikotoMotionEditor.AnimBank.";
         static readonly Regex kTrailingNumber = new Regex (@"^(.*?)(\d+)$");
-
-        public struct Entry
-        {
-            public string path;
-            /// <summary>表示名（.rig を除いたもの）</summary>
-            public string name;
-            /// <summary>フォルダから見たサブフォルダ（直下なら空）</summary>
-            public string group;
-        }
 
         /// <summary>
         /// 既定の置き場所を決める口（プロジェクトの決まりに合わせたいとき、[InitializeOnLoad] などから入れる）。
@@ -130,17 +131,23 @@ namespace Lilium
         /// <summary>
         /// フォルダの下（サブフォルダも）の編集用クリップ。組（サブフォルダ）→ 名前の順
         /// </summary>
-        public static List<Entry> List (string folder)
+        public static List<BankEntry> List (string folder)
         {
-            List<Entry> result = new List<Entry> ();
+            return List (folder, EditingClip.kSuffix);
+        }
+
+        /// <summary>フォルダの下（サブフォルダも）の、名前が「〜suffix.anim」のクリップ（AnimBank と PoseBank で共通）</summary>
+        internal static List<BankEntry> List (string folder, string suffix)
+        {
+            List<BankEntry> result = new List<BankEntry> ();
             if (string.IsNullOrEmpty (folder) || !AssetDatabase.IsValidFolder (folder)) return result;
             foreach (string guid in AssetDatabase.FindAssets ("t:AnimationClip", new[] { folder })) {
                 string path = AssetDatabase.GUIDToAssetPath (guid);
-                if (!EditingClip.IsEditingClipPath (path)) continue;
+                if (!path.EndsWith (suffix + EditingClip.kExtension, System.StringComparison.OrdinalIgnoreCase)) continue;
                 string directory = Path.GetDirectoryName (path).Replace ('\\', '/');
-                result.Add (new Entry {
+                result.Add (new BankEntry {
                     path = path,
-                    name = BaseName (path),
+                    name = BaseName (path, suffix),
                     group = directory.Length > folder.Length ? directory.Substring (folder.Length + 1) : "",
                 });
             }
@@ -156,15 +163,23 @@ namespace Lilium
         /// </summary>
         public static string BaseName (string path)
         {
+            return BaseName (path, EditingClip.kSuffix);
+        }
+
+        internal static string BaseName (string path, string suffix)
+        {
             string name = Path.GetFileNameWithoutExtension (path);
-            return name.EndsWith (EditingClip.kSuffix, System.StringComparison.OrdinalIgnoreCase)
-                ? name.Substring (0, name.Length - EditingClip.kSuffix.Length)
-                : name;
+            return name.EndsWith (suffix, System.StringComparison.OrdinalIgnoreCase) ? name.Substring (0, name.Length - suffix.Length) : name;
         }
 
         public static string MakePath (string folder, string baseName)
         {
-            return folder + "/" + baseName + EditingClip.kSuffix + EditingClip.kExtension;
+            return MakePath (folder, baseName, EditingClip.kSuffix);
+        }
+
+        internal static string MakePath (string folder, string baseName, string suffix)
+        {
+            return folder + "/" + baseName + suffix + EditingClip.kExtension;
         }
 
         /// <summary>
@@ -186,7 +201,13 @@ namespace Lilium
 
         static bool Exists (string folder, string baseName)
         {
-            return AssetDatabase.LoadMainAssetAtPath (MakePath (folder, baseName)) != null || File.Exists (MakePath (folder, baseName));
+            return Exists (folder, baseName, EditingClip.kSuffix);
+        }
+
+        internal static bool Exists (string folder, string baseName, string suffix)
+        {
+            string path = MakePath (folder, baseName, suffix);
+            return AssetDatabase.LoadMainAssetAtPath (path) != null || File.Exists (path);
         }
 
         /// <summary>
@@ -249,7 +270,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// ゴミ箱へ移す（OS のゴミ箱から戻せる）。焼いた版は残す
+        /// ゴミ箱へ移す（OS のゴミ箱から戻せる）。焼いた版は残す。PoseBank の姿勢も同じ
         /// </summary>
         public static bool Delete (AnimationClip clip)
         {

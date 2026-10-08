@@ -85,23 +85,8 @@ namespace Lilium
                 problem = host.GetSwapProblem,
                 visible = () => host.bakeOverrides.Count > 0 && string.IsNullOrEmpty (outputName),
             });
-            headButtons.Add (new LayerClipButton {
-                label = "↑",
-                tooltip = Tr ("OUTPUT_LAYER_MOVE_UP_TOOLTIP"),
-                run = () => host.MoveOutput (this, -1),
-                problem = () => host.GetMoveOutputProblem (this, -1),
-            });
-            headButtons.Add (new LayerClipButton {
-                label = "↓",
-                tooltip = Tr ("OUTPUT_LAYER_MOVE_DOWN_TOOLTIP"),
-                run = () => host.MoveOutput (this, 1),
-                problem = () => host.GetMoveOutputProblem (this, 1),
-            });
-            headButtons.Add (new LayerClipButton {
-                label = Tr ("HUMANOID_LAYER_REMOVE"),
-                tooltip = Tr ("OUTPUT_LAYER_REMOVE_TOOLTIP"),
-                run = () => host.RemoveOutput (this),
-            });
+            LayerClipButton.AddOrderButtons (headButtons, direction => host.MoveOutput (this, direction), direction => host.GetMoveOutputProblem (this, direction),
+                Tr ("OUTPUT_LAYER_MOVE_UP_TOOLTIP"), Tr ("OUTPUT_LAYER_MOVE_DOWN_TOOLTIP"), () => host.RemoveOutput (this), Tr ("OUTPUT_LAYER_REMOVE_TOOLTIP"));
             output.toggles.Add (new LayerClipToggle {
                 label = "Auto",
                 tooltip = Tr ("OUTPUT_LAYER_AUTO_TOOLTIP"),

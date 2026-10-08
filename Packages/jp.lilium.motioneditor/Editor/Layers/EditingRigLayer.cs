@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -73,9 +71,8 @@ namespace Lilium
         /// </summary>
         public override void EvaluateKeepingValues (float time)
         {
-            List<KeyValuePair<EditorCurveBinding, float>> properties = stage_.CapturePropertyValues ();
-            SolveAndShow ();
-            stage_.RestorePropertyValues (properties);
+            stage_.Solve ();
+            stage_.ShowEditingBody ();
         }
 
         /// <summary>

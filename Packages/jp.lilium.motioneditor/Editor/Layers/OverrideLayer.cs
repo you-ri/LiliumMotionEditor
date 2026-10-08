@@ -97,23 +97,8 @@ namespace Lilium
                 },
             };
             // 並べ替えと外すのは段の名前の行（Output の段と同じ）。ファイルごと消すのはクリップの行
-            headButtons.Add (new LayerClipButton {
-                label = "↑",
-                tooltip = Tr ("OVERRIDE_LAYER_MOVE_UP_TOOLTIP"),
-                run = () => host_.MoveOverride (index_, -1),
-                problem = () => host_.GetMoveOverrideProblem (index_, -1),
-            });
-            headButtons.Add (new LayerClipButton {
-                label = "↓",
-                tooltip = Tr ("OVERRIDE_LAYER_MOVE_DOWN_TOOLTIP"),
-                run = () => host_.MoveOverride (index_, 1),
-                problem = () => host_.GetMoveOverrideProblem (index_, 1),
-            });
-            headButtons.Add (new LayerClipButton {
-                label = Tr ("HUMANOID_LAYER_REMOVE"),
-                tooltip = Tr ("OVERRIDE_LAYER_REMOVE_TOOLTIP"),
-                run = () => host_.RemoveOverride (index_, false),
-            });
+            LayerClipButton.AddOrderButtons (headButtons, direction => host_.MoveOverride (index_, direction), direction => host_.GetMoveOverrideProblem (index_, direction),
+                Tr ("OVERRIDE_LAYER_MOVE_UP_TOOLTIP"), Tr ("OVERRIDE_LAYER_MOVE_DOWN_TOOLTIP"), () => host_.RemoveOverride (index_, false), Tr ("OVERRIDE_LAYER_REMOVE_TOOLTIP"));
             result.buttons.Add (new LayerClipButton {
                 label = Tr ("OVERRIDE_LAYER_DELETE_FILE"),
                 tooltip = Tr ("OVERRIDE_LAYER_DELETE_FILE_TOOLTIP"),

@@ -44,6 +44,29 @@ namespace Lilium
         public System.Func<string> problem;
         /// <summary>出すかどうか。null の関数は常に出す</summary>
         public System.Func<bool> visible;
+
+        /// <summary>段の名前の行の「↑ ↓ 外す」（Override・Output の段）。move・moveProblem には -1（上へ）か 1（下へ）を渡す</summary>
+        public static void AddOrderButtons (List<LayerClipButton> buttons, System.Action<int> move, System.Func<int, string> moveProblem,
+            string upTooltip, string downTooltip, System.Action remove, string removeTooltip)
+        {
+            buttons.Add (new LayerClipButton {
+                label = "↑",
+                tooltip = upTooltip,
+                run = () => move (-1),
+                problem = () => moveProblem (-1),
+            });
+            buttons.Add (new LayerClipButton {
+                label = "↓",
+                tooltip = downTooltip,
+                run = () => move (1),
+                problem = () => moveProblem (1),
+            });
+            buttons.Add (new LayerClipButton {
+                label = Tr ("HUMANOID_LAYER_REMOVE"),
+                tooltip = removeTooltip,
+                run = remove,
+            });
+        }
     }
 
     public sealed class LayerClipToggle

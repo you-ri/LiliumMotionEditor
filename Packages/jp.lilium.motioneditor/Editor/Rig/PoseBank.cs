@@ -19,15 +19,6 @@ namespace Lilium
         public const string kSuffix = ".pose";
         const string kPrefsKey = "MikotoMotionEditor.PoseBank.";
 
-        public struct Entry
-        {
-            public string path;
-            /// <summary>表示名（.pose を除いたもの）</summary>
-            public string name;
-            /// <summary>フォルダから見たサブフォルダ（直下なら空）</summary>
-            public string group;
-        }
-
         /// <summary>
         /// 既定の置き場所を決める口（AnimBank.defaultFolder と同じ使い方）。null を返すとパッケージの既定（prefab のフォルダ/Poses）
         /// </summary>
@@ -77,41 +68,24 @@ namespace Lilium
         /// <summary>
         /// フォルダの下（サブフォルダも）の姿勢。組（サブフォルダ）→ 名前の順
         /// </summary>
-        public static List<Entry> List (string folder)
+        public static List<BankEntry> List (string folder)
         {
-            List<Entry> result = new List<Entry> ();
-            if (string.IsNullOrEmpty (folder) || !AssetDatabase.IsValidFolder (folder)) return result;
-            foreach (string guid in AssetDatabase.FindAssets ("t:AnimationClip", new[] { folder })) {
-                string path = AssetDatabase.GUIDToAssetPath (guid);
-                if (!IsPosePath (path)) continue;
-                string directory = Path.GetDirectoryName (path).Replace ('\\', '/');
-                result.Add (new Entry {
-                    path = path,
-                    name = BaseName (path),
-                    group = directory.Length > folder.Length ? directory.Substring (folder.Length + 1) : "",
-                });
-            }
-            result.Sort ((a, b) => {
-                int group = string.CompareOrdinal (a.group, b.group);
-                return group != 0 ? group : EditorUtility.NaturalCompare (a.name, b.name);
-            });
-            return result;
+            return AnimBank.List (folder, kSuffix);
         }
 
         public static string BaseName (string path)
         {
-            string name = Path.GetFileNameWithoutExtension (path);
-            return name.EndsWith (kSuffix, System.StringComparison.OrdinalIgnoreCase) ? name.Substring (0, name.Length - kSuffix.Length) : name;
+            return AnimBank.BaseName (path, kSuffix);
         }
 
         public static string MakePath (string folder, string baseName)
         {
-            return folder + "/" + baseName + kSuffix + EditingClip.kExtension;
+            return AnimBank.MakePath (folder, baseName, kSuffix);
         }
 
         static bool Exists (string folder, string baseName)
         {
-            return AssetDatabase.LoadMainAssetAtPath (MakePath (folder, baseName)) != null || File.Exists (MakePath (folder, baseName));
+            return AnimBank.Exists (folder, baseName, kSuffix);
         }
 
         /// <summary>
@@ -262,8 +236,7 @@ namespace Lilium
         /// </summary>
         public static bool Delete (AnimationClip pose)
         {
-            string path = AssetDatabase.GetAssetPath (pose);
-            return !string.IsNullOrEmpty (path) && AssetDatabase.MoveAssetToTrash (path);
+            return AnimBank.Delete (pose);
         }
     }
 
