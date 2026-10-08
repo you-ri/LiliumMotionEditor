@@ -58,6 +58,10 @@ namespace Lilium
             /// このトラックが扱うカーブ。null ならクリップ全体
             /// </summary>
             public System.Predicate<EditorCurveBinding> filter;
+            /// <summary>
+            /// keys と同じ並びのキーの色（全身 IK の点の、そのフレームの状態の色）。null なら既定の色
+            /// </summary>
+            public Color[] keyColors;
         }
 
         /// <summary>タイムラインの下端（Layers パネルの一覧）の最小の高さ</summary>
@@ -2477,7 +2481,10 @@ namespace Lilium
                 if (paths.Count == 0) continue;
 
                 System.Predicate<EditorCurveBinding> filter = binding => paths.Contains (binding.path);
-                tracks.Add (new TimelineTrack { label = target.label, keys = GetTargetKeyFrames (target), filter = filter });
+                int[] keys = GetTargetKeyFrames (target);
+                BodyPointTarget point = target as BodyPointTarget;
+                Color[] keyColors = point != null ? keys.Select (f => point.GetKeyColor (keyed, f)).ToArray () : null;
+                tracks.Add (new TimelineTrack { label = target.label, keys = keys, filter = filter, keyColors = keyColors });
             }
             return tracks;
         }

@@ -802,8 +802,7 @@ namespace Lilium
         [Test]
         public void FloorClamp_KeepsMovedPointsAboveFloor ([Values (false, true)] bool clamp)
         {
-            // Floor Clamp が入っていれば、床（ワールドの Y = 0）より下へ動かした点は、動かした線が床に当たる所で止まる（床の上を滑らない）。
-            // 床に着いた点をさらに斜め下へ動かしても動かない
+            // Floor Clamp が入っていれば、床（ワールドの Y = 0）より下へ動かした点は床の高さに置く。横の動きはそのまま（床の上を滑る）
             Setup s = Create ();
             List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
             BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
@@ -819,16 +818,14 @@ namespace Lilium
             Vector3 point;
             Quaternion rotation;
             s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out point, out rotation);
-            Vector3 expected = clamp ? footStart + delta * (footStart.y / -delta.y) : footStart + delta;
-            Assert.LessOrEqual (Vector3.Distance (expected, point), kPositionTolerance, clamp ? "動かした線が床に当たる所で止まる" : "床より下へ動く");
+            Vector3 expected = footStart + delta;
+            if (clamp) expected.y = 0;
+            Assert.LessOrEqual (Vector3.Distance (expected, point), kPositionTolerance, clamp ? "床で止まり、横へは動く" : "床より下へ動く");
             if (clamp) {
                 foot.MoveBy (new Vector3 (0.05f, -0.05f, 0.05f));
                 Vector3 again;
                 s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out again, out rotation);
-                Assert.LessOrEqual (Vector3.Distance (expected, again), kPositionTolerance, "床に着いた点は、さらに下へ動かしても滑らない");
-                foot.MoveBy (new Vector3 (0.05f, 0, 0));
-                s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out again, out rotation);
-                Assert.LessOrEqual (Vector3.Distance (expected + new Vector3 (0.05f, 0, 0), again), kPositionTolerance, "床の上の真横の動きは効く");
+                Assert.LessOrEqual (Vector3.Distance (expected + new Vector3 (0.05f, 0, 0.05f), again), kPositionTolerance, "床に着いた点をさらに斜め下へ動かすと、床の上を滑る");
             }
             s.body.TryGetPointWorld (HumanBodyBones.LeftHand, out point, out rotation);
             Assert.LessOrEqual (Vector3.Distance (handStart + new Vector3 (0, -0.1f, 0), point), kPositionTolerance, "床より上の点はそのまま動く");

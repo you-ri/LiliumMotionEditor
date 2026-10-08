@@ -46,7 +46,7 @@
     "CONTEXT_PROBE_TIMELINE_TRACK_OFFSETS": "Track {0} ({1})",
     "CONTEXT_PROBE_TIMELINE_UNRESOLVED_SHOTS": "{0} camera shots ({1}) point to cameras outside the prefab and cannot be read (the usual view is used during them)",
     "CONTROLLER_OVERLAY_ALL_AXES": "All",
-    "CONTROLLER_OVERLAY_FLOOR_CLAMP_TOOLTIP": "Keep full-body IK points at or above the floor (world Y = 0) while moving them. A point stops where it hits the floor instead of sliding along it. Applies only while editing; not stored per point",
+    "CONTROLLER_OVERLAY_FLOOR_CLAMP_TOOLTIP": "Keep full-body IK points at or above the floor (world Y = 0) while moving them. Moving below the floor slides the point along it. Applies only while editing; not stored per point",
     "CONTROLLER_OVERLAY_FOOT_BANK_TOOLTIP": "bank (tilts onto the inner/outer edge)",
     "CONTROLLER_OVERLAY_FOOT_ROLL_TOOLTIP": "roll (rolls forward/back)",
     "CONTROLLER_OVERLAY_FOOT_TOOLTIP": "Foot roll (degrees). R = roll (positive lifts the heel, negative lifts the toes), B = bank (tilts onto the inner/outer edge), T = twist (pivots on the ball of the foot). Setting a value switches to IK",
