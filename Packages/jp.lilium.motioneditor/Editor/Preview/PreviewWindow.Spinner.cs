@@ -451,32 +451,6 @@ namespace Lilium
         {
             if (stateChanged != null) stateChanged ();
         }
-
-        // Move / Rot / Scale は Unity の Tools/Move・Rotate・Scale と同じ W / E / R。
-        // あちらは全体のショートカットなので、窓にフォーカスがある間は窓のものが勝つ（ぶつかりの確認は出ない）
-        [Shortcut ("Lilium Motion Editor/Spinner Move", typeof (PreviewWindow), KeyCode.W)]
-        static void SpinnerMoveShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.spinnerMode = SpinnerMode.Move);
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Rotate", typeof (PreviewWindow), KeyCode.E)]
-        static void SpinnerRotateShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.spinnerMode = SpinnerMode.Rotate);
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Scale", typeof (PreviewWindow), KeyCode.R)]
-        static void SpinnerScaleShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.spinnerMode = SpinnerMode.Scale);
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Toggle Pole", typeof (PreviewWindow), KeyCode.U)]
-        static void SpinnerPoleShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.spinnerPole = !window.spinnerPole);
-        }
     }
 
 }
