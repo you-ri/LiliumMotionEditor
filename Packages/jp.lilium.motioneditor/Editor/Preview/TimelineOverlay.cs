@@ -314,7 +314,8 @@ namespace Lilium
 
     /// <summary>
     /// 目盛り（ルーラー）とトラック（クリップ全体＋骨ごと）。見た目:
-    /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白、サイクルキーは青緑に Material Icons の loop のアイコン・目盛りに三角）、キーの間は両矢印の線とフレーム数。
+    /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白、サイクルキーは青緑に Material Icons の loop のアイコン・目盛りに三角、
+    /// 全身 IK の点のトラックはそのフレームの点の状態の色＝丸の色）、キーの間は両矢印の線とフレーム数。
     /// 今のフレームは白い縦線。目盛りとトラックの上でホイールは横の拡大縮小、中ボタン（Alt+左）ドラッグは横の移動。
     ///
     /// 形は Painter2D（generateVisualContent）で毎回いまの状態から描き直し、数字は使い回す Label を絶対座標で置く
@@ -360,6 +361,8 @@ namespace Lilium
         static readonly Color kCycleKeyColor = new Color (0.4f, 0.78f, 0.72f);
         static readonly Color kCurrentCycleKeyColor = new Color (0.72f, 0.95f, 0.9f);
         static readonly Color kCycleMarkColor = new Color (0.1f, 0.25f, 0.23f);
+        /// <summary>全身 IK の点のキー（点の状態の色）で、今のフレームのキーを白へ寄せる割合</summary>
+        const float kCurrentStateKeyLighten = 0.5f;
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
         // 選んだキー・枠選択の枠の不透明度。色はアクセントの色
         const float kBoxFillAlpha = 0.15f;
@@ -770,14 +773,18 @@ namespace Lilium
                     DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1));
                 }
 
-                foreach (int frame in track.keys) {
+                for (int k = 0; k < track.keys.Length; k++) {
+                    int frame = track.keys[k];
                     Rect box = GetKeyRect (frame, row);
                     if (box.xMax < keyArea.x || box.x > keyArea.xMax) continue;
                     bool isDragged = dragTrack_ == i && dragKeyFrame_ == frame && dragMoved_;
                     bool isCycle = frame == cycleFrame;
+                    bool isCurrent = frame == window_.frame;
+                    // 全身 IK の点のキーは点の状態の色（サイクルキーでもこちら。サイクルキーはアイコンで分かる）
                     Color fill = selectedKeys_.Contains ((track.label, frame)) ? accent_
-                        : isCycle ? (frame == window_.frame ? kCurrentCycleKeyColor : kCycleKeyColor)
-                        : frame == window_.frame ? kCurrentKeyColor : kKeyColor;
+                        : track.keyColors != null ? (isCurrent ? Color.Lerp (track.keyColors[k], Color.white, kCurrentStateKeyLighten) : track.keyColors[k])
+                        : isCycle ? (isCurrent ? kCurrentCycleKeyColor : kCycleKeyColor)
+                        : isCurrent ? kCurrentKeyColor : kKeyColor;
                     DrawKeyBox (painter, box, fill, isDragged ? 0.35f : 1);
                 }
                 // ドラッグ中のキーは行き先に描く（トラックの外へ出すと赤＝離すと消える）

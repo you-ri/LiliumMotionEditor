@@ -175,20 +175,12 @@ namespace Lilium
         public bool floorClamp { get; set; }
 
         /// <summary>
-        /// 床より下へ動かすとき、今の場所から position へ向かう線が床に当たる所で止める。
-        /// Y だけ 0 にすると、下へ引いた分が床の上の横の動きになって点が滑る（床に着いた点は、さらに下へ引いても動かない）
+        /// 床より下へ動かすとき、Y だけ 0 にする（横の動きはそのまま効き、点は床の上を滑る。10-08 ユーザー指示で、床に当たった所で止めるのをやめた）
         /// </summary>
         Vector3 ClampToFloor (Vector3 position)
         {
-            if (!floorClamp || position.y >= 0) return position;
-            Vector3 current;
-            Quaternion rotation;
-            GetPoint (out current, out rotation);
-            // もう床より下にある点（Floor Clamp を入れる前に置いた）は、その真上の床へ上げる
-            if (current.y <= 0) return new Vector3 (current.x, 0, current.z);
-            Vector3 hit = Vector3.Lerp (current, position, current.y / (current.y - position.y));
-            hit.y = 0;
-            return hit;
+            if (floorClamp && position.y < 0) position.y = 0;
+            return position;
         }
 
         /// <summary>
@@ -357,6 +349,25 @@ namespace Lilium
             get { return locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor; }
         }
 
+        static readonly float[] stateValues_ = new float[BodyPoint.kValueCount];
+
+        /// <summary>
+        /// タイムラインのキーの色。クリップのそのフレームの状態の丸の色（不透明にする。丸は骨が透けるよう薄くしてあるが、トラックの上では見分けにくい）。
+        /// 今の点ではなくクリップから読むのは、キーごとに状態が違うため
+        /// </summary>
+        public Color GetKeyColor (AnimationClip clip, int frame)
+        {
+            bool keyed;
+            string path = AnimationUtility.CalculateTransformPath (control_, rig_.root.transform);
+            EditingClip.GetPointState (clip, path, frame / clip.frameRate, stateValues_, out keyed);
+            bool pinned = stateValues_[BodyPoint.IndexOf (BodyPoint.kPositionWeightProperty)] > 0
+                || (hasRotation_ && stateValues_[BodyPoint.IndexOf (BodyPoint.kRotationWeightProperty)] > 0);
+            bool locked = pinned && stateValues_[BodyPoint.IndexOf (BodyPoint.kLockedProperty)] >= 0.5f;
+            Color color = locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor;
+            color.a = 1;
+            return color;
+        }
+
         public override GameObject gameObject
         {
             get { return control_ != null ? control_.gameObject : null; }
@@ -399,7 +410,7 @@ namespace Lilium
         /// </summary>
         void PinPosition (Vector3 position)
         {
-            // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る。床で止めるのは、今の場所が要るので値を入れる前
+            // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る
             position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
             body_.SetPointPositionWorld (human_, position);
