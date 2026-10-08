@@ -803,6 +803,13 @@ namespace Lilium
         void OnEnable ()
         {
             titleContent = new GUIContent ("Motion Editor", Icons.Load ("Motion"));
+            // マウスを動かすたびに描き直して、ハンドル・メッシュの下の物をすぐ強調する
+            // （受け取らないと、ほかの理由で描き直されるまで、止めてしばらくしないと強調されない）
+            wantsMouseMove = true;
+            wantsMouseEnterLeaveWindow = true;
+            // 姿勢が変わったら、メッシュの当たりに使い回している焼いたメッシュを捨てる
+            poseSampled -= InvalidatePickMeshes;
+            poseSampled += InvalidatePickMeshes;
             GLDraw.Initialize ();
             Undo.undoRedoPerformed += OnUndoRedo;
             AnimationUtility.onCurveWasModified += OnCurveWasModified;
@@ -1171,6 +1178,7 @@ namespace Lilium
             foreach (PoseTarget target in targets_) {
                 if (target.gameObject != null) targetByObject_[target.gameObject] = target;
             }
+            ApplyFloorClamp ();
             BuildStack ();
             BuildPicker ();
             RestoreSelection ();
@@ -1386,6 +1394,8 @@ namespace Lilium
         {
             if (stage_ == null) RebuildStage ();
             if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, kPanelIds);
+            // 窓の外へ出たら、メッシュの下の物の強調を外す（外では MouseMove が来ない）
+            if (Event.current.type == EventType.MouseLeaveWindow && UpdateMeshHover (false, Vector2.zero, Rect.zero)) RepaintView ();
             if (Event.current.type != EventType.Repaint || viewport_ == null) return;
 
             Rect rect = viewport_.ChangeCoordinatesTo (rootVisualElement, viewport_.contentRect);
@@ -1465,12 +1475,25 @@ namespace Lilium
             handlesDrawing_ = true;
             handlePressed_ = ev.type == EventType.MouseDown;
             handleModifiers_ = ev.modifiers;
+            // 点をつかむ間に FK で骨を動かしたら、子の Pin の点を一緒に動かす（動かす前の骨を控える）
+            List<FkBefore> fkBefore = pointGrab && ev.type != EventType.Layout && ev.type != EventType.Repaint
+                ? CaptureFkBefore (selection_.Select (FindTarget)) : null;
+            Dictionary<Transform, FkTarget> fkByBone = pointGrab ? FkTargetsByBone () : null;
+            FkTarget linkClicked = null;
+            PoseHandleUtility.meshHover = meshHover_;
             EditorGUI.BeginChangeCheck ();
             try {
                 foreach (PoseTarget target in targets_) {
                     bool selected = IsSelected (target.gameObject);
                     BodyPointTarget point = target as BodyPointTarget;
                     if (point != null) {
+                        // 点をつなぐ線を押すと、線に当たる骨の FK を選ぶ
+                        FkTarget linkFk = null;
+                        Transform linkBone = point.linkBone;
+                        if (fkByBone != null && linkBone != null) fkByBone.TryGetValue (linkBone, out linkFk);
+                        point.linkPickable = linkFk != null && CanEditTarget (linkFk);
+                        point.linkSelected = linkFk != null && IsSelected (linkFk.gameObject);
+                        point.linkHovered = linkFk != null && meshHover_ != null && linkFk.gameObject == meshHover_;
                         // 点は View の IK で出し入れする。切っている間も選んでいる点は出す（骨を隠しているときと同じく、そのまま動かせるように）
                         if (pointGrab && !displayGrab && (showIk_ || selected)) {
                             PoseHandles.locked = pointsLocked;
@@ -1479,12 +1502,11 @@ namespace Lilium
                             point.inBox = box.HasValue && IsInBox (stage_.camera, viewRect, box.Value, point.framePosition);
                             point.OnHandleGUI (selected);
                             if (point.ConsumeContextClick ()) contextPoint_ = point;
+                            if (point.ConsumeLinkClick () && linkFk != null) linkClicked = linkFk;
                             // いくつか選んでいる点の 1 つをつかんで動かした: ほかの選んでいる点も同じだけ動かす
                             Vector3 dragged = point.ConsumeDragDelta ();
                             if (dragged != Vector3.zero && selected && selection_.Count > 1) {
-                                foreach (BodyPointTarget other in GetSelectedPoints ()) {
-                                    if (other != point) other.MoveBy (dragged);
-                                }
+                                foreach (BodyPointTarget other in PointsMovedWith (targets_, GetSelectedPoints (), point)) other.MoveBy (dragged);
                             }
                             // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（固定している点は付いて回らない）
                             Quaternion turned = point.ConsumeRotateDelta ();
@@ -1499,7 +1521,8 @@ namespace Lilium
                     }
                     // 点の無い骨（指など）は、リグ定義で出すと決めた物だけ出す（隠すと見えず動かせない）
                     FkTarget fk = target as FkTarget;
-                    if (pointGrab && fk != null && !fk.fullBodyHandle) continue;
+                    // 線から選んだ骨の FK は出す（回転のギズモで回せる）
+                    if (pointGrab && fk != null && !fk.fullBodyHandle && !selected) continue;
                     // 骨を隠している間は、選んでいる物だけ出す（選択したまま見た目を確かめ、そのまま動かせるように）。
                     // 手足の IK は View の IK が入っていれば隠さない
                     if (!showBones_ && !selected && !(showIk_ && target is IkTarget)) continue;
@@ -1525,6 +1548,19 @@ namespace Lilium
             }
             bool changed = EditorGUI.EndChangeCheck ();
             if (displayGrab && ev.type == EventType.Repaint) DrawAimGhost ();
+            if (linkClicked != null) {
+                handlesDrawing_ = true;
+                try {
+                    Select (linkClicked.gameObject);
+                }
+                finally {
+                    handlesDrawing_ = false;
+                }
+                linkClicked.FocusHandle ();
+                RepaintView ();
+            }
+            // FK で骨を動かした: 子の Pin の点を一緒に動かす（動かした点は、点を動かしたときと同じ流れでキーを打つ）
+            if (changed) CarryPinnedPoints (fkBefore);
 
             // つかんでいるハンドルが変わったら知らせる（IK が IK と FK を切り替える）
             if (focusControl_ != GUIUtility.hotControl) {
@@ -1661,6 +1697,102 @@ namespace Lilium
                 if (point != null && IsSelected (point.gameObject)) points.Add (point);
             }
             return points;
+        }
+
+        /// <summary>FK の骨の、動かす前の値（ローカルの値で動かしたかを見て、ワールドの値で点を一緒に動かす）</summary>
+        struct FkBefore
+        {
+            public Transform bone;
+            public Vector3 localPosition;
+            public Quaternion localRotation;
+            public Pose world;
+        }
+
+        /// <summary>targets のうち FK の骨の、動かす前の値。全身 IK の点をつかむ間でなければ null（点を一緒に動かさない）</summary>
+        List<FkBefore> CaptureFkBefore (IEnumerable<PoseTarget> targets)
+        {
+            if (!isPointGrab) return null;
+            List<FkBefore> result = new List<FkBefore> ();
+            foreach (PoseTarget target in targets) {
+                FkTarget fk = target as FkTarget;
+                if (fk == null || fk.bone == null) continue;
+                FkBefore before = new FkBefore { bone = fk.bone, world = new Pose (fk.bone.position, fk.bone.rotation) };
+                fk.bone.GetLocalPositionAndRotation (out before.localPosition, out before.localRotation);
+                result.Add (before);
+            }
+            return result;
+        }
+
+        /// <summary>CaptureFkBefore から後に動かした FK の骨に付けて、子の Pin の点を動かす。動かした点があれば true</summary>
+        bool CarryPinnedPoints (List<FkBefore> before)
+        {
+            if (before == null || before.Count == 0) return false;
+            Dictionary<Transform, Pose> moved = new Dictionary<Transform, Pose> ();
+            foreach (FkBefore entry in before) {
+                Vector3 position;
+                Quaternion rotation;
+                entry.bone.GetLocalPositionAndRotation (out position, out rotation);
+                // 子の骨はワールドの値が親に付いて変わるので、ローカルの値で動かした骨を見分ける（Equals は誤差を許さない比べ方）
+                if (!position.Equals (entry.localPosition) || !rotation.Equals (entry.localRotation)) moved[entry.bone] = entry.world;
+            }
+            return moved.Count > 0 && CarryPinnedPoints (targets_, moved);
+        }
+
+        /// <summary>
+        /// 全身 IK の点をつかむ間に、FK で骨を動かした（moved は動かした骨と、動かす前のワールドの位置・向き）:
+        /// その骨と子の骨に乗る Pin の点を、骨と同じだけ回して・ずらして置き直す（10-08。点をつなぐ線から骨を選んで FK で動かす）。
+        /// Locked の点は置いた場所に残す。Free の点は体に付いて動く。
+        /// 点ごとに、自分の骨から根の方へたどって最初に当たる動かした骨の変化を掛ける（その骨より先は付いて動くだけなので、
+        /// いくつかの骨をまとめて動かしても二重に掛からない）。動かした点があれば true
+        /// </summary>
+        internal static bool CarryPinnedPoints (IList<PoseTarget> targets, IDictionary<Transform, Pose> moved)
+        {
+            bool carried = false;
+            foreach (PoseTarget target in targets) {
+                BodyPointTarget point = target as BodyPointTarget;
+                if (point == null || !point.pinned || point.locked) continue;
+                for (Transform t = point.editingBone; t != null; t = t.parent) {
+                    Pose before;
+                    if (!moved.TryGetValue (t, out before)) continue;
+                    point.CarryWith (before.position, t.rotation * Quaternion.Inverse (before.rotation), t.position - before.position);
+                    carried = true;
+                    break;
+                }
+            }
+            return carried;
+        }
+
+        /// <summary>FK の対象を、編集用の骨で引く（点をつなぐ線から、線に当たる骨の FK を探す）</summary>
+        Dictionary<Transform, FkTarget> FkTargetsByBone ()
+        {
+            Dictionary<Transform, FkTarget> result = new Dictionary<Transform, FkTarget> ();
+            foreach (PoseTarget target in targets_) {
+                FkTarget fk = target as FkTarget;
+                if (fk != null && fk.bone != null) result[fk.bone] = fk;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// いくつか選んでいる点の 1 つ（grabbed）をつかんで動かしたとき、一緒に同じだけ動かす点（grabbed は含まない）。
+        /// 選んだ中に親の点（ChildTargets。Ctrl で子階層を選ぶときと同じ関係）がある Free の点は動かさない:
+        /// 親の点を動かせば体に付いて動くので、Pin にしない（親と子をまとめて選んで動かすと、子まで全部 Pin になっていた。10-07）。
+        /// Pin・Locked の点は体に付いて動かないので、今までどおり同じだけ動かす。
+        /// つかんだ点が子で、選んだ親が Free のときは、親を動かして Pin にする（まとめて動かすと、選んだ物は全部動く。親をつかんだときと同じ見た目になる）
+        /// </summary>
+        internal static List<BodyPointTarget> PointsMovedWith (IList<PoseTarget> targets, IList<BodyPointTarget> selected, BodyPointTarget grabbed)
+        {
+            HashSet<PoseTarget> carried = new HashSet<PoseTarget> ();
+            foreach (BodyPointTarget parent in selected) {
+                foreach (PoseTarget child in ChildTargets (targets, parent, null)) carried.Add (child);
+            }
+            List<BodyPointTarget> moved = new List<BodyPointTarget> ();
+            foreach (BodyPointTarget point in selected) {
+                if (point == grabbed) continue;
+                if (point.state == BodyPointState.Free && carried.Contains (point)) continue;
+                moved.Add (point);
+            }
+            return moved;
         }
 
         /// <summary>
@@ -2048,9 +2180,11 @@ namespace Lilium
                         EndCameraDrag ();
                         if (boxSelecting_) {
                             boxSelecting_ = false;
+                            // ギズモを出すハンドルの印は、選ぶ前に外す。メッシュで骨の FK を選んだときは、SelectPicked がその骨に出し直す
+                            // （選んだ後に外すと、線を押して選んだときと違って回転のギズモが出ない）
+                            PoseHandleUtility.focusControl = 0;
                             if (boxMoved_) SelectPointsInBox (rect, ev.modifiers);
                             else SelectByMeshClick (boxStart_, rect, ev.modifiers);
-                            PoseHandleUtility.focusControl = 0;
                             RepaintView ();
                         }
                         ev.Use ();
@@ -2061,8 +2195,9 @@ namespace Lilium
                     }
                     break;
                 case EventType.MouseMove:
-                    // ハンドルの上に来たときの色を変える
-                    if (mouseInView) RepaintView ();
+                    // ハンドルの上に来たときの色を変える。ハンドルの上でなければ、メッシュの下の物（押したら選ぶ物）を強調する
+                    bool hoverChanged = UpdateMeshHover (mouseInView && GUIUtility.hotControl == 0 && HandleUtility.nearestControl == 0, ev.mousePosition, rect);
+                    if (mouseInView || hoverChanged) RepaintView ();
                     break;
                 case EventType.ScrollWheel:
                     // 選んでいる骨の上のホイールはねじり（PoseHandles.BoneHandle が先に使う）。残ったものでズームする

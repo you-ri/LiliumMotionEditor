@@ -621,7 +621,7 @@ MonoBehaviour:
     anchor: 6
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    pullStrength: 0
+    pullStrength: 1
     link: LeftSoleBall
   - enabled: 1
     name: LeftToeTip
@@ -669,7 +669,7 @@ MonoBehaviour:
     anchor: 6
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    pullStrength: 0
+    pullStrength: 1
     link: RightSoleBall
   - enabled: 1
     name: RightToeTip

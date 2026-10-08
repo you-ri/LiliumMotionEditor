@@ -34,6 +34,7 @@ namespace Lilium
         SpinnerElement spinner_;
         Button[] modes_;
         Toggle pole_;
+        Toggle floorClamp_;
         ValueRow[] rows_;
         /// <summary>足の転がし（roll / bank / twist）の行。足の転がしを持つ脚の IK を選んでいるときだけ出す</summary>
         ValueRow foot_;
@@ -86,6 +87,10 @@ namespace Lilium
             ShortcutTooltip.Set (pole_, containerWindow, Tr ("CONTROLLER_OVERLAY_POLE_TOOLTIP"), "Spinner Toggle Pole");
             pole_.RegisterValueChangedCallback (e => window_.spinnerPole = e.newValue);
             root.Add (pole_);
+
+            floorClamp_ = new Toggle ("Floor Clamp") { tooltip = Tr ("CONTROLLER_OVERLAY_FLOOR_CLAMP_TOOLTIP") };
+            floorClamp_.RegisterValueChangedCallback (e => window_.floorClamp = e.newValue);
+            root.Add (floorClamp_);
 
             spinner_ = new SpinnerElement (window_);
             root.Add (spinner_);
@@ -313,6 +318,8 @@ namespace Lilium
             }
             pole_.style.display = window_.isIKSelected ? DisplayStyle.Flex : DisplayStyle.None;
             pole_.SetValueWithoutNotify (window_.spinnerPole);
+            floorClamp_.style.display = window_.hasBodyPoints ? DisplayStyle.Flex : DisplayStyle.None;
+            floorClamp_.SetValueWithoutNotify (window_.floorClamp);
             spinner_.Refresh ();
 
             string warning = window_.spinOverrideWarning;

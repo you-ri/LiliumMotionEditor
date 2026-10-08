@@ -224,17 +224,47 @@ namespace Lilium
                 return;
             }
 
+            SelectPicked (PickTargetAt (point, rect, false), modifiers);
+        }
+
+        /// <summary>
+        /// 表示域の point のメッシュに当たる物（押したら選ぶ物）。cached なら前に焼いたメッシュを使い回す（マウスを動かすたびに探すとき）
+        /// </summary>
+        PoseTarget PickTargetAt (Vector2 point, Rect rect, bool cached)
+        {
+            if (stage_ == null || rect.width < 1 || rect.height < 1) return null;
             Camera camera = stage_.camera;
             camera_.Apply (camera);
             camera.aspect = rect.width / rect.height;
             // ビューポート座標は左下が原点
             Ray ray = camera.ViewportPointToRay (new Vector3 (point.x / rect.width, 1 - point.y / rect.height, 0));
 
-            Transform bone = stage_.PickBone (ray);
+            Transform bone = cached ? stage_.PickBoneCached (ray) : stage_.PickBone (ray);
             PoseTarget target = FindPickTarget (bone);
             // キーの自動追加が切で、今のフレームにキーの無い物は選ばない（ハンドルも薄く出してつかめなくしている）
             if (target != null && !CanEditTarget (target)) target = null;
-            SelectPicked (target, modifiers);
+            return target;
+        }
+
+        /// <summary>メッシュでマウスの下にある物（押したら選ぶ物）。ハンドルを、マウスが乗ったのと同じに強調する</summary>
+        GameObject meshHover_;
+
+        /// <summary>
+        /// マウスを動かしたとき、メッシュでマウスの下にある物を探し直す。active でなければ（表示域の外・ハンドルの上・つかんでいる間）外す。
+        /// 変わったら true
+        /// </summary>
+        bool UpdateMeshHover (bool active, Vector2 point, Rect rect)
+        {
+            PoseTarget target = active ? PickTargetAt (point, rect, true) : null;
+            GameObject hover = target != null ? target.gameObject : null;
+            if (hover == meshHover_) return false;
+            meshHover_ = hover;
+            return true;
+        }
+
+        void InvalidatePickMeshes ()
+        {
+            if (stage_ != null) stage_.InvalidatePickMeshes ();
         }
 
         /// <summary>メッシュのクリックで当たった物を選ぶ。修飾キーが無ければ 1 つだけ選ぶ（null なら外す）</summary>
@@ -248,6 +278,9 @@ namespace Lilium
             }
             if (shift || children) SelectWithModifiers (target.gameObject, modifiers);
             else Select (target.gameObject);
+            // 点をつかむ間は FK のハンドルを押さずに選ぶので、回転のギズモを出す
+            FkTarget fk = target as FkTarget;
+            if (fk != null && isPointGrab) fk.FocusHandle ();
         }
 
         /// <summary>
@@ -281,17 +314,13 @@ namespace Lilium
         /// </summary>
         PoseTarget FindPickTarget (Transform bone)
         {
-            // ✋ が全身 IK の段のときは、その骨（無ければ親へたどって最初に当たる骨）の関節の点を選ぶ。
-            // 点の無い骨でも、リグ定義で点をつかむ間も出すと決めた FK（指など）なら、その FK を選ぶ
+            // ✋ が全身 IK の段のときは、その骨（無ければ親へたどって最初に当たる骨）の FK を選ぶ（点をつなぐ線を押したときと同じ。10-08）。
+            // 点はメッシュの上に丸で出ているので、丸を押して選ぶ。FK で骨を回すと、子の Pin の点が付いてくる（CarryPinnedPoints）
             if (isPointGrab) {
                 for (Transform t = bone; t != null; t = t.parent) {
-                    foreach (PoseTarget candidate in targets_) {
-                        BodyPointTarget point = candidate as BodyPointTarget;
-                        if (point != null && point.isOnBoneOrigin && point.anchor == t) return point;
-                    }
                     PoseTarget target;
                     FkTarget fk = pickTransforms_.TryGetValue (t, out target) ? target as FkTarget : null;
-                    if (fk != null && fk.fullBodyHandle) return fk;
+                    if (fk != null) return fk;
                 }
                 return null;
             }

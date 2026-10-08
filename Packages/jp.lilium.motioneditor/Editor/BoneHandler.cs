@@ -343,7 +343,7 @@ namespace Lilium
                     break;
 
                 case EventType.Repaint:
-                    if (HandleUtility.nearestControl == controlID) {
+                    if (HandleUtility.nearestControl == controlID || hoverControl == controlID) {
                         edgeColor = Color.yellow;
                     }
 
@@ -691,6 +691,8 @@ namespace Lilium
 
         public static Color color = new Color (0, 1, 0, 0.2f);
         public static Color edgeColor = new Color (0, 1, 0, 1);
+        /// <summary>マウスが乗ったのと同じに描くハンドル（メッシュでマウスの下にある物。0 なら無し）。呼ぶ側がハンドルごとに入れる</summary>
+        public static int hoverControl;
 
         internal static void DrawJoint (Vector3 basePoint, float size)
         {
@@ -783,7 +785,7 @@ namespace Lilium
                     break;
 
                 case EventType.Repaint:
-                    if (HandleUtility.nearestControl == controlID) {
+                    if (HandleUtility.nearestControl == controlID || hoverControl == controlID) {
                         edgeColor = Color.yellow;
                     }
 

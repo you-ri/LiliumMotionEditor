@@ -868,6 +868,110 @@ namespace Lilium
         }
 
         [Test]
+        public void MovingParentWithChildrenSelected_PinsOnlyParent ()
+        {
+            // 腰と子階層の点をまとめて選び（Ctrl で子階層を選ぶのと同じ）、腰をつかんで動かす:
+            // 腰だけが Pin になり、子の Free の点は Free のまま体に付いて動く。Pin の子の点は同じだけ動く
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
+            List<BodyPointTarget> selected = new List<BodyPointTarget> { hips };
+            selected.AddRange (PreviewWindow.ChildTargets (targets, hips, null).OfType<BodyPointTarget> ());
+            Assert.Contains (hand, selected);
+            foot.SetState (BodyPointState.Pin);
+            Vector3 footPlaced;
+            Quaternion rotation;
+            s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out footPlaced, out rotation);
+            Vector3 handStart = Bone (s, HumanBodyBones.LeftHand).position;
+
+            Vector3 delta = new Vector3 (0.05f, 0.03f, -0.04f);
+            hips.MoveBy (delta);
+            List<BodyPointTarget> moved = PreviewWindow.PointsMovedWith (targets, selected, hips);
+            Assert.IsFalse (moved.Contains (hand), "子の Free の点は動かさない");
+            Assert.Contains (foot, moved, "子の Pin の点は一緒に動かす");
+            foreach (BodyPointTarget point in moved) point.MoveBy (delta);
+
+            Assert.AreEqual (BodyPointState.Pin, hips.state, "つかんだ親は Pin");
+            foreach (BodyPointTarget point in selected) {
+                if (point != hips && point != foot) Assert.AreEqual (BodyPointState.Free, point.state, point.label + " は Free のまま");
+            }
+            Vector3 footNow;
+            s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out footNow, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (footPlaced + delta, footNow), kPositionTolerance, "Pin の子の点は同じだけ動く");
+
+            s.body.CaptureInput ();
+            s.body.Solve ();
+            Assert.LessOrEqual (Vector3.Distance (handStart + delta, Bone (s, HumanBodyBones.LeftHand).position), 1e-3f, "Free の子は体に付いて動く");
+        }
+
+        [Test]
+        public void PointsMovedWith_SkipsOnlyFreePointsWhoseParentIsSelected ()
+        {
+            // 判定だけ（解かない）。選んだ中に親の点がある Free の点だけ一緒に動かさない
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
+            BodyPointTarget spine = PointTarget (targets, HumanBodyBones.Spine);
+            BodyPointTarget chest = PointTarget (targets, HumanBodyBones.Chest);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget knee = PointTarget (targets, HumanBodyBones.LeftLowerLeg);
+            BodyPointTarget ankle = PointTarget (targets, HumanBodyBones.LeftFoot);
+            System.Func<string, BodyPointTarget> named = name => targets.OfType<BodyPointTarget> ().Single (p => p.id.name == name);
+            BodyPointTarget heel = named ("LeftHeel");
+            BodyPointTarget ball = named ("LeftSoleBall");
+
+            // 子をつかむと、Free の親は一緒に動く
+            CollectionAssert.AreEquivalent (new[] { hips }, PreviewWindow.PointsMovedWith (targets, new[] { hips, hand }, hand), "手をつかむと腰も動く");
+            // 付け根の点の子には同じ骨の上の点が入る。骨の上の点の子には入らない
+            CollectionAssert.IsEmpty (PreviewWindow.PointsMovedWith (targets, new[] { ankle, heel, ball }, ankle), "足首をつかむと踵・足裏は体に付いて動く");
+            CollectionAssert.AreEquivalent (new[] { ankle }, PreviewWindow.PointsMovedWith (targets, new[] { ankle, heel, ball }, heel), "踵をつかむと足首は動く");
+            // 連鎖: 腰（Pin）・背骨（つかむ）・胸（Free）
+            hips.SetState (BodyPointState.Pin);
+            CollectionAssert.AreEquivalent (new[] { hips }, PreviewWindow.PointsMovedWith (targets, new[] { hips, spine, chest }, spine), "胸は背骨の子なので動かさない");
+            // Locked の子は一緒に動く
+            hips.SetState (BodyPointState.Free);
+            ankle.SetState (BodyPointState.Locked);
+            CollectionAssert.AreEquivalent (new[] { ankle }, PreviewWindow.PointsMovedWith (targets, new[] { hips, knee, ankle }, hips), "膝は Free のまま、Locked の足首は動く");
+        }
+
+        [Test]
+        public void FloorClamp_KeepsMovedPointsAboveFloor ([Values (false, true)] bool clamp)
+        {
+            // Floor Clamp が入っていれば、床（ワールドの Y = 0）より下へ動かした点は、動かした線が床に当たる所で止まる（床の上を滑らない）。
+            // 床に着いた点をさらに斜め下へ動かしても動かない
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            foot.floorClamp = clamp;
+            hand.floorClamp = clamp;
+            Vector3 footStart = Bone (s, HumanBodyBones.LeftFoot).position;
+            Vector3 handStart = Bone (s, HumanBodyBones.LeftHand).position;
+            Vector3 delta = new Vector3 (0.05f, -(footStart.y + 0.1f), 0.02f);
+            foot.MoveBy (delta);
+            hand.MoveBy (new Vector3 (0, -0.1f, 0));
+
+            Vector3 point;
+            Quaternion rotation;
+            s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out point, out rotation);
+            Vector3 expected = clamp ? footStart + delta * (footStart.y / -delta.y) : footStart + delta;
+            Assert.LessOrEqual (Vector3.Distance (expected, point), kPositionTolerance, clamp ? "動かした線が床に当たる所で止まる" : "床より下へ動く");
+            if (clamp) {
+                foot.MoveBy (new Vector3 (0.05f, -0.05f, 0.05f));
+                Vector3 again;
+                s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out again, out rotation);
+                Assert.LessOrEqual (Vector3.Distance (expected, again), kPositionTolerance, "床に着いた点は、さらに下へ動かしても滑らない");
+                foot.MoveBy (new Vector3 (0.05f, 0, 0));
+                s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out again, out rotation);
+                Assert.LessOrEqual (Vector3.Distance (expected + new Vector3 (0.05f, 0, 0), again), kPositionTolerance, "床の上の真横の動きは効く");
+            }
+            s.body.TryGetPointWorld (HumanBodyBones.LeftHand, out point, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (handStart + new Vector3 (0, -0.1f, 0), point), kPositionTolerance, "床より上の点はそのまま動く");
+        }
+
+        [Test]
         public void RotatingPoint_DoesNotCarryPinnedPoints ()
         {
             // 点を 1 つ選んで回すと骨を FK で回すだけで、固定している点（Pin・Locked）は付いて回らない（移動と同じ。S29）
@@ -896,6 +1000,117 @@ namespace Lilium
             s.body.TryGetPointWorld (hand.id, out position, out rotation);
             Assert.LessOrEqual (Vector3.Distance (handPosition, position), 1e-5f, "Locked の手は付いて回らない");
             Assert.LessOrEqual (Quaternion.Angle (handRotation, rotation), 0.01f);
+        }
+
+        [Test]
+        public void LinkBone_IsTheBoneUnderTheLine ()
+        {
+            // 点をつなぐ線に当たる骨: 関節の点は相手（親の側）の点の骨、骨の上の点はその点の骨。腰はつなぐ相手が無い
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            System.Func<string, BodyPointTarget> named = name => targets.OfType<BodyPointTarget> ().Single (p => p.id.name == name);
+            Assert.AreSame (Bone (s, HumanBodyBones.LeftUpperArm), PointTarget (targets, HumanBodyBones.LeftLowerArm).linkBone, "肘 → 肩の線は上腕");
+            Assert.AreSame (Bone (s, HumanBodyBones.LeftLowerLeg), PointTarget (targets, HumanBodyBones.LeftFoot).linkBone, "足首 → 膝の線は下腿");
+            Assert.AreSame (Bone (s, HumanBodyBones.LeftFoot), named ("LeftHeel").linkBone, "踵 → 足首の線は足");
+            Assert.AreSame (Bone (s, HumanBodyBones.LeftUpperLeg), named ("LeftKneePole").linkBone, "膝の Pole → 膝の線は太もも");
+            Assert.IsNull (PointTarget (targets, HumanBodyBones.Hips).linkBone, "腰はつなぐ相手が無い");
+        }
+
+        [Test]
+        public void FkMovedFromLink_CarriesPinnedChildren_KeepsLocked ()
+        {
+            // 線から選んだ骨（上腕）を FK で回す: 上腕より先の Pin の点は骨と一緒に回り、Locked の点・Free の点・ほかの枝の点は置いた所のまま
+            Setup s = Create ();
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
+            Transform upperArm = Bone (s, HumanBodyBones.LeftUpperArm);
+            FkTarget fk = targets.OfType<FkTarget> ().Single (t => t.bone == upperArm);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget elbow = PointTarget (targets, HumanBodyBones.LeftLowerArm);
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointTarget palm = targets.OfType<BodyPointTarget> ().Single (p => p.id.name == "LeftPalmIndex");
+            hand.SetState (BodyPointState.Pin);
+            hand.SetValues (false, TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (0, 20, 0));
+            elbow.SetState (BodyPointState.Locked);
+            foot.SetState (BodyPointState.Pin);
+            Vector3 handPosition, elbowPosition, footPosition;
+            Quaternion handRotation, rotation;
+            s.body.TryGetPointWorld (hand.id, out handPosition, out handRotation);
+            s.body.TryGetPointWorld (elbow.id, out elbowPosition, out rotation);
+            s.body.TryGetPointWorld (foot.id, out footPosition, out rotation);
+
+            Pose before = new Pose (upperArm.position, upperArm.rotation);
+            Quaternion delta = Quaternion.AngleAxis (40, Vector3.forward);
+            fk.SpinRotateWorld (delta, false);
+            Assert.IsTrue (PreviewWindow.CarryPinnedPoints (targets, new Dictionary<Transform, Pose> { { upperArm, before } }));
+
+            Vector3 position;
+            s.body.TryGetPointWorld (hand.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (before.position + delta * (handPosition - before.position), position), kPositionTolerance, "Pin の手は骨と一緒に回る");
+            Assert.Less (Quaternion.Angle (delta * handRotation, rotation), kAngleTolerance, "向きを固定した手は向きも回る");
+            s.body.TryGetPointWorld (elbow.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (elbowPosition, position), kPositionTolerance, "Locked の肘は動かない");
+            s.body.TryGetPointWorld (foot.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (footPosition, position), kPositionTolerance, "ほかの枝の Pin の点は動かない");
+            Assert.AreEqual (BodyPointState.Free, palm.state, "Free の点は Free のまま（体に付いて動く）");
+            Assert.AreEqual (BodyPointState.Locked, elbow.state);
+        }
+
+        [Test]
+        public void FkMovedTogether_CarriesPinnedPointsOnce ()
+        {
+            // 上腕と前腕をまとめて動かした（Reset で腕を戻したなど）: 手は、たどって最初に当たる動かした骨（前腕）の変化だけで動く（上腕の分を二重に掛けない）
+            Setup s = Create ();
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
+            Transform upperArm = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform lowerArm = Bone (s, HumanBodyBones.LeftLowerArm);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            hand.SetState (BodyPointState.Pin);
+            Vector3 handPosition;
+            Quaternion rotation;
+            s.body.TryGetPointWorld (hand.id, out handPosition, out rotation);
+            Dictionary<Transform, Pose> moved = new Dictionary<Transform, Pose> {
+                { upperArm, new Pose (upperArm.position, upperArm.rotation) },
+                { lowerArm, new Pose (lowerArm.position, lowerArm.rotation) },
+            };
+            Pose lowerBefore = moved[lowerArm];
+            targets.OfType<FkTarget> ().Single (t => t.bone == upperArm).SpinRotateWorld (Quaternion.AngleAxis (30, Vector3.forward), false);
+            targets.OfType<FkTarget> ().Single (t => t.bone == lowerArm).SpinRotateWorld (Quaternion.AngleAxis (45, Vector3.up), false);
+            PreviewWindow.CarryPinnedPoints (targets, moved);
+
+            Vector3 expected = lowerArm.position + lowerArm.rotation * Quaternion.Inverse (lowerBefore.rotation) * (handPosition - lowerBefore.position);
+            Vector3 position;
+            s.body.TryGetPointWorld (hand.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (expected, position), kPositionTolerance, "手は前腕に付いた所");
+        }
+
+        [Test]
+        public void FkSetValues_MovesBoneRightAway_LikeSolve ()
+        {
+            // 数値欄・Reset で FK の値を入れると、骨もすぐその値の姿勢になる（解き直した後と同じ。点を一緒に動かす量を骨から読むため）
+            Setup s = Create ();
+            PoseFk (s);
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            Transform upperArm = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform hips = Bone (s, HumanBodyBones.Hips);
+            FkTarget arm = targets.OfType<FkTarget> ().Single (t => t.bone == upperArm);
+            FkTarget pelvis = targets.OfType<FkTarget> ().Single (t => t.bone == hips);
+            pelvis.SetValues (false, TransformChannels.Position | TransformChannels.Rotation, new Vector3 (0.05f, -0.1f, 0.02f), Quaternion.Euler (10, 0, 5));
+            arm.SetValues (false, TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (20, 30, -10));
+            Pose hipsNow = new Pose (hips.position, hips.rotation);
+            Pose armNow = new Pose (upperArm.position, upperArm.rotation);
+
+            s.solver.Solve ();
+            Assert.LessOrEqual (Vector3.Distance (hips.position, hipsNow.position), kPositionTolerance, "腰の位置");
+            Assert.Less (Quaternion.Angle (hips.rotation, hipsNow.rotation), kAngleTolerance, "腰の向き");
+            Assert.LessOrEqual (Vector3.Distance (upperArm.position, armNow.position), kPositionTolerance, "上腕の位置");
+            Assert.Less (Quaternion.Angle (upperArm.rotation, armNow.rotation), kAngleTolerance, "上腕の向き");
+
+            arm.ResetValues (false, TransformChannels.All);
+            armNow = new Pose (upperArm.position, upperArm.rotation);
+            s.solver.Solve ();
+            Assert.Less (Quaternion.Angle (upperArm.rotation, armNow.rotation), kAngleTolerance, "Reset でも同じ");
         }
 
         [Test]

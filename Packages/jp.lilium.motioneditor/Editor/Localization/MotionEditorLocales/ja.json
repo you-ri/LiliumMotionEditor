@@ -46,6 +46,7 @@
     "CONTEXT_PROBE_TIMELINE_TRACK_OFFSETS": "トラック {0}（{1}）",
     "CONTEXT_PROBE_TIMELINE_UNRESOLVED_SHOTS": "カメラ割りのうち {0} ショット（{1}）は prefab の外のカメラを指していて読めない（その間はいつもの視点）",
     "CONTROLLER_OVERLAY_ALL_AXES": "全軸",
+    "CONTROLLER_OVERLAY_FLOOR_CLAMP_TOOLTIP": "全身 IK の点を動かすとき、床（ワールドの Y = 0）より下へ置かない。床に当たった所で止め、床の上を滑らせない。操作のときだけ効き、点ごとには保存しない",
     "CONTROLLER_OVERLAY_FOOT_BANK_TOOLTIP": "bank（左右の縁で傾ける）",
     "CONTROLLER_OVERLAY_FOOT_ROLL_TOOLTIP": "roll（前後に転がす）",
     "CONTROLLER_OVERLAY_FOOT_TOOLTIP": "足の転がし（度）。R = roll（正で踵が上がる・負でつま先が上がる）、B = bank（左右の縁で傾ける）、T = twist（母趾球でひねる）。入れると IK になる",

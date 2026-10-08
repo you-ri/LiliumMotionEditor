@@ -52,6 +52,38 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// 全身 IK の点を動かすとき、床（ワールドの Y = 0）より下へ置かない（Controller の Floor Clamp）。
+        /// 操作のときだけのフラグなので、窓が持って点へ配る（点ごとにもクリップにも保存しない）
+        /// </summary>
+        [SerializeField] bool floorClamp_;
+
+        public bool floorClamp
+        {
+            get { return floorClamp_; }
+            set {
+                if (floorClamp_ == value) return;
+                floorClamp_ = value;
+                ApplyFloorClamp ();
+                RaiseStateChanged ();
+            }
+        }
+
+        /// <summary>全身 IK の点があるか（Floor Clamp を出すか）</summary>
+        public bool hasBodyPoints
+        {
+            get { return targets_.Any (t => t is BodyPointTarget); }
+        }
+
+        /// <summary>Floor Clamp を点へ配る（フラグを変えたとき・点の対象を作り直したとき）</summary>
+        void ApplyFloorClamp ()
+        {
+            foreach (PoseTarget target in targets_) {
+                BodyPointTarget point = target as BodyPointTarget;
+                if (point != null) point.floorClamp = floorClamp_;
+            }
+        }
+
         public bool spinnerPole
         {
             get { return spinnerPole_; }
@@ -107,7 +139,9 @@ namespace Lilium
         public void SpinMove (Vector3 delta)
         {
             if (!CanSpin (SpinnerMode.Move)) return;
+            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
             selectedTarget.SpinMove (delta, spinnerPole_);
+            CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Position);
         }
 
@@ -115,7 +149,9 @@ namespace Lilium
         public void SpinRotate (Vector3 euler)
         {
             if (!CanSpin (SpinnerMode.Rotate)) return;
+            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
             selectedTarget.SpinRotateLocal (Quaternion.Euler (euler), spinnerPole_);
+            CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Rotation);
         }
 
@@ -128,7 +164,9 @@ namespace Lilium
             if (!CanSpin (SpinnerMode.Rotate)) return;
             Quaternion view = camera_.rotation;
             Quaternion rotation = Quaternion.AngleAxis (drag.x, view * Vector3.up) * Quaternion.AngleAxis (drag.y, view * Vector3.right);
+            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
             selectedTarget.SpinRotateWorld (rotation, spinnerPole_);
+            CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Rotation);
         }
 
@@ -241,7 +279,9 @@ namespace Lilium
         {
             PoseTarget target = selectedTarget;
             if (target == null || !CanEditValues (channels)) return;
+            List<FkBefore> before = CaptureFkBefore (new[] { target });
             target.SetValues (spinnerPole_, channels, position, rotation);
+            CarryPinnedPoints (before);
             AfterSpin (channels);
         }
 
@@ -415,7 +455,10 @@ namespace Lilium
             if (stage_ == null) return;
             Undo.IncrementCurrentGroup ();
             int group = Undo.GetCurrentGroup ();
+            // 全身 IK の点をつかむ間に FK の値を入れた・戻した: 子の Pin の点を一緒に動かす
+            List<FkBefore> before = CaptureFkBefore (targets);
             edit ();
+            CarryPinnedPoints (before);
             SolveAfterManipulate ();
             if (targets.Any (t => t is BodyPointTarget) || hasActivePoints) {
                 CommitFullBodyPose ();

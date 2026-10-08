@@ -38,6 +38,17 @@ namespace Lilium
         }
         public static Color color = StandardColor;
 
+        /// <summary>
+        /// メッシュでマウスの下にある物（押したら選ぶ物。窓が描く前に入れる）。そのハンドルは、マウスが乗ったのと同じに強調して描く
+        /// </summary>
+        public static GameObject meshHover;
+
+        /// <summary>メッシュでマウスの下にある物のハンドルなら、そのハンドルの番号（PoseHandles が乗った印で描く）</summary>
+        static int MeshHoverControl (int controlHash, Transform t)
+        {
+            return meshHover != null && t != null && t.gameObject == meshHover && GUIUtility.hotControl == 0 ? controlHash : 0;
+        }
+
         public static bool IsSelectedController (GameObject go)
         {
             return EditorHost.current.IsSelected (go);
@@ -61,6 +72,7 @@ namespace Lilium
             Event ev = Event.current;
             Vector3 outPosition;
             PoseHandles.color = selectColor && EditorHost.current.IsSelected (t.gameObject) ? SelectBoneColor : color;
+            PoseHandles.hoverControl = MeshHoverControl (controlHash, t);
             PoseHandles.edgeColor = PoseHandles.color;
             if (PoseHandles.JointHandle (controlHash, position, EditorHost.current.handleSize, out outPosition)) {
                 if (ev.type == EventType.MouseDown) {
@@ -147,7 +159,7 @@ namespace Lilium
         /// </summary>
         public static PoseHandles.CapsuleResult DoRingHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, float radius, Color ringColor)
         {
-            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash;
+            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash || MeshHoverControl (controlHash, t) != 0;
             Color drawColor = ringColor;
             float tube = radius * kRingTubeRatio;
             if (highlight) {
@@ -172,7 +184,7 @@ namespace Lilium
         /// </summary>
         public static PoseHandles.CapsuleResult DoCapsuleHandle (int controlHash, Transform t, Vector3 heel, Vector3 toe, Vector3 normal, float radius, Color capsuleColor, out Vector3 delta)
         {
-            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash;
+            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash || MeshHoverControl (controlHash, t) != 0;
             Color drawColor = capsuleColor;
             float tube = EditorHost.current.handleSize * 0.35f;
             if (highlight) {
@@ -204,6 +216,7 @@ namespace Lilium
             Quaternion outRotation;
             PoseHandles.color = EditorHost.current.IsSelected (t.gameObject) ? SelectBoneColor : color;
             PoseHandles.edgeColor = PoseHandles.color;
+            PoseHandles.hoverControl = MeshHoverControl (controlHash, t);
             if (PoseHandles.BoneHandle (controlHash, position, rotation, length, EditorHost.current.handleSize, out outRotation)) {
                 if (ev.type == EventType.MouseDown) {
                     EditorHost.current.RecordUndo (t, "Rotate " + t.name);

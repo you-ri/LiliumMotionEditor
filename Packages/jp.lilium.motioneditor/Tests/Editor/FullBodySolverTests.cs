@@ -508,9 +508,9 @@ namespace Lilium
         [Test]
         public void DirectionPoints_DefaultToPullStrengthZero ()
         {
-            // 既定の一覧では、向きの点（膝の Pole・足の小指側も）は引く強さ 0、ほかの点は 1
+            // 既定の一覧では、向きの点（膝の Pole も）は引く強さ 0、ほかの点は 1（足の小指側も、手の小指側と同じく 1。10-07）
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
-                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole") || point.name.EndsWith ("LittleToeSide");
+                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole");
                 Assert.AreEqual (direction ? 0 : 1, point.pullStrength, point.name);
             }
             Assert.IsEmpty (definition_.Validate ());
@@ -1135,9 +1135,10 @@ namespace Lilium
         }
 
         [Test]
-        public void LittleToeSide_TiltsFootAroundAnkle_WithoutPulling ()
+        public void LittleToeSide_TiltsFootAroundPinnedAnkle ()
         {
-            // 足首の位置を固定し、小指側の点（引く強さ 0）を下へ: 足が足首まわりに回って小指側が下がる。脛から根の側は動かない
+            // 足首の位置を固定し、小指側の点を下へ: 足が足首まわりに回って小指側が下がる。脛から根の側は動かない
+            // （小指側は引く強さ 1 だが、同じ骨の足首を固定しているので、足首まわりに回るだけ）
             Setup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
             Solve (s);
@@ -1155,6 +1156,20 @@ namespace Lilium
             Assert.Less (now.y, start.y - 0.01f, "小指側が下がる");
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), kReach, "足首は動かない");
             AssertUnchanged (bones, before, 1e-4f, 0.01f, "脛から根の側", b => b == foot || b.IsChildOf (foot));
+        }
+
+        [Test]
+        public void FootTipPoints_PullLeg_LikePalmPoints ([Values (false, true)] bool toeTip, [Values (false, true)] bool toes)
+        {
+            // 小指側・足先（つま先の先）の点だけを固定して前上へ動かす: 手の 2 点と同じく、点が目標に届くまで脚ごと引く（向けるだけにしない）
+            Setup s = Create (toes: toes);
+            Transform foot = Bone (s, HumanBodyBones.LeftFoot);
+            Vector3 ankle = foot.position;
+            BodyPointId side = toeTip ? BodyPointId.ToeTip (HumanBodyBones.LeftFoot) : BodyPointId.LittleToeSide (HumanBodyBones.LeftFoot);
+            PinDirection (s, side, s.forward * 0.1f + s.up * 0.05f);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (side), kReach, "点が目標に届く");
+            Assert.Greater (Vector3.Distance (ankle, foot.position), 0.05f, "足首も引かれて動く");
         }
 
         // ---- 顔の前の点の高さ ----

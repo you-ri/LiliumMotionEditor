@@ -442,7 +442,7 @@ namespace Lilium
                     points.Add (new BodyPoint { name = side + "Heel", bone = foot, anchor = BodyPointAnchor.Heel });
                     points.Add (new BodyPoint { name = side + "SoleBall", bone = foot, anchor = BodyPointAnchor.SoleBall });
                     points.Add (new BodyPoint {
-                        name = side + "LittleToeSide", bone = foot, anchor = BodyPointAnchor.LittleToeSide, pullStrength = 0, link = side + "SoleBall",
+                        name = side + "LittleToeSide", bone = foot, anchor = BodyPointAnchor.LittleToeSide, link = side + "SoleBall",
                     });
                     points.Add (new BodyPoint { name = side + "ToeTip", bone = toes, anchor = BodyPointAnchor.ToeTip, link = side + "SoleBall" });
                     points.Add (new BodyPoint { name = side + "PalmIndex", bone = hand, anchor = BodyPointAnchor.IndexBase });

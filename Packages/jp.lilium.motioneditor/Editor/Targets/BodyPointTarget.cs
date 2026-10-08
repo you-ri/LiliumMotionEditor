@@ -41,6 +41,10 @@ namespace Lilium
         const float kLinkWidth = 4.5f;
         const float kLinkGap = 1.7f;
         static readonly Color kLinkColor = new Color (0.8f, 0.85f, 0.9f, 0.55f);
+        /// <summary>線を押す当たりで、丸より後に当たるよう足す距離（ピクセル）。線の端と丸が近いとき、丸を優先する</summary>
+        const float kLinkPickBias = 2;
+        /// <summary>マウスが乗っている・線に当たる骨（FK）を選んでいる線の太さ（線の太さの何倍か）</summary>
+        const float kLinkHighlightWidth = 1.8f;
         /// <summary>点をつかまない間に出す、固定した点の印の大きさ（ハンドルの大きさの何倍か）</summary>
         const float kMarkScale = 0.6f;
         static readonly Color kPinnedColor = new Color (1f, 0.55f, 0.1f, 0.8f);
@@ -71,6 +75,8 @@ namespace Lilium
         readonly Transform displayBone_;
         readonly bool hasRotation_;
         readonly int moveHash_;
+        readonly int linkHash_;
+        bool linkClicked_;
         /// <summary>動かしたがまだキーを打っていない値（位置と位置の固定の強さ）</summary>
         bool positionDirty_;
         /// <summary>動かしたがまだキーを打っていない値（向きと向きの固定の強さ）</summary>
@@ -162,6 +168,68 @@ namespace Lilium
             get { return bone_; }
         }
 
+        /// <summary>
+        /// 動かした点を、床（ワールドの Y = 0）より下へ置かない（Controller の Floor Clamp）。
+        /// 操作のときだけのフラグで、窓が配る（点ごとには持たず、クリップにも保存しない）
+        /// </summary>
+        public bool floorClamp { get; set; }
+
+        /// <summary>
+        /// 床より下へ動かすとき、今の場所から position へ向かう線が床に当たる所で止める。
+        /// Y だけ 0 にすると、下へ引いた分が床の上の横の動きになって点が滑る（床に着いた点は、さらに下へ引いても動かない）
+        /// </summary>
+        Vector3 ClampToFloor (Vector3 position)
+        {
+            if (!floorClamp || position.y >= 0) return position;
+            Vector3 current;
+            Quaternion rotation;
+            GetPoint (out current, out rotation);
+            // もう床より下にある点（Floor Clamp を入れる前に置いた）は、その真上の床へ上げる
+            if (current.y <= 0) return new Vector3 (current.x, 0, current.z);
+            Vector3 hit = Vector3.Lerp (current, position, current.y / (current.y - position.y));
+            hit.y = 0;
+            return hit;
+        }
+
+        /// <summary>
+        /// 線（つなぐ相手の点までの線）に当たる骨。線を押すと、窓がこの骨の FK を選ぶ。
+        /// 骨の上の点（踵・膝の Pole など）はその点の骨、関節の点は相手の点の骨（肘の点 → 肩の点の線は上腕）
+        /// </summary>
+        public Transform linkBone
+        {
+            get { return link_ == null ? null : offsetPoint_ ? bone_ : link_.bone_; }
+        }
+
+        /// <summary>線を押せるか（線に当たる骨の FK を今動かせるか。窓が描く前に入れる）</summary>
+        public bool linkPickable;
+
+        /// <summary>線に当たる骨の FK を選んでいるか（線を選んだ色で描く。窓が描く前に入れる）</summary>
+        public bool linkSelected;
+
+        /// <summary>線に当たる骨がメッシュでマウスの下にあるか（マウスが乗ったのと同じに描く。窓が描く前に入れる）</summary>
+        public bool linkHovered;
+
+        /// <summary>線を左ボタンで押されたか（読むと消える）。窓が、線に当たる骨の FK を選ぶ</summary>
+        public bool ConsumeLinkClick ()
+        {
+            bool clicked = linkClicked_;
+            linkClicked_ = false;
+            return clicked;
+        }
+
+        /// <summary>
+        /// 骨を FK で動かした（pivot を中心に delta だけ回し、offset だけずらした）とき、固定している値を骨と一緒に動かす。
+        /// Free の値は骨に付いて動くので触らない。Locked の点は置いた場所に残すので、呼ぶ側が外す
+        /// </summary>
+        public void CarryWith (Vector3 pivot, Quaternion delta, Vector3 offset)
+        {
+            Vector3 position;
+            Quaternion rotation;
+            GetPoint (out position, out rotation);
+            if (positionPinned) PinPosition (pivot + offset + delta * (position - pivot));
+            if (rotationPinned) PinRotation (delta * rotation);
+        }
+
         /// <summary>右ボタンで押されたか（読むと消える）。窓が、選んでいる点をまとめて固定 / 解除する</summary>
         public bool ConsumeContextClick ()
         {
@@ -216,6 +284,7 @@ namespace Lilium
             displayBone_ = point.bone;
             hasRotation_ = point.hasRotation;
             moveHash_ = ("MktBodyPointMove" + control_.GetEntityId ()).GetHashCode ();
+            linkHash_ = ("MktBodyPointLink" + control_.GetEntityId ()).GetHashCode ();
         }
 
         /// <summary>点が乗る骨</summary>
@@ -330,6 +399,8 @@ namespace Lilium
         /// </summary>
         void PinPosition (Vector3 position)
         {
+            // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る。床で止めるのは、今の場所が要るので値を入れる前
+            position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
             body_.SetPointPositionWorld (human_, position);
             body_.SetPositionWeight (human_, 1);
@@ -528,7 +599,7 @@ namespace Lilium
             GetPoint (out position, out rotation);
             Quaternion shape = GetShape (position, rotation);
 
-            DrawLink (position);
+            DoLink (position);
             DrawRing (position, selected);
 
             // 関節の丸（つかんで動かすと位置を固定する）
@@ -595,15 +666,54 @@ namespace Lilium
         /// </summary>
         void DrawLink (Vector3 position)
         {
-            if (Event.current.type != EventType.Repaint || link_ == null) return;
+            Vector3 start, end;
+            if (Event.current.type != EventType.Repaint || !TryGetLink (position, out start, out end)) return;
+            DrawLinkLine (start, end, false);
+        }
+
+        /// <summary>
+        /// 点をつかむ間の線。押すと、線に当たる骨の FK を選ぶ（窓が ConsumeLinkClick で読む）。
+        /// マウスが乗っている間と、その骨の FK を選んでいる間は、太く選びの色で描く
+        /// </summary>
+        void DoLink (Vector3 position)
+        {
+            Vector3 start, end;
+            if (!TryGetLink (position, out start, out end)) return;
+            Event ev = Event.current;
+            if (linkPickable) {
+                if (ev.type == EventType.Layout) {
+                    HandleUtility.AddControl (linkHash_, HandleUtility.DistanceToLine (start, end) + kLinkPickBias);
+                }
+                else if (ev.type == EventType.MouseDown && ev.button == 0 && !ev.alt && GUIUtility.hotControl == 0 && HandleUtility.nearestControl == linkHash_) {
+                    linkClicked_ = true;
+                    ev.Use ();
+                }
+            }
+            if (ev.type != EventType.Repaint) return;
+            bool hover = linkPickable && GUIUtility.hotControl == 0 && (HandleUtility.nearestControl == linkHash_ || linkHovered);
+            DrawLinkLine (start, end, hover);
+        }
+
+        /// <summary>線の両端（丸に重ならないよう、両端に隙間を空ける）。短すぎて隙間しか残らなければ false</summary>
+        bool TryGetLink (Vector3 position, out Vector3 start, out Vector3 end)
+        {
+            start = end = position;
+            if (link_ == null) return false;
             Vector3 delta = link_.framePosition - position;
             float length = delta.magnitude;
             float gap = EditorHost.current.handleSize * kLinkGap;
-            if (length <= gap * 2 + 1e-5f) return;
+            if (length <= gap * 2 + 1e-5f) return false;
             Vector3 direction = delta / length;
+            start = position + direction * gap;
+            end = position + direction * (length - gap);
+            return true;
+        }
+
+        void DrawLinkLine (Vector3 start, Vector3 end, bool hover)
+        {
             Color saved = Handles.color;
-            Handles.color = PoseHandles.Fade (kLinkColor);
-            Handles.DrawAAPolyLine (kLinkWidth, position + direction * gap, position + direction * (length - gap));
+            Handles.color = PoseHandles.Fade (linkSelected ? kRingSelectedColor : hover ? kRingHoverColor : kLinkColor);
+            Handles.DrawAAPolyLine (linkSelected || hover ? kLinkWidth * kLinkHighlightWidth : kLinkWidth, start, end);
             Handles.color = saved;
         }
 
@@ -737,7 +847,7 @@ namespace Lilium
             Quaternion rotation;
             if (!body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
             if ((channels & TransformChannels.Position) != 0) {
-                body_.SetPointPositionWorld (human_, position);
+                body_.SetPointPositionWorld (human_, ClampToFloor (position));
                 positionDirty_ = true;
             }
             if (hasRotation_ && (channels & TransformChannels.Rotation) != 0) {

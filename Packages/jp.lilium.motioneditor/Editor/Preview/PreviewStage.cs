@@ -1229,7 +1229,61 @@ namespace Lilium
         /// </summary>
         public Transform PickBone (Ray ray)
         {
+            // 押したときは、今の見た目で焼き直す
+            pickMeshesValid_ = false;
             return PickBoneInternal (ray);
+        }
+
+        /// <summary>
+        /// PickBone と同じだが、前に焼いたメッシュを使い回す（マウスを動かすたびに、押したら選ぶ物を探して強調するため。
+        /// 毎回焼くと重い）。姿勢を変えたら InvalidatePickMeshes で捨てる
+        /// </summary>
+        public Transform PickBoneCached (Ray ray)
+        {
+            return PickBoneInternal (ray);
+        }
+
+        /// <summary>使い回している焼いたメッシュを捨てる（姿勢を変えたとき）</summary>
+        public void InvalidatePickMeshes ()
+        {
+            pickMeshesValid_ = false;
+        }
+
+        /// <summary>当たりを見るメッシュ（骨を持つメッシュは今の見た目で焼いた頂点。レンダラーの Transform から見た位置）</summary>
+        sealed class PickMesh
+        {
+            public SkinnedMeshRenderer skin;
+            public Transform transform;
+            public Vector3[] vertices;
+            public int[] triangles;
+        }
+
+        readonly List<PickMesh> pickMeshes_ = new List<PickMesh> ();
+        bool pickMeshesValid_;
+
+        void BuildPickMeshes ()
+        {
+            pickMeshes_.Clear ();
+            pickMeshesValid_ = true;
+            if (model == null) return;
+            foreach (SkinnedMeshRenderer skin in model.GetComponentsInChildren<SkinnedMeshRenderer> ()) {
+                if (!skin.enabled || skin.sharedMesh == null) continue;
+                Mesh baked = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+                try {
+                    skin.BakeMesh (baked);
+                    Vector3[] vertices = baked.vertices;
+                    if (vertices.Length == 0) continue;
+                    pickMeshes_.Add (new PickMesh { skin = skin, transform = skin.transform, vertices = vertices, triangles = skin.sharedMesh.triangles });
+                }
+                finally {
+                    Object.DestroyImmediate (baked);
+                }
+            }
+            foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter> ()) {
+                MeshRenderer renderer = filter.GetComponent<MeshRenderer> ();
+                if (renderer == null || !renderer.enabled || filter.sharedMesh == null) continue;
+                pickMeshes_.Add (new PickMesh { transform = filter.transform, vertices = filter.sharedMesh.vertices, triangles = filter.sharedMesh.triangles });
+            }
         }
 
         /// <summary>
@@ -1258,44 +1312,20 @@ namespace Lilium
         Transform PickBoneInternal (Ray ray)
         {
             if (model == null) return null;
+            if (!pickMeshesValid_) BuildPickMeshes ();
 
             Transform picked = null;
             float distance = float.MaxValue;
-
-            foreach (SkinnedMeshRenderer skin in model.GetComponentsInChildren<SkinnedMeshRenderer> ()) {
-                if (!skin.enabled || skin.sharedMesh == null) continue;
-
-                Mesh baked = new Mesh { hideFlags = HideFlags.HideAndDontSave };
-                try {
-                    skin.BakeMesh (baked);
-                    Vector3[] vertices = baked.vertices;
-                    if (vertices.Length == 0) continue;
-
-                    int[] triangles = skin.sharedMesh.triangles;
-                    MeshHit hit;
-                    // 焼いたメッシュはレンダラーの Transform から見た位置
-                    if (!RaycastMesh (ray, skin.transform, vertices, triangles, out hit) || hit.distance >= distance) continue;
-
-                    Transform bone = FindHeaviestBone (skin, triangles, hit);
-                    if (bone == null) continue;
-                    picked = bone;
-                    distance = hit.distance;
-                }
-                finally {
-                    Object.DestroyImmediate (baked);
-                }
-            }
-
-            foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter> ()) {
-                MeshRenderer renderer = filter.GetComponent<MeshRenderer> ();
-                if (renderer == null || !renderer.enabled || filter.sharedMesh == null) continue;
-
+            foreach (PickMesh mesh in pickMeshes_) {
+                if (mesh.transform == null) continue;
                 MeshHit hit;
-                if (!RaycastMesh (ray, filter.transform, filter.sharedMesh.vertices, filter.sharedMesh.triangles, out hit) || hit.distance >= distance) continue;
-                picked = filter.transform;
+                if (!RaycastMesh (ray, mesh.transform, mesh.vertices, mesh.triangles, out hit) || hit.distance >= distance) continue;
+                // 骨を持つメッシュは、当たった所を一番動かしている骨。持たないメッシュはその Transform
+                Transform bone = mesh.skin != null ? FindHeaviestBone (mesh.skin, mesh.triangles, hit) : mesh.transform;
+                if (bone == null) continue;
+                picked = bone;
                 distance = hit.distance;
             }
-
             return picked;
         }
 

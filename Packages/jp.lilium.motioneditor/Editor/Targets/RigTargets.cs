@@ -408,15 +408,48 @@ namespace Lilium
         public override void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
         {
             BeginEdit ();
+            Quaternion current = CurrentValue ();
             if ((channels & TransformChannels.Rotation) != 0) control_.localRotation = Quaternion.Normalize (rotation);
             if (position_ && (channels & TransformChannels.Position) != 0) control_.localPosition = position / humanScale;
+            FollowControl (current);
         }
 
         public override void ResetValues (bool pole, TransformChannels channels)
         {
             BeginEdit ();
+            Quaternion current = CurrentValue ();
             if ((channels & TransformChannels.Rotation) != 0) control_.localRotation = Quaternion.identity;
             if (position_ && (channels & TransformChannels.Position) != 0) control_.localPosition = Vector3.zero;
+            FollowControl (current);
+        }
+
+        /// <summary>今の骨の見た目を FK の値にしたもの（コントロールの値は、IK が骨を動かした分だけ見た目とずれていることがある）</summary>
+        Quaternion CurrentValue ()
+        {
+            Quaternion rotation;
+            Vector3 position;
+            return solver_.TryGetCurrentFkValue (bone_, out rotation, out position) ? rotation : control_.localRotation;
+        }
+
+        /// <summary>
+        /// コントロールに入れた値の姿勢へ、骨もすぐ動かす（解き直すのを待たない）。窓が骨の動いた量を見て、全身 IK の固定している点を一緒に動かすため。
+        /// 値は「親の今の姿勢から見た、基準姿勢からの差」なので、今の見た目の値 current から入れた値への差を骨に掛ければよい
+        /// （向き = ルート × 親の差 × 値 × 基準の向き。位置 = ルートから見た基準の位置 + 値 × 体の大きさ）
+        /// </summary>
+        void FollowControl (Quaternion current)
+        {
+            Quaternion rest = rig_.GetRestRootRotation (bone_);
+            bone_.rotation = bone_.rotation * Quaternion.Inverse (rest) * Quaternion.Inverse (current) * control_.localRotation * rest;
+            if (position_) bone_.position = rig_.root.transform.TransformPoint (rig_.GetRestRootPosition (bone_) + control_.localPosition * humanScale);
+        }
+
+        /// <summary>
+        /// 回転のギズモを出す（ハンドルを押さずに選んだとき。全身 IK の点をつかむ間に、点をつなぐ線から骨を選んだ）。
+        /// ギズモは最後に押したハンドルに出るので、この骨のハンドルを押したことにする
+        /// </summary>
+        public void FocusHandle ()
+        {
+            PoseHandleUtility.focusControl = boneHash_;
         }
 
         public override string mirrorKey
