@@ -10,22 +10,8 @@ namespace Lilium
     /// <summary>
     /// 骨を直接動かす Generic のクリップを、編集用リグの値に直して取り込む
     /// </summary>
-    public class GenericImportTests
+    public class GenericImportTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
         AnimationClip CreateClip (float rate)
         {
             AnimationClip clip = new AnimationClip { frameRate = rate };
@@ -66,17 +52,15 @@ namespace Lilium
         [Test]
         public void ImportedValuesReproduceSourcePose ()
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
-            created_.Add (definition);
+            EditRigDefinition definition = CreateDefinition ();
             Animator display = TestSkeleton.CreateHumanoid (created_, true);
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            disposables_.Add (rig);
+            EditingRig rig = CreateEditingRig (definition, display);
             EditingRigSolver solver = new EditingRigSolver (rig);
             solver.Capture ();
             ClipSampler sourceSampler = new ClipSampler (rig.animator);
-            disposables_.Add (sourceSampler);
+            Keep (sourceSampler);
             List<PoseTarget> targets = RigTargets.Create (rig, solver);
-            foreach (PoseTarget target in targets) disposables_.Add (target);
+            foreach (PoseTarget target in targets) Keep (target);
 
             Transform lowerArm = display.GetBoneTransform (HumanBodyBones.LeftLowerArm);
             Transform upperLeg = display.GetBoneTransform (HumanBodyBones.RightUpperLeg);
@@ -113,7 +97,7 @@ namespace Lilium
             Transform root = rig.root.transform;
             Transform[] bones = { rig.GetEditingBone (HumanBodyBones.LeftLowerArm), rig.GetEditingBone (HumanBodyBones.RightUpperLeg), rig.GetEditingBone (HumanBodyBones.LeftHand) };
             ClipSampler destinationSampler = new ClipSampler (rig.animator);
-            disposables_.Add (destinationSampler);
+            Keep (destinationSampler);
             foreach (int frame in new[] { 0, 7, 20 }) {
                 float time = frame / 60f;
                 rig.ResetBonesToRest ();

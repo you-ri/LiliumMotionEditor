@@ -12,7 +12,7 @@ namespace Lilium
     /// <summary>
     /// Humanoid への焼き（S2）
     /// </summary>
-    public class HumanoidBakerTests
+    public class HumanoidBakerTests : RigTestFixture
     {
         static readonly HumanBodyBones[] kCompared = {
             HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.Neck, HumanBodyBones.Head,
@@ -22,32 +22,12 @@ namespace Lilium
             HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
         };
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
-            created_.Add (definition_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        T Keep<T> (T disposable) where T : System.IDisposable
-        {
-            disposables_.Add (disposable);
-            return disposable;
+            definition_ = CreateDefinition ();
         }
 
         sealed class Setup
@@ -66,14 +46,8 @@ namespace Lilium
             Setup s = new Setup ();
             s.display = TestSkeleton.CreateHumanoid (created_, true);
             s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            if (rotated) {
-                GameObject prefab = new GameObject ("Prefab");
-                created_.Add (prefab);
-                prefab.transform.position = new Vector3 (2, 0, -1);
-                s.display.transform.SetParent (prefab.transform, false);
-                s.display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            }
-            s.rig = Keep (EditingRig.Create (definition_, s.display, name => new GameObject (name), rigLayers != null ? rigLayers (s.display) : null));
+            if (rotated) PlaceInPrefab (s.display, new Vector3 (2, 0, -1));
+            s.rig = CreateEditingRig (definition_, s.display, rigLayers != null ? rigLayers (s.display) : null);
             s.solver = new EditingRigSolver (s.rig);
             s.solver.Capture ();
             s.sampler = Keep (new ClipSampler (s.rig.animator));
@@ -286,7 +260,7 @@ namespace Lilium
             created_.Add (character);
             new GameObject ("bone").transform.SetParent (character.transform, false);
             Animator animator = character.AddComponent<Animator> ();
-            EditingRig rig = Keep (EditingRig.Create (definition_, animator, name => new GameObject (name)));
+            EditingRig rig = CreateEditingRig (definition_, animator);
             HumanoidBaker baker = Keep (new HumanoidBaker (rig, new EditingRigSolver (rig), (clip, time) => { }));
             Assert.IsNotNull (baker.error);
             Assert.Throws<System.InvalidOperationException> (() => baker.Bake (NewClip (), NewClip ()));

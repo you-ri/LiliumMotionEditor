@@ -6,9 +6,9 @@ namespace Lilium
 {
 
     /// <summary>
-    /// キーの書き込み（1 か所に集めたもの）とポーズの貼り付け
+    /// タイムラインのキーとポーズのコピー・貼り付け（TimelineClipboard / PoseClipboard）と、貼り付けが使うキーの書き込み
     /// </summary>
-    public class ClipWriteTests
+    public class ClipboardTests
     {
         static readonly EditorCurveBinding kBinding = EditorCurveBinding.FloatCurve ("Hips", typeof (Transform), "m_LocalPosition.x");
         static readonly EditorCurveBinding kOtherBinding = EditorCurveBinding.FloatCurve ("Hips/Spine", typeof (Transform), "m_LocalPosition.y");

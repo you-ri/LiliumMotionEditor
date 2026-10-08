@@ -10,22 +10,8 @@ namespace Lilium
     /// <summary>
     /// 既存の Humanoid のモーションを編集用リグの値へ読み込む（S7）
     /// </summary>
-    public class HumanoidImportTests
+    public class HumanoidImportTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
         [Test]
         public void GenericClipIsRejected ()
         {
@@ -42,15 +28,13 @@ namespace Lilium
         [Test]
         public void ImportedValuesReproduceTheMotion ()
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
-            created_.Add (definition);
+            EditRigDefinition definition = CreateDefinition ();
             Animator display = TestSkeleton.CreateHumanoid (created_, true);
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            disposables_.Add (rig);
+            EditingRig rig = CreateEditingRig (definition, display);
             EditingRigSolver solver = new EditingRigSolver (rig);
             solver.Capture ();
             List<PoseTarget> targets = RigTargets.Create (rig, solver);
-            foreach (PoseTarget target in targets) disposables_.Add (target);
+            foreach (PoseTarget target in targets) Keep (target);
 
             // 表示モデルへ当てる Humanoid のモーション（muscle のカーブ）
             AnimationClip source = new AnimationClip { frameRate = 30 };
@@ -62,7 +46,7 @@ namespace Lilium
             Assert.IsNull (HumanoidImport.GetProblem (source));
 
             ClipSampler sampler = new ClipSampler (display);
-            disposables_.Add (sampler);
+            Keep (sampler);
             AnimationClip destination = new AnimationClip { frameRate = 60 };
             created_.Add (destination);
 
@@ -84,15 +68,13 @@ namespace Lilium
         [Test]
         public void RootMotionIsMovedIntoHips ()
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
-            created_.Add (definition);
+            EditRigDefinition definition = CreateDefinition ();
             Animator display = TestSkeleton.CreateHumanoid (created_, true);
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            disposables_.Add (rig);
+            EditingRig rig = CreateEditingRig (definition, display);
             EditingRigSolver solver = new EditingRigSolver (rig);
             solver.Capture ();
             List<PoseTarget> targets = RigTargets.Create (rig, solver);
-            foreach (PoseTarget target in targets) disposables_.Add (target);
+            foreach (PoseTarget target in targets) Keep (target);
 
             // 前へ 1 進む（Humanoid の長さなので humanScale 倍になる）
             AnimationClip source = new AnimationClip { frameRate = 60 };
@@ -103,7 +85,7 @@ namespace Lilium
             AnimationUtility.SetEditorCurve (source, EditorCurveBinding.FloatCurve ("", typeof (Animator), "RootQ.w"), AnimationCurve.Constant (0, 0.5f, 1));
 
             ClipSampler sampler = new ClipSampler (display);
-            disposables_.Add (sampler);
+            Keep (sampler);
             AnimationClip destination = new AnimationClip { frameRate = 60 };
             created_.Add (destination);
             Transform hips = rig.GetEditingBone (HumanBodyBones.Hips);
@@ -117,7 +99,7 @@ namespace Lilium
             Assert.IsTrue (AnimationUtility.GetAnimationClipSettings (destination).keepOriginalPositionXZ, "ルートの扱いの設定を写す");
 
             ClipSampler editing = new ClipSampler (rig.animator);
-            disposables_.Add (editing);
+            Keep (editing);
             rig.ResetBonesToRest ();
             editing.Sample (destination, 0);
             solver.Solve ();

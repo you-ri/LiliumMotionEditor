@@ -9,7 +9,7 @@ namespace Lilium
     /// <summary>
     /// リグの定義と、キャラへの割り当て。Avatar はテストの中で骨を組んで作る（パッケージの外のアセットに頼らない）
     /// </summary>
-    public class RigBindingTests
+    public class RigBindingTests : RigTestFixture
     {
         static readonly HumanBodyBones[] kRequired = {
             HumanBodyBones.Hips,
@@ -20,25 +20,14 @@ namespace Lilium
             HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
         };
 
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
+            definition_ = CreateDefinition ();
             // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
             definition_.solver = RigSolver.TwoBoneIk;
-            created_.Add (definition_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
         }
 
         Animator CreateHumanoid (bool withChest, params string[] extraBones)

@@ -9,45 +9,23 @@ namespace Lilium
     /// <summary>
     /// 足の転がし（Reverse Foot。S22）。支点が動かないこと・角度 0 で今までと同じこと・FK/IK の切り替え・左右反転・Override の重ね方
     /// </summary>
-    public class ReverseFootTests
+    public class ReverseFootTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-3f;
         const float kAngleTolerance = 0.01f;
         const string kLeft = "LeftLeg";
         const string kRight = "RightLeg";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<EditingRig> rigs_ = new List<EditingRig> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (EditingRig rig in rigs_) rig.Dispose ();
-            rigs_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
         /// <summary>
-        /// キャラの prefab でよくあるように、Animator の GameObject を Y270 に回して置く。脚は IK にして、膝を曲げておく（転がしで足首が動いても届くように）
+        /// 脚は IK にして、膝を曲げておく（転がしで足首が動いても届くように）
         /// </summary>
         (EditingRig, EditingRigSolver) CreateRig (bool toes = true, System.Action<EditRigDefinition> configure = null, bool bend = true, float size = 1)
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
+            EditRigDefinition definition = CreateDefinition ();
             // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
             definition.solver = RigSolver.TwoBoneIk;
-            created_.Add (definition);
             if (configure != null) configure (definition);
-            GameObject prefabRoot = new GameObject ("Prefab");
-            created_.Add (prefabRoot);
-            Animator display = toes ? TestSkeleton.CreateHumanoidWithToes (created_, size) : TestSkeleton.CreateHumanoid (created_, true, size);
-            display.transform.SetParent (prefabRoot.transform, false);
-            display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            rigs_.Add (rig);
+            EditingRig rig = CreateEditingRig (definition, CreateCharacter (size: size, toes: toes));
             EditingRigSolver solver = new EditingRigSolver (rig);
             foreach (string chain in new[] { kLeft, kRight }) {
                 solver.SwitchToIk (chain);
@@ -84,19 +62,6 @@ namespace Lilium
             return pivots[(int)pivot];
         }
 
-        static Dictionary<Transform, (Vector3, Quaternion)> Snapshot (EditingRig rig)
-        {
-            return rig.editingBones.ToDictionary (b => b, b => (b.position, b.rotation));
-        }
-
-        static void AssertSamePose (Dictionary<Transform, (Vector3, Quaternion)> expected, EditingRig rig)
-        {
-            foreach (KeyValuePair<Transform, (Vector3, Quaternion)> pair in expected) {
-                Assert.That (Vector3.Distance (pair.Value.Item1, pair.Key.position), Is.LessThan (kPositionTolerance), pair.Key.name + " の位置");
-                Assert.That (Quaternion.Angle (pair.Value.Item2, pair.Key.rotation), Is.LessThan (kAngleTolerance), pair.Key.name + " の回転");
-            }
-        }
-
         [Test]
         public void LegsHaveReverseFootAndArmsDoNot ()
         {
@@ -116,7 +81,7 @@ namespace Lilium
             Solve (rig, solver);
             solver.SetFootAngles (kLeft, Vector3.zero);
             Solve (rig, solver);
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -206,12 +171,12 @@ namespace Lilium
             solver.TryGetFootAngles (kLeft, out angles);
             Assert.AreEqual (Vector3.zero, angles);
             Solve (rig, solver);
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
 
             // IK に戻しても飛ばない
             solver.SwitchToIk (kLeft);
             Solve (rig, solver);
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -229,7 +194,7 @@ namespace Lilium
             Assert.AreEqual (Vector3.zero, angles);
             solver.SetIkWeight (kLeft, 1);
             Solve (rig, solver);
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -243,7 +208,7 @@ namespace Lilium
                 solver.SyncIkFk ();
                 Solve (rig, solver);
             }
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -259,7 +224,7 @@ namespace Lilium
             solver.TryGetFootAngles (kLeft, out angles);
             Assert.AreEqual (Vector3.zero, angles);
             Solve (rig, solver);
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]

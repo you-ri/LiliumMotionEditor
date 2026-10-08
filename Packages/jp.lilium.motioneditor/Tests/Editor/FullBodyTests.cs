@@ -11,38 +11,18 @@ namespace Lilium
     /// 全身 IK（S25）の配線: リグの定義のモード・点のコントロール・素通し・元の姿勢からの解き直し・焼きへの接続。
     /// 解く中身（硬さ・角度制限）は S25a-2 で別に確かめる
     /// </summary>
-    public class FullBodyTests
+    public class FullBodyTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-4f;
         const float kAngleTolerance = 0.01f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
-            created_.Add (definition_);
+            definition_ = CreateDefinition ();
             Random.InitState (4321);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        T Keep<T> (T disposable) where T : System.IDisposable
-        {
-            disposables_.Add (disposable);
-            return disposable;
         }
 
         sealed class Setup
@@ -59,29 +39,14 @@ namespace Lilium
         {
             definition_.solver = fullBody ? RigSolver.FullBodyIk : RigSolver.TwoBoneIk;
             Setup s = new Setup ();
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            s.display = fingers ? TestSkeleton.CreateHumanoidWithFingers (created_) : TestSkeleton.CreateHumanoid (created_, withChest, size);
+            s.display = CreateCharacter (withChest, size, fingers: fingers, twistFrames: twistFrames);
             s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            s.display.transform.SetParent (prefab.transform, false);
-            s.display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            if (twistFrames) TwistFrames (s.display.GetBoneTransform (HumanBodyBones.Hips));
 
-            s.rig = Keep (EditingRig.Create (definition_, s.display, name => new GameObject (name)));
+            s.rig = CreateEditingRig (definition_, s.display);
             s.solver = new EditingRigSolver (s.rig);
             s.solver.Capture ();
             s.body = Keep (new FullBodyRig (s.rig, definition_));
             return s;
-        }
-
-        static void TwistFrames (Transform hips)
-        {
-            Transform[] bones = hips.GetComponentsInChildren<Transform> ();
-            Dictionary<Transform, Vector3> positions = bones.ToDictionary (t => t, t => t.position);
-            foreach (Transform bone in bones) {
-                bone.rotation = Random.rotation;
-                foreach (Transform child in bone) child.position = positions[child];
-            }
         }
 
         static Transform Bone (Setup s, HumanBodyBones bone)
@@ -116,12 +81,6 @@ namespace Lilium
         }
 
         // ---- リグの定義のモード ----
-
-        [Test]
-        public void DefaultDefinition_UsesFullBodyIk ()
-        {
-            Assert.AreEqual (RigSolver.FullBodyIk, definition_.solver, "新しく作る定義の既定は全身 IK");
-        }
 
         [Test]
         public void TwoBoneIkDefinition_UsesIkChains_AndHasNoPoints ()
@@ -403,101 +362,6 @@ namespace Lilium
             s.body.SetRotationWeight (HumanBodyBones.LeftHand, 1);
             s.body.Solve ();
             AssertSamePose (before, s, "今の場所で固定しても動かない", 1e-4f, 0.05f);
-        }
-
-        // ---- リグの定義 ----
-
-        [Test]
-        public void Defaults_StiffnessGrowsTowardBodyCenter_AndFingersAreNotSolved ()
-        {
-            float Stiffness (HumanBodyBones bone)
-            {
-                return definition_.fkControls.First (c => c.bone == bone).stiffness;
-            }
-
-            Assert.Greater (Stiffness (HumanBodyBones.Hips), Stiffness (HumanBodyBones.Spine));
-            Assert.Greater (Stiffness (HumanBodyBones.Spine), Stiffness (HumanBodyBones.Chest));
-            Assert.Greater (Stiffness (HumanBodyBones.Chest), Stiffness (HumanBodyBones.LeftShoulder));
-            Assert.Greater (Stiffness (HumanBodyBones.LeftShoulder), Stiffness (HumanBodyBones.LeftUpperArm));
-            Assert.AreEqual (Stiffness (HumanBodyBones.LeftUpperArm), Stiffness (HumanBodyBones.RightUpperArm), "左右対称");
-
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftIndexDistal).fullBodySolve);
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.Jaw).fullBodyPoint);
-            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftToes).fullBodySolve, "つま先は接地に使うので解く");
-
-            // 全身 IK の点をつかむ間も出すのは、解かない（点の無い）骨だけ
-            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftIndexDistal).fullBodyHandle);
-            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.Jaw).fullBodyHandle);
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftHand).fullBodyHandle);
-        }
-
-        [Test]
-        public void Version3Definition_ShowsUnsolvedBonesWhilePointGrab ()
-        {
-            // 版 3 までの定義には fullBodyHandle が無い（読むと false）。今の定義で解かない骨を出すようにする
-            foreach (EditRigDefinition.FkControl control in definition_.fkControls) control.fullBodyHandle = false;
-            definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftThumbProximal).fullBodySolve = true;
-            definition_.version = 3;
-
-            definition_.UpgradeIfNeeded ();
-
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.IsTrue (definition_.fkControls.First (c => c.bone == HumanBodyBones.RightLittleDistal).fullBodyHandle);
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftThumbProximal).fullBodyHandle, "解くようにした骨は点が付くので出さない");
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.Hips).fullBodyHandle);
-        }
-
-        [Test]
-        public void OldVersionDefinition_GetsDefaultsFilled ()
-        {
-            // S23 で作った定義アセットには全身 IK の項目が無い（読むと 0 や既定の初期値のまま）
-            foreach (EditRigDefinition.FkControl control in definition_.fkControls) {
-                control.fullBodySolve = true;
-                control.fullBodyPoint = true;
-                control.stiffness = 0;
-            }
-            // solver の項目も無いので、初期値の 2 本骨 IK で読まれる
-            definition_.solver = RigSolver.TwoBoneIk;
-            definition_.version = 0;
-
-            definition_.UpgradeIfNeeded ();
-
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.AreEqual (0.95f, definition_.fkControls.First (c => c.bone == HumanBodyBones.Hips).stiffness, 1e-6f);
-            Assert.IsFalse (definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftThumbProximal).fullBodySolve);
-            Assert.AreEqual (RigSolver.TwoBoneIk, definition_.solver, "古い定義は今の IK のまま");
-
-            // 今の版で直した値は、読み直しても上書きしない
-            definition_.fkControls.First (c => c.bone == HumanBodyBones.Hips).stiffness = 0.4f;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (0.4f, definition_.fkControls.First (c => c.bone == HumanBodyBones.Hips).stiffness, 1e-6f);
-        }
-
-        [Test]
-        public void Validate_ReportsBadFullBodyValues ()
-        {
-            Assert.AreEqual (0, definition_.Validate ().Count);
-            definition_.fullBody.iterations = 0;
-            definition_.fkControls[0].stiffness = 1.5f;
-            List<string> errors = definition_.Validate ();
-            Assert.AreEqual (2, errors.Count, string.Join (" / ", errors));
-        }
-
-        [Test]
-        public void CopyFrom_KeepsSolverAndFullBodyValues ()
-        {
-            definition_.solver = RigSolver.FullBodyIk;
-            definition_.fullBody.iterations = 33;
-            definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness = 0.33f;
-
-            EditRigDefinition copy = ScriptableObject.CreateInstance<EditRigDefinition> ();
-            created_.Add (copy);
-            copy.CopyFrom (definition_);
-
-            Assert.AreEqual (RigSolver.FullBodyIk, copy.solver);
-            Assert.AreEqual (33, copy.fullBody.iterations);
-            Assert.AreEqual (0.33f, copy.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness, 1e-6f);
-            Assert.AreEqual (EditRigDefinition.kVersion, copy.version);
         }
 
         // ---- つかむ対象とキー ----

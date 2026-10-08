@@ -9,63 +9,25 @@ namespace Lilium
     /// <summary>
     /// 編集用リグの解決（コントロール → 骨）と、その逆（骨 → コントロール）
     /// </summary>
-    public class EditingRigSolverTests
+    public class EditingRigSolverTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-4f;
         const float kAngleTolerance = 0.01f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<EditingRig> rigs_ = new List<EditingRig> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
+            definition_ = CreateDefinition ();
             // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
             definition_.solver = RigSolver.TwoBoneIk;
-            created_.Add (definition_);
             Random.InitState (1234);
         }
 
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (EditingRig rig in rigs_) rig.Dispose ();
-            rigs_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        /// <summary>
-        /// キャラの prefab でよくあるように、Animator の GameObject を Y270 に回して置く。
-        /// twistFrames なら骨の軸の向き（ローカルの回転）をばらばらにする（位置は変えない。体の形は同じで骨の軸だけ違うキャラ）
-        /// </summary>
         EditingRig CreateRig (bool withChest = true, bool twistFrames = false, float size = 1)
         {
-            GameObject prefabRoot = new GameObject ("Prefab");
-            created_.Add (prefabRoot);
-            Animator display = TestSkeleton.CreateHumanoid (created_, withChest, size);
-            display.transform.SetParent (prefabRoot.transform, false);
-            display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            if (twistFrames) TwistFrames (display.GetBoneTransform (HumanBodyBones.Hips));
-
-            EditingRig rig = EditingRig.Create (definition_, display, name => new GameObject (name));
-            rigs_.Add (rig);
-            return rig;
-        }
-
-        static void TwistFrames (Transform hips)
-        {
-            // 回す前に全部の骨の位置を取っておく（親を回すと孫まで動くので、先に記録しないと形が崩れる）
-            Transform[] bones = hips.GetComponentsInChildren<Transform> ();
-            Dictionary<Transform, Vector3> positions = bones.ToDictionary (t => t, t => t.position);
-            foreach (Transform bone in bones) {
-                bone.rotation = Random.rotation;
-                foreach (Transform child in bone) child.position = positions[child];
-            }
+            return CreateEditingRig (definition_, CreateCharacter (withChest, size, twistFrames: twistFrames));
         }
 
         static Transform Bone (EditingRig rig, HumanBodyBones bone)
@@ -81,25 +43,6 @@ namespace Lilium
         static void SetIkWeight (EditingRig rig, string chain, float weight)
         {
             Control (rig, RigPaths.IkChain (chain)).GetComponent<IkControl> ().ikWeight = weight;
-        }
-
-        /// <summary>
-        /// 骨の姿勢を記録する（ルートから見た値）
-        /// </summary>
-        static Dictionary<Transform, (Vector3, Quaternion)> Snapshot (EditingRig rig)
-        {
-            Transform root = rig.root.transform;
-            return rig.editingBones.ToDictionary (b => b, b => (root.InverseTransformPoint (b.position), Quaternion.Inverse (root.rotation) * b.rotation));
-        }
-
-        static void AssertSamePose (Dictionary<Transform, (Vector3, Quaternion)> expected, EditingRig rig)
-        {
-            Dictionary<Transform, (Vector3, Quaternion)> actual = Snapshot (rig);
-            foreach (KeyValuePair<Transform, (Vector3, Quaternion)> pair in expected) {
-                (Vector3 position, Quaternion rotation) = actual[pair.Key];
-                Assert.That (Vector3.Distance (pair.Value.Item1, position), Is.LessThan (kPositionTolerance), pair.Key.name + " の位置");
-                Assert.That (Quaternion.Angle (pair.Value.Item2, rotation), Is.LessThan (kAngleTolerance), pair.Key.name + " の回転");
-            }
         }
 
         /// <summary>
@@ -141,7 +84,7 @@ namespace Lilium
             rig.ResetBonesToRest ();
             solver.Solve ();
 
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -157,7 +100,7 @@ namespace Lilium
             rig.ResetBonesToRest ();
             solver.Solve ();
 
-            AssertSamePose (expected, rig);
+            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
         }
 
         [Test]

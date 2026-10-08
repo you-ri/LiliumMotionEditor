@@ -10,9 +10,8 @@ namespace Lilium
     /// <summary>
     /// キーの書き出し口（CurveWriter）
     /// </summary>
-    public class CurveWriterTests
+    public class CurveWriterTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
         AnimationClip clip_;
         Transform root_;
         Transform bone_;
@@ -28,15 +27,6 @@ namespace Lilium
             controls.SetParent (root_, false);
             bone_ = new GameObject ("Bone").transform;
             bone_.SetParent (controls, false);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
         }
 
         AnimationCurve Curve (string path, System.Type type, string property)

@@ -10,9 +10,8 @@ namespace Lilium
     /// <summary>
     /// ゲームの Rig の値の代理（Controls/Game/...）。Animation Rigging に頼らないよう、Rig の中身の情報（RigLayerInfo）はテストで組む
     /// </summary>
-    public class RigProxiesTests
+    public class RigProxiesTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
         EditingRig rig_;
         Animator display_;
@@ -26,8 +25,7 @@ namespace Lilium
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
-            created_.Add (definition_);
+            definition_ = CreateDefinition ();
             display_ = TestSkeleton.CreateHumanoid (created_, true, 1.5f);
 
             Transform rigs = Child (display_.transform, "Rigs", Vector3.zero);
@@ -38,17 +36,6 @@ namespace Lilium
             handTarget_ = Child (handIk_, "Target", new Vector3 (-0.4f, 1.0f, 0.2f));
             weaponTarget_ = Child (display_.GetBoneTransform (HumanBodyBones.LeftHand), "weapon_target", new Vector3 (0, 0, 0.1f));
             applied_.Clear ();
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            if (rig_ != null) rig_.Dispose ();
-            rig_ = null;
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
         }
 
         static Transform Child (Transform parent, string name, Vector3 position)
@@ -102,7 +89,7 @@ namespace Lilium
                 Layer ("Foot Rig", foot, false, 1, Constraint ("FootIK", foot, 1)),
                 Layer ("Upper Rig", rigTransform_, true, 1),
             };
-            rig_ = EditingRig.Create (definition_, display_, name => new GameObject (name), layers);
+            rig_ = CreateEditingRig (definition_, display_, layers);
             return rig_.rigProxies;
         }
 
@@ -247,7 +234,7 @@ namespace Lilium
         [Test]
         public void NoLayersGivesEmptyProxies ()
         {
-            rig_ = EditingRig.Create (definition_, display_, name => new GameObject (name));
+            rig_ = CreateEditingRig (definition_, display_);
             Assert.IsNotNull (rig_.rigProxies);
             Assert.AreEqual (0, rig_.rigProxies.rigs.Count);
             Assert.IsNull (rig_.FindControl (RigPaths.kGame));

@@ -9,42 +9,17 @@ namespace Lilium
     /// <summary>
     /// Controller のパネル（S9）: 数値欄の値の読み書き・行ごとの Reset・左右反転
     /// </summary>
-    public class MirrorValuesTests
+    public class MirrorValuesTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-3f;
         const float kAngleTolerance = 0.05f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<EditingRig> rigs_ = new List<EditingRig> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (EditingRig rig in rigs_) rig.Dispose ();
-            rigs_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        /// <summary>
-        /// キャラの prefab でよくあるように、Animator の GameObject を Y270 に回して置く
-        /// </summary>
         EditingRig CreateRig ()
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
+            EditRigDefinition definition = CreateDefinition ();
             // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
             definition.solver = RigSolver.TwoBoneIk;
-            created_.Add (definition);
-            GameObject prefabRoot = new GameObject ("Prefab");
-            created_.Add (prefabRoot);
-            Animator display = TestSkeleton.CreateHumanoid (created_, true);
-            display.transform.SetParent (prefabRoot.transform, false);
-            display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            rigs_.Add (rig);
-            return rig;
+            return CreateEditingRig (definition, CreateCharacter ());
         }
 
         static Vector3 RootPosition (EditingRig rig, HumanBodyBones bone)
