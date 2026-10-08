@@ -334,17 +334,11 @@ namespace Lilium
             Vector3 hint = Vector3.zero;
             for (int f = 0; f < count; f++) {
                 Quaternion q = CurveEdit.EvaluateRotation (clip, path, f / rate);
-                hint = f == 0 ? Wrap (q.eulerAngles) : EulerAngles.Closest (q, hint);
+                hint = f == 0 ? EulerAngles.Wrap (q.eulerAngles) : EulerAngles.Closest (q, hint);
                 eulers[f] = hint;
             }
             eulerCache_[path] = eulers;
             return eulers;
-        }
-
-        static Vector3 Wrap (Vector3 euler)
-        {
-            for (int i = 0; i < 3; i++) euler[i] = Mathf.DeltaAngle (0, euler[i]);
-            return euler;
         }
 
         float Evaluate (Channel channel, float frame)
@@ -731,7 +725,7 @@ namespace Lilium
             selected_.Clear ();
             selected_.AddRange (moved);
             Invalidate ();
-            window_.EndCurveEdit ();
+            window_.AfterClipEdit ();
         }
 
         void EndDrag ()
@@ -761,7 +755,7 @@ namespace Lilium
             selected_.Clear ();
             selected_.Add (new SelectedKey { channel = channel, frame = frame });
             Invalidate ();
-            window_.EndCurveEdit ();
+            window_.AfterClipEdit ();
         }
 
         void DeleteSelected ()
@@ -771,7 +765,7 @@ namespace Lilium
             foreach (SelectedKey key in selected_) CurveEdit.RemoveKey (clip, key.channel.binding, key.frame);
             selected_.Clear ();
             Invalidate ();
-            window_.EndCurveEdit ();
+            window_.AfterClipEdit ();
         }
 
         void ShowContextMenu (Vector2 position)
@@ -812,7 +806,7 @@ namespace Lilium
                     CurveEdit.SetTangentMode (clip, key.channel.binding, key.frame, mode);
                 }
                 Invalidate ();
-                window_.EndCurveEdit ();
+                window_.AfterClipEdit ();
             });
         }
     }

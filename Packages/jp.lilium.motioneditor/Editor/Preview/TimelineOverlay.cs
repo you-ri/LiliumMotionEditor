@@ -141,18 +141,6 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 組み込みアイコン（暗いスキンでは d_ 付き）。トランスポートのボタンが使う
-    /// </summary>
-    static class TimelineIcons
-    {
-        public static Texture2D Load (string name)
-        {
-            Texture2D texture = EditorGUIUtility.isProSkin ? EditorGUIUtility.FindTexture ("d_" + name) : null;
-            return texture != null ? texture : EditorGUIUtility.FindTexture (name);
-        }
-    }
-
-    /// <summary>
     /// タイムライン上端の段: Auto Key の切替、ポーズのコピー/貼り付け/リセット、再生の transport、今のフレーム、Tracks の切替、Fit
     /// </summary>
     sealed class TransportBar : VisualElement
@@ -277,7 +265,7 @@ namespace Lilium
         static Button IconButton (string icon, string tooltip, System.Action click)
         {
             Button button = new Button (click) { tooltip = tooltip };
-            Texture2D texture = TimelineIcons.Load (icon);
+            Texture2D texture = Icons.LoadBuiltin (icon);
             if (texture != null) button.iconImage = Background.FromTexture2D (texture);
             else button.text = icon.Substring (0, 1);
             button.style.width = 28;
@@ -293,7 +281,7 @@ namespace Lilium
             if (window_ == null) return;
 
             Clock clock = window_.clock;
-            Texture2D icon = TimelineIcons.Load (clock.isPlaying ? "PauseButton" : "PlayButton");
+            Texture2D icon = Icons.LoadBuiltin (clock.isPlaying ? "PauseButton" : "PlayButton");
             if (icon != null) playButton_.iconImage = Background.FromTexture2D (icon);
 
             frameField_.SetValueWithoutNotify (window_.frame);

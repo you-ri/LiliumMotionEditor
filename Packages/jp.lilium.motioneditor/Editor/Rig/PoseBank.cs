@@ -187,19 +187,9 @@ namespace Lilium
             if (muscleByAttribute_ == null) {
                 muscleByAttribute_ = new Dictionary<string, int> ();
                 string[] names = HumanTrait.MuscleName;
-                string[] fingers = { "Thumb", "Index", "Middle", "Ring", "Little" };
                 for (int i = 0; i < names.Length; i++) {
-                    string name = names[i];
-                    muscleByAttribute_[name] = i;
-                    foreach (string side in new[] { "Left", "Right" }) {
-                        foreach (string finger in fingers) {
-                            string prefix = side + " " + finger + " ";
-                            if (!name.StartsWith (prefix)) continue;
-                            string rest = name.Substring (prefix.Length);
-                            // "1 Stretched" → ".1 Stretched"、"Spread" → ".Spread"
-                            muscleByAttribute_[side + "Hand." + finger + "." + rest] = i;
-                        }
-                    }
+                    muscleByAttribute_[names[i]] = i;
+                    muscleByAttribute_[HumanoidBaker.clipMuscleNames[i]] = i;
                 }
             }
             Dictionary<int, float> result = new Dictionary<int, float> ();

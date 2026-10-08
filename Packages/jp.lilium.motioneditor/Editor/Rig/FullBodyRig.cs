@@ -464,7 +464,7 @@ namespace Lilium
         {
             Point point = Find (bone);
             if (point == null || !point.hasRotation) return false;
-            point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * rotation * Quaternion.Inverse (point.restRootRotation));
+            point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * rotation * Quaternion.Inverse (point.restRootRotation));
             return true;
         }
 
@@ -501,7 +501,7 @@ namespace Lilium
             }
             localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
             localRotation = point.hasRotation
-                ? Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation))
+                ? EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation))
                 : point.control.localRotation;
             return true;
         }
@@ -510,7 +510,7 @@ namespace Lilium
         {
             point.control.localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
             if (point.hasRotation) {
-                point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
             }
         }
 
@@ -567,7 +567,7 @@ namespace Lilium
                 position = true;
             }
             if (point.hasRotation && point.values.rotationWeight >= 1 && Quaternion.Angle (point.bone.rotation, PointWorldRotation (point)) > kSyncAngle) {
-                point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
                 rotation = true;
             }
         }
@@ -642,13 +642,6 @@ namespace Lilium
         {
             Point point = Find (bone);
             return point != null ? Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) : 0;
-        }
-
-        static Quaternion Normalize (Quaternion q)
-        {
-            // 同じ回転の 2 通りの表し方のうち w ≥ 0 に揃える（キーの間で符号が飛ぶと補間が遠回りになる）
-            q = Quaternion.Normalize (q);
-            return q.w < 0 ? new Quaternion (-q.x, -q.y, -q.z, -q.w) : q;
         }
 
         // ---- 解く ----

@@ -438,6 +438,12 @@ namespace Lilium
             return go != null && targetByObject_.TryGetValue (go, out target) ? target : null;
         }
 
+        /// <summary>選んでいる物（同じ物を指す GameObject が 2 つ選ばれていても 1 つ）</summary>
+        IEnumerable<PoseTarget> SelectedTargets ()
+        {
+            return selection_.Select (FindTarget).Where (t => t != null).Distinct ();
+        }
+
         /// <summary>
         /// ツールのハンドル用カメラ。ツールの GUI を回す直前に Unity が読むので、ここで描画用のカメラと視点を揃える。
         /// このとき Screen は窓（ホストビュー）の大きさ
@@ -775,6 +781,23 @@ namespace Lilium
         }
 
         /// <summary>
+        /// キーが無くて動かせなかったハンドルの操作を、つかむ前の操作値へ戻して知らせる。
+        /// クリップを当て直すだけでは戻らない: カーブの無い値（Reset で打たない腰の位置など）は当て直しで今のまま残る
+        /// </summary>
+        void RevertManipulation (PreviewStage.ControlState before)
+        {
+            if (before != null) {
+                stage_.RestoreControlState (before);
+                SolveAfterManipulate ();
+            }
+            else {
+                SamplePose ();
+            }
+            NotifyNoKey ();
+            RepaintView ();
+        }
+
+        /// <summary>
         /// クリップを書き換える前の Undo の記録。アセットでないクリップ（メモリ上だけの物）は記録しない。
         /// 記録すると、どのシーンにも属さない物として開いているシーンが変更扱いになる
         /// </summary>
@@ -784,6 +807,17 @@ namespace Lilium
             if (EditorUtility.IsPersistent (clip)) {
                 Undo.RecordObject (clip, name);
             }
+        }
+
+        /// <summary>
+        /// クリップのカーブを書き換えた後。キーの一覧と残像を捨て、段が控えているカーブを読み直させて、姿勢を当て直す
+        /// </summary>
+        public void AfterClipEdit ()
+        {
+            keyFrames_ = null;
+            ghostsDirty_ = true;
+            if (stage_ != null) stage_.InvalidateClipCurves ();
+            SamplePose ();
         }
 
         void OnEnable ()
@@ -1576,15 +1610,7 @@ namespace Lilium
                             BodyPointTarget point = target as BodyPointTarget;
                             if (point != null) point.ClearPendingKeys ();
                         }
-                        if (before != null) {
-                            stage_.RestoreControlState (before);
-                            SolveAfterManipulate ();
-                        }
-                        else {
-                            SamplePose ();
-                        }
-                        NotifyNoKey ();
-                        RepaintView ();
+                        RevertManipulation (before);
                         return;
                     }
                     SolveAfterManipulate ();
@@ -1596,15 +1622,7 @@ namespace Lilium
                 // キーの自動追加が切: キーの無い物は動かさない（つかむ前の操作値へ戻す）。
                 // クリップを当て直すだけでは戻らない: カーブの無い値（Reset で打たない腰の位置など）は当て直しで今のまま残る
                 if (!CanEditSelectedTargets ()) {
-                    if (before != null) {
-                        stage_.RestoreControlState (before);
-                        SolveAfterManipulate ();
-                    }
-                    else {
-                        SamplePose ();
-                    }
-                    NotifyNoKey ();
-                    RepaintView ();
+                    RevertManipulation (before);
                     return;
                 }
                 if (hasGoal) {
@@ -1882,8 +1900,7 @@ namespace Lilium
         [Shortcut ("Lilium Motion Editor/Toggle Point Lock", typeof (PreviewWindow), KeyCode.L)]
         static void TogglePointLockShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.ToggleSelectedPointsLocked ();
+            Run (args, window => window.ToggleSelectedPointsLocked ());
         }
 
         /// <summary>
@@ -2202,7 +2219,7 @@ namespace Lilium
             bool add = (modifiers & EventModifiers.Shift) != 0;
             bool children = (modifiers & (EventModifiers.Control | EventModifiers.Command)) != 0;
             if (stage_ == null || rect.width < 1 || rect.height < 1) return;
-            Rect box = Rect.MinMaxRect (Mathf.Min (boxStart_.x, boxEnd_.x), Mathf.Min (boxStart_.y, boxEnd_.y), Mathf.Max (boxStart_.x, boxEnd_.x), Mathf.Max (boxStart_.y, boxEnd_.y));
+            Rect box = boxRect;
             Camera camera = stage_.camera;
             camera_.Apply (camera);
             camera.aspect = rect.width / rect.height;
@@ -2225,12 +2242,18 @@ namespace Lilium
             SelectObjects (selected);
         }
 
+        /// <summary>引いた枠（表示域の中の座標）</summary>
+        Rect boxRect
+        {
+            get { return Rect.MinMaxRect (Mathf.Min (boxStart_.x, boxEnd_.x), Mathf.Min (boxStart_.y, boxEnd_.y), Mathf.Max (boxStart_.x, boxEnd_.x), Mathf.Max (boxStart_.y, boxEnd_.y)); }
+        }
+
         /// <summary>引いている枠（表示域の中の座標。引いていなければ null）</summary>
         Rect? draggingBox
         {
             get {
                 if (!boxSelecting_ || !boxMoved_) return null;
-                return Rect.MinMaxRect (Mathf.Min (boxStart_.x, boxEnd_.x), Mathf.Min (boxStart_.y, boxEnd_.y), Mathf.Max (boxStart_.x, boxEnd_.x), Mathf.Max (boxStart_.y, boxEnd_.y));
+                return boxRect;
             }
         }
 
@@ -2463,7 +2486,7 @@ namespace Lilium
         {
             if (showTracks_ == ShowTracksFlag.All) return targets_;
 
-            return selection_.Select (FindTarget).Where (t => t != null);
+            return SelectedTargets ();
         }
 
         /// <summary>
@@ -2605,9 +2628,7 @@ namespace Lilium
 
             RecordClipUndo ("Paste Keys");
             int count = TimelineClipboard.Paste (targetClip, currentFrame);
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            keyFrames_ = null;
-            SamplePose ();
+            AfterClipEdit ();
             return count;
         }
 
@@ -2619,14 +2640,12 @@ namespace Lilium
         {
             if (!CanEditClip ()) return;
             HashSet<string> paths = new HashSet<string> ();
-            foreach (PoseTarget target in selection_.Select (FindTarget).Where (t => t != null)) target.CollectKeyedPaths (paths);
+            foreach (PoseTarget target in SelectedTargets ()) target.CollectKeyedPaths (paths);
             if (paths.Count == 0) return;
 
             RecordClipUndo (keepFrame < 0 ? "Clear Keys" : "Keep One Key");
             ClipKeyUtility.KeepOnlyKeyAtFrame (targetClip, keepFrame, binding => paths.Contains (binding.path));
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            keyFrames_ = null;
-            SamplePose ();
+            AfterClipEdit ();
             RaiseStateChanged ();
         }
 
@@ -2640,7 +2659,7 @@ namespace Lilium
             if (targetClip == null) return;
             HashSet<string> paths = new HashSet<string> ();
             int count = 0;
-            foreach (PoseTarget target in selection_.Select (FindTarget).Where (t => t != null)) {
+            foreach (PoseTarget target in SelectedTargets ()) {
                 target.CollectKeyedPaths (paths);
                 count++;
             }
@@ -2665,9 +2684,7 @@ namespace Lilium
             using (CurveWriter writer = BeginCurves ("Paste Pose")) {
                 PoseClipboard.Paste (writer);
             }
-            keyFrames_ = null;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
+            AfterClipEdit ();
         }
 
         /// <summary>
@@ -2701,103 +2718,98 @@ namespace Lilium
 
         // ショートカット（この窓にフォーカスがあるときだけ効く。Edit > Shortcuts で変えられる）
 
+        /// <summary>
+        /// ショートカットを、受けた窓で行う。Motion Scene の窓が受けたら、その窓が映しているプレビュー窓で行う
+        /// </summary>
+        static void Run (ShortcutArguments args, System.Action<PreviewWindow> action)
+        {
+            PreviewWindow window = OverlayWindows.Resolve (args.context as EditorWindow);
+            if (window != null) action (window);
+        }
+
         [Shortcut ("Lilium Motion Editor/Frame Selected", typeof (PreviewWindow), KeyCode.F)]
         static void FrameSelectedShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.FrameSelection ();
+            Run (args, window => window.FrameSelection ());
         }
 
         [Shortcut ("Lilium Motion Editor/Side View", typeof (PreviewWindow), KeyCode.F1)]
         static void SideViewShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.LookFrom (ViewPreset.Side);
+            Run (args, window => window.LookFrom (ViewPreset.Side));
         }
 
         [Shortcut ("Lilium Motion Editor/Top View", typeof (PreviewWindow), KeyCode.F2)]
         static void TopViewShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.LookFrom (ViewPreset.Top);
+            Run (args, window => window.LookFrom (ViewPreset.Top));
         }
 
         [Shortcut ("Lilium Motion Editor/Front View", typeof (PreviewWindow), KeyCode.F3)]
         static void FrontViewShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.LookFrom (ViewPreset.Front);
+            Run (args, window => window.LookFrom (ViewPreset.Front));
         }
 
         [Shortcut ("Lilium Motion Editor/Play", typeof (PreviewWindow), KeyCode.Space)]
         static void PlayShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.TogglePlay ();
+            Run (args, window => window.TogglePlay ());
         }
 
         [Shortcut ("Lilium Motion Editor/Copy Pose", typeof (PreviewWindow), KeyCode.C)]
         static void CopyPoseShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.CopyPose ();
+            Run (args, window => window.CopyPose ());
         }
 
         [Shortcut ("Lilium Motion Editor/Paste Pose", typeof (PreviewWindow), KeyCode.V)]
         static void PastePoseShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.PastePose ();
+            Run (args, window => window.PastePose ());
         }
 
         // Unity の Animation 窓でキーを打つのと同じ K
         [Shortcut ("Lilium Motion Editor/Key All", typeof (PreviewWindow), KeyCode.K)]
         static void KeyAllShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.KeyAll ();
+            Run (args, window => window.KeyAll ());
         }
 
         [Shortcut ("Lilium Motion Editor/Previous Frame", typeof (PreviewWindow), KeyCode.LeftArrow)]
         static void PreviousFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.SetFrame (window.currentFrame - 1);
+            Run (args, window => window.SetFrame (window.currentFrame - 1));
         }
 
         [Shortcut ("Lilium Motion Editor/Next Frame", typeof (PreviewWindow), KeyCode.RightArrow)]
         static void NextFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.SetFrame (window.currentFrame + 1);
+            Run (args, window => window.SetFrame (window.currentFrame + 1));
         }
 
         [Shortcut ("Lilium Motion Editor/Back 10 Frames", typeof (PreviewWindow), KeyCode.LeftArrow, ShortcutModifiers.Shift)]
         static void Back10FramesShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.SetFrame (window.currentFrame - 10);
+            Run (args, window => window.SetFrame (window.currentFrame - 10));
         }
 
         [Shortcut ("Lilium Motion Editor/Forward 10 Frames", typeof (PreviewWindow), KeyCode.RightArrow, ShortcutModifiers.Shift)]
         static void Forward10FramesShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.SetFrame (window.currentFrame + 10);
+            Run (args, window => window.SetFrame (window.currentFrame + 10));
         }
 
         [Shortcut ("Lilium Motion Editor/Previous Key", typeof (PreviewWindow), KeyCode.Comma)]
         static void PreviousKeyShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.GoToKey (-1);
+            Run (args, window => window.GoToKey (-1));
         }
 
         [Shortcut ("Lilium Motion Editor/Next Key", typeof (PreviewWindow), KeyCode.Period)]
         static void NextKeyShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.GoToKey (1);
+            Run (args, window => window.GoToKey (1));
         }
 
         /// <summary>

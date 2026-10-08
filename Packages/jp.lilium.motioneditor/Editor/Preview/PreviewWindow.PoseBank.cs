@@ -39,7 +39,7 @@ namespace Lilium
         /// <summary>選んでいる対象の数（PoseBank が「どこへ貼るか」を出す）</summary>
         public int selectedTargetCount
         {
-            get { return selection_.Select (FindTarget).Where (t => t != null).Distinct ().Count (); }
+            get { return SelectedTargets ().Count (); }
         }
 
         /// <summary>
@@ -47,7 +47,7 @@ namespace Lilium
         /// </summary>
         HashSet<string> SelectedKeyedPaths ()
         {
-            List<PoseTarget> selected = selection_.Select (FindTarget).Where (t => t != null).Distinct ().ToList ();
+            List<PoseTarget> selected = SelectedTargets ().ToList ();
             if (selected.Count == 0) return null;
             HashSet<string> paths = new HashSet<string> ();
             foreach (PoseTarget target in selected) target.CollectKeyedPaths (paths);
@@ -87,9 +87,7 @@ namespace Lilium
                 }
             }
             applied = values.Count;
-            keyFrames_ = null;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
+            AfterClipEdit ();
             return null;
         }
 

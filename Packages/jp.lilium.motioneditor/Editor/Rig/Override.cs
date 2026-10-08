@@ -112,9 +112,9 @@ namespace Lilium
     /// </summary>
     public static class OverrideApplier
     {
-        const string kPosition = "m_LocalPosition.";
-        const string kRotation = "m_LocalRotation.";
-        const string kScale = "m_LocalScale.";
+        const string kPosition = CurveEdit.kPosition + ".";
+        const string kRotation = CurveEdit.kRotation + ".";
+        const string kScale = CurveEdit.kScale + ".";
 
         sealed class TransformCurves
         {

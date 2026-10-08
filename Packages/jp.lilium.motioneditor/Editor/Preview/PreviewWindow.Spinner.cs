@@ -368,14 +368,14 @@ namespace Lilium
         /// <summary>選んでいる物のうち、今のフレームで値を入れられる物（いくつ選んでいても全部）</summary>
         List<PoseTarget> GetEditableSelectedTargets ()
         {
-            return selection_.Select (FindTarget).Where (t => t != null && CanEditTarget (t)).Distinct ().ToList ();
+            return SelectedTargets ().Where (CanEditTarget).ToList ();
         }
 
         /// <summary>選んでいる物のどれかの値を戻せるか（Controller パネルの Reset）</summary>
         public bool CanResetSelectedValues ()
         {
             // 再生中も毎フレーム聞かれるので、1 つ見つかれば止める
-            return selection_.Select (FindTarget).Any (t => t != null && CanEditTarget (t));
+            return SelectedTargets ().Any (CanEditTarget);
         }
 
         /// <summary>
@@ -457,29 +457,25 @@ namespace Lilium
         [Shortcut ("Lilium Motion Editor/Spinner Move", typeof (PreviewWindow), KeyCode.W)]
         static void SpinnerMoveShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Move;
+            Run (args, window => window.spinnerMode = SpinnerMode.Move);
         }
 
         [Shortcut ("Lilium Motion Editor/Spinner Rotate", typeof (PreviewWindow), KeyCode.E)]
         static void SpinnerRotateShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Rotate;
+            Run (args, window => window.spinnerMode = SpinnerMode.Rotate);
         }
 
         [Shortcut ("Lilium Motion Editor/Spinner Scale", typeof (PreviewWindow), KeyCode.R)]
         static void SpinnerScaleShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Scale;
+            Run (args, window => window.spinnerMode = SpinnerMode.Scale);
         }
 
         [Shortcut ("Lilium Motion Editor/Spinner Toggle Pole", typeof (PreviewWindow), KeyCode.U)]
         static void SpinnerPoleShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerPole = !window.spinnerPole;
+            Run (args, window => window.spinnerPole = !window.spinnerPole);
         }
     }
 

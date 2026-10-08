@@ -46,7 +46,7 @@ namespace Lilium
         /// </summary>
         public RigProxies rigProxies { get; private set; }
         /// <summary>
-        /// 表示モデルの体の大きさ。IK の目標を保存するときに割る
+        /// 表示モデルの体の大きさ。IK の目標を保存するときに割る（割れるよう、人型でない・0 のときは 1）
         /// </summary>
         public float humanScale { get; private set; }
         /// <summary>
@@ -98,7 +98,7 @@ namespace Lilium
             }
 
             Transform source = displayAnimator.transform;
-            rig.humanScale = displayAnimator.isHuman ? displayAnimator.humanScale : 1;
+            rig.humanScale = displayAnimator.isHuman && displayAnimator.humanScale > 1e-6f ? displayAnimator.humanScale : 1;
             rig.root = createGameObject (source.name);
             rig.root.transform.SetPositionAndRotation (source.position, source.rotation);
             rig.root.transform.localScale = source.lossyScale;
@@ -171,7 +171,7 @@ namespace Lilium
                 if (!point.enabled) continue;
                 Transform control = CreateControl (point.path, createGameObject);
                 control.gameObject.AddComponent<BodyPoint> ();
-                control.localPosition = (GetRestRootPosition (GetEditingBone (point.bone)) + GetPointRestOffset (point)) / (humanScale > 1e-6f ? humanScale : 1);
+                control.localPosition = (GetRestRootPosition (GetEditingBone (point.bone)) + GetPointRestOffset (point)) / humanScale;
             }
         }
 
@@ -200,7 +200,7 @@ namespace Lilium
         /// </summary>
         public Vector3 GetPointRestOffset (RigBinding.Point point)
         {
-            float scale = humanScale > 1e-6f ? humanScale : 1;
+            float scale = humanScale;
             EditRigDefinition.BodyPoint definition = point.definition;
             if (definition == null) return Vector3.zero;
             return GetAnchorRestOffset (point) + BodyToRoot (definition.offset) * scale;

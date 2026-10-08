@@ -91,7 +91,7 @@ namespace Lilium
             Undo.IncrementCurrentGroup ();
             RecordClipUndo ("Set Property");
             CurveEdit.SetKey (editingClip_, PropertyPlayer.ToClip (display), currentFrame, value);
-            AfterPropertyEdit ();
+            AfterClipEdit ();
         }
 
         /// <summary>
@@ -103,15 +103,7 @@ namespace Lilium
             Undo.IncrementCurrentGroup ();
             RecordClipUndo ("Remove Property");
             AnimationUtility.SetEditorCurve (editingClip_, PropertyPlayer.ToClip (display), null);
-            AfterPropertyEdit ();
-        }
-
-        void AfterPropertyEdit ()
-        {
-            keyFrames_ = null;
-            ghostsDirty_ = true;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
+            AfterClipEdit ();
         }
     }
 

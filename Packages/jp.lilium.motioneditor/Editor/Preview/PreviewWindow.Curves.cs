@@ -30,7 +30,7 @@ namespace Lilium
             AnimationClip clip = targetClip;
             if (clip == null) return owners;
             EditorCurveBinding[] all = AnimationUtility.GetCurveBindings (clip);
-            foreach (PoseTarget target in selection_.Select (FindTarget).Where (t => t != null).Distinct ()) {
+            foreach (PoseTarget target in SelectedTargets ()) {
                 HashSet<string> paths = new HashSet<string> ();
                 target.CollectKeyedPaths (paths);
                 CurveOwner owner = new CurveOwner { label = target.label };
@@ -70,17 +70,6 @@ namespace Lilium
             // 前の操作（Spinner の入力など）と同じ Undo にまとめない
             Undo.IncrementCurrentGroup ();
             RecordClipUndo (undoName);
-        }
-
-        /// <summary>
-        /// カーブを書き換えた後。姿勢を作り直す（キーの一覧は OnCurveWasModified が捨てる）
-        /// </summary>
-        public void EndCurveEdit ()
-        {
-            keyFrames_ = null;
-            ghostsDirty_ = true;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
         }
 
         /// <summary>

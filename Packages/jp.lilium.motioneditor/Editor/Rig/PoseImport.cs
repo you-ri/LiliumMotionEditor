@@ -127,12 +127,11 @@ namespace Lilium
         /// </summary>
         static void AlignRotationSigns (Dictionary<EditorCurveBinding, float[]> values, IEnumerable<string> rotationPaths, int frameCount)
         {
-            string[] axes = { "x", "y", "z", "w" };
             foreach (string path in rotationPaths) {
                 float[][] q = new float[4][];
                 bool complete = true;
                 for (int i = 0; i < 4; i++) {
-                    complete &= values.TryGetValue (EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalRotation." + axes[i]), out q[i]);
+                    complete &= values.TryGetValue (CurveEdit.RotationBinding (path, i), out q[i]);
                 }
                 if (!complete) continue;
 

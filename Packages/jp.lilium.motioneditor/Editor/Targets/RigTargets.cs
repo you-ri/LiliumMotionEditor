@@ -383,7 +383,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > 1e-6f ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         public Transform bone
@@ -861,7 +861,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > 1e-6f ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         Transform targetControl
@@ -1074,7 +1074,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > 1e-6f ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)

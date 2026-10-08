@@ -50,6 +50,8 @@
 
 - Layers の段と段の間の矢印を Material Icons にした。逆に通れるかの説明は矢印のツールチップに移しました。
 
+- `PreviewWindow.EndCurveEdit` を `AfterClipEdit` にした。クリップを書き換えた後の後始末を、ほかの編集と同じ 1 本で行います。`HumanoidOutput` の `GetOutputPath`・`WriteLink`・`GetStatus` の段になったオーバーロードは、既定の引数を持つ 1 本ずつにまとめました。
+
 ### Fixed
 
 - PoseBank のパネルだけ、窓の外へはみ出しても窓の中へ戻らなかったのを直した。

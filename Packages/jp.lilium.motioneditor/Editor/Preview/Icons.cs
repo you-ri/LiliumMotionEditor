@@ -30,6 +30,13 @@ namespace Lilium
             Texture2D icon = EditorGUIUtility.pixelsPerPoint > 1 ? AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + name + "@2x.png") : null;
             return icon != null ? icon : AssetDatabase.LoadAssetAtPath<Texture2D> (kFolder + name + ".png");
         }
+
+        /// <summary>Unity の組み込みのアイコン（再生ボタンなど）。暗いテーマなら「d_」の付いた方</summary>
+        public static Texture2D LoadBuiltin (string name)
+        {
+            Texture2D texture = EditorGUIUtility.isProSkin ? EditorGUIUtility.FindTexture ("d_" + name) : null;
+            return texture != null ? texture : EditorGUIUtility.FindTexture (name);
+        }
     }
 
 }

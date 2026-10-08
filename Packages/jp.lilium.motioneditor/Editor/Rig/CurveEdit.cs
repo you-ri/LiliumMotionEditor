@@ -11,17 +11,26 @@ namespace Lilium
     /// </summary>
     public static class CurveEdit
     {
+        public const string kPosition = "m_LocalPosition";
         public const string kRotation = "m_LocalRotation";
-        static readonly string[] kAxes = { "x", "y", "z", "w" };
+        public const string kScale = "m_LocalScale";
+        /// <summary>成分の名前（位置・拡大は先頭の 3 つ、回転は 4 つ）</summary>
+        internal static readonly string[] kAxes = { "x", "y", "z", "w" };
 
         public static bool IsRotation (EditorCurveBinding binding)
         {
             return binding.type == typeof (Transform) && binding.propertyName.StartsWith (kRotation + ".");
         }
 
+        /// <summary>Transform の局所値（kPosition・kRotation・kScale）の 1 成分のカーブ</summary>
+        public static EditorCurveBinding TransformBinding (string path, string property, int component)
+        {
+            return EditorCurveBinding.FloatCurve (path, typeof (Transform), property + "." + kAxes[component]);
+        }
+
         public static EditorCurveBinding RotationBinding (string path, int component)
         {
-            return EditorCurveBinding.FloatCurve (path, typeof (Transform), kRotation + "." + kAxes[component]);
+            return TransformBinding (path, kRotation, component);
         }
 
         /// <summary>

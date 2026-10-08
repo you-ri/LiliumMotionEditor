@@ -201,12 +201,12 @@ namespace Lilium
             if (System.Array.IndexOf (Stacker.GetPoseKeys (targetClip, filter), frame) >= 0) {
                 RecordClipUndo ("Stacker Insert");
                 int inserted = Stacker.InsertAfter (targetClip, frame, filter);
-                AfterStackerEdit ("Stacker Insert");
+                AfterClipEdit ();
                 if (inserted >= 0) SetFrame (inserted);
                 return;
             }
             WriteGroupKeys (stackerGroup, "Stacker Key");
-            AfterStackerEdit ("Stacker Key");
+            AfterClipEdit ();
         }
 
         /// <summary>
@@ -217,7 +217,7 @@ namespace Lilium
         {
             if (!CanEditClip ()) return;
             WriteGroupKeys (kGroupAll, "Key All");
-            AfterStackerEdit ("Key All");
+            AfterClipEdit ();
         }
 
         /// <summary>
@@ -250,7 +250,7 @@ namespace Lilium
         {
             if (!CanEditClip ()) return;
             RecordClipUndo ("Stacker Delete");
-            if (Stacker.Delete (targetClip, currentFrame, GroupFilter (stackerGroup))) AfterStackerEdit ("Stacker Delete");
+            if (Stacker.Delete (targetClip, currentFrame, GroupFilter (stackerGroup))) AfterClipEdit ();
         }
 
         /// <summary>
@@ -260,15 +260,7 @@ namespace Lilium
         {
             if (!CanEditClip ()) return;
             RecordClipUndo ("Stacker Interval");
-            if (Stacker.SetInterval (targetClip, frame, interval, GroupFilter (stackerGroup))) AfterStackerEdit ("Stacker Interval");
-        }
-
-        void AfterStackerEdit (string undoName)
-        {
-            keyFrames_ = null;
-            ghostsDirty_ = true;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
+            if (Stacker.SetInterval (targetClip, frame, interval, GroupFilter (stackerGroup))) AfterClipEdit ();
         }
 
         /// <summary>
@@ -278,7 +270,7 @@ namespace Lilium
         {
             name = name != null ? name.Trim () : "";
             if (name.Length == 0 || name == kGroupAll || name == kGroupBody || name == kGroupHands || name == kGroupRig) return;
-            List<string> members = selection_.Select (FindTarget).Where (t => t != null).Select (t => t.label).ToList ();
+            List<string> members = SelectedTargets ().Select (t => t.label).ToList ();
             if (members.Count == 0) return;
             Stacker.Group group = FindCustomGroup (name);
             if (group == null) stacker.groups.Add (group = new Stacker.Group { name = name });

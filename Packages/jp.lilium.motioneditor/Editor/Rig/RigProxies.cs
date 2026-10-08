@@ -144,7 +144,7 @@ namespace Lilium
             RigProxies proxies = new RigProxies ();
             if (rig == null || rig.displayAnimator == null || layers == null) return proxies;
 
-            proxies.humanScale_ = rig.humanScale > 0 ? rig.humanScale : 1;
+            proxies.humanScale_ = rig.humanScale;
             Transform displayRoot = rig.displayAnimator.transform;
             HashSet<string> names = new HashSet<string> ();
             foreach (RigLayerInfo layer in layers) {
@@ -253,13 +253,13 @@ namespace Lilium
             string proxyPath = RigPaths.Game (entry.name, relative);
             string gamePath = PathOf (source, displayRoot);
             channels_.Add (new Channel {
-                kind = ChannelKind.Position, proxyPath = proxyPath, proxyType = typeof (Transform), proxyProperty = "m_LocalPosition",
-                gamePath = gamePath, gameType = typeof (Transform), gameProperty = "m_LocalPosition", scale = humanScale_,
+                kind = ChannelKind.Position, proxyPath = proxyPath, proxyType = typeof (Transform), proxyProperty = CurveEdit.kPosition,
+                gamePath = gamePath, gameType = typeof (Transform), gameProperty = CurveEdit.kPosition, scale = humanScale_,
                 proxyTransform = item.proxy,
             });
             channels_.Add (new Channel {
-                kind = ChannelKind.Rotation, proxyPath = proxyPath, proxyType = typeof (Transform), proxyProperty = "m_LocalRotation",
-                gamePath = gamePath, gameType = typeof (Transform), gameProperty = "m_LocalRotation",
+                kind = ChannelKind.Rotation, proxyPath = proxyPath, proxyType = typeof (Transform), proxyProperty = CurveEdit.kRotation,
+                gamePath = gamePath, gameType = typeof (Transform), gameProperty = CurveEdit.kRotation,
                 proxyTransform = item.proxy,
             });
         }

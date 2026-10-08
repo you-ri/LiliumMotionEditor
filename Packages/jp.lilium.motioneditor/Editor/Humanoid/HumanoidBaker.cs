@@ -18,7 +18,6 @@ namespace Lilium
     {
         public const string kRootT = "RootT";
         public const string kRootQ = "RootQ";
-        static readonly string[] kAxes = { "x", "y", "z", "w" };
         static readonly string[] kFingers = { "Thumb", "Index", "Middle", "Ring", "Little" };
         static string[] clipMuscleNames_;
 
@@ -309,14 +308,13 @@ namespace Lilium
             List<EditorCurveBinding> bindings = new List<EditorCurveBinding> (bodyCount + channels.Count * 4);
             List<AnimationCurve> curves = new List<AnimationCurve> (bindings.Capacity);
             for (int c = 0; c < bodyCount; c++) {
-                string property = c < 3 ? kRootT + "." + kAxes[c] : c < 7 ? kRootQ + "." + kAxes[c - 3] : clipMuscleNames[c - 7];
+                string property = c < 3 ? kRootT + "." + CurveEdit.kAxes[c] : c < 7 ? kRootQ + "." + CurveEdit.kAxes[c - 3] : clipMuscleNames[c - 7];
                 bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), property));
                 curves.Add (MakeCurve (body[c], rate));
             }
             for (int c = 0; c < goalCurves.Length; c++) {
                 string name = HumanoidGoals.kCurveNames[c / 7];
-                int axis = c % 7;
-                string property = axis < 3 ? name + "T." + kAxes[axis] : name + "Q." + kAxes[axis - 3];
+                string property = HumanoidGoals.CurveProperty (name, c % 7);
                 bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), property));
                 curves.Add (MakeCurve (goalCurves[c], rate));
             }
@@ -379,9 +377,9 @@ namespace Lilium
                 Transform editing = readFromDisplay ? extra.bone : rig_.GetEditingBone (extra.bone);
                 if (editing == null) continue;
                 string path = AnimationUtility.CalculateTransformPath (extra.bone, displayRoot);
-                Add (channels, context, hooks, frameCount, TransformBindings (path, "m_LocalRotation", 4), true, v => Write (v, editing.localRotation));
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, editing.localRotation));
                 if (extra.control.position) {
-                    Add (channels, context, hooks, frameCount, TransformBindings (path, "m_LocalPosition", 3), false, v => Write (v, editing.localPosition));
+                    Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, editing.localPosition));
                 }
             }
 
@@ -445,8 +443,8 @@ namespace Lilium
                 humanPoseProperties_ = new HashSet<string> (clipMuscleNames);
                 string[] vectors = { kRootT, "MotionT", "LeftFootT", "RightFootT", "LeftHandT", "RightHandT" };
                 string[] rotations = { kRootQ, "MotionQ", "LeftFootQ", "RightFootQ", "LeftHandQ", "RightHandQ" };
-                foreach (string name in vectors) for (int i = 0; i < 3; i++) humanPoseProperties_.Add (name + "." + kAxes[i]);
-                foreach (string name in rotations) for (int i = 0; i < 4; i++) humanPoseProperties_.Add (name + "." + kAxes[i]);
+                foreach (string name in vectors) for (int i = 0; i < 3; i++) humanPoseProperties_.Add (name + "." + CurveEdit.kAxes[i]);
+                foreach (string name in rotations) for (int i = 0; i < 4; i++) humanPoseProperties_.Add (name + "." + CurveEdit.kAxes[i]);
             }
             return humanPoseProperties_.Contains (binding.propertyName);
         }
@@ -468,7 +466,7 @@ namespace Lilium
         {
             EditorCurveBinding[] bindings = new EditorCurveBinding[count];
             for (int i = 0; i < count; i++) {
-                bindings[i] = EditorCurveBinding.FloatCurve (path, typeof (Transform), property + "." + kAxes[i]);
+                bindings[i] = CurveEdit.TransformBinding (path, property, i);
             }
             return bindings;
         }

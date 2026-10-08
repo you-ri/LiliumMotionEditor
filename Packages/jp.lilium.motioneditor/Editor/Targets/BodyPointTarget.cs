@@ -801,7 +801,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > 1e-6f ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         /// <summary>

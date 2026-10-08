@@ -60,20 +60,11 @@ namespace Lilium
         /// <summary>
         /// 焼いたクリップの置き場所。元がアセットでなければ null
         /// </summary>
-        public static string GetOutputPath (AnimationClip source)
-        {
-            return GetOutputPath (source, false);
-        }
-
-        public static string GetOutputPath (AnimationClip source, bool edited)
-        {
-            return GetOutputPath (SourcePath (source), edited);
-        }
-
+        /// <param name="edited">Override を重ねて焼く（元の焼いた版を残し、別のクリップに出す。S14）</param>
         /// <param name="outputName">焼いて書き出す段（Output）の名前（S21）。空なら 名前.anim、あれば 名前.&lt;outputName&gt;.anim</param>
-        public static string GetOutputPath (AnimationClip source, bool edited, string outputName)
+        public static string GetOutputPath (AnimationClip source, bool edited = false, string outputName = null)
         {
-            return WithOutputName (GetOutputPath (source, edited), outputName);
+            return WithOutputName (GetOutputPath (SourcePath (source), edited), outputName);
         }
 
         static string WithOutputName (string path, string outputName)
@@ -94,13 +85,8 @@ namespace Lilium
         }
 
         /// <param name="path">元のクリップのアセットのパス</param>
-        public static string GetOutputPath (string path)
-        {
-            return GetOutputPath (path, false);
-        }
-
         /// <param name="edited">Override を重ねて焼く（元の焼いた版を残し、別のクリップに出す。S14）</param>
-        public static string GetOutputPath (string path, bool edited)
+        public static string GetOutputPath (string path, bool edited = false)
         {
             if (string.IsNullOrEmpty (path)) return null;
 
@@ -145,14 +131,9 @@ namespace Lilium
             }
         }
 
-        public static void WriteLink (string outputPath, AnimationClip source, GameObject model)
-        {
-            WriteLink (outputPath, source, model, null);
-        }
-
         /// <param name="overrides">一緒に焼いた Override のクリップ（S14。無ければ null）</param>
         /// <param name="definitionHash">リグの定義のうち、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
-        public static void WriteLink (string outputPath, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides, string definitionHash = null)
+        public static void WriteLink (string outputPath, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides = null, string definitionHash = null)
         {
             AssetImporter importer = AssetImporter.GetAtPath (outputPath);
             if (importer == null) return;
@@ -223,20 +204,10 @@ namespace Lilium
         /// </summary>
         /// <param name="model">いま編集しているキャラ</param>
         /// <param name="bakeProblem">いま焼けない理由（窓の状態も含む）。焼けるなら null</param>
-        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem)
-        {
-            return GetStatus (source, model, bakeProblem, null);
-        }
-
         /// <param name="overrides">一緒に焼く Override のクリップ（S14）</param>
-        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides)
-        {
-            return GetStatus (source, model, bakeProblem, overrides, null);
-        }
-
         /// <param name="outputName">焼いて書き出す段（Output）の名前（S21）</param>
         /// <param name="definitionHash">今のリグの定義の、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
-        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides, string outputName, string definitionHash = null)
+        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides = null, string outputName = null, string definitionHash = null)
         {
             if (source == null) return new LayerClipStatus (LayerClipState.None, Tr ("HUMANOID_OUTPUT_NO_SOURCE_CLIP"));
             bool edited = overrides != null && overrides.Count > 0;
@@ -321,15 +292,10 @@ namespace Lilium
         /// </summary>
         public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, out string outputPath)
         {
-            return BakeToAsset (baker, source, model, null, out outputPath);
+            return BakeToAsset (baker, source, model, null, null, out outputPath);
         }
 
         /// <param name="overrides">一緒に焼く Override のクリップ（S14）。1 つでもあれば `<元>.edited.anim` へ出す</param>
-        public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides, out string outputPath)
-        {
-            return BakeToAsset (baker, source, model, overrides, null, out outputPath);
-        }
-
         /// <param name="outputName">焼いて書き出す段（Output）の名前（S21）。空なら 名前.anim</param>
         public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides, string outputName, out string outputPath, string definitionHash = null)
         {

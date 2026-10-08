@@ -344,7 +344,7 @@ namespace Lilium
             if (target != shownTarget_ || window_.spinnerPole != shownPole_) {
                 shownTarget_ = target;
                 shownPole_ = window_.spinnerPole;
-                shownEuler_ = Wrap (rotation.eulerAngles);
+                shownEuler_ = EulerAngles.Wrap (rotation.eulerAngles);
             }
             Vector3 euler = has ? EulerAngles.Closest (rotation, shownEuler_) : Vector3.zero;
             shownEuler_ = euler;
@@ -397,12 +397,6 @@ namespace Lilium
         {
             float step = channel == TransformChannels.Rotation ? 0.01f : 0.0001f;
             return Mathf.Round (value / step) * step;
-        }
-
-        static Vector3 Wrap (Vector3 euler)
-        {
-            for (int i = 0; i < 3; i++) euler[i] = Mathf.DeltaAngle (0, euler[i]);
-            return euler;
         }
     }
 

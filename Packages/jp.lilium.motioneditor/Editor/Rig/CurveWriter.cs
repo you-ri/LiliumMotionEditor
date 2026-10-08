@@ -13,10 +13,6 @@ namespace Lilium
     /// </summary>
     public sealed class CurveWriter : System.IDisposable
     {
-        const string kPosition = "m_LocalPosition";
-        const string kRotation = "m_LocalRotation";
-        const string kScale = "m_LocalScale";
-        static readonly string[] kAxes = { "x", "y", "z", "w" };
 
         readonly AnimationClip clip_;
         readonly Transform root_;
@@ -94,23 +90,23 @@ namespace Lilium
             string path = PathOf (t);
             if ((channels & TransformChannels.Position) != 0) {
                 Vector3 p = t.localPosition;
-                SetTransform (path, kPosition + ".x", p.x);
-                SetTransform (path, kPosition + ".y", p.y);
-                SetTransform (path, kPosition + ".z", p.z);
+                SetTransform (path, CurveEdit.kPosition + ".x", p.x);
+                SetTransform (path, CurveEdit.kPosition + ".y", p.y);
+                SetTransform (path, CurveEdit.kPosition + ".z", p.z);
             }
             if ((channels & TransformChannels.Rotation) != 0) {
                 Quaternion q = t.localRotation;
-                SetTransform (path, kRotation + ".x", q.x);
-                SetTransform (path, kRotation + ".y", q.y);
-                SetTransform (path, kRotation + ".z", q.z);
-                SetTransform (path, kRotation + ".w", q.w);
+                SetTransform (path, CurveEdit.kRotation + ".x", q.x);
+                SetTransform (path, CurveEdit.kRotation + ".y", q.y);
+                SetTransform (path, CurveEdit.kRotation + ".z", q.z);
+                SetTransform (path, CurveEdit.kRotation + ".w", q.w);
                 if (!rotationPaths_.Contains (path)) rotationPaths_.Add (path);
             }
             if ((channels & TransformChannels.Scale) != 0) {
                 Vector3 s = t.localScale;
-                SetTransform (path, kScale + ".x", s.x);
-                SetTransform (path, kScale + ".y", s.y);
-                SetTransform (path, kScale + ".z", s.z);
+                SetTransform (path, CurveEdit.kScale + ".x", s.x);
+                SetTransform (path, CurveEdit.kScale + ".y", s.y);
+                SetTransform (path, CurveEdit.kScale + ".z", s.z);
             }
         }
 
@@ -137,7 +133,7 @@ namespace Lilium
         {
             values_[binding] = value;
             raw_.Add (binding);
-            if (binding.type == typeof (Transform) && binding.propertyName.StartsWith (kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
+            if (binding.type == typeof (Transform) && binding.propertyName.StartsWith (CurveEdit.kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
                 rotationPaths_.Add (binding.path);
             }
         }
@@ -153,7 +149,7 @@ namespace Lilium
                 return;
             }
             SetTransform (binding.path, binding.propertyName, value);
-            if (binding.propertyName.StartsWith (kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
+            if (binding.propertyName.StartsWith (CurveEdit.kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
                 rotationPaths_.Add (binding.path);
             }
         }
@@ -234,12 +230,12 @@ namespace Lilium
                 Transform t = root_ == null ? null : path.Length == 0 ? root_ : root_.Find (path);
                 if (storePosition != null) {
                     Vector3 current = t != null ? t.localPosition : Vector3.zero;
-                    ConvertVector (path, kPosition, current, storePosition);
+                    ConvertVector (path, CurveEdit.kPosition, current, storePosition);
                 }
                 if (storeRotation != null) ConvertRotation (path, t != null ? t.localRotation : Quaternion.identity);
                 if (storeScale != null) {
                     Vector3 current = t != null ? t.localScale : Vector3.one;
-                    ConvertVector (path, kScale, current, storeScale);
+                    ConvertVector (path, CurveEdit.kScale, current, storeScale);
                 }
             }
         }
@@ -250,7 +246,7 @@ namespace Lilium
             Vector3 value = current;
             bool any = false;
             for (int a = 0; a < 3; a++) {
-                parts[a] = EditorCurveBinding.FloatCurve (path, typeof (Transform), property + "." + kAxes[a]);
+                parts[a] = CurveEdit.TransformBinding (path, property, a);
                 float v;
                 if (values_.TryGetValue (parts[a], out v) && !raw_.Contains (parts[a])) {
                     value[a] = v;
@@ -268,7 +264,7 @@ namespace Lilium
             Quaternion value = current;
             bool any = false;
             for (int a = 0; a < 4; a++) {
-                parts[a] = EditorCurveBinding.FloatCurve (path, typeof (Transform), kRotation + "." + kAxes[a]);
+                parts[a] = CurveEdit.RotationBinding (path, a);
                 float v;
                 if (values_.TryGetValue (parts[a], out v) && !raw_.Contains (parts[a])) {
                     value[a] = v;
@@ -292,7 +288,7 @@ namespace Lilium
             foreach (string path in rotationPaths_) {
                 bool complete = true;
                 for (int a = 0; a < 4 && complete; a++) {
-                    parts[a] = EditorCurveBinding.FloatCurve (path, typeof (Transform), kRotation + "." + kAxes[a]);
+                    parts[a] = CurveEdit.RotationBinding (path, a);
                     complete = values_.ContainsKey (parts[a]);
                 }
                 for (int a = 0; a < 4 && complete; a++) {
