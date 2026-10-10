@@ -744,6 +744,7 @@ namespace Lilium
         {
             if (target == null) return false;
             if (IsPastCycleKey ()) return false;
+            if (GetMaskProblem (target) != null) return false;
             if (autoKey || !CanEditClip ()) return true;
             // 全身 IK の点は、離すと解いた全身の姿勢を打つ（S25）。点ごとのキーではなくフレームで見て、姿勢のキーがあるフレームでだけ動かす
             if (target is BodyPointTarget) return HasPoseKeyAtCurrentFrame ();
@@ -789,7 +790,41 @@ namespace Lilium
         /// </summary>
         void NotifyNoKey ()
         {
-            ShowNotification (new GUIContent (IsPastCycleKey () ? Tr ("PREVIEW_WINDOW_PAST_CYCLE_KEY") : Tr ("PREVIEW_WINDOW_NO_KEY_CANNOT_MOVE")), 1.5);
+            string masked = null;
+            foreach (PoseTarget target in targets_) {
+                if (IsSelected (target.gameObject) && (masked = GetMaskProblem (target)) != null) break;
+            }
+            ShowNotification (new GUIContent (masked ?? (IsPastCycleKey () ? Tr ("PREVIEW_WINDOW_PAST_CYCLE_KEY") : Tr ("PREVIEW_WINDOW_NO_KEY_CANNOT_MOVE"))), 1.5);
+        }
+
+        /// <summary>
+        /// 書き出し先（✏）の Override の段のマスクの外なので動かせない理由（動かせるなら null。S17）。
+        /// 動かしてもキーを打てず、離すと元に戻るため、つかませない
+        /// </summary>
+        public string GetMaskProblem (PoseTarget target)
+        {
+            OverrideLayer layer = overrideWriteLayer;
+            ChannelMask mask = layer != null ? layer.mask : null;
+            if (!IsOutsideMask (stage_, mask, target)) return null;
+            return Tr ("PREVIEW_WINDOW_OUTSIDE_MASK", target.label, mask.name, layer.label);
+        }
+
+        static readonly List<string> maskPaths_ = new List<string> ();
+
+        /// <summary>
+        /// 物がマスクの外か。物のキーのパスが 1 つでもマスクの中なら中（例えば手の IK は目標とヒントのどちらかが中なら動かせる）。
+        /// キーのパスを持たない物は外にしない
+        /// </summary>
+        internal static bool IsOutsideMask (PreviewStage stage, ChannelMask mask, PoseTarget target)
+        {
+            if (mask == null || target == null || stage == null) return false;
+            maskPaths_.Clear ();
+            target.CollectKeyedPaths (maskPaths_);
+            if (maskPaths_.Count == 0) return false;
+            foreach (string path in maskPaths_) {
+                if (stage.InMask (mask, EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalRotation.x"))) return false;
+            }
+            return true;
         }
 
         /// <summary>
@@ -1500,7 +1535,7 @@ namespace Lilium
                         point.linkHovered = linkFk != null && meshHover_ != null && linkFk.gameObject == meshHover_;
                         // 点は View の IK で出し入れする。切っている間も選んでいる点は出す（骨を隠しているときと同じく、そのまま動かせるように）
                         if (pointGrab && !displayGrab && (showIk_ || selected)) {
-                            PoseHandles.locked = pointsLocked;
+                            PoseHandles.locked = pointsLocked || GetMaskProblem (point) != null;
                             // いくつか選んでいる間は、中心の点にだけギズモを出す（選んだ点の数だけ重なって出る）
                             point.showGizmo = selection_.Count <= 1 || point.gameObject == pivotPoint_;
                             point.inBox = box.HasValue && IsInBox (stage_.camera, viewRect, box.Value, point.framePosition);
@@ -1508,9 +1543,10 @@ namespace Lilium
                             if (point.ConsumeContextClick ()) contextPoint_ = point;
                             if (point.ConsumeLinkClick () && linkFk != null) linkClicked = linkFk;
                             // いくつか選んでいる点の 1 つをつかんで動かした: ほかの選んでいる点も同じだけ動かす
-                            Vector3 dragged = point.ConsumeDragDelta ();
+                            Vector3 draggedFrom;
+                            Vector3 dragged = point.ConsumeDragDelta (out draggedFrom);
                             if (dragged != Vector3.zero && selected && selection_.Count > 1) {
-                                foreach (BodyPointTarget other in PointsMovedWith (targets_, GetSelectedPoints (), point)) other.MoveBy (dragged);
+                                MoveSelectedPoints (targets_, GetSelectedPoints (), point, draggedFrom, dragged);
                             }
                             // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（固定している点は付いて回らない）
                             Quaternion turned = point.ConsumeRotateDelta ();
@@ -1800,6 +1836,27 @@ namespace Lilium
         }
 
         /// <summary>
+        /// いくつか選んでいる点の 1 つ（grabbed）を from から delta だけ動かした（grabbed は動かしてある）: ほかの選んでいる点を同じだけ動かす。
+        /// Floor Clamp が入っていれば、選んでいる点をひとかたまりとして床に当てる（10-09 ユーザー指示。点ごとに当てると、
+        /// つかんだ点だけ床で止まり、ほかの点は床の下へ潜っていた）: 一番低い点が床より下へ行くなら、まとめて動かす量の Y を
+        /// その点が床に着く所まで上げる（横の動きはそのまま効き、かたまりは床の上を滑る。1 つの点を床に当てるときと同じ）。
+        /// 一緒に動かさない Free の点（親を動かせば体に付いて動く）も、同じだけ動くとみなして低さに入れる
+        /// </summary>
+        internal static void MoveSelectedPoints (IList<PoseTarget> targets, IList<BodyPointTarget> selected, BodyPointTarget grabbed, Vector3 from, Vector3 delta)
+        {
+            if (grabbed.floorClamp) {
+                float lowest = float.MaxValue;
+                foreach (BodyPointTarget point in selected) {
+                    lowest = Mathf.Min (lowest, point == grabbed ? from.y : point.framePosition.y);
+                }
+                if (lowest + delta.y < 0) delta.y = -lowest;
+                // つかんだ点は自分だけで床に当てて置いてあるので、かたまりの動かす量で置き直す
+                grabbed.MoveTo (from + delta);
+            }
+            foreach (BodyPointTarget other in PointsMovedWith (targets, selected, grabbed)) other.MoveBy (delta);
+        }
+
+        /// <summary>
         /// 点を 1 つ選んで回した: その点を中心に、点が乗る骨を回す（S26。点の種類で変えない）。
         /// 骨は FK で回すので、子の骨と、骨に付いて動く Free の点は一緒に回る。固定している点（Pin・Locked。同じ骨の上の点も）は回さず、
         /// 置いた場所と向きのまま（S29。移動と同じく、ほかの点の操作に連動しない。全身 IK が手足を曲げて届かせる）。
@@ -1954,21 +2011,7 @@ namespace Lilium
             }
             Undo.IncrementCurrentGroup ();
             int group = Undo.GetCurrentGroup ();
-            foreach (PoseTarget target in targets_) {
-                BodyPointTarget point = target as BodyPointTarget;
-                if (point != null) point.SyncToBone ();
-            }
-            // 解いた姿勢を骨の値（FK の差分・腰の位置）にする。ここからは、この姿勢が元の姿勢
-            if (stage_.editingRigSolver != null) stage_.editingRigSolver.Capture ();
-            stage_.fullBody.CaptureInput ();
-            using (CurveWriter writer = BeginCurves ("Key Pose")) {
-                foreach (PoseTarget target in targets_) {
-                    BodyPointTarget point = target as BodyPointTarget;
-                    if (point != null && point.hasPendingKeys) point.WritePendingKeys (writer);
-                }
-                foreach (PoseTarget target in targets_) target.WriteKeys (writer);
-                if (rigProxies != null) rigProxies.WriteWeightKeys (writer);
-            }
+            PoseCommit.WriteFullBodyPose (stage_, targets_, () => BeginCurves ("Key Pose"));
             Undo.SetCurrentGroupName ("Key Pose");
             Undo.CollapseUndoOperations (group);
             keyFrames_ = null;

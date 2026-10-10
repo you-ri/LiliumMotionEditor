@@ -131,8 +131,18 @@ namespace Lilium
         sealed class Point
         {
             public BodyPointId id;
-            /// <summary>骨の上の点の、骨の付け根からの位置（骨の枠・メートル）。関節の点は 0</summary>
+            /// <summary>骨の上の点の、骨の付け根からの位置（基準姿勢の骨の枠・メートル）。関節の点は 0。向きを混ぜる点は PointOffset で今の値を出す</summary>
             public Vector3 offset;
+            /// <summary>ずれの向きを混ぜる相手の骨（S34。混ぜない点は null）</summary>
+            public Transform blendBone;
+            /// <summary>混ぜる割合（0〜1）</summary>
+            public float blend;
+            /// <summary>offset のうち、混ぜた向きで回す分（基準姿勢の骨の枠・メートル）</summary>
+            public Vector3 blendOffset;
+            /// <summary>基準姿勢の、相手の骨から見た骨の向き</summary>
+            public Quaternion blendRest = Quaternion.identity;
+            /// <summary>相手の骨の、解く骨の並びでの番号（混ぜない・解く骨でなければ -1）</summary>
+            public int blendBody = -1;
             public Transform control;
             public BodyPoint values;
             public Transform bone;
@@ -179,9 +189,16 @@ namespace Lilium
                     if (control == null || bone == null || values == null) continue;
                     Quaternion restRotation = rig.GetRestRootRotation (bone);
                     Vector3 offset = rig.GetPointRestOffset (point);
+                    Transform blendBone = rig.GetEditingBone (point.blendBone);
+                    Vector3 blendOffset = blendBone != null ? rig.GetPointBlendRestOffset (point) : Vector3.zero;
+                    if (blendOffset.sqrMagnitude <= kEpsilon * kEpsilon) blendBone = null;
                     points_.Add (new Point {
                         id = new BodyPointId (point.name),
                         offset = Quaternion.Inverse (restRotation) * offset,
+                        blendBone = blendBone,
+                        blend = blendBone != null ? Mathf.Clamp01 (point.definition.blend) : 0,
+                        blendOffset = blendBone != null ? Quaternion.Inverse (restRotation) * blendOffset : Vector3.zero,
+                        blendRest = blendBone != null ? Quaternion.Inverse (rig.GetRestRootRotation (blendBone)) * restRotation : Quaternion.identity,
                         control = control,
                         values = values,
                         bone = bone,
@@ -260,7 +277,10 @@ namespace Lilium
                     hingeAxis = axis,
                 };
             }
-            foreach (Point point in points_) point.body = bodies_.IndexOf (point.bone);
+            foreach (Point point in points_) {
+                point.body = bodies_.IndexOf (point.bone);
+                point.blendBody = point.blendBone != null ? bodies_.IndexOf (point.blendBone) : -1;
+            }
         }
 
         public void Dispose ()
@@ -367,7 +387,19 @@ namespace Lilium
 
         static Vector3 BonePointWorld (Point point)
         {
-            return point.bone.position + point.bone.rotation * point.offset;
+            return point.bone.position + point.bone.rotation * PointOffset (point, point.bone.rotation, point.blendBone != null ? point.blendBone.rotation : point.bone.rotation);
+        }
+
+        /// <summary>
+        /// 骨の上の点の、骨の付け根からの位置（今の骨の枠・メートル）。向きを混ぜる点（S34）は、ずれ（blendOffset）を
+        /// 骨から見た相手の骨の、基準姿勢からの回りを blend だけ掛けて回す（解く側の FullBodyIk.PointOffset と同じ計算）。
+        /// boneRotation / blendRotation は骨と相手の骨の向き（同じ空間なら、ワールドでもルート空間でもよい）
+        /// </summary>
+        static Vector3 PointOffset (Point point, Quaternion boneRotation, Quaternion blendRotation)
+        {
+            if (point.blendBone == null || point.blend <= 0) return point.offset;
+            Quaternion relative = Quaternion.Inverse (boneRotation) * blendRotation * point.blendRest;
+            return point.offset - point.blendOffset + Quaternion.Slerp (Quaternion.identity, Normalize (relative), point.blend) * point.blendOffset;
         }
 
         /// <summary>点が動かす編集用の骨（無ければ null）</summary>
@@ -608,7 +640,9 @@ namespace Lilium
             Pose pose = LocalRestPose (point.bone, resetBones);
             // 点の向きは骨の向きそのもの（CapturePoint と同じ）
             rotation = pose.rotation;
-            position = pose.position + pose.rotation * point.offset;
+            // 向きを混ぜる点は、相手の骨も戻した（戻した祖先に付いて動いた）向きで混ぜる
+            Quaternion blendRotation = point.blendBone != null ? LocalRestPose (point.blendBone, resetBones).rotation : pose.rotation;
+            position = pose.position + pose.rotation * PointOffset (point, pose.rotation, blendRotation);
             return true;
         }
 
@@ -773,6 +807,10 @@ namespace Lilium
                     positionWeight = positionWeight,
                     rotationWeight = rotationWeight,
                     aim = point.aim ? 1 : 0,
+                    blendBone = point.blendBody,
+                    blend = point.blendBody >= 0 ? point.blend : 0,
+                    blendOffset = point.blendOffset,
+                    blendRest = point.blendRest,
                 };
             }
             if (count == 0) return false;

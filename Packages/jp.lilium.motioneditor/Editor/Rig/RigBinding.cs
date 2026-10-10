@@ -59,6 +59,11 @@ namespace Lilium
             public HumanBodyBones humanBone;
             /// <summary>向きも持つ点か</summary>
             public bool hasRotation;
+            /// <summary>
+            /// ずれの向きを混ぜる相手の骨（S34。定義の blendBone がこのキャラに無い・解かない骨なら、親をたどって最初に当たる解く骨）。
+            /// 混ぜない点・相手が乗る骨と同じになった点は null
+            /// </summary>
+            public Transform blendBone;
         }
 
         public static string kFullBodyIkReason => Tr ("RIG_BINDING_FULL_BODY_IK_UNUSED");
@@ -157,6 +162,13 @@ namespace Lilium
                         else if (onOrigin) break;
                     }
                     if (host == null) continue;
+                    Fk blend = null;
+                    if (entry.blends) {
+                        for (int b = (int)entry.blendBone; b >= 0 && b < (int)HumanBodyBones.LastBone && blend == null; b = HumanTrait.GetParentBone (b)) {
+                            Fk fk = binding.FindFk ((HumanBodyBones)b);
+                            if (fk != null && fk.enabled && fk.control.fullBodySolve) blend = fk;
+                        }
+                    }
                     binding.points.Add (new Point {
                         definition = entry,
                         name = entry.name,
@@ -164,6 +176,7 @@ namespace Lilium
                         bone = host.bone,
                         humanBone = host.control.bone,
                         hasRotation = entry.rotation,
+                        blendBone = blend != null && blend.bone != host.bone ? blend.bone : null,
                     });
                 }
             }

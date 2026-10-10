@@ -192,11 +192,31 @@ namespace Lilium
             /// </summary>
             [Tooltip ("Name of the point to draw a line to (display only). Empty: the joint point above it in the bone hierarchy.")]
             public string link;
+            /// <summary>
+            /// 基準からのずれ（offset）の向きを、乗る骨と混ぜる相手の骨（S34）。blend が 0 なら使わない。
+            /// キャラに無い・全身 IK で解かない骨なら、親の骨をたどって最初に当たる解く骨（乗る骨と同じになれば混ぜない）
+            /// </summary>
+            [Tooltip ("Bone whose rotation is blended with the host bone's to turn the offset (e.g. the shin for a knee pole on the thigh). Used only when Blend is above 0.")]
+            public HumanBodyBones blendBone;
+            /// <summary>
+            /// 混ぜる割合（0〜1。S34）。ずれを、乗る骨の向きと blendBone の向きを基準姿勢からの回りで混ぜた向きで回す（0 は乗る骨だけ、1 は blendBone だけ）。
+            /// 基準の場所は乗る骨に付いたまま。膝の Pole（太ももに乗る）を 0.5 にすると、膝を曲げても Pole は太ももと脛の間の向き（膝の外側）に出る。
+            /// 引く強さ 0 の点だけで使える
+            /// </summary>
+            [Range (0, 1)]
+            [Tooltip ("How much the offset turns with Blend Bone instead of the host bone (0: host bone only, 1: Blend Bone only). 0.5 keeps a knee pole between the thigh and the shin when the knee bends. Only for points with pull strength 0.")]
+            public float blend;
+
+            /// <summary>ずれの向きを、ほかの骨と混ぜるか</summary>
+            public bool blends
+            {
+                get { return blend > 0 && blendBone != bone; }
+            }
         }
 
         public const float kDefaultStiffness = 0.2f;
         /// <summary>定義の形の版。古い版のアセットを読んだら、足りない項目を既定値で埋める</summary>
-        public const int kVersion = 6;
+        public const int kVersion = 7;
 
         [SerializeField, HideInInspector]
         int version_;
@@ -320,6 +340,13 @@ namespace Lilium
                 // 後方互換は保たない方針なので、点の一覧は今の既定で作り直す（一覧を直していた定義も既定に戻る。今までのクリップの Toes の点のキーは当たらなくなる）
                 bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
             }
+            else if (version_ < 7) {
+                // 版 7: 膝の Pole のずれを、太ももと脛の向きを半分ずつ混ぜた向きで回すようにした（10-08。S34）。
+                // 既定の一覧の膝の Pole で、混ぜる設定をまだ入れていない物だけ直す（版 6 で作り直した一覧なので、ほかの点はそのまま）
+                foreach (BodyPoint point in bodyPoints) {
+                    if (point != null) SetKneePoleBlend (point);
+                }
+            }
             if (version_ >= 1 && version_ < 4) {
                 // 版 4: 全身 IK の点をつかむ間も出す骨を選べるようにした。今の定義で解かない骨（点が無い骨）を出す（版 0 からは SetFullBodyDefaults が入れる）
                 foreach (FkControl control in fkControls) {
@@ -365,6 +392,8 @@ namespace Lilium
                         .Append (point.offset.z.ToString ("R", culture)).Append (point.rotation ? 'r' : '-');
                     // 引く強さ 0 の点（S28）だけ足す（1 の点だけの定義は、項目を足す前と同じハッシュのまま。焼き直しが要る扱いにしない）
                     if (point.pullStrength <= 0) text.Append ('a');
+                    // 向きを混ぜる点（S34）だけ足す（混ぜない定義は、項目を足す前と同じハッシュのまま）
+                    if (point.blends) text.Append ('b').Append ((int)point.blendBone).Append (',').Append (point.blend.ToString ("R", culture));
                 }
             }
             foreach (IkChain chain in ikChains) {
@@ -400,7 +429,8 @@ namespace Lilium
         /// 既定の点の一覧:
         /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨には置かない（足の点で足りる。contactPoints のとき）
         /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝の Pole（directionPoints）。顔の前の点は目の高さ（Eyes）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
-        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前に置き、太ももを回して膝の向きを決める
+        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前に置き、太ももを回して膝の向きを決める。
+        ///   膝の Pole のずれの向きは、太ももと脛の向きを半分ずつ混ぜる（S34。膝を曲げても膝が出る向きに置かれる）
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根（contactPoints）。踵と足裏の中心は足に乗り、足首とつなぐ。
         ///   小指側は足に乗る向けるだけの点（引く強さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
         ///   つま先の先はつま先の骨に置き（無いキャラでは足へ乗る）、足裏の中心とつなぐ
@@ -428,10 +458,12 @@ namespace Lilium
                 foreach (string side in new[] { "Left", "Right" }) {
                     HumanBodyBones thigh = side == "Left" ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg;
                     HumanBodyBones shin = side == "Left" ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
-                    points.Add (new BodyPoint {
+                    BodyPoint pole = new BodyPoint {
                         name = side + "KneePole", bone = thigh, anchor = BodyPointAnchor.Knee, offset = new Vector3 (0, 0, settings.directionLength),
                         pullStrength = 0, link = shin.ToString (),
-                    });
+                    };
+                    SetKneePoleBlend (pole);
+                    points.Add (pole);
                 }
             }
             if (settings.contactPoints) {
@@ -451,6 +483,23 @@ namespace Lilium
             }
             return points;
         }
+
+        /// <summary>
+        /// 膝の Pole（既定の一覧の名前・太ももに乗る・膝が基準）なら、ずれを太ももと脛の向きを半分ずつ混ぜた向きで回すようにする（S34）。
+        /// 太ももだけの向きだと、膝を曲げたとき Pole が太ももの前（腿を上げると膝の真上）へ回り、膝の外側から大きく外れる。
+        /// 半分ずつなら、膝の曲がりの二等分の向き（膝が出る向き）に出る。混ぜる設定が入っている点は変えない
+        /// </summary>
+        static void SetKneePoleBlend (BodyPoint point)
+        {
+            bool left = point.name == "LeftKneePole" && point.bone == HumanBodyBones.LeftUpperLeg;
+            bool right = point.name == "RightKneePole" && point.bone == HumanBodyBones.RightUpperLeg;
+            if ((!left && !right) || point.anchor != BodyPointAnchor.Knee || point.blend > 0) return;
+            point.blendBone = left ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
+            point.blend = kKneePoleBlend;
+        }
+
+        /// <summary>膝の Pole の、脛の向きを混ぜる割合（S34）</summary>
+        public const float kKneePoleBlend = 0.5f;
 
         /// <summary>全身 IK の点が向きも持つ骨か（手・足首・頭・腰。ほかは位置だけ）</summary>
         public static bool PointHasRotation (HumanBodyBones bone)
@@ -557,6 +606,12 @@ namespace Lilium
                     if (point.pullStrength <= 0 && point.anchor == BodyPointAnchor.BoneOrigin && point.offset == Vector3.zero) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL", point.name));
                     }
+                    if (point.blend < 0 || point.blend > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_OUT_OF_RANGE", point.name));
+                    if (point.blend > 0 && (point.blendBone < 0 || point.blendBone >= HumanBodyBones.LastBone)) {
+                        errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_BONE_OUT_OF_RANGE", point.name));
+                    }
+                    // 引く強さ 1 の点は、骨を剛体として引き合う解き方なので、2 本の骨の向きで決まる場所は扱えない
+                    if (point.blends && point.pullStrength > 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_NEEDS_AIM", point.name));
                 }
             }
 

@@ -63,6 +63,17 @@ namespace Lilium
         /// 骨の付け根そのものの点（offset が 0）は向ける腕が無いので、0 と同じに扱う
         /// </summary>
         public int aim;
+        /// <summary>
+        /// ずれの向きを混ぜる相手の骨（S34。膝の Pole なら脛）。blend が 0 より大きく、bone と違うときだけ使う。
+        /// 向けるだけの点（aim）でだけ効く（ほかの点は offset のまま骨に付いた点として解く）
+        /// </summary>
+        public int blendBone;
+        /// <summary>混ぜる割合（0〜1）。blendOffset を、骨から見た相手の骨の基準姿勢からの回りを blend だけ掛けて回す</summary>
+        public float blend;
+        /// <summary>offset のうち、混ぜた向きで回す分（基準姿勢の骨の枠・メートル）。残り（offset − blendOffset）は骨に付いたまま</summary>
+        public float3 blendOffset;
+        /// <summary>基準姿勢の、相手の骨から見た骨の向き（inverse(相手の基準の向き) × 骨の基準の向き）</summary>
+        public quaternion blendRest;
     }
 
     /// <summary>
@@ -935,18 +946,34 @@ namespace Lilium
             if (first < 0) {
                 int p = d.bones[b].parent;
                 quaternion rest = p >= 0 ? math.mul (d.rotations[p], d.restRelative[b]) : d.inputRotations[b];
-                quaternion aimed = math.mul (FromTo (math.rotate (rest, effector.offset - pivotLocal), effector.position - pivot), rest);
+                quaternion aimed = math.mul (FromTo (math.rotate (rest, PointOffset (ref d, e) - pivotLocal), effector.position - pivot), rest);
                 return math.normalizesafe (weight >= 1 ? aimed : math.slerp (rest, aimed, weight), rest);
             }
             quaternion current = d.rotations[b];
-            float3 axis = math.normalizesafe (math.rotate (current, d.effectors[first].offset - pivotLocal));
-            float3 from = math.rotate (current, effector.offset - pivotLocal);
+            float3 axis = math.normalizesafe (math.rotate (current, PointOffset (ref d, first) - pivotLocal));
+            float3 from = math.rotate (current, PointOffset (ref d, e) - pivotLocal);
             float3 to = effector.position - pivot;
             from -= axis * math.dot (from, axis);
             to -= axis * math.dot (to, axis);
             if (math.lengthsq (axis) < 0.5f || math.lengthsq (from) < 1e-12f || math.lengthsq (to) < 1e-12f) return current;
             float turn = SignedAngle (math.normalize (from), math.normalize (to), axis) * weight;
             return math.normalizesafe (math.mul (quaternion.AxisAngle (axis, turn), current), current);
+        }
+
+        /// <summary>
+        /// 向けるだけの点 e の、骨の付け根からの位置（今の骨の枠）。ずれの向きを混ぜる点（S34）は、骨から見た相手の骨の
+        /// 基準姿勢からの回りを blend だけ掛けて blendOffset を回す（膝の Pole を 0.5 にすると、膝の曲がりの半分だけ回る）。
+        /// 骨とその先をまとめて回しても（向ける・Pole）、骨から見た相手の向きは変わらないので、点は骨と一緒に回る
+        /// </summary>
+        static float3 PointOffset (ref FullBodyIkData d, int e)
+        {
+            FullBodyIkEffector effector = d.effectors[e];
+            int b = effector.bone;
+            int c = effector.blendBone;
+            if (effector.blend <= 0 || c < 0 || c >= d.bones.Length || c == b) return effector.offset;
+            quaternion relative = math.normalizesafe (math.mul (math.mul (math.inverse (d.rotations[b]), d.rotations[c]), effector.blendRest), quaternion.identity);
+            quaternion turn = math.slerp (quaternion.identity, relative, math.saturate (effector.blend));
+            return effector.offset - effector.blendOffset + math.rotate (turn, effector.blendOffset);
         }
 
         /// <summary>骨 i が骨 bone 自身かその先にあるか</summary>
@@ -1010,7 +1037,7 @@ namespace Lilium
             for (int e = 0; e < effectorCount; e++) {
                 FullBodyIkEffector effector = d.effectors[e];
                 if (effector.bone < 0 || effector.bone >= n) continue;
-                float3 point = d.positions[effector.bone] + math.rotate (d.rotations[effector.bone], effector.offset);
+                float3 point = d.positions[effector.bone] + math.rotate (d.rotations[effector.bone], IsAim (ref d, e) ? PointOffset (ref d, e) : effector.offset);
                 if (IsAim (ref d, e)) {
                     // 向けるだけの点は距離を合わせないので、付け根から点へ向かう線と目標の離れ
                     float3 origin = d.positions[effector.bone];
@@ -1084,7 +1111,7 @@ namespace Lilium
             float3 top = d.positions[b];
             float3 axis = math.normalizesafe (d.positions[end] - top);
             if (math.lengthsq (axis) < 0.5f) return false;
-            float3 from = math.rotate (d.rotations[b], effector.offset);
+            float3 from = math.rotate (d.rotations[b], PointOffset (ref d, e));
             float3 to = effector.position - top;
             from -= axis * math.dot (from, axis);
             to -= axis * math.dot (to, axis);

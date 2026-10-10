@@ -49,6 +49,12 @@ namespace Lilium
             get { return entry != null ? entry.mode : OverrideMode.Additive; }
         }
 
+        /// <summary>効く範囲（S17）。null なら全部</summary>
+        public ChannelMask mask
+        {
+            get { return entry != null ? entry.mask : null; }
+        }
+
         public override LayerKind kind { get { return LayerKind.Override; } }
         public override int order { get { return PoseStack.kOrderOverride + index_; } }
         public override string idSuffix { get { return index_.ToString (); } }
@@ -93,6 +99,7 @@ namespace Lilium
                 getStatus = () => {
                     if (overrideClip == null) return new LayerClipStatus (LayerClipState.None, Tr ("OVERRIDE_LAYER_NO_CLIP"));
                     if (belowWriteLayer) return new LayerClipStatus (LayerClipState.Stale, Tr ("OVERRIDE_LAYER_BELOW_WRITE"));
+                    if (mask != null) return new LayerClipStatus (LayerClipState.Ready, Tr ("OVERRIDE_LAYER_MASKED", mode, mask.name));
                     return new LayerClipStatus (LayerClipState.Ready, mode.ToString ());
                 },
             };
@@ -120,6 +127,13 @@ namespace Lilium
                 run = () => host_.RemoveOverride (index_, true),
                 visible = () => host_.layerStructureEditing,
             });
+            result.objects.Add (new LayerClipObject {
+                label = "Mask",
+                tooltip = Tr ("OVERRIDE_LAYER_MASK_TOOLTIP"),
+                type = typeof (ChannelMask),
+                get = () => mask,
+                set = value => host_.SetOverrideMask (index_, value as ChannelMask),
+            });
             result.buttons.Add (new LayerClipButton {
                 label = mode.ToString (),
                 tooltip = Tr ("OVERRIDE_LAYER_MODE_TOOLTIP", next),
@@ -135,11 +149,14 @@ namespace Lilium
         {
             if (belowWriteLayer) return;
             // ✏ の段は、重ねる前の値を控える（書くときの元になる）
-            if (host_ != null && index_ == host_.overrideWriteIndex) stage_.CaptureOverrideSource ();
-            stage_.ApplyOverride (overrideClip, mode, weight, time);
+            bool writing = host_ != null && index_ == host_.overrideWriteIndex;
+            if (writing) stage_.CaptureOverrideSource ();
+            stage_.ApplyOverride (overrideClip, mode, weight, time, mask);
             stage_.Solve ();
-            if (stage_.editingRig != null) stage_.editingRig.SyncToDisplay ();
-            stage_.InvalidateHumanoidPose ();
+            // 編集用の体を表示モデルへ写すと、任意のプロパティで入れた Transform の値が戻るので、控えて入れ直す（ShowEditingBody）
+            stage_.ShowEditingBody ();
+            // 任意のプロパティ（表情のブレンドシェイプなど）は表示モデルへ直接重ねる
+            stage_.ApplyOverrideProperties (overrideClip, mode, weight, time, mask, writing);
         }
     }
 

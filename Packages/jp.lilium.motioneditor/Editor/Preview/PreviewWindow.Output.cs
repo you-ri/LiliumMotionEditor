@@ -240,6 +240,7 @@ namespace Lilium
                 }
             }
 
+            AnimationClip bakeProperties = null;
             try {
                 List<AnimationClip> overrides = bakeOverrides;
                 System.Action<float> apply = throughStack
@@ -254,6 +255,8 @@ namespace Lilium
                         baker.afterSolve = () => stage_.SolveLockedSpan (fullBodyWeight);
                     }
                     baker.bakeRigProxies = !rig;
+                    bakeProperties = OverrideProperties.CreateBakeSource (baseClip, bakePropertyLayers, stage_);
+                    baker.propertySource = bakeProperties;
                     string path;
                     HumanoidBaker.Result result = HumanoidOutput.BakeToAsset (baker, baseClip, stage_.sourcePrefab, overrides, output.outputName, out path);
                     string text = Tr ("PREVIEW_WINDOW_OUTPUT_BAKED", Path.GetFileName (path), result.frameCount, result.milliseconds.ToString ("0"));
@@ -271,6 +274,7 @@ namespace Lilium
                 return false;
             }
             finally {
+                if (bakeProperties != null) Object.DestroyImmediate (bakeProperties);
                 foreach (KeyValuePair<PoseLayer, float> pair in clipWeights) pair.Key.clipWeight = pair.Value;
                 foreach (PoseLayer layer in hidden) layer.enabled = true;
                 if (stage_ != null) stage_.InvalidateClipCurves ();

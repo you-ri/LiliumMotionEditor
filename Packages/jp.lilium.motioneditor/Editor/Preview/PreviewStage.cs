@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
 using Lilium;
@@ -132,9 +133,17 @@ namespace Lilium
         public FullBodyRig fullBody { get; private set; }
         public string error { get; private set; }
 
+        /// <summary>
+        /// 描かない世界か（S35。窓を開かずに姿勢を作る PoseSession が使う）。描画の道具（renderUtility・camera・handlesCamera・床）を持たない
+        /// </summary>
+        public bool headless
+        {
+            get { return renderUtility == null; }
+        }
+
         public Camera camera
         {
-            get { return renderUtility.camera; }
+            get { return renderUtility != null ? renderUtility.camera : null; }
         }
 
         /// <summary>プレビューの世界のシーン（Scene ビュー型の窓が映す。S15d）</summary>
@@ -145,8 +154,10 @@ namespace Lilium
 
         public bool showFloor
         {
-            get { return floor_.activeSelf; }
-            set { floor_.SetActive (value); }
+            get { return floor_ != null && floor_.activeSelf; }
+            set {
+                if (floor_ != null) floor_.SetActive (value);
+            }
         }
 
         /// <summary>
@@ -166,18 +177,36 @@ namespace Lilium
         /// 骨のハンドルが本物の骨の上に出るよう、複製を同じ場所に置く。null なら原点
         /// </param>
         public PreviewStage (GameObject prefab, EditRigDefinition definition = null, Transform placement = null)
+            : this (prefab, definition, placement, true)
+        {
+        }
+
+        /// <summary>
+        /// 描かない世界を作る（S35）。姿勢の組み立て（クリップを当てる・重ねる・解く・焼く）は描く世界と同じ物を通るので、
+        /// 窓で作る姿勢と同じになる。PreviewRenderUtility はバッチモード（-nographics）で作れないので、シーンだけを自分で開く
+        /// </summary>
+        public static PreviewStage CreateHeadless (GameObject prefab, EditRigDefinition definition = null)
+        {
+            return new PreviewStage (prefab, definition, null, false);
+        }
+
+        PreviewStage (GameObject prefab, EditRigDefinition definition, Transform placement, bool render)
         {
             placement_ = placement;
             ownsDefinition_ = definition == null;
             sourcePrefab = prefab;
             definition_ = definition != null ? definition : EditRigDefinition.CreateDefault ();
-            renderUtility = new PreviewRenderUtility ();
-            scene_ = renderUtility.camera.gameObject.scene;
-
-            SetupCameraAndLights ();
-            handlesCamera = CreateRoot ("Handles Camera").AddComponent<Camera> ();
-            handlesCamera.enabled = false;
-            floor_ = CreateFloor ();
+            if (render) {
+                renderUtility = new PreviewRenderUtility ();
+                scene_ = renderUtility.camera.gameObject.scene;
+                SetupCameraAndLights ();
+                handlesCamera = CreateRoot ("Handles Camera").AddComponent<Camera> ();
+                handlesCamera.enabled = false;
+                floor_ = CreateFloor ();
+            }
+            else {
+                scene_ = EditorSceneManager.NewPreviewScene ();
+            }
             if (prefab != null) CreateModel (prefab);
         }
 
@@ -231,7 +260,8 @@ namespace Lilium
                 Object.DestroyImmediate (handlesTarget_);
             }
             if (ownsDefinition_ && definition_ != null) Object.DestroyImmediate (definition_);
-            renderUtility.Cleanup ();
+            if (renderUtility != null) renderUtility.Cleanup ();
+            else if (scene_.IsValid ()) EditorSceneManager.ClosePreviewScene (scene_);
         }
 
         /// <summary>
@@ -298,6 +328,7 @@ namespace Lilium
         /// <param name="width">窓（ホストビュー）の幅（ピクセル）。Screen.width</param>
         public void EnsureHandlesTarget (int width, int height)
         {
+            if (handlesCamera == null) return;
             if (handlesTarget_ != null && handlesTarget_.width >= width && handlesTarget_.height >= height) return;
 
             if (handlesTarget_ != null) {
@@ -318,6 +349,7 @@ namespace Lilium
         /// </summary>
         public void UpdateLights (Quaternion viewRotation)
         {
+            if (renderUtility == null) return;
             Light[] lights = renderUtility.lights;
             lights[0].transform.rotation = viewRotation * Quaternion.Euler (35, 35, 0);
             lights[1].transform.rotation = viewRotation * Quaternion.Euler (10, 200, 0);
@@ -541,14 +573,15 @@ namespace Lilium
 
         /// <summary>
         /// 編集用クリップを重みで合成してコントロールへ当てる（Editing Rig の段）。
-        /// 1 はこれまでどおり上書き（カーブの無いコントロールは今の値のまま）。1 未満は、コントロールを基準の値へ戻してから混ぜる
+        /// どちらもコントロールを基準の値へ戻してから当てる。1 は上書き、1 未満は基準の値と混ぜる
         /// </summary>
         public void BlendDataClip (AnimationClip clip, float time, float weight)
         {
             if (weight >= 1) {
-                // 全身 IK の点はカーブの無い値を残さない（S25）。前に開いていたクリップや、打たなかった操作の固定が残ると、
-                // 点のキーが無いクリップで素通しにならない
-                RestoreBodyPoints ();
+                // 前の値を残さない（2026-10-10）。Unity は基準の値と同じ一定のカーブを当てないので、残すと
+                // 触っていない部位（どのキーも基準の値）に前の評価の値が残り、足し算の Override が評価のたびに積み重なる。
+                // 全身 IK の点も、前に開いていたクリップや打たなかった操作の固定が残ると、点のキーが無いクリップで素通しにならない（S25）
+                RestoreControls ();
                 SampleClip (clip, time);
                 MaskBodyPoints (clip, time);
                 return;
@@ -590,21 +623,71 @@ namespace Lilium
         public void CaptureOverrideSource ()
         {
             overrideSource_ = editingRig != null && editingRig.root != null ? CaptureControlState () : null;
+            overridePropertySource_.Clear ();
+            overridePropertySourceValid_ = true;
         }
 
         /// <summary>控えを捨てる（姿勢を作り始めるとき）</summary>
         public void ClearOverrideSource ()
         {
             overrideSource_ = null;
+            overridePropertySource_.Clear ();
+            overridePropertySourceValid_ = false;
+        }
+
+        /// <summary>書き込み先の Override の段が重ねる前の、任意のプロパティの値（表示モデルから見たバインディング）</summary>
+        readonly Dictionary<EditorCurveBinding, float> overridePropertySource_ = new Dictionary<EditorCurveBinding, float> ();
+        bool overridePropertySourceValid_;
+
+        /// <summary>
+        /// Override のクリップの任意のプロパティ（Controls/Props/...）を、表示モデルの今の値へ重ねる（S17）。
+        /// capture を立てると、重ねる前の値を控える（書き込み先の段。キーを打つときの差分の元）
+        /// </summary>
+        public void ApplyOverrideProperties (AnimationClip clip, OverrideMode mode, float weight, float time, ChannelMask mask, bool capture)
+        {
+            if (animator == null) return;
+            System.Predicate<EditorCurveBinding> filter = mask != null ? binding => InMask (mask, binding) : (System.Predicate<EditorCurveBinding>)null;
+            properties_.Layer (animator.gameObject, clip, mode, weight, time, filter, capture ? overridePropertySource_ : null);
+        }
+
+        /// <summary>
+        /// 書き込み先の Override の段の手前の、任意のプロパティの値。段が重ねていない値は今の値（段より上の段は編集中は効かないので、今の値が手前の値）。
+        /// 控えが無ければ false
+        /// </summary>
+        public bool TryGetOverridePropertySource (EditorCurveBinding display, out float value)
+        {
+            if (overridePropertySource_.TryGetValue (display, out value)) return true;
+            return overridePropertySourceValid_ && animator != null && PropertyPlayer.TryGetValue (animator.gameObject, display, out value);
+        }
+
+        /// <summary>任意のプロパティの、クリップで入れる前の値（焼き・統合で、元にカーブが無い値の基準）</summary>
+        public bool TryGetPropertyOriginal (EditorCurveBinding display, out float value)
+        {
+            value = 0;
+            return animator != null && properties_.TryGetOriginal (animator.gameObject, display, out value);
         }
 
         /// <summary>
         /// Override のクリップを、今のコントロールの値へ重ねる（S14）
         /// </summary>
-        public void ApplyOverride (AnimationClip clip, OverrideMode mode, float weight, float time)
+        public void ApplyOverride (AnimationClip clip, OverrideMode mode, float weight, float time, ChannelMask mask = null)
         {
             if (editingRig == null || editingRig.root == null) return;
-            OverrideApplier.Apply (clip, mode, weight, time, editingRig.root.transform);
+            OverrideApplier.Apply (clip, mode, weight, time, editingRig.root.transform, mask, mask != null ? maskParts : null);
+        }
+
+        ChannelMaskParts maskParts_;
+
+        /// <summary>編集用クリップのパスの部位（段のマスクが部位で絞るのに使う。S17）</summary>
+        public ChannelMaskParts maskParts
+        {
+            get { return maskParts_ ?? (maskParts_ = new ChannelMaskParts (definition_)); }
+        }
+
+        /// <summary>カーブが段のマスクの中か（マスクが無ければ中）</summary>
+        public bool InMask (ChannelMask mask, UnityEditor.EditorCurveBinding binding)
+        {
+            return mask == null || mask.Contains (binding, maskParts.PartOf (binding.path));
         }
 
         /// <summary>
@@ -1565,6 +1648,9 @@ namespace Lilium
             foreach (SkinnedMeshRenderer skin in model.GetComponentsInChildren<SkinnedMeshRenderer> (true)) {
                 // 骨を動かしても枠が追従しないので、カメラの外と判定されて消えないようにする
                 skin.updateWhenOffscreen = true;
+                // 描くたびに骨の行列を取り直す。Unity が裏にある（ほかのアプリに焦点がある）間はエディタのフレームが間引かれ、
+                // スキンの行列が更新されないまま描かれる。骨は動いているのに絵のキャラだけ止まり、点やハンドルとずれる（10-10 実測）
+                skin.forceMatrixRecalculationPerRender = true;
             }
             holder.SetActive (true);
 

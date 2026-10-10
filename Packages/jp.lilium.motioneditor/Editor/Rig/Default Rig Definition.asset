@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
   m_Name: Default Rig Definition
   m_EditorClassIdentifier: 
-  version_: 6
+  version_: 7
   solver: 1
   fullBody:
     iterations: 48
@@ -399,6 +399,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
@@ -407,6 +409,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightUpperLeg
     bone: 2
@@ -415,6 +419,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
@@ -423,6 +429,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightLowerLeg
     bone: 4
@@ -431,6 +439,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftFoot
     bone: 5
@@ -439,6 +449,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -447,6 +459,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: Spine
     bone: 7
@@ -455,6 +469,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: Chest
     bone: 8
@@ -463,6 +479,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: Neck
     bone: 9
@@ -471,6 +489,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: Head
     bone: 10
@@ -479,6 +499,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftShoulder
     bone: 11
@@ -487,6 +509,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightShoulder
     bone: 12
@@ -495,6 +519,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftUpperArm
     bone: 13
@@ -503,6 +529,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightUpperArm
     bone: 14
@@ -511,6 +539,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftLowerArm
     bone: 15
@@ -519,6 +549,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -527,6 +559,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftHand
     bone: 17
@@ -535,6 +569,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightHand
     bone: 18
@@ -543,6 +579,8 @@ MonoBehaviour:
     rotation: 1
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: UpperChest
     bone: 54
@@ -551,6 +589,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: HipsDirection
     bone: 0
@@ -559,6 +599,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: UpperChestDirection
     bone: 54
@@ -567,6 +609,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
@@ -575,6 +619,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: HeadTop
     bone: 10
@@ -583,6 +629,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftKneePole
     bone: 1
@@ -591,6 +639,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: LeftLowerLeg
+    blendBone: 3
+    blend: 0.5
   - enabled: 1
     name: RightKneePole
     bone: 2
@@ -599,6 +649,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 0
     link: RightLowerLeg
+    blendBone: 4
+    blend: 0.5
   - enabled: 1
     name: LeftHeel
     bone: 5
@@ -607,6 +659,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftSoleBall
     bone: 5
@@ -615,6 +669,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
@@ -623,6 +679,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: LeftSoleBall
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftToeTip
     bone: 19
@@ -631,6 +689,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: LeftSoleBall
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
@@ -639,6 +699,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
@@ -647,6 +709,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightHeel
     bone: 6
@@ -655,6 +719,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightSoleBall
     bone: 6
@@ -663,6 +729,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
@@ -671,6 +739,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: RightSoleBall
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightToeTip
     bone: 20
@@ -679,6 +749,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: RightSoleBall
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -687,6 +759,8 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -695,3 +769,5 @@ MonoBehaviour:
     rotation: 0
     pullStrength: 1
     link: 
+    blendBone: 0
+    blend: 0

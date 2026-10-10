@@ -1255,6 +1255,106 @@ namespace Lilium
         }
 
         [Test]
+        public void KneePole_TurnsHalfWithShin_WhenKneeBends ([Values (0f, 0.5f)] float blend)
+        {
+            // 腿を前へ 90° 上げ、膝を 90° 曲げて脛を真下に戻す。太ももだけの向き（0）なら Pole は膝の真上、
+            // 脛と半分ずつ混ぜる（既定の 0.5。S34）なら膝の前上 45°（膝の曲がりの二等分の向き）に出る
+            Assert.AreEqual (EditRigDefinition.kKneePoleBlend, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blend, "既定は 0.5");
+            Assert.AreEqual (HumanBodyBones.LeftLowerLeg, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blendBone, "脛と混ぜる");
+            foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
+                if (point.name.EndsWith ("KneePole")) point.blend = blend;
+            }
+            Setup s = Create ();
+            Transform thigh = Bone (s, HumanBodyBones.LeftUpperLeg);
+            Transform shin = Bone (s, HumanBodyBones.LeftLowerLeg);
+            thigh.rotation = Quaternion.FromToRotation (-s.up, s.forward) * thigh.rotation;
+            shin.rotation = Quaternion.FromToRotation (s.forward, -s.up) * shin.rotation;
+
+            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            Vector3 onBone;
+            Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone));
+            Vector3 direction = blend > 0 ? (s.forward + s.up).normalized : s.up;
+            Vector3 expected = shin.position + direction * definition_.fullBody.directionLength * s.rig.humanScale;
+            Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "膝の Pole の場所");
+        }
+
+        [Test]
+        public void KneePole_PinnedWhereItIs_KeepsBentKnee ()
+        {
+            // 膝を曲げた姿勢で、膝の Pole を今の場所に固定しても姿勢は変わらない（表示の場所と解く側の場所が同じ。S34）
+            Setup s = Create ();
+            Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
+            Pin (s, HumanBodyBones.LeftFoot, s.forward * 0.1f + s.up * 0.25f, true);
+            Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
+            Pin (s, HumanBodyBones.Hips, -s.up * 0.1f);
+            Solve (s);
+            Vector3 bent = knee.position;
+            Vector3 thighDirection = (knee.position - Bone (s, HumanBodyBones.LeftUpperLeg).position).normalized;
+            Vector3 shinDirection = (Bone (s, HumanBodyBones.LeftFoot).position - knee.position).normalized;
+            Assert.Greater (Vector3.Angle (thighDirection, shinDirection), 30f, "膝が曲がっている");
+
+            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            PinDirection (s, pole, Vector3.zero);
+            Solve (s);
+            Assert.LessOrEqual (Vector3.Distance (bent, knee.position), 1e-4f, "膝は動かない");
+            Assert.LessOrEqual (s.body.GetResidual (pole), 1e-4f, "Pole は骨の上の場所のまま");
+        }
+
+        [Test]
+        public void BlendedBodyPoint_WorksOnOtherLimbs_AndNeedsZeroPull ()
+        {
+            // 肘の Pole: 上腕に乗せて肘の後ろに置き、前腕と半分ずつ混ぜる。肘を曲げても肘の外側に出る
+            EditRigDefinition.BodyPoint elbow = new EditRigDefinition.BodyPoint {
+                name = "LeftElbowPole", bone = HumanBodyBones.LeftUpperArm, offset = new Vector3 (0, 0, -0.25f),
+                pullStrength = 0, blendBone = HumanBodyBones.LeftLowerArm, blend = 0.5f,
+            };
+            definition_.bodyPoints.Add (elbow);
+            Assert.IsEmpty (definition_.Validate ());
+            Setup s = Create ();
+            BodyPointId id = new BodyPointId ("LeftElbowPole");
+            Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform lower = Bone (s, HumanBodyBones.LeftLowerArm);
+            Vector3 arm = (lower.position - upper.position).normalized;
+            Vector3 onBone;
+            Assert.IsTrue (s.body.TryGetBonePointWorld (id, out onBone));
+            Vector3 back = upper.position - s.forward * 0.25f * s.rig.humanScale;
+            Assert.LessOrEqual (Vector3.Distance (back, onBone), 1e-4f, "まっすぐな腕では、上腕の付け根の後ろ");
+
+            // 前腕だけを肘で 90° 前へ曲げると、ずれは半分の 45° だけ前へ回る（付け根は上腕に付いたまま）
+            lower.rotation = Quaternion.FromToRotation (arm, s.forward) * lower.rotation;
+            Assert.IsTrue (s.body.TryGetBonePointWorld (id, out onBone));
+            Vector3 expected = upper.position + Quaternion.AngleAxis (45, Vector3.Cross (arm, s.forward)) * (-s.forward) * 0.25f * s.rig.humanScale;
+            Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "前腕と半分ずつ混ぜた向き");
+
+            // 引く強さ 1 の点は混ぜられない・割合は 0〜1
+            elbow.pullStrength = 1;
+            Assert.IsNotEmpty (definition_.Validate ());
+            elbow.pullStrength = 0;
+            elbow.blend = 1.5f;
+            Assert.IsNotEmpty (definition_.Validate ());
+        }
+
+        [Test]
+        public void Version6Definition_GetsKneePoleBlend ()
+        {
+            // 版 7 で膝の Pole を脛と混ぜるようにした。版 6 の定義は、混ぜる設定の無い膝の Pole だけ直す（ほかの点・自分で入れた設定はそのまま）
+            EditRigDefinition.BodyPoint left = definition_.bodyPoints.First (p => p.name == "LeftKneePole");
+            EditRigDefinition.BodyPoint right = definition_.bodyPoints.First (p => p.name == "RightKneePole");
+            left.blend = 0;
+            right.blendBone = HumanBodyBones.RightFoot;
+            right.blend = 0.3f;
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
+            definition_.version = 6;
+            definition_.UpgradeIfNeeded ();
+            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
+            Assert.AreEqual (EditRigDefinition.kKneePoleBlend, left.blend);
+            Assert.AreEqual (HumanBodyBones.LeftLowerLeg, left.blendBone);
+            Assert.AreEqual (0.3f, right.blend, "自分で入れた割合は変えない");
+            Assert.AreEqual (HumanBodyBones.RightFoot, right.blendBone);
+            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "Nose"), "版 6 からは一覧を作り直さない");
+        }
+
+        [Test]
         public void CustomBodyPoint_IsPlacedByOffset_AndSolvedLikeAnyPoint ()
         {
             // 頭の付け根から上へ 0.1・前へ 0.2（humanScale 比）の所に、自分で点を足す

@@ -75,8 +75,39 @@ namespace Lilium
                 foreach (Stacker.Group group in stacker.groups) {
                     if (!names.Contains (group.name)) names.Add (group.name);
                 }
+                // マスク（S17）も組として選べる（Override の段と同じ範囲でキーを打つ・ずらす）
+                foreach (ChannelMask mask in stackerMasks) {
+                    string name = MaskGroupName (mask);
+                    if (!names.Contains (name)) names.Add (name);
+                }
                 return names;
             }
+        }
+
+        const string kMaskGroupSuffix = " (Mask)";
+
+        static string MaskGroupName (ChannelMask mask)
+        {
+            return mask.name + kMaskGroupSuffix;
+        }
+
+        /// <summary>組として選べるマスク: 同梱の既定のマスクと、Override の段に付けているマスク</summary>
+        IEnumerable<ChannelMask> stackerMasks
+        {
+            get {
+                List<ChannelMask> result = ChannelMaskFiles.LoadDefaults ();
+                foreach (OverrideClip entry in overrides_) {
+                    if (entry != null && entry.mask != null && !result.Contains (entry.mask)) result.Add (entry.mask);
+                }
+                return result;
+            }
+        }
+
+        /// <summary>組の名前がマスクの組なら、そのマスク（違えば null）</summary>
+        ChannelMask FindMaskGroup (string name)
+        {
+            if (name == null || !name.EndsWith (kMaskGroupSuffix)) return null;
+            return stackerMasks.FirstOrDefault (m => MaskGroupName (m) == name);
         }
 
         public string stackerGroup
@@ -153,8 +184,10 @@ namespace Lilium
                 case kGroupRig: return targets_.Where (t => t is RigSourceTarget);
             }
             Stacker.Group group = FindCustomGroup (name);
-            if (group == null) return Enumerable.Empty<PoseTarget> ();
-            return targets_.Where (t => group.targets.Contains (t.label));
+            if (group != null) return targets_.Where (t => group.targets.Contains (t.label));
+            ChannelMask mask = FindMaskGroup (name);
+            if (mask != null) return targets_.Where (t => !IsOutsideMask (stage_, mask, t));
+            return Enumerable.Empty<PoseTarget> ();
         }
 
         static bool IsPropertyBinding (EditorCurveBinding binding)
@@ -175,6 +208,8 @@ namespace Lilium
             if (name == kGroupAll) return null;
             if (name == kGroupFace) return IsFaceBinding;
             if (name == kGroupProps) return IsPropertyBinding;
+            ChannelMask mask = FindMaskGroup (name);
+            if (mask != null && stage_ != null) return binding => stage_.InMask (mask, binding);
             HashSet<string> paths = new HashSet<string> ();
             foreach (PoseTarget target in GroupTargets (name)) target.CollectKeyedPaths (paths);
             if (name == kGroupRig) return binding => paths.Contains (binding.path) || binding.path.StartsWith (RigPaths.kGame);
@@ -226,15 +261,22 @@ namespace Lilium
         void WriteGroupKeys (string group, string undoName)
         {
             int frame = currentFrame;
+            ChannelMask mask = FindMaskGroup (group);
             using (CurveWriter writer = BeginCurves (undoName)) {
+                // マスクの組は、物の中のマスク外のカーブも打たない
+                if (mask != null && stage_ != null) {
+                    System.Predicate<EditorCurveBinding> layerFilter = writer.filter;
+                    writer.filter = binding => stage_.InMask (mask, binding) && (layerFilter == null || layerFilter (binding));
+                }
                 foreach (PoseTarget target in GroupTargets (group)) target.WriteKeys (writer);
-                if (group == kGroupAll || group == kGroupRig) {
+                if (group == kGroupAll || group == kGroupRig || mask != null) {
                     if (rigProxies != null) rigProxies.WriteWeightKeys (writer);
                 }
             }
-            // 任意のプロパティは今の値のままキーにする（All・Face・Props）
-            if (group == kGroupAll || group == kGroupFace || group == kGroupProps) {
+            // 任意のプロパティは今の値のままキーにする（All・Face・Props。マスクの組はマスクの中だけ）
+            if (group == kGroupAll || group == kGroupFace || group == kGroupProps || mask != null) {
                 System.Predicate<EditorCurveBinding> propertyFilter = group == kGroupFace ? (System.Predicate<EditorCurveBinding>)IsFaceBinding : IsPropertyBinding;
+                if (mask != null && stage_ != null) propertyFilter = binding => IsPropertyBinding (binding) && stage_.InMask (mask, binding);
                 foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (targetClip)) {
                     if (!propertyFilter (binding)) continue;
                     AnimationCurve curve = AnimationUtility.GetEditorCurve (targetClip, binding);
@@ -277,7 +319,7 @@ namespace Lilium
         public void StackerSaveGroup (string name)
         {
             name = name != null ? name.Trim () : "";
-            if (name.Length == 0 || name == kGroupAll || name == kGroupBody || name == kGroupHands || name == kGroupRig) return;
+            if (name.Length == 0 || name == kGroupAll || name == kGroupBody || name == kGroupHands || name == kGroupRig || name.EndsWith (kMaskGroupSuffix)) return;
             List<string> members = selection_.Select (FindTarget).Where (t => t != null).Select (t => t.label).ToList ();
             if (members.Count == 0) return;
             Stacker.Group group = FindCustomGroup (name);

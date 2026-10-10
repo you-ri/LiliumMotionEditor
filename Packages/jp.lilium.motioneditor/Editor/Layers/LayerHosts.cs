@@ -71,6 +71,8 @@ namespace Lilium
         /// <summary>層のクリップを置き換える。null で層を外す</summary>
         void SetOverrideClip (int index, AnimationClip clip);
         void SetOverrideMode (int index, OverrideMode mode);
+        /// <summary>効く範囲（マスク）を変える（S17。null で全部に効く）</summary>
+        void SetOverrideMask (int index, ChannelMask mask);
         /// <summary>Override の段を外す（deleteAsset でクリップのファイルも消す）</summary>
         void RemoveOverride (int index, bool deleteAsset);
         /// <summary>Override の段を 1 つ上（-1）か下（+1）の Override と入れ替える（S21）</summary>

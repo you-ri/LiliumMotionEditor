@@ -68,6 +68,8 @@ namespace Lilium
         public string clip = "";
         /// <summary>合成の仕方（OverrideMode の名前）</summary>
         public string mode = "";
+        /// <summary>効く範囲（ChannelMask の GUID。S17）。空なら全部に効く</summary>
+        public string mask = "";
     }
 
     /// <summary>

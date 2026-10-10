@@ -55,6 +55,18 @@ namespace Lilium
     }
 
     /// <summary>
+    /// クリップの行の下に並べるアセットの欄（段のマスクなど）
+    /// </summary>
+    public sealed class LayerClipObject
+    {
+        public string label;
+        public string tooltip;
+        public System.Type type;
+        public System.Func<Object> get;
+        public System.Action<Object> set;
+    }
+
+    /// <summary>
     /// 段が持つクリップ。**どの段にどのクリップが付いているかを、段の行で見せる**ためのもの。
     /// 元（編集するクリップ）は選び直せる。出力（焼いたクリップ）は置き場所が決まっているので見せるだけ。
     /// 重みを持つクリップは、その段を流れる姿勢に合成する（既定の 100% は上書き）
@@ -69,6 +81,7 @@ namespace Lilium
         public System.Func<LayerClipStatus> getStatus;
         public readonly List<LayerClipButton> buttons = new List<LayerClipButton> ();
         public readonly List<LayerClipToggle> toggles = new List<LayerClipToggle> ();
+        public readonly List<LayerClipObject> objects = new List<LayerClipObject> ();
         /// <summary>合成の重み。null なら重みを持たない（合成しないクリップ）</summary>
         public System.Func<float> getWeight;
         public System.Action<float> setWeight;

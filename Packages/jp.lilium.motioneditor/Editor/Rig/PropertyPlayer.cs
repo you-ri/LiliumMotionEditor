@@ -117,6 +117,54 @@ namespace Lilium
         }
 
         /// <summary>
+        /// Override の段のプロパティのカーブを、今の値（元のクリップと下の段を入れた後）へ重ねる（S17）。
+        /// 元の値は Apply と同じく覚えておき、次の Apply で段が効かなくなっていれば戻る。
+        /// source を渡すと、重ねる前の値を控える（書き出し先の段。キーを打つときに差分の元になる）
+        /// </summary>
+        public void Layer (GameObject root, AnimationClip clip, OverrideMode mode, float weight, float time, System.Predicate<EditorCurveBinding> filter, Dictionary<EditorCurveBinding, float> source)
+        {
+            if (root == null || clip == null || weight <= 0) return;
+            weight = Mathf.Clamp01 (weight);
+            RotationBatch rotations = new RotationBatch ();
+            foreach (OverrideApplier.PropertyCurve channel in OverrideApplier.GetPropertyCurves (clip)) {
+                if (channel.curve == null || channel.curve.length == 0) continue;
+                if (filter != null && !filter (channel.clip)) continue;
+                float current;
+                if (!TryGetValue (root, channel.display, out current)) continue;
+                if (!originals_.ContainsKey (channel.display)) originals_[channel.display] = current;
+                if (source != null) source[channel.display] = current;
+                float value = OverrideMath.ComposeFloat (mode, IsAdditive (root, channel.display), current, channel.curve.Evaluate (time), weight);
+                if (!rotations.Add (root, channel.display, value)) SetValue (root, channel.display, value);
+            }
+            rotations.Flush ();
+        }
+
+        /// <summary>入れる前の元の値（入れたことが無ければ今の値）</summary>
+        public bool TryGetOriginal (GameObject root, EditorCurveBinding display, out float value)
+        {
+            if (originals_.TryGetValue (display, out value)) return true;
+            return root != null && TryGetValue (root, display, out value);
+        }
+
+        static readonly Dictionary<EditorCurveBinding, bool> additive_ = new Dictionary<EditorCurveBinding, bool> ();
+
+        /// <summary>
+        /// Additive の段で足し合わせる値か。足せるのはコンポーネントの小数の値（ブレンドシェイプなど）だけ。
+        /// 表示の ON/OFF・整数・Transform の値（回転の成分を足すと別の回転になる）は Additive でも置き換える
+        /// </summary>
+        public static bool IsAdditive (GameObject root, EditorCurveBinding display)
+        {
+            if (display.type == typeof (Transform) || display.type == typeof (GameObject)) return false;
+            if (display.propertyName.StartsWith ("blendShape.")) return true;
+            bool result;
+            if (additive_.TryGetValue (display, out result)) return result;
+            if (root == null) return false;
+            result = AnimationUtility.GetEditorCurveValueType (root, display) == typeof (float) && display.propertyName != "m_Enabled";
+            additive_[display] = result;
+            return result;
+        }
+
+        /// <summary>
         /// 今入れている値（表示モデルの今の値）を控える。骨を表示モデルへ写し直す処理（編集用の体の同期）が
         /// Transform の値（武器の握りなど）を上書きするので、その前に控えて <see cref="Put"/> で戻す
         /// </summary>

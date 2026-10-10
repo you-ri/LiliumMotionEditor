@@ -521,9 +521,14 @@ namespace Lilium
 
         public bool TrySetWrite (PoseLayer layer, out string reason)
         {
-            // 保存データの段の値は、その段自身へ書くときだけつかめる。✏ を移したら ✋ も一緒に移す
+            // 保存データの段の値は、その段自身へ書くときだけつかめる。✏ を移したら ✋ も一緒に移す。
+            // ただし ✋ が保存データの段でない（全身 IK・表示の骨など）なら、新しい ✏ まで経路が通る限り ✋ は残す
+            // （Override へ書くたびに ✋ が Override へ移り、全身 IK のハンドルが消えていた。2026-10-10）
             string saved = manipulateId_;
-            if (layer != null && layer.isData && layer.canManipulate) manipulateId_ = layer.id;
+            PoseLayer current = manipulateLayer;
+            string ignored;
+            bool keep = layer != null && current != null && !current.isData && PathKind (layer, current, out ignored) != InverseKind.None;
+            if (!keep && layer != null && layer.isData && layer.canManipulate) manipulateId_ = layer.id;
             if (!CanWrite (layer, out reason)) {
                 manipulateId_ = saved;
                 return false;

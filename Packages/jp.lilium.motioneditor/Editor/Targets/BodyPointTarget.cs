@@ -92,13 +92,17 @@ namespace Lilium
         public bool inBox;
 
         Vector3 dragDelta_;
+        /// <summary>動かした量をためはじめる前の点の位置（ワールド）</summary>
+        Vector3 dragFrom_;
 
         /// <summary>
-        /// 丸をつかんで動かした量（ワールド。読むと消える）。いくつか選んでいるとき、窓がほかの選んでいる点を同じだけ動かす
+        /// 丸をつかんで動かした量（ワールド。読むと消える）と、動かす前の点の位置。いくつか選んでいるとき、窓がほかの選んでいる点を同じだけ動かす。
+        /// 動かす前の位置は、Floor Clamp を選んだ点全体で掛け直すときに使う（この点は自分だけで床に当てて置いてある）
         /// </summary>
-        public Vector3 ConsumeDragDelta ()
+        public Vector3 ConsumeDragDelta (out Vector3 from)
         {
             Vector3 delta = dragDelta_;
+            from = dragFrom_;
             dragDelta_ = Vector3.zero;
             return delta;
         }
@@ -110,6 +114,19 @@ namespace Lilium
             Quaternion rotation;
             GetPoint (out position, out rotation);
             PinPosition (position + delta);
+        }
+
+        /// <summary>点を position（ワールド）へ置いて Pin にする</summary>
+        public void MoveTo (Vector3 position)
+        {
+            PinPosition (position);
+        }
+
+        /// <summary>丸・ギズモで動かした量をためる。ためはじめなら、動かす前の位置を控える</summary>
+        void AddDragDelta (Vector3 from, Vector3 to)
+        {
+            if (dragDelta_ == Vector3.zero) dragFrom_ = from;
+            dragDelta_ += to - from;
         }
 
         Quaternion rotateDelta_ = Quaternion.identity;
@@ -428,6 +445,16 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 向きの固定だけを外す（位置の固定は残す。S36 で姿勢を書くとき、向きを決めない点にする）。外したら次のキーで強さ 0 を打つ
+        /// </summary>
+        public void ReleaseRotation ()
+        {
+            if (!rotationPinned) return;
+            body_.SetRotationWeight (human_, 0);
+            rotationDirty_ = true;
+        }
+
+        /// <summary>
         /// 固定を付け外しする。外すときは位置も向きも外す。付けるときは、今の骨の位置で位置だけ固定する
         /// </summary>
         public void TogglePin ()
@@ -616,7 +643,7 @@ namespace Lilium
             // 関節の丸（つかんで動かすと位置を固定する）
             Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
             if (moved != position) {
-                dragDelta_ += moved - position;
+                AddDragDelta (position, moved);
                 PinPosition (moved);
                 position = moved;
                 GUI.changed = true;
@@ -635,7 +662,7 @@ namespace Lilium
             else if (selected && showGizmo) {
                 Vector3 gizmoPosition = PoseHandles.PositionHandle (position, PoseHandleUtility.GizmoAxes (shape));
                 if (gizmoPosition != position) {
-                    dragDelta_ += gizmoPosition - position;
+                    AddDragDelta (position, gizmoPosition);
                     PinPosition (gizmoPosition);
                     GUI.changed = true;
                 }

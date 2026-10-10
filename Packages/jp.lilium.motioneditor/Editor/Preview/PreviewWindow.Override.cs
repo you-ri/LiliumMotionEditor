@@ -140,7 +140,7 @@ namespace Lilium
                     if (clip == null) continue;
                     OverrideMode mode;
                     if (!System.Enum.TryParse (record.mode, out mode)) mode = OverrideMode.Additive;
-                    result.Add (new OverrideClip { clip = clip, mode = mode, order = result.Count });
+                    result.Add (new OverrideClip { clip = clip, mode = mode, order = result.Count, mask = ChannelMaskFiles.FromGuid (record.mask) });
                 }
                 if (any) return result;
             }
@@ -179,6 +179,7 @@ namespace Lilium
                     baseName = name,
                     clip = AssetDatabase.AssetPathToGUID (AssetDatabase.GetAssetPath (entry.clip)),
                     mode = entry.mode.ToString (),
+                    mask = ChannelMaskFiles.ToGuid (entry.mask),
                 });
                 // 以前の置き方（.meta の印）は消す（キャラの設定が正になる）
                 if (OverrideFiles.IsOverride (entry.clip)) OverrideFiles.Unlink (entry.clip);
@@ -293,6 +294,17 @@ namespace Lilium
             AfterOverrideChange (true);
         }
 
+        /// <summary>効く範囲（マスク）を変える（S17。null で全部に効く）</summary>
+        public void SetOverrideMask (int index, ChannelMask mask)
+        {
+            if (index < 0 || index >= overrides_.Count) return;
+            OverrideClip entry = overrides_[index];
+            if (entry.mask == mask) return;
+            entry.mask = mask;
+            SaveOverrides ();
+            AfterOverrideChange (false);
+        }
+
         void AfterOverrideChange (bool rebuildStack)
         {
             keyFrames_ = null;
@@ -312,33 +324,7 @@ namespace Lilium
         {
             OverrideLayer layer = overrideWriteLayer;
             if (layer == null || stage_ == null) return;
-            OverrideMode mode = layer.mode;
-
-            PreviewStage stage = stage_;
-            writer.storePosition = (path, value) => {
-                Vector3 position;
-                Quaternion rotation;
-                Vector3 scale;
-                return stage.TryGetOverrideSource (path, out position, out rotation, out scale) ? OverrideMath.StorePosition (mode, position, value) : value;
-            };
-            writer.storeRotation = (path, value) => {
-                Vector3 position;
-                Quaternion rotation;
-                Vector3 scale;
-                return stage.TryGetOverrideSource (path, out position, out rotation, out scale) ? OverrideMath.StoreRotation (mode, rotation, value) : value;
-            };
-            writer.storeScale = (path, value) => {
-                Vector3 position;
-                Quaternion rotation;
-                Vector3 scale;
-                return stage.TryGetOverrideSource (path, out position, out rotation, out scale) ? OverrideMath.StoreScale (mode, scale, value) : value;
-            };
-            writer.storeFloat = (binding, value) => {
-                float source;
-                return stage.TryGetOverrideSourceFloat (binding.path, binding.type, binding.propertyName, out source)
-                    ? OverrideMath.StoreFloat (mode, Lilium.IkControl.IsAdditive (binding.propertyName), source, value)
-                    : value;
-            };
+            PoseCommit.AttachOverrideStore (writer, stage_, layer.mode, layer.mask);
         }
 
         /// <summary>焼く元のクリップ（土台）</summary>
@@ -367,6 +353,24 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 焼く・統合するときに任意のプロパティへ重ねる段（効いている段だけ。下から順。S17）
+        /// </summary>
+        List<OverrideProperties.Layer> bakePropertyLayers
+        {
+            get {
+                List<OverrideProperties.Layer> result = new List<OverrideProperties.Layer> ();
+                if (poseStack_ == null) return result;
+                foreach (PoseLayer layer in poseStack_.layers) {
+                    OverrideLayer overrideLayer = layer as OverrideLayer;
+                    if (overrideLayer == null || overrideLayer.overrideClip == null) continue;
+                    if (!overrideLayer.enabled || overrideLayer.weight <= 0) continue;
+                    result.Add (new OverrideProperties.Layer { clip = overrideLayer.overrideClip, mode = overrideLayer.mode, weight = overrideLayer.weight, mask = overrideLayer.mask });
+                }
+                return result;
+            }
+        }
+
+        /// <summary>
         /// 焼くときに、そのフレームの姿勢（操作値）を作る。土台（編集用クリップか Humanoid のクリップ）を当て、効いている Override を重ねる。
         /// 解くのは焼く側（HumanoidBaker）
         /// </summary>
@@ -383,7 +387,7 @@ namespace Lilium
                 OverrideLayer overrideLayer = layer as OverrideLayer;
                 if (overrideLayer == null || overrideLayer.overrideClip == null) continue;
                 if (!overrideLayer.enabled || overrideLayer.weight <= 0) continue;
-                stage_.ApplyOverride (overrideLayer.overrideClip, overrideLayer.mode, overrideLayer.weight, time);
+                stage_.ApplyOverride (overrideLayer.overrideClip, overrideLayer.mode, overrideLayer.weight, time, overrideLayer.mask);
             }
         }
 
@@ -457,6 +461,10 @@ namespace Lilium
                     }
                 }
                 PoseImport.WriteCollected (editingClip_, values, rotationPaths, frameCount, clock_.rate);
+                // 任意のプロパティは姿勢から作り直せないので、段を重ねたカーブを作って書く（S17）
+                foreach (KeyValuePair<EditorCurveBinding, AnimationCurve> pair in OverrideProperties.Compose (editingClip_, bakePropertyLayers, stage_, frameCount, clock_.rate)) {
+                    AnimationUtility.SetEditorCurve (editingClip_, pair.Key, pair.Value);
+                }
                 removed = OverrideMerge.ReduceKeys (editingClip_);
             }
             catch (System.Exception exception) {

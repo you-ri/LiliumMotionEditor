@@ -130,7 +130,7 @@ namespace Lilium
         {
             if (window_ == null || value_ == null) return;
             bool has = window_.selectedProperty.HasValue;
-            string problem = window_.GetCurveEditProblem ();
+            string problem = has ? window_.GetPropertyEditProblem (window_.selectedProperty.Value) : window_.GetCurveEditProblem ();
             selectedLabel_.text = !has ? Tr ("PROPERTIES_OVERLAY_SELECT_PROPERTY") : problem != null ? Tr ("PROPERTIES_OVERLAY_CANNOT_WRITE", problem) : "";
             float value = 0;
             bool readable = has && window_.TryGetPropertyValue (window_.selectedProperty.Value, out value);

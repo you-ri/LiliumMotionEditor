@@ -207,6 +207,18 @@ namespace Lilium
             return GetAnchorRestOffset (point) + BodyToRoot (definition.offset) * scale;
         }
 
+        /// <summary>
+        /// GetPointRestOffset のうち、乗る骨と混ぜる相手の骨（RigBinding.Point.blendBone）の向きを混ぜて回す分（S34。定義のずれ。基準の場所は乗る骨に付いたまま）。
+        /// 混ぜない点は 0
+        /// </summary>
+        public Vector3 GetPointBlendRestOffset (RigBinding.Point point)
+        {
+            float scale = humanScale > 1e-6f ? humanScale : 1;
+            EditRigDefinition.BodyPoint definition = point.definition;
+            if (definition == null || point.blendBone == null || !definition.blends) return Vector3.zero;
+            return BodyToRoot (definition.offset) * scale;
+        }
+
         Vector3 GetAnchorRestOffset (RigBinding.Point point)
         {
             Transform host = GetEditingBone (point.bone);

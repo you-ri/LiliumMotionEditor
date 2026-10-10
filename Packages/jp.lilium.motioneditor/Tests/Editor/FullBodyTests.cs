@@ -969,6 +969,47 @@ namespace Lilium
         }
 
         [Test]
+        public void FloorClamp_MovesSelectedPointsAsOneBody ([Values (false, true)] bool clamp)
+        {
+            // いくつか選んで 1 つをつかんで動かすと、Floor Clamp は選んだ点をひとかたまりとして床に当てる:
+            // 手をつかんで下げても、先に足が床に着いたらかたまりはそれ以上下がらない。横へは同じだけ動く（床の上を滑る）
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = clamp;
+            Vector3 handStart = Bone (s, HumanBodyBones.LeftHand).position;
+            Vector3 footStart = Bone (s, HumanBodyBones.LeftFoot).position;
+            Assert.Greater (handStart.y, footStart.y + 0.1f, "手は足より高い所から始める");
+
+            // 窓と同じ流れ: つかんだ点は自分で動き（自分だけで床に当てる）、窓がかたまりとして掛け直す
+            Vector3 delta = new Vector3 (0.05f, -(footStart.y + 0.1f), 0.02f);
+            hand.MoveBy (delta);
+            PreviewWindow.MoveSelectedPoints (targets, new[] { hand, foot }, hand, handStart, delta);
+
+            Vector3 expected = delta;
+            if (clamp) expected.y = -footStart.y;
+            Vector3 point;
+            Quaternion rotation;
+            s.body.TryGetPointWorld (HumanBodyBones.LeftHand, out point, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (handStart + expected, point), kPositionTolerance, clamp ? "つかんだ手は、足が床に着いた所で止まる" : "つかんだ手はそのまま動く");
+            s.body.TryGetPointWorld (HumanBodyBones.LeftFoot, out point, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (footStart + expected, point), kPositionTolerance, clamp ? "足は床に着いて、横へは同じだけ動く" : "足は床より下へ動く");
+
+            if (clamp) {
+                // 床に着いたかたまりをさらに斜め下へ動かすと、床の上を滑る
+                Vector3 more = new Vector3 (0.03f, -0.05f, -0.04f);
+                Vector3 handFrom = hand.framePosition;
+                Vector3 footFrom = foot.framePosition;
+                hand.MoveBy (more);
+                PreviewWindow.MoveSelectedPoints (targets, new[] { hand, foot }, hand, handFrom, more);
+                Vector3 slide = new Vector3 (more.x, 0, more.z);
+                Assert.LessOrEqual (Vector3.Distance (handFrom + slide, hand.framePosition), kPositionTolerance, "手は高さを変えずに滑る");
+                Assert.LessOrEqual (Vector3.Distance (footFrom + slide, foot.framePosition), kPositionTolerance, "足は床の上を滑る");
+            }
+        }
+
+        [Test]
         public void RotatingPoint_DoesNotCarryPinnedPoints ()
         {
             // 点を 1 つ選んで回すと骨を FK で回すだけで、固定している点（Pin・Locked）は付いて回らない（移動と同じ。S29）

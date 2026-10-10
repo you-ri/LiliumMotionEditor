@@ -43,6 +43,14 @@ namespace Lilium
         /// </summary>
         public bool onlyExistingKeys;
 
+        /// <summary>
+        /// 打ってよいカーブか（書き込み先の段のマスク。S17）。null なら全部打つ。外れたカーブは打たない
+        /// </summary>
+        public System.Predicate<EditorCurveBinding> filter;
+
+        /// <summary>filter で打たなかったカーブの数（書き終えた後に読む）</summary>
+        public int maskedCount { get; private set; }
+
         /// <summary>onlyExistingKeys で打たなかったカーブの数（書き終えた後に読む）</summary>
         public int skippedCount { get; private set; }
 
@@ -191,6 +199,10 @@ namespace Lilium
             List<EditorCurveBinding> bindings = new List<EditorCurveBinding> (values_.Count);
             List<AnimationCurve> curves = new List<AnimationCurve> (values_.Count);
             foreach (KeyValuePair<EditorCurveBinding, float> pair in values_) {
+                if (filter != null && !filter (pair.Key)) {
+                    maskedCount++;
+                    continue;
+                }
                 if (keyedPaths != null && !keyedPaths.Contains (pair.Key.path)) {
                     skippedCount++;
                     continue;

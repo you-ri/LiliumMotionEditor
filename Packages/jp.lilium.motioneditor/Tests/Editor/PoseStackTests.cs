@@ -493,6 +493,7 @@ namespace Lilium
             public int overrideWriteIndex { get { return -1; } }
             public void SetOverrideClip (int index, AnimationClip clip) { }
             public void SetOverrideMode (int index, OverrideMode mode) { }
+            public void SetOverrideMask (int index, ChannelMask mask) { }
             public void RemoveOverride (int index, bool deleteAsset) { }
             public string GetMergeOverridesProblem () { return "テスト"; }
             public bool MergeOverrides () { return false; }

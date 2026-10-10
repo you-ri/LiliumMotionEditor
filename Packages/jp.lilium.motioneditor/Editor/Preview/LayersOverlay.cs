@@ -471,6 +471,32 @@ namespace Lilium
             }
             box.Add (line);
 
+            foreach (LayerClipObject spec in clip.objects) {
+                LayerClipObject entry = spec;
+                VisualElement objectLine = new VisualElement ();
+                objectLine.style.flexDirection = FlexDirection.Row;
+                objectLine.style.alignItems = Align.Center;
+                Label objectName = new Label (entry.label) { tooltip = entry.tooltip };
+                objectName.style.fontSize = 10;
+                objectName.style.width = 28;
+                objectName.style.color = kNoteColor;
+                objectLine.Add (objectName);
+                ObjectField objectField = new ObjectField { objectType = entry.type, allowSceneObjects = false, tooltip = entry.tooltip };
+                objectField.style.flexGrow = 1;
+                objectField.style.flexShrink = 1;
+                objectField.style.minWidth = 60;
+                objectField.style.marginLeft = 0;
+                objectField.SetValueWithoutNotify (entry.get ());
+                objectField.RegisterValueChangedCallback (e => entry.set (e.newValue));
+                objectLine.Add (objectField);
+                box.Add (objectLine);
+                refreshControls.Add (() => {
+                    objectLine.style.display = clip.clip != null ? DisplayStyle.Flex : DisplayStyle.None;
+                    Object value = entry.get ();
+                    if (objectField.value != value) objectField.SetValueWithoutNotify (value);
+                });
+            }
+
             if (clip.hasWeight) {
                 Slider weight = new Slider (Tr ("LAYERS_OVERLAY_BLEND"), 0, 1) { value = clip.getWeight (), showInputField = true };
                 weight.style.fontSize = 10;

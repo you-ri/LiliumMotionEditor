@@ -67,6 +67,12 @@ namespace Lilium
         /// </summary>
         public System.Action afterSolve;
 
+        /// <summary>
+        /// 任意のプロパティ（Controls/Props/...）のカーブを読むクリップ。null なら焼く元のクリップから読む。
+        /// Override の段がプロパティを重ねるときに、重ねたカーブを渡す（S17。OverrideProperties.CreateBakeSource）
+        /// </summary>
+        public AnimationClip propertySource;
+
         HumanPoseHandler displayHandler_;
 
         /// <param name="sample">編集用の体へクリップを当てる関数（ステージの SampleClip）。当てるグラフは 1 つにしたいので外から受け取る</param>
@@ -329,12 +335,13 @@ namespace Lilium
             // 任意のプロパティ（S6）は解く必要が無いので、カーブをそのまま、ゲーム prefab から見たパスへ写す。
             // 読込で元の Humanoid のクリップから持ち越した武器の骨などのカーブ（HumanoidImport.CarryCurves）もここを通る
             List<KeyValuePair<EditorCurveBinding, EditorCurveBinding>> referenceBindings = new List<KeyValuePair<EditorCurveBinding, EditorCurveBinding>> ();
-            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (source)) {
+            AnimationClip properties = propertySource != null ? propertySource : source;
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (properties)) {
                 EditorCurveBinding display;
                 if (!PropertyPlayer.TryToDisplay (binding, out display)) continue;
                 if (!HumanoidBakeHooks.ShouldBake (hooks, context, display)) continue;
                 bindings.Add (display);
-                curves.Add (AnimationUtility.GetEditorCurve (source, binding));
+                curves.Add (AnimationUtility.GetEditorCurve (properties, binding));
             }
             foreach (EditorCurveBinding binding in AnimationUtility.GetObjectReferenceCurveBindings (source)) {
                 EditorCurveBinding display;

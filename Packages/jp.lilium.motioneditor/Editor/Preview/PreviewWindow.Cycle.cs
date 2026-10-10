@@ -133,10 +133,7 @@ namespace Lilium
         /// </summary>
         int KeyFrameToWrite ()
         {
-            int frame = currentFrame;
-            int first, last;
-            if (overrideWriteLayer == null && cycle && TryGetCycleRange (out first, out last) && frame == last) return first;
-            return frame;
+            return PoseCommit.KeyFrameToWrite (currentFrame, cycle, GetKeyFrames (), overrideWriteLayer != null);
         }
 
         /// <summary>
@@ -144,8 +141,7 @@ namespace Lilium
         /// </summary>
         bool IsPastCycleKey ()
         {
-            int first, last;
-            return cycle && CanEditClip () && TryGetCycleRange (out first, out last) && currentFrame > last;
+            return cycle && CanEditClip () && PoseCommit.IsPastCycleKey (currentFrame, cycle, GetKeyFrames ());
         }
 
         /// <summary>カーブが書き換わったとき（OnCurveWasModified から）。自分で合わせた分でなければ、次の知らせで合わせ直す</summary>

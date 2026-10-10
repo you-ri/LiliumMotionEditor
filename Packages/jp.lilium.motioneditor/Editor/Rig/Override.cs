@@ -31,6 +31,8 @@ namespace Lilium
         public OverrideMode mode = OverrideMode.Additive;
         /// <summary>重ねる順（小さいほど上。S21。同じなら名前順）</summary>
         public int order;
+        /// <summary>効く範囲（S17）。null なら全部に効く。マスクの外のカーブは重ねず、書き込み先のときは打たない</summary>
+        public ChannelMask mask;
     }
 
     /// <summary>
@@ -137,6 +139,22 @@ namespace Lilium
         {
             public readonly List<TransformCurves> transforms = new List<TransformCurves> ();
             public readonly List<FloatCurve> floats = new List<FloatCurve> ();
+            /// <summary>任意のプロパティ（Controls/Props/...。S17）。値は編集用の体ではなく表示モデルへ入るので別に持つ</summary>
+            public readonly List<PropertyCurve> properties = new List<PropertyCurve> ();
+        }
+
+        /// <summary>任意のプロパティのカーブ 1 本（clip は編集用クリップのバインディング、display は表示モデルから見たもの）</summary>
+        public struct PropertyCurve
+        {
+            public EditorCurveBinding clip;
+            public EditorCurveBinding display;
+            public AnimationCurve curve;
+        }
+
+        /// <summary>Override のクリップの任意のプロパティのカーブ（覚えておいた物。書き換えたら捨て直す）</summary>
+        public static IReadOnlyList<PropertyCurve> GetPropertyCurves (AnimationClip clip)
+        {
+            return clip != null ? GetCurves (clip).properties : (IReadOnlyList<PropertyCurve>)new PropertyCurve[0];
         }
 
         static readonly Dictionary<AnimationClip, Curves> cache_ = new Dictionary<AnimationClip, Curves> ();
@@ -159,10 +177,20 @@ namespace Lilium
         /// </summary>
         public static void Apply (AnimationClip clip, OverrideMode mode, float weight, float time, Transform root)
         {
+            Apply (clip, mode, weight, time, root, null, null);
+        }
+
+        /// <summary>
+        /// 層を重ねる。mask があれば、その外のカーブは重ねない（S17）。parts はパスの部位の引き当て（無ければ部位は見ない）
+        /// </summary>
+        public static void Apply (AnimationClip clip, OverrideMode mode, float weight, float time, Transform root, ChannelMask mask, ChannelMaskParts parts)
+        {
             if (clip == null || root == null || weight <= 0) return;
             Curves curves = GetCurves (clip);
             weight = Mathf.Clamp01 (weight);
             foreach (TransformCurves channel in curves.transforms) {
+                // Transform の 3 つの値は同じ物の値なので、位置・回転・大きさをまとめて絞る（決まりはパスと部位で決まる）
+                if (mask != null && !mask.Contains (EditorCurveBinding.FloatCurve (channel.path, typeof (Transform), kRotation + "x"), PartOf (parts, channel.path))) continue;
                 Transform t = channel.path.Length == 0 ? root : root.Find (channel.path);
                 if (t == null) continue;
                 if (channel.position != null) {
@@ -177,6 +205,7 @@ namespace Lilium
                 }
             }
             foreach (FloatCurve channel in curves.floats) {
+                if (mask != null && !mask.Contains (EditorCurveBinding.FloatCurve (channel.path, channel.type, channel.property), PartOf (parts, channel.path))) continue;
                 Transform t = channel.path.Length == 0 ? root : root.Find (channel.path);
                 Component component = t != null ? t.GetComponent (channel.type) : null;
                 if (component == null) continue;
@@ -184,6 +213,11 @@ namespace Lilium
                 if (!TryGetFloat (component, channel.property, out current)) continue;
                 SetFloat (component, channel.property, OverrideMath.ComposeFloat (mode, IkControl.IsAdditive (channel.property) && component is IkControl, current, channel.curve.Evaluate (time), weight));
             }
+        }
+
+        static AvatarMaskBodyPart PartOf (ChannelMaskParts parts, string path)
+        {
+            return parts != null ? parts.PartOf (path) : AvatarMaskBodyPart.LastBodyPart;
         }
 
         /// <summary>重ねられる数値のプロパティか（IK の切替と足の転がしの角度・全身 IK の点の固定の強さ・Rig の代理の重み）</summary>
@@ -253,6 +287,11 @@ namespace Lilium
             curves = new Curves ();
             Dictionary<string, TransformCurves> byPath = new Dictionary<string, TransformCurves> ();
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
+                EditorCurveBinding display;
+                if (PropertyPlayer.TryToDisplay (binding, out display)) {
+                    curves.properties.Add (new PropertyCurve { clip = binding, display = display, curve = AnimationUtility.GetEditorCurve (clip, binding) });
+                    continue;
+                }
                 if (binding.type == typeof (Transform)) {
                     int axis;
                     AnimationCurve[] slot = null;
@@ -301,6 +340,8 @@ namespace Lilium
             public string mode;
             /// <summary>重ねる順（S21）</summary>
             public int order;
+            /// <summary>効く範囲（ChannelMask の GUID。S17）。空なら全部に効く</summary>
+            public string mask;
         }
 
         /// <summary>
@@ -393,6 +434,7 @@ namespace Lilium
                 baseName = AssetDatabase.IsSubAsset (baseClip) ? baseClip.name : null,
                 mode = entry.mode.ToString (),
                 order = entry.order,
+                mask = ChannelMaskFiles.ToGuid (entry.mask),
             };
             string json = JsonUtility.ToJson (new Envelope { overrideLayer = settings });
             if (importer.userData == json) return true;
@@ -415,7 +457,7 @@ namespace Lilium
         {
             OverrideMode mode;
             if (!System.Enum.TryParse (settings.mode, out mode)) mode = OverrideMode.Additive;
-            return new OverrideClip { clip = clip, mode = mode, order = settings.order };
+            return new OverrideClip { clip = clip, mode = mode, order = settings.order, mask = ChannelMaskFiles.FromGuid (settings.mask) };
         }
 
         static Settings Read (string path)
@@ -429,6 +471,118 @@ namespace Lilium
             catch (System.ArgumentException) {
                 return null;
             }
+        }
+    }
+
+    /// <summary>
+    /// 元のクリップの任意のプロパティ（Controls/Props/...）に Override の段を重ねたカーブ（S17）。
+    /// 任意のプロパティは焼くときに解かずにカーブをそのまま写すので、段を重ねた値は焼き・統合の前にフレームごとに作る
+    /// </summary>
+    public static class OverrideProperties
+    {
+        /// <summary>重ねる段 1 つ（重みは段の重み）</summary>
+        public struct Layer
+        {
+            public AnimationClip clip;
+            public OverrideMode mode;
+            public float weight;
+            public ChannelMask mask;
+        }
+
+        /// <summary>段のどれかが、効く任意のプロパティのカーブを持つか</summary>
+        public static bool Any (IList<Layer> layers)
+        {
+            if (layers == null) return false;
+            foreach (Layer layer in layers) {
+                if (layer.clip != null && layer.weight > 0 && OverrideApplier.GetPropertyCurves (layer.clip).Count > 0) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 段が重ねるプロパティごとに、0 から frameCount - 1 フレームまで合成したカーブ（編集用クリップのバインディング）。
+        /// 元にカーブが無い値は、表示モデルの元の値から重ねる。段が重ねないプロパティは返さない
+        /// </summary>
+        public static Dictionary<EditorCurveBinding, AnimationCurve> Compose (AnimationClip baseClip, IList<Layer> layers, PreviewStage stage, int frameCount, float rate)
+        {
+            Dictionary<EditorCurveBinding, AnimationCurve> result = new Dictionary<EditorCurveBinding, AnimationCurve> ();
+            if (layers == null || stage == null || stage.animator == null || frameCount <= 0) return result;
+            GameObject root = stage.animator.gameObject;
+            // 重ねる値（段の順は問わず、最初に見つけた順）
+            List<OverrideApplier.PropertyCurve> touched = new List<OverrideApplier.PropertyCurve> ();
+            HashSet<EditorCurveBinding> seen = new HashSet<EditorCurveBinding> ();
+            foreach (Layer layer in layers) {
+                if (layer.clip == null || layer.weight <= 0) continue;
+                foreach (OverrideApplier.PropertyCurve channel in OverrideApplier.GetPropertyCurves (layer.clip)) {
+                    if (layer.mask != null && !stage.InMask (layer.mask, channel.clip)) continue;
+                    if (seen.Add (channel.clip)) touched.Add (channel);
+                }
+            }
+            foreach (OverrideApplier.PropertyCurve channel in touched) {
+                // 土台が Humanoid のクリップなら、プロパティのカーブはゲーム prefab から見たパスにある（焼くとそのまま写る）
+                AnimationCurve baseCurve = baseClip != null ? AnimationUtility.GetEditorCurve (baseClip, baseClip.humanMotion ? channel.display : channel.clip) : null;
+                if (baseCurve != null && baseCurve.length == 0) baseCurve = null;
+                float original = 0;
+                if (baseCurve == null && !stage.TryGetPropertyOriginal (channel.display, out original)) continue;
+                bool additive = PropertyPlayer.IsAdditive (root, channel.display);
+                float[] values = new float[frameCount];
+                for (int f = 0; f < frameCount; f++) {
+                    float time = f / rate;
+                    float value = baseCurve != null ? baseCurve.Evaluate (time) : original;
+                    foreach (Layer layer in layers) {
+                        if (layer.clip == null || layer.weight <= 0) continue;
+                        if (layer.mask != null && !stage.InMask (layer.mask, channel.clip)) continue;
+                        AnimationCurve curve = FindCurve (layer.clip, channel.clip);
+                        if (curve == null || curve.length == 0) continue;
+                        value = OverrideMath.ComposeFloat (layer.mode, additive, value, curve.Evaluate (time), Mathf.Clamp01 (layer.weight));
+                    }
+                    values[f] = value;
+                }
+                result[channel.clip] = Linear (values, rate);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 焼くときに任意のプロパティを読むクリップ（元のクリップの任意のプロパティのカーブに、段を重ねたカーブを上書きしたもの）。
+        /// 段が任意のプロパティを持たなければ null（元のクリップをそのまま読めばよい）。使い終えたら呼ぶ側で消す
+        /// </summary>
+        public static AnimationClip CreateBakeSource (AnimationClip baseClip, IList<Layer> layers, PreviewStage stage)
+        {
+            if (baseClip == null || !Any (layers)) return null;
+            float rate = baseClip.frameRate > 0 ? baseClip.frameRate : 60;
+            // 焼く長さ（HumanoidBaker と同じ決め方）
+            int frameCount = baseClip.empty ? 1 : Mathf.Max (1, Mathf.RoundToInt (baseClip.length * rate) + 1);
+            AnimationClip result = new AnimationClip { frameRate = rate, name = baseClip.name, hideFlags = HideFlags.HideAndDontSave };
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (baseClip)) {
+                if (RigPaths.FromProps (binding.path) != null) AnimationUtility.SetEditorCurve (result, binding, AnimationUtility.GetEditorCurve (baseClip, binding));
+            }
+            foreach (KeyValuePair<EditorCurveBinding, AnimationCurve> pair in Compose (baseClip, layers, stage, frameCount, rate)) {
+                AnimationUtility.SetEditorCurve (result, pair.Key, pair.Value);
+            }
+            return result;
+        }
+
+        static AnimationCurve FindCurve (AnimationClip clip, EditorCurveBinding binding)
+        {
+            foreach (OverrideApplier.PropertyCurve channel in OverrideApplier.GetPropertyCurves (clip)) {
+                if (channel.clip == binding) return channel.curve;
+            }
+            return null;
+        }
+
+        /// <summary>フレームごとの値を、間を直線でつなぐカーブにする（統合の後の間引きで、直線の区間のキーが消える）</summary>
+        static AnimationCurve Linear (float[] values, float rate)
+        {
+            Keyframe[] keys = new Keyframe[values.Length];
+            for (int f = 0; f < values.Length; f++) {
+                float left = f > 0 ? (values[f] - values[f - 1]) * rate : 0;
+                float right = f + 1 < values.Length ? (values[f + 1] - values[f]) * rate : 0;
+                if (f == 0) left = right;
+                if (f + 1 == values.Length) right = left;
+                keys[f] = new Keyframe (f / rate, values[f], left, right);
+            }
+            return new AnimationCurve (keys);
         }
     }
 

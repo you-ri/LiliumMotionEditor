@@ -39,17 +39,29 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 端のキーは残し、間のキーを前から順に「外しても形が変わらないか」で見ていく
+        /// 端のキーは残し、間のキーを前から順に「外しても形が変わらないか」で見ていく。
+        /// 外した後の前後のキーの間にある元のキーの時刻を全部見直して、元の曲線から tolerance 以内かを確かめる
+        /// （外したキーの時刻だけを見ると、前に外したキーの時刻でのずれが見直されず、外すたびに積み重なる。2026-10-10 に 2° ずれた）
         /// </summary>
         static AnimationCurve Reduce (AnimationCurve curve, float tolerance)
         {
-            List<Keyframe> keys = new List<Keyframe> (curve.keys);
+            Keyframe[] original = curve.keys;
+            List<Keyframe> keys = new List<Keyframe> (original);
             int index = 1;
             while (index < keys.Count - 1) {
                 Keyframe key = keys[index];
                 keys.RemoveAt (index);
                 AnimationCurve candidate = new AnimationCurve (keys.ToArray ());
-                if (Mathf.Abs (candidate.Evaluate (key.time) - key.value) <= tolerance) continue;
+                float from = keys[index - 1].time;
+                float to = keys[index].time;
+                bool same = true;
+                foreach (Keyframe sample in original) {
+                    if (sample.time <= from || sample.time >= to) continue;
+                    if (Mathf.Abs (candidate.Evaluate (sample.time) - sample.value) <= tolerance) continue;
+                    same = false;
+                    break;
+                }
+                if (same) continue;
                 keys.Insert (index, key);
                 index++;
             }
