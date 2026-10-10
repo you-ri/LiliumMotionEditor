@@ -26,7 +26,7 @@ namespace Lilium
         }
 
         /// <summary>text の後ろに、id のショートカットのキーを付ける。キーが無い（割り当てを外した・その窓には無い）ならそのまま</summary>
-        public static string Format (string text, string id)
+        static string Format (string text, string id)
         {
             string keys = GetKeys (id);
             return string.IsNullOrEmpty (keys) ? text : text + " (" + keys + ")";

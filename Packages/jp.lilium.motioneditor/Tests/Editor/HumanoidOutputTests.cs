@@ -9,12 +9,9 @@ namespace Lilium
     /// <summary>
     /// 焼いたクリップの置き場所と、元のクリップとの対応。アセットを作るので、使い捨てのフォルダに作って最後に消す
     /// </summary>
-    public class HumanoidOutputTests
+    public class HumanoidOutputTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktHumanoidOutputTest";
-
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
 
         [SetUp]
         public void SetUp ()
@@ -26,12 +23,8 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            // フォルダのクリップを使うリグやサンプラーを捨ててからフォルダを消す（土台の後片付けはこの後に走るので、先に呼ぶ）
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 
@@ -136,17 +129,15 @@ namespace Lilium
         [Test]
         public void BakeToAssetKeepsGuidAndSettings ()
         {
-            EditRigDefinition definition = EditRigDefinition.CreateDefault ();
-            created_.Add (definition);
+            EditRigDefinition definition = CreateDefinition ();
             Animator display = TestSkeleton.CreateHumanoid (created_, true);
-            EditingRig rig = EditingRig.Create (definition, display, name => new GameObject (name));
-            disposables_.Add (rig);
+            EditingRig rig = CreateEditingRig (definition, display);
             EditingRigSolver solver = new EditingRigSolver (rig);
             solver.Capture ();
             ClipSampler sampler = new ClipSampler (rig.animator);
-            disposables_.Add (sampler);
+            Keep (sampler);
             HumanoidBaker baker = new HumanoidBaker (rig, solver, sampler.Sample);
-            disposables_.Add (baker);
+            Keep (baker);
 
             AnimationClip source = CreateClipAsset ("Idle.rig.anim");
             string path;

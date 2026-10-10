@@ -71,8 +71,6 @@ namespace Lilium
         /// </summary>
         public static System.Func<GameObject, string> blockReason;
 
-        static readonly string[] kPositionAxes = { "x", "y", "z" };
-
         /// <summary>定義を表示モデルの物へ結び付けたもの</summary>
         public sealed class Bound
         {
@@ -213,7 +211,7 @@ namespace Lilium
 
         static EditorCurveBinding PositionBinding (string path, int axis)
         {
-            return EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalPosition." + kPositionAxes[axis]);
+            return CurveEdit.TransformBinding (path, CurveEdit.kPosition, axis);
         }
 
         static bool HasRotation (AnimationClip clip, string path)

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Mathematics;
-using Lilium;
 
 namespace Lilium
 {
@@ -13,31 +12,17 @@ namespace Lilium
     /// 全身 IK の解く中身（S25a-2）: 固定した点に届く・骨の長さが変わらない・肘と膝が逆に曲がらない・
     /// 体の中心ほど動かない・両立しない点でも壊れない・続けて動かしても飛ばない・Burst とマネージドで同じ結果
     /// </summary>
-    public class FullBodySolverTests
+    public class FullBodySolverTests : RigTestFixture
     {
         const float kReach = 1e-3f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
+            definition_ = CreateDefinition ();
             definition_.solver = RigSolver.FullBodyIk;
-            created_.Add (definition_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
         }
 
         sealed class Setup
@@ -52,20 +37,13 @@ namespace Lilium
         Setup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, System.Action<Animator> decorate = null)
         {
             Setup s = new Setup ();
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            Animator display = eyes ? TestSkeleton.CreateHumanoidWithEyes (created_)
-                : toes ? TestSkeleton.CreateHumanoidWithToes (created_, size, toeOut) : TestSkeleton.CreateHumanoid (created_, withChest, size);
+            Animator display = CreateCharacter (withChest, size, toes, toeOut, eyes: eyes);
             if (decorate != null) decorate (display);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
-            display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            s.rig = EditingRig.Create (definition_, display, name => new GameObject (name));
-            disposables_.Add (s.rig);
+            s.rig = CreateEditingRig (definition_, display);
             s.solver = new EditingRigSolver (s.rig);
             s.solver.Capture ();
-            s.body = new FullBodyRig (s.rig, definition_);
-            disposables_.Add (s.body);
+            s.body = Keep (new FullBodyRig (s.rig, definition_));
             s.forward = s.rig.root.transform.TransformDirection (s.rig.bodyForward).normalized;
             s.up = Vector3.up;
             return s;
@@ -83,6 +61,29 @@ namespace Lilium
             s.body.SetPointPositionWorld (bone, Bone (s, bone).position + offset);
             s.body.SetPositionWeight (bone, 1);
             if (rotation) s.body.SetRotationWeight (bone, 1);
+        }
+
+        /// <summary>
+        /// 今の点のまま、マネージドと Burst で 1 回ずつ解き、全部の骨の位置と向きが合うことを確かめる。checkManaged はマネージドで解いた直後に呼ぶ。
+        /// Burst のコンパイルが済んでいなければ Inconclusive にする（短いバッチ実行では間に合わないことがある。失敗ではない）
+        /// </summary>
+        static void AssertBurstMatchesManaged (Setup s, System.Action checkManaged = null)
+        {
+            Transform[] bones = s.rig.editingBones.ToArray ();
+
+            s.body.useBurst = false;
+            Solve (s);
+            if (checkManaged != null) checkManaged ();
+            Vector3[] positions = bones.Select (b => b.position).ToArray ();
+            Quaternion[] rotations = bones.Select (b => b.rotation).ToArray ();
+
+            s.body.useBurst = true;
+            Solve (s);
+            if (!s.body.lastSolveUsedBurst) Assert.Inconclusive ("Burst がまだコンパイル中か、切れている（Jobs > Burst > Enable Compilation）。マネージドでは動いた");
+            for (int i = 0; i < bones.Length; i++) {
+                Assert.LessOrEqual (Vector3.Distance (positions[i], bones[i].position), 1e-4f, bones[i].name + " の位置（Burst とマネージドの差）");
+                Assert.LessOrEqual (Quaternion.Angle (rotations[i], bones[i].rotation), 0.01f, bones[i].name + " の向き（Burst とマネージドの差）");
+            }
         }
 
         /// <summary>基準姿勢へ戻して、編集用リグ → 全身 IK の順に解く</summary>
@@ -508,9 +509,9 @@ namespace Lilium
         [Test]
         public void DirectionPoints_DefaultToPullStrengthZero ()
         {
-            // 既定の一覧では、向きの点（膝の Pole も）は引く強さ 0、ほかの点は 1（足の小指側も、手の小指側と同じく 1。10-07）
+            // 既定の一覧では、向きの点（膝・肘の Pole も）は引く強さ 0、ほかの点は 1（足の小指側も、手の小指側と同じく 1。10-07）
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
-                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole");
+                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole") || point.name.EndsWith ("ElbowPole");
                 Assert.AreEqual (direction ? 0 : 1, point.pullStrength, point.name);
             }
             Assert.IsEmpty (definition_.Validate ());
@@ -823,20 +824,7 @@ namespace Lilium
             PinDirection (s, BodyPointId.Direction (HumanBodyBones.Head), side * 0.2f);
             PinDirection (s, BodyPointId.Top (HumanBodyBones.Head), -side * 0.1f);
             PinDirection (s, ChestDirection (s), -side * 0.3f);
-            Transform[] bones = s.rig.editingBones.ToArray ();
-
-            s.body.useBurst = false;
-            Solve (s);
-            Vector3[] positions = bones.Select (b => b.position).ToArray ();
-            Quaternion[] rotations = bones.Select (b => b.rotation).ToArray ();
-
-            s.body.useBurst = true;
-            Solve (s);
-            if (!s.body.lastSolveUsedBurst) Assert.Inconclusive ("Burst がまだコンパイル中か、切れている（Jobs > Burst > Enable Compilation）。マネージドでは動いた");
-            for (int i = 0; i < bones.Length; i++) {
-                Assert.LessOrEqual (Vector3.Distance (positions[i], bones[i].position), 1e-4f, bones[i].name + " の位置（Burst とマネージドの差）");
-                Assert.LessOrEqual (Quaternion.Angle (rotations[i], bones[i].rotation), 0.01f, bones[i].name + " の向き（Burst とマネージドの差）");
-            }
+            AssertBurstMatchesManaged (s);
         }
 
         /// <summary>3 本の骨の鎖を上へ（長さ 0.5）。解く前の値を入れる</summary>
@@ -1059,54 +1047,6 @@ namespace Lilium
         // ---- 点の一覧（S26b） ----
 
         [Test]
-        public void DefaultBodyPoints_Names ()
-        {
-            string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
-            foreach (string name in new[] { "Hips", "Head", "LeftHand", "RightFoot", "HipsDirection", "UpperChestDirection", "HeadDirection", "HeadTop",
-                "LeftKneePole", "RightKneePole", "LeftHeel", "RightSoleBall", "LeftLittleToeSide", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
-                Assert.Contains (name, names, name);
-            }
-            Assert.IsTrue (definition_.bodyPoints.First (p => p.name == "LeftHand").rotation, "手は向きを持つ");
-            Assert.IsFalse (definition_.bodyPoints.First (p => p.name == "LeftLowerArm").rotation, "肘は位置だけ");
-            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Jaw"), "解かない骨には置かない");
-            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftToes" || p.name == "RightToes"), "つま先の骨の付け根には置かない");
-            Assert.IsEmpty (definition_.Validate ());
-        }
-
-        [Test]
-        public void Version2Definition_GetsBodyPointsFromOldSettings ()
-        {
-            definition_.bodyPoints.Clear ();
-            definition_.fullBody.directionPoints = false;
-            definition_.version = 2;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "LeftHeel"), "骨の上の点は作る");
-            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name.EndsWith ("Direction")), "向きの点を置かない設定だった");
-            Assert.IsEmpty (definition_.Validate ());
-        }
-
-        [Test]
-        public void Version4Definition_ResetsBodyPointsToDefault ()
-        {
-            // 版 5 で足の点を作り直した。後方互換は保たないので、版 4 までの点の一覧は今の既定に置き換わる（足した点も消える）
-            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
-            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "LeftToes", bone = HumanBodyBones.LeftToes });
-            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("SoleBall") || p.name.EndsWith ("LittleToeSide") || p.name.EndsWith ("KneePole"));
-            definition_.version = 4;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
-            Assert.Contains ("LeftSoleBall", names);
-            Assert.Contains ("RightLittleToeSide", names);
-            Assert.Contains ("RightKneePole", names);
-            Assert.IsFalse (names.Contains ("Nose"), "足した点は消える");
-            Assert.IsFalse (names.Contains ("LeftToes"), "つま先の骨の付け根の点は消える");
-            Assert.AreEqual (0, definition_.bodyPoints.First (p => p.name == "HeadDirection").pullStrength, "向きの点は今の既定（引く強さ 0）");
-            Assert.IsEmpty (definition_.Validate ());
-        }
-
-        [Test]
         public void FootPoints_LieOnFootCenterLine_WhenToesTurnOut ()
         {
             // つま先が外を向いた足（つま先の付け根を外へ 5cm）。踵・足裏の中心・つま先の先は、足首からつま先の付け根へ向かう線の上に並ぶ
@@ -1300,18 +1240,118 @@ namespace Lilium
             Assert.LessOrEqual (s.body.GetResidual (pole), 1e-4f, "Pole は骨の上の場所のまま");
         }
 
+        // ---- 肘の Pole（S43） ----
+
+        [Test]
+        public void ElbowPole_IsPlacedBehindElbow_OnUpperArm ()
+        {
+            Setup s = Create ();
+            foreach (HumanBodyBones upper in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm }) {
+                BodyPointId pole = BodyPointId.ElbowPole (upper);
+                Transform elbow = Bone (s, upper == HumanBodyBones.LeftUpperArm ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
+                Vector3 onBone;
+                Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), upper + " の肘の Pole");
+                Assert.AreEqual (Bone (s, upper), s.body.GetBone (pole), "上腕に乗る");
+                Vector3 expected = elbow.position - s.forward * definition_.fullBody.directionLength * s.rig.humanScale;
+                Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "肘の後ろ（基準姿勢で肘が向く方）");
+                EditRigDefinition.BodyPoint point = definition_.bodyPoints.First (p => p.name == pole.name);
+                Assert.AreEqual (0, point.pullStrength, "向けるだけの点");
+                Assert.AreEqual (EditRigDefinition.kElbowPoleBlend, point.blend, "前腕と半分ずつ混ぜる");
+            }
+        }
+
+        [Test]
+        public void ElbowPole_TurnsElbow_WithHandPinned ()
+        {
+            // 手を胸の前へ寄せて肘を曲げる。左の肘の Pole を外上へ動かすと、手は動かずに肘がそちらへ回る
+            Setup s = Create ();
+            Dictionary<Transform, float> lengths = Lengths (s);
+            Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform elbow = Bone (s, HumanBodyBones.LeftLowerArm);
+            Transform hand = Bone (s, HumanBodyBones.LeftHand);
+            Vector3 outward = (hand.position - upper.position).normalized;
+            Pin (s, HumanBodyBones.Hips, Vector3.zero);
+            Pin (s, HumanBodyBones.Chest, Vector3.zero);
+            Pin (s, HumanBodyBones.LeftHand, (-outward * 0.25f + s.forward * 0.25f) * s.rig.humanScale, true);
+            Solve (s);
+            Vector3 bent = elbow.position;
+            Vector3 handAt = hand.position;
+            Assert.Greater (Vector3.Angle (elbow.position - upper.position, hand.position - elbow.position), 30f, "肘が曲がっている");
+
+            BodyPointId pole = BodyPointId.ElbowPole (HumanBodyBones.LeftUpperArm);
+            Vector3 offset = (outward + s.up) * 0.3f * s.rig.humanScale;
+            Vector3 target;
+            Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out target));
+            target += offset;
+            PinDirection (s, pole, offset);
+            Solve (s);
+            Assert.Less (Vector3.Distance (elbow.position, target), Vector3.Distance (bent, target) - 0.02f, "肘が Pole の方へ回る");
+            Assert.LessOrEqual (Vector3.Distance (handAt, hand.position), kReach, "手は動かない");
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
+        }
+
+        [Test]
+        public void ElbowPole_Free_DoesNotChangeSolve ()
+        {
+            // 版 8 で足した肘の Pole は、Free（キーの無い今までのクリップ）なら解いた姿勢を変えない（今までのクリップの互換）
+            System.Func<Setup, Pose[]> solve = s => {
+                s.body.useBurst = false;
+                Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
+                Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
+                Pin (s, HumanBodyBones.Hips, (-s.up * 0.12f + s.forward * 0.05f) * s.rig.humanScale);
+                Pin (s, HumanBodyBones.LeftHand, (s.forward * 0.3f - s.up * 0.35f) * s.rig.humanScale, true);
+                Pin (s, HumanBodyBones.RightHand, (s.forward * 0.2f + s.up * 0.25f) * s.rig.humanScale);
+                Pin (s, HumanBodyBones.RightLowerArm, s.forward * 0.1f * s.rig.humanScale);
+                Solve (s);
+                return Poses (s.rig.editingBones.ToArray ());
+            };
+            Pose[] with = solve (Create ());
+            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "LeftElbowPole"));
+            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("ElbowPole"));
+            Pose[] without = solve (Create ());
+            Assert.AreEqual (without.Length, with.Length);
+            for (int i = 0; i < with.Length; i++) {
+                Assert.LessOrEqual (Vector3.Distance (without[i].position, with[i].position), 1e-5f, i + " の位置");
+                Assert.LessOrEqual (Quaternion.Angle (without[i].rotation, with[i].rotation), 1e-3f, i + " の向き");
+            }
+        }
+
+        [Test]
+        public void Version7Definition_GetsElbowPoles ()
+        {
+            // 版 8 で肘の Pole を足した。版 7 の定義には最後に足すだけ（ほかの点・自分で足した同じ名前の点はそのまま）
+            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("ElbowPole"));
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint {
+                name = "RightElbowPole", bone = HumanBodyBones.RightUpperArm, offset = new Vector3 (0, -0.2f, 0), pullStrength = 0,
+            });
+            int count = definition_.bodyPoints.Count;
+            definition_.version = 7;
+            definition_.UpgradeIfNeeded ();
+            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
+            Assert.AreEqual (count + 1, definition_.bodyPoints.Count, "左だけ足す");
+            EditRigDefinition.BodyPoint left = definition_.bodyPoints[definition_.bodyPoints.Count - 1];
+            Assert.AreEqual ("LeftElbowPole", left.name, "最後に足す");
+            Assert.AreEqual (BodyPointAnchor.Elbow, left.anchor);
+            Assert.AreEqual (HumanBodyBones.LeftLowerArm, left.blendBone);
+            Assert.AreEqual ("LeftLowerArm", left.link, "肘へ線でつなぐ");
+            Assert.AreEqual (new Vector3 (0, -0.2f, 0), definition_.bodyPoints.First (p => p.name == "RightElbowPole").offset, "自分で足した点は変えない");
+            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "Nose"));
+            Assert.IsEmpty (definition_.Validate ());
+        }
+
         [Test]
         public void BlendedBodyPoint_WorksOnOtherLimbs_AndNeedsZeroPull ()
         {
-            // 肘の Pole: 上腕に乗せて肘の後ろに置き、前腕と半分ずつ混ぜる。肘を曲げても肘の外側に出る
+            // 上腕の付け根の後ろに置き、前腕と半分ずつ混ぜる点を自分で足す（既定の肘の Pole とは別の名前）
             EditRigDefinition.BodyPoint elbow = new EditRigDefinition.BodyPoint {
-                name = "LeftElbowPole", bone = HumanBodyBones.LeftUpperArm, offset = new Vector3 (0, 0, -0.25f),
+                name = "LeftArmBack", bone = HumanBodyBones.LeftUpperArm, offset = new Vector3 (0, 0, -0.25f),
                 pullStrength = 0, blendBone = HumanBodyBones.LeftLowerArm, blend = 0.5f,
             };
             definition_.bodyPoints.Add (elbow);
             Assert.IsEmpty (definition_.Validate ());
             Setup s = Create ();
-            BodyPointId id = new BodyPointId ("LeftElbowPole");
+            BodyPointId id = new BodyPointId ("LeftArmBack");
             Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
             Transform lower = Bone (s, HumanBodyBones.LeftLowerArm);
             Vector3 arm = (lower.position - upper.position).normalized;
@@ -1513,20 +1553,7 @@ namespace Lilium
             LockPoint (s, BodyPointId.PalmLittle (HumanBodyBones.LeftHand), Vector3.zero);
             Pin (s, HumanBodyBones.LeftHand, s.up * 0.04f);
             Pin (s, HumanBodyBones.Hips, -s.up * 0.08f + s.forward * 0.1f);
-            Transform[] bones = s.rig.editingBones.ToArray ();
-
-            s.body.useBurst = false;
-            Solve (s);
-            Vector3[] positions = bones.Select (b => b.position).ToArray ();
-            Quaternion[] rotations = bones.Select (b => b.rotation).ToArray ();
-
-            s.body.useBurst = true;
-            Solve (s);
-            if (!s.body.lastSolveUsedBurst) Assert.Inconclusive ("Burst がまだコンパイル中か、切れている（Jobs > Burst > Enable Compilation）。マネージドでは動いた");
-            for (int i = 0; i < bones.Length; i++) {
-                Assert.LessOrEqual (Vector3.Distance (positions[i], bones[i].position), 1e-4f, bones[i].name + " の位置（Burst とマネージドの差）");
-                Assert.LessOrEqual (Quaternion.Angle (rotations[i], bones[i].rotation), 0.01f, bones[i].name + " の向き（Burst とマネージドの差）");
-            }
+            AssertBurstMatchesManaged (s);
         }
 
         [Test]
@@ -1576,22 +1603,10 @@ namespace Lilium
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.15f + s.forward * 0.2f - s.up * 0.15f);
-            Transform[] bones = s.rig.editingBones.ToArray ();
-
-            s.body.useBurst = false;
-            Solve (s);
-            Assert.IsFalse (s.body.lastSolveUsedBurst, "マネージドで動く");
-            Vector3[] positions = bones.Select (b => b.position).ToArray ();
-            Quaternion[] rotations = bones.Select (b => b.rotation).ToArray ();
-            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "マネージドでも届く");
-
-            s.body.useBurst = true;
-            Solve (s);
-            if (!s.body.lastSolveUsedBurst) Assert.Inconclusive ("Burst がまだコンパイル中か、切れている（Jobs > Burst > Enable Compilation）。マネージドでは動いた");
-            for (int i = 0; i < bones.Length; i++) {
-                Assert.LessOrEqual (Vector3.Distance (positions[i], bones[i].position), 1e-4f, bones[i].name + " の位置（Burst とマネージドの差）");
-                Assert.LessOrEqual (Quaternion.Angle (rotations[i], bones[i].rotation), 0.01f, bones[i].name + " の向き（Burst とマネージドの差）");
-            }
+            AssertBurstMatchesManaged (s, () => {
+                Assert.IsFalse (s.body.lastSolveUsedBurst, "マネージドで動く");
+                Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "マネージドでも届く");
+            });
         }
 
         [Test]
@@ -1632,46 +1647,6 @@ namespace Lilium
                 body.Dispose ();
                 body.Dispose ();
             }
-        }
-
-        // ---- リグの定義 ----
-
-        [Test]
-        public void FullBodyHash_ChangesWithSettings_AndIsEmptyForTwoBoneIk ()
-        {
-            string hash = definition_.GetFullBodyHash ();
-            Assert.IsNotEmpty (hash);
-            Assert.AreEqual (hash, definition_.GetFullBodyHash (), "同じ設定なら同じ");
-            definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness = 0.31f;
-            string stiffer = definition_.GetFullBodyHash ();
-            Assert.AreNotEqual (hash, stiffer, "硬さを変えると変わる");
-            definition_.fullBody.hipsPin = 0.11f;
-            Assert.AreNotEqual (stiffer, definition_.GetFullBodyHash (), "腰を留める強さを変えると変わる");
-            definition_.solver = RigSolver.TwoBoneIk;
-            Assert.IsEmpty (definition_.GetFullBodyHash (), "2 本骨 IK の定義では、全身 IK の設定は姿勢に効かない");
-        }
-
-        [Test]
-        public void Version1Definition_GetsNewDefaults_ButKeepsEditedValues ()
-        {
-            EditRigDefinition.FkControl shoulder = definition_.fkControls.First (c => c.bone == HumanBodyBones.LeftShoulder);
-            EditRigDefinition.FkControl spine = definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine);
-            definition_.version = 1;
-            definition_.fullBody.iterations = 20;
-            definition_.fullBody.hipsPin = 0.3f;
-            shoulder.stiffness = 0.3f;
-            spine.stiffness = 0.33f;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.AreEqual (new EditRigDefinition.FullBodySettings ().iterations, definition_.fullBody.iterations);
-            Assert.AreEqual (new EditRigDefinition.FullBodySettings ().hipsPin, definition_.fullBody.hipsPin, 1e-6f);
-            Assert.AreEqual (0.5f, shoulder.stiffness, 1e-6f);
-            Assert.AreEqual (0.33f, spine.stiffness, 1e-6f, "直してあった値は変えない");
-
-            definition_.version = 1;
-            definition_.fullBody.iterations = 35;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (35, definition_.fullBody.iterations, "直してあった回数は変えない");
         }
     }
 

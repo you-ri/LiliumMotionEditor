@@ -19,6 +19,12 @@ namespace Lilium
             return (a - hint).sqrMagnitude <= (b - hint).sqrMagnitude ? a : b;
         }
 
+        /// <summary>各軸を -180〜180° に収める</summary>
+        public static Vector3 Wrap (Vector3 euler)
+        {
+            return Near (euler, Vector3.zero);
+        }
+
         static Vector3 Near (Vector3 euler, Vector3 hint)
         {
             for (int i = 0; i < 3; i++) euler[i] = hint[i] + Mathf.DeltaAngle (hint[i], euler[i]);

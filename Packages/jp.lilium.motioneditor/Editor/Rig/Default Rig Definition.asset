@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
   m_Name: Default Rig Definition
   m_EditorClassIdentifier: 
-  version_: 7
+  version_: 8
   solver: 1
   fullBody:
     iterations: 48
@@ -771,3 +771,23 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+  - enabled: 1
+    name: LeftElbowPole
+    bone: 13
+    anchor: 9
+    offset: {x: 0, y: 0, z: -0.25}
+    rotation: 0
+    pullStrength: 0
+    link: LeftLowerArm
+    blendBone: 15
+    blend: 0.5
+  - enabled: 1
+    name: RightElbowPole
+    bone: 14
+    anchor: 9
+    offset: {x: 0, y: 0, z: -0.25}
+    rotation: 0
+    pullStrength: 0
+    link: RightLowerArm
+    blendBone: 16
+    blend: 0.5

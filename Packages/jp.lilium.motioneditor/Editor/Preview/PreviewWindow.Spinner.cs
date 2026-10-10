@@ -3,7 +3,6 @@ using UnityEditor;
 using UnityEditor.ShortcutManagement;
 using System.Collections.Generic;
 using System.Linq;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -369,14 +368,14 @@ namespace Lilium
         /// <summary>選んでいる物のうち、今のフレームで値を入れられる物（いくつ選んでいても全部）</summary>
         List<PoseTarget> GetEditableSelectedTargets ()
         {
-            return selection_.Select (FindTarget).Where (t => t != null && CanEditTarget (t)).Distinct ().ToList ();
+            return SelectedTargets ().Where (CanEditTarget).ToList ();
         }
 
         /// <summary>選んでいる物のどれかの値を戻せるか（Controller パネルの Reset）</summary>
         public bool CanResetSelectedValues ()
         {
             // 再生中も毎フレーム聞かれるので、1 つ見つかれば止める
-            return selection_.Select (FindTarget).Any (t => t != null && CanEditTarget (t));
+            return SelectedTargets ().Any (CanEditTarget);
         }
 
         /// <summary>
@@ -409,36 +408,6 @@ namespace Lilium
                     if (ik.hasFootAngles) ik.SetFootAngles (Vector3.zero);
                 }
             });
-        }
-
-        /// <summary>
-        /// 選んでいる物の左右の相手（体の中心の骨なら自分）。反転できなければ null
-        /// </summary>
-        public PoseTarget GetMirrorTarget ()
-        {
-            PoseTarget target = selectedTarget;
-            string key = target != null ? target.mirrorKey : null;
-            if (key == null) return null;
-            string other = MirrorNames.Swap (key) ?? key;
-            foreach (PoseTarget candidate in targets_) {
-                if (candidate.mirrorKey == other && candidate.GetType () == target.GetType ()) return candidate;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// 選んでいる物の今の見た目を左右反転して、相手へ入れる（体の中心の骨は自分を反転する）。相手のフレームにキーを打つ
-        /// </summary>
-        public void MirrorSpinValues ()
-        {
-            PoseTarget source = selectedTarget;
-            PoseTarget target = GetMirrorTarget ();
-            if (source == null || target == null) return;
-            if (!CanEditTarget (target)) {
-                NotifyNoKey ();
-                return;
-            }
-            ApplyValueEdit (target, "Mirror " + source.label, () => target.MirrorFrom (source));
         }
 
         /// <summary>
@@ -481,36 +450,6 @@ namespace Lilium
         void RaiseStateChanged ()
         {
             if (stateChanged != null) stateChanged ();
-        }
-
-        // Move / Rot / Scale は Unity の Tools/Move・Rotate・Scale と同じ W / E / R。
-        // あちらは全体のショートカットなので、窓にフォーカスがある間は窓のものが勝つ（ぶつかりの確認は出ない）
-        [Shortcut ("Lilium Motion Editor/Spinner Move", typeof (PreviewWindow), KeyCode.W)]
-        static void SpinnerMoveShortcut (ShortcutArguments args)
-        {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Move;
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Rotate", typeof (PreviewWindow), KeyCode.E)]
-        static void SpinnerRotateShortcut (ShortcutArguments args)
-        {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Rotate;
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Scale", typeof (PreviewWindow), KeyCode.R)]
-        static void SpinnerScaleShortcut (ShortcutArguments args)
-        {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerMode = SpinnerMode.Scale;
-        }
-
-        [Shortcut ("Lilium Motion Editor/Spinner Toggle Pole", typeof (PreviewWindow), KeyCode.U)]
-        static void SpinnerPoleShortcut (ShortcutArguments args)
-        {
-            PreviewWindow window = args.context as PreviewWindow;
-            if (window != null) window.spinnerPole = !window.spinnerPole;
         }
     }
 

@@ -59,23 +59,6 @@ namespace Lilium
             return negate_[muscle];
         }
 
-        public static void Mirror (ref HumanPose pose)
-        {
-            Build ();
-            float[] source = (float[])pose.muscles.Clone ();
-            for (int i = 0; i < source.Length; i++) {
-                float value = source[partner_[i]];
-                pose.muscles[i] = negate_[i] ? -value : value;
-            }
-            pose.bodyPosition = MirrorPosition (pose.bodyPosition);
-            pose.bodyRotation = MirrorRotation (pose.bodyRotation);
-        }
-
-        public static Vector3 MirrorPosition (Vector3 position)
-        {
-            return new Vector3 (-position.x, position.y, position.z);
-        }
-
         public static Quaternion MirrorRotation (Quaternion rotation)
         {
             return new Quaternion (rotation.x, -rotation.y, -rotation.z, rotation.w);
@@ -145,7 +128,7 @@ namespace Lilium
                 AnimationCurve[] from = new AnimationCurve[7];
                 bool complete = true;
                 for (int c = 0; c < 7; c++) {
-                    string property = GoalProperty (names[partner], c);
+                    string property = HumanoidGoals.CurveProperty (names[partner], c);
                     if (!curves.TryGetValue (property, out from[c])) complete = false;
                 }
                 if (!complete) continue;
@@ -178,16 +161,10 @@ namespace Lilium
                 float[] keyTimes = new float[times.Count];
                 times.CopyTo (keyTimes);
                 for (int c = 0; c < 7; c++) {
-                    bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), GoalProperty (names[i], c)));
+                    bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), HumanoidGoals.CurveProperty (names[i], c)));
                     values.Add (Linear (keyTimes, mirrored[c], from[c]));
                 }
             }
-        }
-
-        static string GoalProperty (string name, int channel)
-        {
-            string[] axes = { "x", "y", "z", "w" };
-            return channel < 3 ? name + "T." + axes[channel] : name + "Q." + axes[channel - 3];
         }
 
         /// <summary>キーの間を直線でつなぐカーブ（折り返しの設定は元のカーブから）</summary>

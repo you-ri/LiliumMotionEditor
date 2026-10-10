@@ -121,10 +121,7 @@ namespace Lilium
             }
             cycleFrames_ = changed ? ClipCycle.GetFrames (clip) : frames;
             if (!changed) return;
-            keyFrames_ = null;
-            ghostsDirty_ = true;
-            if (stage_ != null) stage_.InvalidateClipCurves ();
-            SamplePose ();
+            AfterClipEdit ();
         }
 
         /// <summary>

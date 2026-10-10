@@ -3,7 +3,6 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -299,10 +298,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 段の値を当て直さずに前進解決する。値を直に動かした後、その段から解き直すときに使う（動かした値をクリップで上書きしないため）。
-        /// 値を持たない段は Evaluate と同じ
-        /// </summary>
-        /// <summary>
         /// 前の段の値を直に動かした後の解き直し（EvaluateFrom で、開始段より後ろの段）。普段は Evaluate と同じ。
         /// クリップを当てただけのときと、操作の途中とで扱いを変える段が上書きする
         /// </summary>
@@ -311,6 +306,10 @@ namespace Lilium
             Evaluate (time);
         }
 
+        /// <summary>
+        /// 段の値を当て直さずに前進解決する。値を直に動かした後、その段から解き直すときに使う（動かした値をクリップで上書きしないため）。
+        /// 値を持たない段は Evaluate と同じ
+        /// </summary>
         public virtual void EvaluateKeepingValues (float time)
         {
             Evaluate (time);

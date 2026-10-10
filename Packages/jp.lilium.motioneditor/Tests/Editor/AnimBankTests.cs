@@ -47,7 +47,7 @@ namespace Lilium
             // ゲーム用のクリップ（.rig が無い）は出さない
             AssetDatabase.CreateAsset (new AnimationClip (), kFolder + "/Walk.anim");
 
-            List<AnimBank.Entry> entries = AnimBank.List (kFolder);
+            List<BankEntry> entries = AnimBank.List (kFolder);
             Assert.AreEqual (new[] { "Attack 2", "Attack 10", "Walk", "Fire" }, entries.Select (e => e.name).ToArray (), "組 → 名前（数の順）");
             Assert.AreEqual ("Skills", entries[3].group);
             Assert.AreEqual ("", entries[0].group);

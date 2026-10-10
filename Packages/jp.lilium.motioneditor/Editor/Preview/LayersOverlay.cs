@@ -4,7 +4,6 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
 using UnityEditor.UIElements;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium

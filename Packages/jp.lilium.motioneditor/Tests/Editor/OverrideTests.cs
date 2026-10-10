@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using Lilium;
 
 namespace Lilium
 {

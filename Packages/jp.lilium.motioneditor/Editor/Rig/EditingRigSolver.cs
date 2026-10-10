@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -381,8 +380,6 @@ namespace Lilium
         {
             ClearFootAngles (entry);
             Transform root = rootTransform;
-            Vector3 a = root.InverseTransformPoint (entry.root.position);
-            Vector3 b = root.InverseTransformPoint (entry.mid.position);
             Vector3 c = root.InverseTransformPoint (entry.tip.position);
 
             entry.target.localPosition = c / humanScale;
@@ -425,7 +422,8 @@ namespace Lilium
             return entry.mid.position + rootTransform.TransformDirection (PoseHint (entry)) * HintDistance (entry);
         }
 
-        static Quaternion Normalize (Quaternion q)
+        /// <summary>長さ 1 にして、w ≥ 0 の側にそろえる（全身 IK の FullBodyRig も使う）</summary>
+        internal static Quaternion Normalize (Quaternion q)
         {
             // 同じ回転の 2 通りの表し方のうち w ≥ 0 に揃える（キーの間で符号が飛ぶと補間が遠回りになる）
             q = Quaternion.Normalize (q);

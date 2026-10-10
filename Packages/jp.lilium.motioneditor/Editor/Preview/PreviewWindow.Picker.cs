@@ -105,17 +105,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 一覧の中で選択を動かす（↑↓）。何も選んでいなければ先頭から
-        /// </summary>
-        public void MovePickerSelection (int offset)
-        {
-            if (pickerEntries_.Count == 0) return;
-
-            int index = pickerSelectedIndex;
-            SelectPickerIndex (index < 0 ? 0 : Mathf.Clamp (index + offset, 0, pickerEntries_.Count - 1));
-        }
-
-        /// <summary>
         /// 一覧の先頭・末尾へ（Home / End）
         /// </summary>
         public void SelectPickerEdge (bool first)

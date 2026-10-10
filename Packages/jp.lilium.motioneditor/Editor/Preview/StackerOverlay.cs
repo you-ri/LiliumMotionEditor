@@ -122,9 +122,13 @@ namespace Lilium
             root.Add (message_);
 
             Refresh ();
+            window_.stateChanged -= Refresh;
             window_.stateChanged += Refresh;
+            window_.stackerChanged -= Refresh;
             window_.stackerChanged += Refresh;
+            window_.keysChanged -= Refresh;
             window_.keysChanged += Refresh;
+            window_.poseSampled -= RefreshCurrent;
             window_.poseSampled += RefreshCurrent;
             return root;
         }

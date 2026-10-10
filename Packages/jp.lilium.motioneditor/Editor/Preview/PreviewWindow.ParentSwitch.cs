@@ -65,7 +65,7 @@ namespace Lilium
             Undo.IncrementCurrentGroup ();
             RecordClipUndo ("Switch Parent");
             string note = ParentSwitch.Switch (editingClip_, propertyRoot, bound, frame, source);
-            AfterPropertyEdit ();
+            AfterClipEdit ();
             if (note != null) ShowNotification (new GUIContent (note), 2.5);
         }
     }

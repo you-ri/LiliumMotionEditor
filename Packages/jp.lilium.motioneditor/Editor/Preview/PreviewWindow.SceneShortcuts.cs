@@ -11,78 +11,64 @@ namespace Lilium
     /// </summary>
     public partial class PreviewWindow
     {
-        static PreviewWindow SceneSource (ShortcutArguments args)
-        {
-            return OverlayWindows.Resolve (args.context as EditorWindow);
-        }
-
         [Shortcut ("Lilium Motion Editor (Scene)/Play", typeof (SceneWindow), KeyCode.Space)]
         static void ScenePlayShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.TogglePlay ();
+            Run (args, window => window.TogglePlay ());
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Copy Pose", typeof (SceneWindow), KeyCode.C)]
         static void SceneCopyPoseShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.CopyPose ();
+            Run (args, window => window.CopyPose ());
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Key All", typeof (SceneWindow), KeyCode.K)]
         static void SceneKeyAllShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.KeyAll ();
+            Run (args, window => window.KeyAll ());
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Previous Frame", typeof (SceneWindow), KeyCode.LeftArrow)]
         static void ScenePreviousFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.SetFrame (window.currentFrame - 1);
+            Run (args, window => window.SetFrame (window.currentFrame - 1));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Next Frame", typeof (SceneWindow), KeyCode.RightArrow)]
         static void SceneNextFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.SetFrame (window.currentFrame + 1);
+            Run (args, window => window.SetFrame (window.currentFrame + 1));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Back 10 Frames", typeof (SceneWindow), KeyCode.LeftArrow, ShortcutModifiers.Shift)]
         static void SceneBack10FramesShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.SetFrame (window.currentFrame - 10);
+            Run (args, window => window.SetFrame (window.currentFrame - 10));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Forward 10 Frames", typeof (SceneWindow), KeyCode.RightArrow, ShortcutModifiers.Shift)]
         static void SceneForward10FramesShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.SetFrame (window.currentFrame + 10);
+            Run (args, window => window.SetFrame (window.currentFrame + 10));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Previous Key", typeof (SceneWindow), KeyCode.Comma)]
         static void ScenePreviousKeyShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.GoToKey (-1);
+            Run (args, window => window.GoToKey (-1));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Next Key", typeof (SceneWindow), KeyCode.Period)]
         static void SceneNextKeyShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.GoToKey (1);
+            Run (args, window => window.GoToKey (1));
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/First Frame", typeof (SceneWindow), KeyCode.Home)]
         static void SceneFirstFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
+            PreviewWindow window = OverlayWindows.Resolve (args.context as EditorWindow);
             if (window == null) return;
             if (window.isPickerFocused) window.SelectPickerEdge (true);
             else window.SetFrame (0);
@@ -91,7 +77,7 @@ namespace Lilium
         [Shortcut ("Lilium Motion Editor (Scene)/Last Key Frame", typeof (SceneWindow), KeyCode.End)]
         static void SceneLastKeyFrameShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
+            PreviewWindow window = OverlayWindows.Resolve (args.context as EditorWindow);
             if (window == null) return;
             if (window.isPickerFocused) window.SelectPickerEdge (false);
             else window.SetFrame (window.GetLastKeyFrame ());
@@ -102,29 +88,25 @@ namespace Lilium
         [Shortcut ("Lilium Motion Editor (Scene)/Spinner Move", typeof (SceneWindow), KeyCode.W)]
         static void SceneSpinnerMoveShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.spinnerMode = SpinnerMode.Move;
+            Run (args, window => window.spinnerMode = SpinnerMode.Move);
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Spinner Rotate", typeof (SceneWindow), KeyCode.E)]
         static void SceneSpinnerRotateShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.spinnerMode = SpinnerMode.Rotate;
+            Run (args, window => window.spinnerMode = SpinnerMode.Rotate);
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Spinner Scale", typeof (SceneWindow), KeyCode.R)]
         static void SceneSpinnerScaleShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.spinnerMode = SpinnerMode.Scale;
+            Run (args, window => window.spinnerMode = SpinnerMode.Scale);
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Spinner Toggle Pole", typeof (SceneWindow), KeyCode.U)]
         static void SceneSpinnerPoleShortcut (ShortcutArguments args)
         {
-            PreviewWindow window = SceneSource (args);
-            if (window != null) window.spinnerPole = !window.spinnerPole;
+            Run (args, window => window.spinnerPole = !window.spinnerPole);
         }
     }
 

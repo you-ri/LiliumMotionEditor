@@ -17,8 +17,6 @@ namespace Lilium
     sealed class ParentSwitchTarget : PoseTarget
     {
         static readonly Color kColor = new Color (0.3f, 0.9f, 1f, 0.35f);
-        static readonly string[] kPositionAxes = { "x", "y", "z" };
-        static readonly string[] kRotationAxes = { "x", "y", "z", "w" };
 
         readonly PreviewStage stage_;
         readonly ParentSwitch.Bound bound_;
@@ -139,9 +137,9 @@ namespace Lilium
             string path = RigPaths.Props (bound_.definition.gripPath);
             Vector3 position = bound_.grip.localPosition;
             Quaternion rotation = bound_.grip.localRotation;
-            for (int i = 0; i < 3; i++) writer.Set (EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalPosition." + kPositionAxes[i]), position[i]);
+            for (int i = 0; i < 3; i++) writer.Set (CurveEdit.TransformBinding (path, CurveEdit.kPosition, i), position[i]);
             float[] q = { rotation.x, rotation.y, rotation.z, rotation.w };
-            for (int i = 0; i < 4; i++) writer.Set (EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalRotation." + kRotationAxes[i]), q[i]);
+            for (int i = 0; i < 4; i++) writer.Set (CurveEdit.RotationBinding (path, i), q[i]);
         }
 
         public override void CollectKeyedPaths (ICollection<string> result)

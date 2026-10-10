@@ -12,7 +12,6 @@ namespace Lilium
     public interface IEditorHost
     {
         float handleSize { get; }
-        float currentFrame { get; }
         bool IsSelected (GameObject go);
         void Select (GameObject go);
 
@@ -49,7 +48,6 @@ namespace Lilium
             public static readonly SelectionHost instance = new SelectionHost ();
 
             public float handleSize { get { return 0.1f; } }
-            public float currentFrame { get { return 0; } }
 
             public bool IsSelected (GameObject go)
             {

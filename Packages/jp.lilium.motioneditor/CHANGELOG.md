@@ -74,6 +74,8 @@
 
 - Layers の段と段の間の矢印を Material Icons にした。逆に通れるかの説明は矢印のツールチップに移しました。
 
+- `PreviewWindow.EndCurveEdit` を `AfterClipEdit` にした。クリップを書き換えた後の後始末を、ほかの編集と同じ 1 本で行います。`HumanoidOutput` の `GetOutputPath`・`WriteLink`・`GetStatus` の段になったオーバーロードは、既定の引数を持つ 1 本ずつにまとめました。`AnimBank.Entry` と `PoseBank.Entry` は同じ形なので `BankEntry` 1 つにしました。
+
 ### Fixed
 
 - 書き出し先（✏）を Override の段へ移すと、つかむ段（✋）まで Override へ移り、全身 IK のハンドルが消えていた。全身 IK や表示の骨をつかんでいるときは、つかむ段をそのまま残します。
@@ -83,6 +85,12 @@
 - Override の統合で、キーを間引くたびにずれが積み重なり、元の形から 2° ほどずれることがあった。
 
 - Override の段が効いていると、任意のプロパティで動かした Transform の値（武器の握りなど）が、編集用の体の値へ戻っていた。
+
+- PoseBank のパネルだけ、窓の外へはみ出しても窓の中へ戻らなかったのを直した。
+
+- Properties・Stacker のパネルが作り直されると、更新の処理が重ねて登録されていたのを直した。
+
+- Motion Scene でメッシュを押したとき、キーの自動追加が切でも今のフレームにキーの無い骨を選べていたのを直した。表示域のクリックと同じく選びません。
 
 - 表示域でハンドルや全身 IK の点にマウスを乗せても、止めてしばらくしないと強調されなかったのを直した。動かしている間もすぐ強調します。
 
@@ -97,6 +105,10 @@
 - 全身 IK の点を親と子でまとめて選んで（Ctrl で子階層を選ぶなど）動かすと、子の点まで全部 Pin になっていたのを直した。子の Free の点は Free のまま体に付いて動き、つかんだ親だけが Pin になります。子の Pin・Locked の点は今までどおり一緒に動きます。
 
 - タイムラインの Reset で姿勢を基準へ戻しても、全身 IK の点が元の場所に固定されたまま残っていたのを直した。戻した点の値（固定を外した値）もキーに打ちます。
+
+### Removed
+
+- どこからも使っていなかった public API を外した。`TrackGUI`、`GLDraw.sceneGUIMaterial` と Scene GUI のシェーダ、`PreviewWindow` の `SetLayerParameter`・`orbitCamera`・`MovePickerSelection`・`BakeHumanoid`・`GetBakeProblem`・`GetMirrorTarget`・`MirrorSpinValues`、`PreviewStage` の `scene`・`contexts`、`IEditorHost.currentFrame`、`Clock` の `masterRate`・`speed`、`ContextHooks.hooks`、`LogSlider.value`、`PoseHandleUtility` の `isMouseOver`・`IsSelectedController`・`IsFocusedController`・`JointHandle`・`BoneHandle`（`Do` の付く版は残す）、`GeometryMath.GetDistanceRayToDot`、`AxisSlider.RaycastHitToJoint`、`ReverseFoot.SetPivot`、`ClipSampler.isValid`、`CurveWriter` の `clip`・`frame`・`count`、`RigProxies` の `Weight.rigName`・`Source.rigName`、`HumanoidGoals` の `bodyPosition`・`bodyRotation`・`humanScale`、`HumanoidMirror` の `Mirror`・`MirrorPosition` です。`PreviewStage.StripPolicy` と `ShortcutTooltip.Format` は private にしました。
 
 ## [0.1.1-exp.1] - 2026-10-04
 <!-- changelog-sha: e5696fb037f9e7db9054e011600b7974bc3b015c -->

@@ -78,7 +78,7 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
 - To reuse a pose on a character of a different size, scale positions by the ratio of `humanScale` (same as `PoseDocument.Rescale`)
 - Points of the default rig definition:
   - Body: `Hips` `HipsDirection` `Spine` `Chest` `UpperChest` `UpperChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
-  - Arms: `Left/RightShoulder` `Left/RightUpperArm` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
+  - Arms: `Left/RightShoulder` `Left/RightUpperArm` `Left/RightElbowPole` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
   - Legs: `Left/RightUpperLeg` `Left/RightKneePole` `Left/RightLowerLeg` `Left/RightFoot`
   - Soles: `Left/RightHeel` `Left/RightSoleBall` `Left/RightLittleToeSide` `Left/RightToeTip`
 
@@ -118,6 +118,10 @@ These follow from how the editor interpolates. Breaking them trips lint or break
   `LittleToeSide` does not pull, so it does not stop the foot from rolling onto its side: also lock `Foot` with its rotation (yaw of the foot, pitch when the heel is up).
   With only the ankle point, the foot turns around the ankle and the toes sink into the floor
 - **Keep the knee over the toes** on a planted leg: pin `KneePole` above and in front of the ankle, in the direction the foot points. Otherwise the thigh can twist out of range when the hips turn
+- **Turn an elbow with `ElbowPole`** (rig definition version 8+; behind the elbow in the T-pose): pin it where the elbow should point and the arm turns about the shoulder–hand axis without moving the hand.
+  It is an alternative to pinning `LowerArm` (computing an elbow position that the bones can reach); use one or the other, as with the knee below
+- **Never pin `KneePole` while `LowerLeg` (the knee) is pinned** (same for `ElbowPole` and `LowerArm`). With a knee point the pole stops being a pole and aims the thigh instead; it fights the knee pin and drags the feet through the floor.
+  When the knee is placed (kneeling), leave `KneePole` Free. Lint then reports `FloorPenetration` for the Free pole under the floor; that is the control point only, not the mesh
 - **`Locked` also works off the ground**. For spans where a point should travel on a straight line (just before landing, just after lift-off), lock it on both end keys (straight line between keys).
   With Pin, keys interpolate bone angles, the heel path curves as the body moves, and the foot slides at contact
 - **Lift a foot straight up and put it straight down**: before lift-off and before landing, add a key with the sole points `Locked` a few cm above the floor, right above the contact spot.
@@ -125,10 +129,15 @@ These follow from how the editor interpolates. Breaking them trips lint or break
 - **Locked points move on straight lines**. Build arcs (a swinging foot) with more keys
 - **Place pinned elbows and knees where the bones can reach**: compute them from the shoulder/hip and the wrist/ankle with the bone lengths (two-bone geometry) and a bend direction.
   An unreachable elbow pin drags the clavicle far out of range (and breaks the shoulder mesh)
-- **Pin `UpperArm` near its T-pose spot relative to the chest** when the hands are pinned (guards, arm swings). Leaving it free lets the IK shrug the shoulders
+- **Pin `UpperArm` near its T-pose spot relative to the chest** when the hands are pinned (guards, arm swings). Leaving it free lets the IK shrug the shoulders.
+  When the chest twists or bends relative to the hips, orient that spot about 60% of the way from the hips rotation to the chest rotation (the spine shares the twist);
+  with the full chest rotation the clavicle gets pushed forward/back out of range. Raise it a few cm to shrug (anger, sobbing), lower it to droop
+- **Place hands that touch the head in the head frame** (covering the face, hands on the head): position, fingers and palm relative to the `Head` point and its rotation, then convert to the chest frame.
+  Placed in the chest frame they float 10–20 cm off the face once the head bends
 - **Do not lower an arm straight down**. A Humanoid arm only goes about 60° down; pulling the hand straight down rotates the shoulder far out of range.
   Put the hand about 60° down and pin `UpperArm` at the side of the body
 - **Keep the wrist straight**: orient the hand with the fingers along the forearm (wrist-from-elbow direction)
+- **Keep the palm direction continuous between keys** (e.g. inward on every key of a swing, or turn it gradually). Switching a palm from inward to forward between two keys is a 90–170° hand rotation
 - **Keep the rotation between adjacent keys at 90° or less**. Rotations interpolate per component: large steps distort the speed and above 180° they turn the wrong way. Add keys in between
 - **No keys after the cycle key** (`writableUntil`). For a loop, make the last key the same pose as the first
 - The floor is y = 0. Sole points have y >= 0
@@ -174,6 +183,19 @@ z is toward the opponent. Startup 15 frames, active 15–18, recovery to 50.
 - The support foot pivots on the ball (heel 5 cm up, `SoleBall` locked). The toe tip and little-toe side slide 1–2 cm per frame while pivoting: that `FootSlide` is the pivot, not a defect
 - Put the hip roll (kicking hip up) into the pelvis rotation; it reduces the leg abduction needed. Without it, `Upper Leg In-Out` goes out of range
 - Torso yaw stays 12–20° behind the hips; more twists the upper chest out of range
+
+## Example: exaggerated emotions (anger 100 F, joy 100 F, sadness 120 F)
+
+Keys are built from parameter sets (hips, hips/chest/head rotation, arms, feet, shrug); keys in between are blended from two neighbors and then adjusted (arm arcs).
+
+- Anger: chest out with fists (shrug +3 cm) → lift a foot 32 cm and stomp (hips down to 0.79, chest pitched 28°, fists slammed by the hips) →
+  fists trembling in front of the chest (±3 cm every 3 frames) → `Hand_Point` jabbing at the target → fist overhead, then slammed forward → second stomp → arms crossed, chin up, head turned 40°
+- Joy: deep crouch with arms back → arms swing through an arc (2 extra keys) to front-up on tiptoes → jump (hips +0.36 m, legs tucked, arms in a V, `Hand_Open` with spread fingers) →
+  landing crouch → two fist pumps → arms up, swaying left/right with the opposite heel up
+- Sadness: head hanging 45°, shoulders dropped (UpperArm -2 cm), arms limp → sigh (shoulders up, then lower) → knees buckle forward →
+  kneel on tucked toes (knee one shin length in front of the ankle, hips above the knees) → hands cover the face (head frame) → sobbing (chest ±3°, shoulders ±2.5 cm every 4 frames) → fold forward with the hips down on the heels
+- Rapid trembling/sobbing keys 3–4 frames apart show up as small `Pop` issues just over the limit; they are the intended shake
+- A deep slump bent only at the chest exceeds `UpperChest Front-Back`; tilt the pelvis too (hips pitch 5–55°) and keep the chest pitch at 20–60°
 
 ## Fixing lint issues
 

@@ -205,7 +205,7 @@ muscle と RootT / RootQ を定数カーブに書いて Animator に再生させ
 ## 背景・現状（2026-09-15 調査）
 
 ### ベースの MikotoMotionEditor
-- 場所: `Packages/jp.lilium.motioneditor`（embedded package、v0.1.0）。asmdef は `LiliumMotionEditor.Runtime` / `LiliumMotionEditor.Editor`（10-03 に `MktMotionEditor` 系から改名・名前空間は `Lilium`）。依存パッケージなし。
+- 場所: `Packages/jp.lilium.motioneditor`（embedded package、v0.1.0）。asmdef は `LiliumMotionEditor.Runtime` / `LiliumMotionEditor.Editor`（10-03 に `MktMotionEditor` 系から改名・名前空間は `Lilium`）。ほかに、ゲーム側が参照する属性の `LiliumMotionEditor.Attributes`、全身 IK の計算（Burst）の `LiliumMotionEditor.FullBodyIk`、入っているときだけ使う `LiliumMotionEditor.Rigging.Editor`（Animation Rigging）・`LiliumMotionEditor.Timeline.Editor`（Timeline）、テストの `LiliumMotionEditor.Editor.Tests`（10-08 追記）。依存パッケージなし。
 - テストシーン: `test_motioneditor.unity`。モデルはゲームのキャラ prefab。
   - クリップ参照（`.anim`）は `Samples~` 内にしかなく、参照切れ。
   - ライトにゲーム側のコンポーネントが付いていて、ゲーム側コードに依存している。
@@ -1959,6 +1959,45 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 評価指標（S35〜S40）: 「## 評価指標と閾値」の AI の項。
 対象: `Packages/jp.lilium.motioneditor`（Editor/Preview・Editor/Rig・Editor/Pipeline・Tests）と `.claude/skills/author-motion`。
 
+#### S43: 肘の Pole（10-10 ユーザー指示）
+
+既定のリグ定義には膝の倒れる向きを決める点（膝の Pole）があるが、肘には無かった。肘にも同じ点を足す。
+- `Left/RightElbowPole`: 上腕に乗せ、肘（前腕の付け根。置き場所の基準 `Elbow` を足した）の後ろ（基準姿勢で肘が向く方）に置く。引く強さ 0 の向けるだけの点。
+  膝の Pole と同じく、ずれは上腕と前腕の向きを半分ずつ混ぜた向きで回し（`kElbowPoleBlend` 0.5）、肘へ線でつなぐ。
+- 解き方は膝と同じ（`IsPole` / `SnapPole`）。手を固定したまま、肩と手を結ぶ軸まわりに肘の向きだけ変える。肘の点（`LowerArm`）を固定しているときは Pole にならない。
+
+決めたこと（10-10）:
+1. リグ定義の版 8。版 7 までの定義には一覧の最後に足すだけで、ほかの点・同じ名前の自分で足した点は変えない（版 6 のように作り直さない）。
+   新しく作る定義も最後に置き、版を上げた定義と並びをそろえる。パッケージの既定の定義アセットを作り直した（差は版と 2 点だけ）。
+2. 今までのクリップには肘の Pole のキーが無いので Free になり、Pole は強さに比例して回すので解いた姿勢は変わらない。
+   定義のハッシュには点の一覧が入るので、焼いた版は窓で古いと出る（焼き直しても同じ）。
+
+機能（受け入れ条件）:
+- 肘の Pole は上腕に乗り、まっすぐな腕で肘の後ろ（`directionLength`×体の大きさ）。前腕と半分ずつ混ぜる
+- 肘の Pole を動かすと、手は動かずに肘がそちらへ回る。骨の長さは変わらない
+- Free の肘の Pole は解いた姿勢を変えない（足さない定義と ≤1e-5m・≤1e-3°）
+- 版 7 の定義は肘の Pole を最後に足すだけ（同じ名前の点・ほかの点はそのまま）
+
+評価指標（S35〜S40）: 「## 評価指標と閾値」の AI の項。
+対象: `Packages/jp.lilium.motioneditor`（Editor/Rig・Tests）。
+
+#### S44: 焼くときにキーを間引く（10-10 ユーザー指示）
+
+焼いたクリップは全フレームにキーを打っていたので、テキストのクリップが 1 本で数 MB になった（100 フレーム・130 本で 5.7MB。再生用と
+エディタ用の控え（`m_EditorCurves`）に同じ曲線が 2 回書かれ、キー 1 つが YAML で約 230 バイト）。焼いて作るカーブのキーを間引く。
+- `HumanoidBaker.keyTolerance`（既定 `kKeyTolerance` 5e-4。0 で全フレーム）。体・muscle・手足のゴール・Rig の重みなど焼いて作るカーブだけ。元のクリップから写すカーブは間引かない。
+- 残すキーには元の動きの傾き（前後のフレームの差）を持たせて 3 次曲線（Hermite）でつなぎ、元のフレームの値から許し以内（フレームの間は元の直線から 2 倍以内）のキーを外す。
+  直線でつなぎ直す方式は誤差がキーの間隔の 2 乗で増え、なめらかな正弦でも 101 → 88 キーにしかならなかった。
+- 焼いた結果に `keyCount` / `keyCountBeforeReduce` を足した（操作口の bake の応答にも出す）。
+
+機能（受け入れ条件）:
+- なめらかな動きのキーが 3 割未満。フレームの時刻で元の値から許し以内、間の時刻で元の直線から 2 倍以内。1 フレームの跳ねは消えない
+- 焼いたクリップで編集時の姿勢を再現できる: 間引かなければ 1mm 以内、間引くと 2mm 以内（実測 1.1mm）
+- 今日作った 5 本で、キーが 26〜48%・大きさ 0.8〜2.7MB（前は 2.9〜5.7MB）。全フレームで評価した差は 5e-4 以内
+
+評価指標（S35〜S40）: 「## 評価指標と閾値」の AI の項。
+対象: `Packages/jp.lilium.motioneditor`（Editor/Humanoid・Editor/Rig・Tests）。
+
 ## スプリント計画（1スプリント = 1機能）
 
 | # | 機能 | ゴール | 完了基準 |
@@ -2011,6 +2050,8 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 | S40 | 外で作った動きを Override として取り込む（10-10 追加） | 生成した Humanoid のクリップを元を壊さず重ねられる | S40 の受け入れ条件 |
 | S41 | 動画からモーションを作る（10-10 追加） | モーキャプのサービスで作った FBX を S40 の口で取り込む | S41 の説明 |
 | S42 | 手の形を窓なしで打つ（10-10 追加） | プリセットと指ごとの muscle で手の形をキーにできる | S42 の受け入れ条件 |
+| S43 | 肘の Pole（10-10 追加） | 膝と同じく、肘の向く方を点で決められる | S43 の受け入れ条件 |
+| S44 | 焼くときにキーを間引く（10-10 追加） | 焼いたクリップを形を変えずに小さくする | S44 の受け入れ条件 |
 
 ## 評価指標と閾値
 - 共通: コンパイルエラー0 / エディタ上の例外0 / **Console 警告 0**（Rigging は拘束が invalid だと警告を出す）/ テスト失敗0。
@@ -2255,6 +2296,8 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 - [ ] S37 モーションの検査: 実装済み・テスト通過（10-10）。`MotionLint`（足の滑り・床・muscle の範囲・跳ね・キーの間の回転・左右差。JSON）、窓の Lint のパネル（`LintOverlay`。Check・Copy・行でフレームへ）。跳ねの式に「1 フレームだけ外れる」を足した。足首の点 1 つだけの固定ではつま先が沈むことが分かった（足は 3 点で固定する）。テスト 7 件追加。6.0 でモーションエディタのテスト 378 件すべて通過。残り: 6.6（extrival）での確認・窓のパネルの確認
 - [ ] S38 外部からの操作口: 実装済み・テスト通過（10-10）。`MotionEditorCommands`（JSON の要求 → 応答。open・describe・readPose・writePose・lint・bake・save・close・並べた要求・`-executeMethod`）、`PoseSession.Bake` / `Save`、Unity CLI のコマンド（`motion_*`。`LiliumMotionEditor.Pipeline.Editor`。Pipeline があるときだけ）。検査の muscle は基準姿勢で範囲外の分を除く。テスト 3 件追加。6.0 でモーションエディタのテスト 381 件すべて通過。CLI からデモのキャラで一通り動くのを確かめた。残り: 画面なしの Unity（`-nographics`）での確認・6.6（extrival）での確認
 - [ ] S17 段のマスク: 実装済み・テスト通過（10-10）。`ChannelMask` のアセットとインスペクタ、Override の段に付けて合成・キーの書き込み・つかむのを絞る。任意のプロパティを Override で重ねる（表示・Properties パネル・焼き・統合）。`AvatarMask` の読み書き。既定の組（Body / Upper Body / Hands / Face）を同梱し Stacker の組でも使える。テスト 12 件追加。6.0 でモーションエディタのテスト 398 件すべて通過。窓で Mask 欄・マスク外のハンドルが薄くなること・インスペクタを確認（撮影）。残り: 実キャラでの確認・Stacker のマスクの組の窓での確認・6.6（extrival）での確認
+- [ ] S44 焼くときにキーを間引く: 実装済み・テスト通過（10-10）。`HumanoidBaker.keyTolerance`（3 次曲線でつなぎ直して許し以内のキーを外す）、焼いた結果のキーの数。テスト 1 件追加・1 件を間引きの有無で分けた。6.0 でモーションエディタのテスト 406 件すべて通過。今日作った 5 本を焼き直した（キー 26〜48%）。残り: 6.6（extrival）での確認・ゲームで再生した見た目の確認
+- [ ] S43 肘の Pole: 実装済み・テスト通過（10-10）。置き場所の基準 `Elbow`、`Left/RightElbowPole`（上腕に乗り肘の後ろ。前腕と半分ずつ混ぜる）、リグ定義の版 8（版 7 までは最後に足すだけ）、既定の定義アセットの作り直し。テスト 4 件追加・既存 3 件を直した。6.0 でモーションエディタのテスト 404 件すべて通過。今日作った 5 本（AI Walk・回し蹴り・怒り・喜び・悲しみ）を焼き直して足す前と比べ、差は最大 4.6e-6（muscle）。残り: 窓での見た目と操作の確認・6.6（extrival）での確認
 - [ ] S42 手の形を窓なしで打つ: 実装済み・テスト通過（10-10）。`PoseSession.WriteMuscles`・`PreviewStage.ReadMuscles`・`PoseBank.TryGetMuscle` / `IsFingerMuscle`、操作口の `writeHand` / `readHand`・Unity CLI の `motion_write_hand` / `motion_read_hand`、スキル `author-motion` の「手の形（指）」。テスト 1 件追加。6.0 でモーションエディタのテスト 400 件すべて通過。残り: 6.6（extrival）での確認
 - [ ] S41 動画からモーションを作る: 起票のみ（10-10）。モーキャプのサービスで FBX にして S40 で取り込む方針に変えた。ユーザーのアカウントと動画待ち
 - [ ] S39 画像の書き出し: 実装済み・テスト通過（10-10）。`PoseCapture`（4 方向。正面・右・上は平行投影）、操作口の `capture`・Unity CLI の `motion_capture`、`PoseSession` の描く世界のコンストラクタを public に。歩きを撮って、振り出す足と腕の 2 か所を直した。テスト 2 件追加。6.0 でモーションエディタのテスト 383 件すべて通過。残り: 6.6（extrival）での確認

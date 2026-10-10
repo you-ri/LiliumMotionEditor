@@ -190,6 +190,8 @@ namespace Lilium
                     return JsonUtility.ToJson (new BakeResult {
                         path = path,
                         frameCount = result.frameCount,
+                        keyCount = result.keyCount,
+                        keyCountBeforeReduce = result.keyCountBeforeReduce,
                         milliseconds = result.milliseconds,
                         notes = result.notes ?? new List<string> (),
                     });
@@ -374,7 +376,7 @@ namespace Lilium
         {
             if (preset.EndsWith (".anim", System.StringComparison.OrdinalIgnoreCase)) return AssetDatabase.LoadAssetAtPath<AnimationClip> (preset);
             foreach (string folder in PoseBank.GetFolders (session_.stage.sourcePrefab)) {
-                foreach (PoseBank.Entry entry in PoseBank.List (folder)) {
+                foreach (BankEntry entry in PoseBank.List (folder)) {
                     if (string.Equals (entry.name, preset, System.StringComparison.OrdinalIgnoreCase)) return AssetDatabase.LoadAssetAtPath<AnimationClip> (entry.path);
                 }
             }
@@ -386,7 +388,7 @@ namespace Lilium
         {
             List<string> names = new List<string> ();
             foreach (string folder in PoseBank.GetFolders (session_.stage.sourcePrefab)) {
-                foreach (PoseBank.Entry entry in PoseBank.List (folder)) {
+                foreach (BankEntry entry in PoseBank.List (folder)) {
                     if (!names.Contains (entry.name) && PoseBank.IsHumanoidPose (AssetDatabase.LoadAssetAtPath<AnimationClip> (entry.path))) names.Add (entry.name);
                 }
             }
@@ -529,6 +531,9 @@ namespace Lilium
         {
             public string path;
             public int frameCount;
+            /// <summary>焼いて作ったカーブのキーの数と、間引く前の数</summary>
+            public int keyCount;
+            public int keyCountBeforeReduce;
             public double milliseconds;
             public List<string> notes;
         }

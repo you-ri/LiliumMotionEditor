@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Lilium;
 
 namespace Lilium
 {
@@ -61,6 +60,12 @@ namespace Lilium
         public static BodyPointId KneePole (HumanBodyBones thigh)
         {
             return new BodyPointId (RigPaths.SideOf (thigh) + "KneePole");
+        }
+
+        /// <summary>肘の Pole（upperArm は上腕の骨。既定の一覧での名前。S43）</summary>
+        public static BodyPointId ElbowPole (HumanBodyBones upperArm)
+        {
+            return new BodyPointId (RigPaths.SideOf (upperArm) + "ElbowPole");
         }
 
         /// <summary>人差し指の付け根の点（hand は手首の骨。既定の一覧での名前）</summary>
@@ -399,7 +404,7 @@ namespace Lilium
         {
             if (point.blendBone == null || point.blend <= 0) return point.offset;
             Quaternion relative = Quaternion.Inverse (boneRotation) * blendRotation * point.blendRest;
-            return point.offset - point.blendOffset + Quaternion.Slerp (Quaternion.identity, Normalize (relative), point.blend) * point.blendOffset;
+            return point.offset - point.blendOffset + Quaternion.Slerp (Quaternion.identity, EditingRigSolver.Normalize (relative), point.blend) * point.blendOffset;
         }
 
         /// <summary>点が動かす編集用の骨（無ければ null）</summary>
@@ -497,7 +502,7 @@ namespace Lilium
         {
             Point point = Find (bone);
             if (point == null || !point.hasRotation) return false;
-            point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * rotation * Quaternion.Inverse (point.restRootRotation));
+            point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * rotation * Quaternion.Inverse (point.restRootRotation));
             return true;
         }
 
@@ -534,7 +539,7 @@ namespace Lilium
             }
             localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
             localRotation = point.hasRotation
-                ? Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation))
+                ? EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation))
                 : point.control.localRotation;
             return true;
         }
@@ -543,7 +548,7 @@ namespace Lilium
         {
             point.control.localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
             if (point.hasRotation) {
-                point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
             }
         }
 
@@ -600,7 +605,7 @@ namespace Lilium
                 position = true;
             }
             if (point.hasRotation && point.values.rotationWeight >= 1 && Quaternion.Angle (point.bone.rotation, PointWorldRotation (point)) > kSyncAngle) {
-                point.control.localRotation = Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
                 rotation = true;
             }
         }
@@ -677,13 +682,6 @@ namespace Lilium
         {
             Point point = Find (bone);
             return point != null ? Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) : 0;
-        }
-
-        static Quaternion Normalize (Quaternion q)
-        {
-            // 同じ回転の 2 通りの表し方のうち w ≥ 0 に揃える（キーの間で符号が飛ぶと補間が遠回りになる）
-            q = Quaternion.Normalize (q);
-            return q.w < 0 ? new Quaternion (-q.x, -q.y, -q.z, -q.w) : q;
         }
 
         // ---- 解く ----

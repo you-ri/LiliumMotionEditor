@@ -3,7 +3,6 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
-using Lilium;
 
 namespace Lilium
 {
@@ -75,7 +74,7 @@ namespace Lilium
             AnimBank.Create (kFolder, "Walk");
             AssetDatabase.CreateAsset (new AnimationClip (), kFolder + "/Walk.anim");
 
-            List<PoseBank.Entry> entries = PoseBank.List (kFolder);
+            List<BankEntry> entries = PoseBank.List (kFolder);
             Assert.AreEqual (new[] { "Fist 2", "Fist 10", "Open", "Peace" }, entries.Select (e => e.name).ToArray ());
             Assert.AreEqual ("Hands", entries[3].group);
             Assert.IsFalse (AnimBank.List (kFolder).Any (e => e.name.Contains ("Fist")), "AnimBank には姿勢を出さない");

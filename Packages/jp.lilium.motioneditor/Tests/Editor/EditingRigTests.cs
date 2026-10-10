@@ -9,52 +9,30 @@ namespace Lilium
     /// <summary>
     /// 編集用の体（骨の複製とコントロール）
     /// </summary>
-    public class EditingRigTests
+    public class EditingRigTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<EditingRig> rigs_ = new List<EditingRig> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
+            definition_ = CreateDefinition ();
             // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
             definition_.solver = RigSolver.TwoBoneIk;
-            created_.Add (definition_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            foreach (EditingRig rig in rigs_) rig.Dispose ();
-            rigs_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
         }
 
         /// <summary>
         /// キャラは prefab の中で回して置かれていることが多い（Y270 など）。ルートの向きも写ることを見るため、同じように置く
+        /// （prefab も原点から外して、位置も写ることを見る）
         /// </summary>
-        Animator CreateCharacter (bool withChest = false, params string[] extraBones)
+        Animator CreateDisplay (bool withChest = false, params string[] extraBones)
         {
-            GameObject prefabRoot = new GameObject ("Prefab");
-            created_.Add (prefabRoot);
-            prefabRoot.transform.position = new Vector3 (1, 0, 2);
-
-            Animator animator = TestSkeleton.CreateHumanoid (created_, withChest, extraBones);
-            animator.transform.SetParent (prefabRoot.transform, false);
-            animator.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            return animator;
+            return PlaceInPrefab (TestSkeleton.CreateHumanoid (created_, withChest, extraBones), new Vector3 (1, 0, 2));
         }
 
         EditingRig CreateRig (Animator display)
         {
-            EditingRig rig = EditingRig.Create (definition_, display, name => new GameObject (name));
-            rigs_.Add (rig);
-            return rig;
+            return CreateEditingRig (definition_, display);
         }
 
         static string PathOf (Transform t, Transform root)
@@ -65,7 +43,7 @@ namespace Lilium
         [Test]
         public void RootMatchesDisplayAnimatorPoseAndName ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             EditingRig rig = CreateRig (display);
 
             Assert.AreEqual (display.name, rig.root.name);
@@ -76,7 +54,7 @@ namespace Lilium
         [Test]
         public void BonesAreClonedWithSamePathsAndRestValues ()
         {
-            Animator display = CreateCharacter (true, "weapon_L");
+            Animator display = CreateDisplay (true, "weapon_L");
             EditingRig rig = CreateRig (display);
 
             Transform[] displayBones = display.GetComponentsInChildren<Transform> ().Where (t => t != display.transform).ToArray ();
@@ -95,7 +73,7 @@ namespace Lilium
         [Test]
         public void CloneHasNoComponentsBesidesAnimatorOnRoot ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             display.GetBoneTransform (HumanBodyBones.Hips).gameObject.AddComponent<BoxCollider> ();
             EditingRig rig = CreateRig (display);
 
@@ -116,7 +94,7 @@ namespace Lilium
         [Test]
         public void ControlsExistOnlyForEnabledBones ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             EditingRig rig = CreateRig (display);
 
             foreach (RigBinding.Fk fk in rig.binding.fk) {
@@ -139,7 +117,7 @@ namespace Lilium
         [Test]
         public void SyncCopiesEditingBonesToDisplay ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             EditingRig rig = CreateRig (display);
             Transform editingElbow = rig.GetEditingBone (HumanBodyBones.LeftLowerArm);
             Transform displayElbow = display.GetBoneTransform (HumanBodyBones.LeftLowerArm);
@@ -155,7 +133,7 @@ namespace Lilium
         [Test]
         public void ResetRestoresRestPose ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             EditingRig rig = CreateRig (display);
             Transform hips = rig.GetEditingBone (HumanBodyBones.Hips);
             Vector3 restPosition = hips.localPosition;
@@ -173,7 +151,7 @@ namespace Lilium
         [Test]
         public void ChildNamedControlsIsSkippedAndReported ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             new GameObject (RigPaths.kRoot).transform.SetParent (display.transform, false);
 
             EditingRig rig = CreateRig (display);
@@ -186,7 +164,7 @@ namespace Lilium
         [Test]
         public void DisposeDestroysEverything ()
         {
-            Animator display = CreateCharacter ();
+            Animator display = CreateDisplay ();
             EditingRig rig = CreateRig (display);
             GameObject root = rig.root;
             Transform bone = rig.GetEditingBone (HumanBodyBones.Hips);

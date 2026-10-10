@@ -449,7 +449,6 @@
     "PREVIEW_WINDOW_HUMANOID_LOG_SWAPPED": "MotionEditor: Swapped references ({0} → {1}):\n- {2}",
     "PREVIEW_WINDOW_HUMANOID_MORE": "\n… and {0} more",
     "PREVIEW_WINDOW_HUMANOID_NOT_IN_PLAY_MODE": "Cannot swap in Play Mode",
-    "PREVIEW_WINDOW_HUMANOID_NO_OUTPUT_LAYER": "No Output layer (add one with \"+Output\" at the top of Layers)",
     "PREVIEW_WINDOW_HUMANOID_NO_OVERRIDE": "No Override",
     "PREVIEW_WINDOW_HUMANOID_NO_REFERENCES": "No references to swap: {0}",
     "PREVIEW_WINDOW_HUMANOID_SKIPPED_LIST": "\n\n{0} skipped (listed in the Console)",

@@ -18,7 +18,6 @@ namespace Lilium
     {
         public const string kRootT = "RootT";
         public const string kRootQ = "RootQ";
-        static readonly string[] kAxes = { "x", "y", "z", "w" };
         static readonly string[] kFingers = { "Thumb", "Index", "Middle", "Ring", "Little" };
         static string[] clipMuscleNames_;
 
@@ -29,6 +28,9 @@ namespace Lilium
         {
             public int frameCount;
             public int curveCount;
+            /// <summary>焼いて作ったカーブのキーの数と、間引く前の数（全フレーム。keyTolerance）</summary>
+            public int keyCount;
+            public int keyCountBeforeReduce;
             public double milliseconds;
             /// <summary>焼かなかったものなど、利用者へ伝えること</summary>
             public List<string> notes;
@@ -72,6 +74,18 @@ namespace Lilium
         /// Override の段がプロパティを重ねるときに、重ねたカーブを渡す（S17。OverrideProperties.CreateBakeSource）
         /// </summary>
         public AnimationClip propertySource;
+
+        /// <summary>
+        /// 焼いて作るカーブ（体・手足のゴール・Rig の重みなど）のキーを間引く許し（カーブの値の単位。0 なら全フレームに打つ）。
+        /// 全フレームに打つとテキストのクリップが 1 本で数 MB になる（10-10。100 フレーム・130 本で 5.7MB）。
+        /// 外して前後を直線でつなぎ直しても、元のフレームの値から許し以内のキーだけを外す。元のクリップから写すカーブは間引かない
+        /// </summary>
+        public float keyTolerance = kKeyTolerance;
+
+        /// <summary>
+        /// キーを間引く既定の許し。muscle では 0.05° 程度、位置では 0.5mm、四元数の成分では 0.06° 程度（Override の取り込みの間引きと同じ）
+        /// </summary>
+        public const float kKeyTolerance = 5e-4f;
 
         HumanPoseHandler displayHandler_;
 
@@ -163,9 +177,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今の編集用の体の姿勢を HumanPose にする。体の位置・向きは編集用の体のルートから見た値
-        /// </summary>
-        /// <summary>
         /// 今の表示モデルの骨の姿勢を HumanPose にする。編集用の体から読むときと同じく、Animator の GameObject を原点・無回転に置いて読む
         /// </summary>
         public bool ReadDisplayPose (ref HumanPose pose)
@@ -185,6 +196,9 @@ namespace Lilium
             return true;
         }
 
+        /// <summary>
+        /// 今の編集用の体の姿勢を HumanPose にする。体の位置・向きは編集用の体のルートから見た値
+        /// </summary>
         public bool ReadPose (ref HumanPose pose)
         {
             if (handler_ == null) return false;
@@ -315,23 +329,25 @@ namespace Lilium
             List<EditorCurveBinding> bindings = new List<EditorCurveBinding> (bodyCount + channels.Count * 4);
             List<AnimationCurve> curves = new List<AnimationCurve> (bindings.Capacity);
             for (int c = 0; c < bodyCount; c++) {
-                string property = c < 3 ? kRootT + "." + kAxes[c] : c < 7 ? kRootQ + "." + kAxes[c - 3] : clipMuscleNames[c - 7];
+                string property = c < 3 ? kRootT + "." + CurveEdit.kAxes[c] : c < 7 ? kRootQ + "." + CurveEdit.kAxes[c - 3] : clipMuscleNames[c - 7];
                 bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), property));
-                curves.Add (MakeCurve (body[c], rate));
+                curves.Add (MakeCurve (body[c], rate, keyTolerance));
             }
             for (int c = 0; c < goalCurves.Length; c++) {
                 string name = HumanoidGoals.kCurveNames[c / 7];
-                int axis = c % 7;
-                string property = axis < 3 ? name + "T." + kAxes[axis] : name + "Q." + kAxes[axis - 3];
+                string property = HumanoidGoals.CurveProperty (name, c % 7);
                 bindings.Add (EditorCurveBinding.FloatCurve ("", typeof (Animator), property));
-                curves.Add (MakeCurve (goalCurves[c], rate));
+                curves.Add (MakeCurve (goalCurves[c], rate, keyTolerance));
             }
             foreach (Channel channel in channels) {
                 for (int i = 0; i < channel.bindings.Length; i++) {
                     bindings.Add (channel.bindings[i]);
-                    curves.Add (MakeCurve (channel.values[i], rate));
+                    curves.Add (MakeCurve (channel.values[i], rate, keyTolerance));
                 }
             }
+            int keyCount = 0;
+            foreach (AnimationCurve curve in curves) keyCount += curve.length;
+            int keyCountBeforeReduce = curves.Count * frameCount;
             // 任意のプロパティ（S6）は解く必要が無いので、カーブをそのまま、ゲーム prefab から見たパスへ写す。
             // 読込で元の Humanoid のクリップから持ち越した武器の骨などのカーブ（HumanoidImport.CarryCurves）もここを通る
             List<KeyValuePair<EditorCurveBinding, EditorCurveBinding>> referenceBindings = new List<KeyValuePair<EditorCurveBinding, EditorCurveBinding>> ();
@@ -365,6 +381,8 @@ namespace Lilium
             return new Result {
                 frameCount = frameCount,
                 curveCount = bindings.Count,
+                keyCount = keyCount,
+                keyCountBeforeReduce = keyCountBeforeReduce,
                 milliseconds = watch.Elapsed.TotalMilliseconds,
                 notes = context.notes,
             };
@@ -386,9 +404,9 @@ namespace Lilium
                 Transform editing = readFromDisplay ? extra.bone : rig_.GetEditingBone (extra.bone);
                 if (editing == null) continue;
                 string path = AnimationUtility.CalculateTransformPath (extra.bone, displayRoot);
-                Add (channels, context, hooks, frameCount, TransformBindings (path, "m_LocalRotation", 4), true, v => Write (v, editing.localRotation));
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, editing.localRotation));
                 if (extra.control.position) {
-                    Add (channels, context, hooks, frameCount, TransformBindings (path, "m_LocalPosition", 3), false, v => Write (v, editing.localPosition));
+                    Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, editing.localPosition));
                 }
             }
 
@@ -452,8 +470,8 @@ namespace Lilium
                 humanPoseProperties_ = new HashSet<string> (clipMuscleNames);
                 string[] vectors = { kRootT, "MotionT", "LeftFootT", "RightFootT", "LeftHandT", "RightHandT" };
                 string[] rotations = { kRootQ, "MotionQ", "LeftFootQ", "RightFootQ", "LeftHandQ", "RightHandQ" };
-                foreach (string name in vectors) for (int i = 0; i < 3; i++) humanPoseProperties_.Add (name + "." + kAxes[i]);
-                foreach (string name in rotations) for (int i = 0; i < 4; i++) humanPoseProperties_.Add (name + "." + kAxes[i]);
+                foreach (string name in vectors) for (int i = 0; i < 3; i++) humanPoseProperties_.Add (name + "." + CurveEdit.kAxes[i]);
+                foreach (string name in rotations) for (int i = 0; i < 4; i++) humanPoseProperties_.Add (name + "." + CurveEdit.kAxes[i]);
             }
             return humanPoseProperties_.Contains (binding.propertyName);
         }
@@ -475,7 +493,7 @@ namespace Lilium
         {
             EditorCurveBinding[] bindings = new EditorCurveBinding[count];
             for (int i = 0; i < count; i++) {
-                bindings[i] = EditorCurveBinding.FloatCurve (path, typeof (Transform), property + "." + kAxes[i]);
+                bindings[i] = CurveEdit.TransformBinding (path, property, i);
             }
             return bindings;
         }
@@ -496,9 +514,12 @@ namespace Lilium
         }
 
         /// <summary>
-        /// フレームごとの値を直線でつなぐカーブにする。全部同じ値なら両端の 2 キーだけ
+        /// フレームごとの値を直線でつなぐカーブにする。全部同じ値なら両端の 2 キーだけ。
+        /// tolerance が 0 より大きければキーを間引く: 残すキーには元の動きの傾き（前後のフレームの差）を持たせて 3 次曲線でつなぎ、
+        /// 外しても元のフレームの値から tolerance 以内（フレームの間の時刻は、元の直線から 2 倍以内）のキーを外す。
+        /// 直線でつなぎ直すと誤差がキーの間隔の 2 乗で増え、なめらかな動きでも 1 割ほどしか減らない（10-10 に試した）。3 次なら 4 乗なので大きく減る
         /// </summary>
-        internal static AnimationCurve MakeCurve (float[] values, float rate)
+        internal static AnimationCurve MakeCurve (float[] values, float rate, float tolerance = 0)
         {
             int count = values.Length;
             float last = (count - 1) / rate;
@@ -512,6 +533,16 @@ namespace Lilium
                     : new AnimationCurve (new Keyframe (0, values[0], 0, 0));
             }
 
+            if (tolerance > 0 && count > 2) {
+                List<int> kept = KeptFrames (values, tolerance);
+                Keyframe[] reduced = new Keyframe[kept.Count];
+                for (int k = 0; k < kept.Count; k++) {
+                    float slope = Slope (values, kept[k]) * rate;
+                    reduced[k] = new Keyframe (kept[k] / rate, values[kept[k]], slope, slope);
+                }
+                return new AnimationCurve (reduced);
+            }
+
             Keyframe[] keys = new Keyframe[count];
             for (int i = 0; i < count; i++) {
                 float inSlope = i > 0 ? (values[i] - values[i - 1]) * rate : 0;
@@ -519,6 +550,51 @@ namespace Lilium
                 keys[i] = new Keyframe (i / rate, values[i], i > 0 ? inSlope : outSlope, i < count - 1 ? outSlope : inSlope);
             }
             return new AnimationCurve (keys);
+        }
+
+        /// <summary>フレーム i での元の動きの傾き（1 フレームあたり。前後のフレームの差。端は片側）</summary>
+        static float Slope (float[] values, int i)
+        {
+            int last = values.Length - 1;
+            if (i <= 0) return values[1] - values[0];
+            if (i >= last) return values[last] - values[last - 1];
+            return (values[i + 1] - values[i - 1]) * 0.5f;
+        }
+
+        /// <summary>start と end のキーを、傾き付きの 3 次曲線（AnimationCurve と同じ Hermite）でつないだときの、間の割合 t の値</summary>
+        static float Hermite (float[] values, int start, int end, float t)
+        {
+            float span = end - start;
+            float t2 = t * t, t3 = t2 * t;
+            return (2 * t3 - 3 * t2 + 1) * values[start] + (t3 - 2 * t2 + t) * span * Slope (values, start)
+                + (-2 * t3 + 3 * t2) * values[end] + (t3 - t2) * span * Slope (values, end);
+        }
+
+        /// <summary>直線でつなぐ 1 区間の長さの上限（フレーム）。長い直線の区間を確かめ直す手間を抑える</summary>
+        const int kMaxReduceSpan = 256;
+
+        /// <summary>
+        /// 残すフレーム（両端を含む）。区間の始まりから先へ伸ばしていき、3 次曲線でつなぐと間のどれかのフレームが tolerance を
+        /// （フレームの間の時刻が元の直線から 2 倍を）超えたら、1 つ手前で区間を切ってキーを残す
+        /// </summary>
+        static List<int> KeptFrames (float[] values, float tolerance)
+        {
+            int count = values.Length;
+            List<int> kept = new List<int> { 0 };
+            int start = 0;
+            for (int end = 2; end < count; end++) {
+                bool fits = end - start <= kMaxReduceSpan;
+                float span = end - start;
+                for (int j = start; j < end && fits; j++) {
+                    if (j > start) fits = Mathf.Abs (Hermite (values, start, end, (j - start) / span) - values[j]) <= tolerance;
+                    if (fits) fits = Mathf.Abs (Hermite (values, start, end, (j + 0.5f - start) / span) - (values[j] + values[j + 1]) * 0.5f) <= tolerance * 2;
+                }
+                if (fits) continue;
+                start = end - 1;
+                kept.Add (start);
+            }
+            if (count > 1) kept.Add (count - 1);
+            return kept;
         }
     }
 

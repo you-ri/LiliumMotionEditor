@@ -67,6 +67,12 @@ namespace Lilium
         /// <summary>クリップのカーブの名前（kGoals と同じ並び。位置は名前 + "T"、向きは名前 + "Q"）</summary>
         public static readonly string[] kCurveNames = { "LeftFoot", "RightFoot", "LeftHand", "RightHand" };
 
+        /// <summary>目標のカーブの名前（channel は 0〜2 が位置の x/y/z、3〜6 が向きの x/y/z/w）</summary>
+        internal static string CurveProperty (string name, int channel)
+        {
+            return channel < 3 ? name + "T." + CurveEdit.kAxes[channel] : name + "Q." + CurveEdit.kAxes[channel - 3];
+        }
+
         GameObject clone_;
         Animator animator_;
         PlayableGraph graph_;
@@ -80,11 +86,6 @@ namespace Lilium
         NativeArray<Vector3> body_;
         NativeArray<Quaternion> bodyRotations_;
         int[] muscleSources_;
-
-        /// <summary>最後に求めたときの体の位置（ワールド）・向き・humanScale</summary>
-        public Vector3 bodyPosition { get { return body_[0]; } }
-        public Quaternion bodyRotation { get { return bodyRotations_[0]; } }
-        public float humanScale { get { return body_[1].x; } }
 
         /// <summary>作れない理由（作れたなら null）</summary>
         public string error { get; private set; }

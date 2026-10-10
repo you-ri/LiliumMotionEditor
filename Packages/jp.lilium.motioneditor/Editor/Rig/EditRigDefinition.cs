@@ -44,6 +44,8 @@ namespace Lilium
         /// 目の高さ（頭の骨の付け根の真上）。目の骨があればその高さ、無ければ頭に付いたメッシュから見積もる（EditingRig.GetEyeHeight）
         /// </summary>
         Eyes,
+        /// <summary>同じ側の肘（前腕の骨の付け根）</summary>
+        Elbow,
     }
 
     /// <summary>
@@ -216,7 +218,7 @@ namespace Lilium
 
         public const float kDefaultStiffness = 0.2f;
         /// <summary>定義の形の版。古い版のアセットを読んだら、足りない項目を既定値で埋める</summary>
-        public const int kVersion = 7;
+        public const int kVersion = 8;
 
         [SerializeField, HideInInspector]
         int version_;
@@ -340,11 +342,18 @@ namespace Lilium
                 // 後方互換は保たない方針なので、点の一覧は今の既定で作り直す（一覧を直していた定義も既定に戻る。今までのクリップの Toes の点のキーは当たらなくなる）
                 bodyPoints = CreateDefaultBodyPoints (fkControls, fullBody);
             }
-            else if (version_ < 7) {
-                // 版 7: 膝の Pole のずれを、太ももと脛の向きを半分ずつ混ぜた向きで回すようにした（10-08。S34）。
-                // 既定の一覧の膝の Pole で、混ぜる設定をまだ入れていない物だけ直す（版 6 で作り直した一覧なので、ほかの点はそのまま）
-                foreach (BodyPoint point in bodyPoints) {
-                    if (point != null) SetKneePoleBlend (point);
+            else {
+                if (version_ < 7) {
+                    // 版 7: 膝の Pole のずれを、太ももと脛の向きを半分ずつ混ぜた向きで回すようにした（10-08。S34）。
+                    // 既定の一覧の膝の Pole で、混ぜる設定をまだ入れていない物だけ直す（版 6 で作り直した一覧なので、ほかの点はそのまま）
+                    foreach (BodyPoint point in bodyPoints) {
+                        if (point != null) SetKneePoleBlend (point);
+                    }
+                }
+                if (version_ < 8 && fullBody.directionPoints) {
+                    // 版 8: 肘の Pole を足した（10-10。S43）。足すだけで、ほかの点は変えない。同じ名前の点があれば足さない（自分で足した肘の Pole を残す）。
+                    // Free（キーの無い今までのクリップ）の Pole は解き方に効かないので、今までのクリップの姿勢は変わらない
+                    AddElbowPoles (bodyPoints, fullBody);
                 }
             }
             if (version_ >= 1 && version_ < 4) {
@@ -430,7 +439,8 @@ namespace Lilium
         /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨には置かない（足の点で足りる。contactPoints のとき）
         /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝の Pole（directionPoints）。顔の前の点は目の高さ（Eyes）。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
         ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前に置き、太ももを回して膝の向きを決める。
-        ///   膝の Pole のずれの向きは、太ももと脛の向きを半分ずつ混ぜる（S34。膝を曲げても膝が出る向きに置かれる）
+        ///   膝の Pole のずれの向きは、太ももと脛の向きを半分ずつ混ぜる（S34。膝を曲げても膝が出る向きに置かれる）。
+        ///   肘の Pole（S43）は上腕に乗せて肘の後ろに置き、同じく上腕と前腕の向きを半分ずつ混ぜる。版 8 で足したので一覧の最後に置く
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根（contactPoints）。踵と足裏の中心は足に乗り、足首とつなぐ。
         ///   小指側は足に乗る向けるだけの点（引く強さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
         ///   つま先の先はつま先の骨に置き（無いキャラでは足へ乗る）、足裏の中心とつなぐ
@@ -481,8 +491,30 @@ namespace Lilium
                     points.Add (new BodyPoint { name = side + "PalmLittle", bone = hand, anchor = BodyPointAnchor.LittleBase });
                 }
             }
+            // 肘の Pole は一覧の最後に置く（版 7 までの定義に足すときと同じ並びにする）
+            if (settings.directionPoints) AddElbowPoles (points, settings);
             return points;
         }
+
+        /// <summary>
+        /// 肘の Pole（S43）を足す。上腕に乗せて肘の後ろ（基準姿勢で肘が向く方）に置き、引く強さ 0 の向けるだけの点にする。
+        /// 膝の Pole と同じく、ずれは上腕と前腕の向きを半分ずつ混ぜた向きで回す（肘を曲げても、肘の曲がりの外側に出る）。同じ名前の点があれば足さない
+        /// </summary>
+        static void AddElbowPoles (List<BodyPoint> points, FullBodySettings settings)
+        {
+            foreach (string side in new[] { "Left", "Right" }) {
+                string name = side + "ElbowPole";
+                if (points.Exists (p => p != null && p.name == name)) continue;
+                points.Add (new BodyPoint {
+                    name = name, bone = side == "Left" ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm, anchor = BodyPointAnchor.Elbow,
+                    offset = new Vector3 (0, 0, -settings.directionLength), pullStrength = 0, link = side + "LowerArm",
+                    blendBone = side == "Left" ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm, blend = kElbowPoleBlend,
+                });
+            }
+        }
+
+        /// <summary>肘の Pole の、前腕の向きを混ぜる割合（S43。膝の Pole と同じ）</summary>
+        public const float kElbowPoleBlend = 0.5f;
 
         /// <summary>
         /// 膝の Pole（既定の一覧の名前・太ももに乗る・膝が基準）なら、ずれを太ももと脛の向きを半分ずつ混ぜた向きで回すようにする（S34）。

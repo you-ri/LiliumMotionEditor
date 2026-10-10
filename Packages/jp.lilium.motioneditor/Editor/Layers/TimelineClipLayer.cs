@@ -1,5 +1,4 @@
 using UnityEngine;
-using Lilium;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium

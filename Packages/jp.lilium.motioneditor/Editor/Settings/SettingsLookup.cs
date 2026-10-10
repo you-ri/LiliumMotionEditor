@@ -33,9 +33,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// この prefab のキャラの設定（無ければ null）。同じ prefab を指すものが 2 つ以上あれば、パスの順で先のものを使い、警告を出す
-        /// </summary>
-        /// <summary>
         /// 設定をこのキャラ（prefab）に結び付ける。同じキャラを指していたほかの設定は、キャラを外す（1 キャラ 1 設定）
         /// </summary>
         public static void Assign (CharacterSettings settings, GameObject prefab)
@@ -57,6 +54,9 @@ namespace Lilium
             Invalidate ();
         }
 
+        /// <summary>
+        /// この prefab のキャラの設定（無ければ null）。同じ prefab を指すものが 2 つ以上あれば、パスの順で先のものを使い、警告を出す
+        /// </summary>
         public static CharacterSettings Find (GameObject prefab)
         {
             string guid = PrefabGuid (prefab);

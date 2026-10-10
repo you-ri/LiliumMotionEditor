@@ -449,7 +449,6 @@
     "PREVIEW_WINDOW_HUMANOID_LOG_SWAPPED": "MotionEditor: 参照を差し替えた（{0} → {1}）:\n- {2}",
     "PREVIEW_WINDOW_HUMANOID_MORE": "\n… ほか {0} 件",
     "PREVIEW_WINDOW_HUMANOID_NOT_IN_PLAY_MODE": "Play Mode 中は差し替えない",
-    "PREVIEW_WINDOW_HUMANOID_NO_OUTPUT_LAYER": "Output の段が無い（Layers の上端の「+Output」で足す）",
     "PREVIEW_WINDOW_HUMANOID_NO_OVERRIDE": "Override が無い",
     "PREVIEW_WINDOW_HUMANOID_NO_REFERENCES": "差し替える参照が見つからない: {0}",
     "PREVIEW_WINDOW_HUMANOID_SKIPPED_LIST": "\n\n触らないもの {0} 件（Console に出す）",

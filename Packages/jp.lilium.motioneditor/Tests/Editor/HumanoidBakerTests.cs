@@ -12,7 +12,7 @@ namespace Lilium
     /// <summary>
     /// Humanoid への焼き（S2）
     /// </summary>
-    public class HumanoidBakerTests
+    public class HumanoidBakerTests : RigTestFixture
     {
         static readonly HumanBodyBones[] kCompared = {
             HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.Neck, HumanBodyBones.Head,
@@ -22,32 +22,12 @@ namespace Lilium
             HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
         };
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
         public void SetUp ()
         {
-            definition_ = EditRigDefinition.CreateDefault ();
-            created_.Add (definition_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        T Keep<T> (T disposable) where T : System.IDisposable
-        {
-            disposables_.Add (disposable);
-            return disposable;
+            definition_ = CreateDefinition ();
         }
 
         sealed class Setup
@@ -66,14 +46,8 @@ namespace Lilium
             Setup s = new Setup ();
             s.display = TestSkeleton.CreateHumanoid (created_, true);
             s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            if (rotated) {
-                GameObject prefab = new GameObject ("Prefab");
-                created_.Add (prefab);
-                prefab.transform.position = new Vector3 (2, 0, -1);
-                s.display.transform.SetParent (prefab.transform, false);
-                s.display.transform.localRotation = Quaternion.Euler (0, 270, 0);
-            }
-            s.rig = Keep (EditingRig.Create (definition_, s.display, name => new GameObject (name), rigLayers != null ? rigLayers (s.display) : null));
+            if (rotated) PlaceInPrefab (s.display, new Vector3 (2, 0, -1));
+            s.rig = CreateEditingRig (definition_, s.display, rigLayers != null ? rigLayers (s.display) : null);
             s.solver = new EditingRigSolver (s.rig);
             s.solver.Capture ();
             s.sampler = Keep (new ClipSampler (s.rig.animator));
@@ -136,6 +110,32 @@ namespace Lilium
         }
 
         [Test]
+        public void ReducedCurves_StayWithinTolerance_AndKeepPeaks ()
+        {
+            // なめらかな動き（1 周の正弦）: キーは 3 割より少なくなり、フレームの時刻では元の値から許し以内、間の時刻は元の直線から 2 倍以内
+            float[] values = new float[101];
+            for (int i = 0; i < values.Length; i++) values[i] = Mathf.Sin (i / 100f * Mathf.PI * 2) * 0.8f;
+            float tolerance = HumanoidBaker.kKeyTolerance;
+            AnimationCurve reduced = HumanoidBaker.MakeCurve (values, 60, tolerance);
+            Assert.Less (reduced.length, values.Length * 0.3f, "キーが減る（" + reduced.length + "）");
+            Assert.AreEqual (0, reduced.keys[0].time, 1e-6f, "最初のフレームは残す");
+            Assert.AreEqual (100 / 60f, reduced.keys[reduced.length - 1].time, 1e-6f, "最後のフレームは残す");
+            for (int i = 0; i < values.Length; i++) {
+                Assert.AreEqual (values[i], reduced.Evaluate (i / 60f), tolerance + 1e-6f, i + "F");
+                if (i < values.Length - 1) Assert.AreEqual ((values[i] + values[i + 1]) / 2, reduced.Evaluate ((i + 0.5f) / 60f), tolerance * 2 + 1e-6f, i + ".5F");
+            }
+
+            // 1 フレームだけの跳ねは消さない
+            float[] spike = new float[11];
+            spike[5] = 1;
+            AnimationCurve kept = HumanoidBaker.MakeCurve (spike, 60, tolerance);
+            for (int i = 0; i < spike.Length; i++) Assert.AreEqual (spike[i], kept.Evaluate (i / 60f), tolerance + 1e-6f, "跳ね " + i + "F");
+
+            // 許しが 0 なら全フレームに打つ
+            Assert.AreEqual (values.Length, HumanoidBaker.MakeCurve (values, 60).length);
+        }
+
+        [Test]
         public void CurvesAreLinearAndConstantOnesAreShort ()
         {
             AnimationCurve constant = HumanoidBaker.MakeCurve (new[] { 2f, 2f, 2f }, 60);
@@ -152,13 +152,16 @@ namespace Lilium
         /// 焼いたクリップを表示モデルの Animator で再生すると、編集用の体と同じ姿勢になる
         /// </summary>
         [Test]
-        public void BakedClipReproducesEditingPose ()
+        public void BakedClipReproducesEditingPose ([Values (0f, HumanoidBaker.kKeyTolerance)] float keyTolerance)
         {
+            // 間引かなければ 1mm 以内。間引く（既定）と muscle ごとの許しが肩から先へ積み重なるので 2mm 以内（10-10 の実測で 1.1mm）
             Setup s = Create (true);
             AnimationClip source = CreateEditingClip (s);
             AnimationClip baked = NewClip ();
 
+            s.baker.keyTolerance = keyTolerance;
             HumanoidBaker.Result result = s.baker.Bake (source, baked);
+            Assert.LessOrEqual (result.keyCount, result.keyCountBeforeReduce);
 
             Assert.AreEqual (11, result.frameCount);
             Assert.AreEqual (7 + HumanTrait.MuscleCount + 4 * 7, result.curveCount, "体・muscle・手足の IK ゴール");
@@ -195,7 +198,7 @@ namespace Lilium
 
             Transform hips = s.display.GetBoneTransform (HumanBodyBones.Hips);
             Assert.That (RootSpace (displayRoot, hips).z, Is.GreaterThan (0.1f), "腰の移動がクリップに入っている（対照）");
-            Assert.That (worstPosition, Is.LessThan (0.001f), "骨の位置（ルートから見た）");
+            Assert.That (worstPosition, Is.LessThan (keyTolerance > 0 ? 0.002f : 0.001f), "骨の位置（ルートから見た）");
             Assert.That (worstAngle, Is.LessThan (0.5f), "骨の向き");
         }
 
@@ -286,7 +289,7 @@ namespace Lilium
             created_.Add (character);
             new GameObject ("bone").transform.SetParent (character.transform, false);
             Animator animator = character.AddComponent<Animator> ();
-            EditingRig rig = Keep (EditingRig.Create (definition_, animator, name => new GameObject (name)));
+            EditingRig rig = CreateEditingRig (definition_, animator);
             HumanoidBaker baker = Keep (new HumanoidBaker (rig, new EditingRigSolver (rig), (clip, time) => { }));
             Assert.IsNotNull (baker.error);
             Assert.Throws<System.InvalidOperationException> (() => baker.Bake (NewClip (), NewClip ()));
