@@ -1938,6 +1938,27 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 評価指標（S35〜S40）: 「## 評価指標と閾値」の AI の項。
 対象: `Packages/jp.lilium.motioneditor`（Editor/Preview・Editor/Rig・Editor/Humanoid・Tests）。AI 本体と学習済みモデルの連携は対象外（別パッケージかサンプル）。
 
+#### S42: 手の形を窓なしで打つ（10-10 ユーザー指示）
+
+窓なしの口（S38）で指を打てなかった（全身 IK の点に指は無い）。窓の PoseBank の Humanoid の姿勢を貼るのと同じ手順を、窓なしの口に出す。
+- `PoseSession.WriteMuscles (muscles)`: muscle の値を今の姿勢に重ね（`PreviewStage.ApplyMusclesAsControls`）、動いた骨の FK の値だけを今のフレームのキーにする。
+  `PreviewStage.ReadMuscles` は今の姿勢を Humanoid に直した muscle の値。`PoseBank.TryGetMuscle`・`IsFingerMuscle` で名前と手を引く。
+- 操作口 `writeHand`（`preset`・`hand`・`muscles`）・`readHand`、Unity CLI `motion_write_hand`・`motion_read_hand`。
+- 指を muscle で書くのは、関節 1 つが -1〜1 の値 1 つで、キャラの骨の向きによらず、焼いても丸められないため。プリセット（PoseBank）も muscle の値。
+
+決めたこと（10-10）:
+1. プリセットは PoseBank のフォルダの名前（大文字小文字を問わない）かパス。片手だけのプリセットは反対の手へ写す。
+2. 個別の値はプリセットの後に当てる。左右を省いた名前は選んだ手へ。指でない muscle は受け付けない（体は全身 IK の点で書く）。
+3. 全身 IK のキャラで姿勢を打つと指もそのときの値でキーになるので、手の形は体のキーの後に打つ（スキル `author-motion` に書いた）。
+
+機能（受け入れ条件）:
+- 選んだ手の指がプリセット・個別の値になる（≤0.02）。選ばなかった手・プリセットに無い指・ほかのフレームは変わらない
+- 焼いたクリップの指の muscle が打った値（≤0.02）
+- 無い手・無いプリセット・指でない muscle・値が無いは理由を返し、何も打たない
+
+評価指標（S35〜S40）: 「## 評価指標と閾値」の AI の項。
+対象: `Packages/jp.lilium.motioneditor`（Editor/Preview・Editor/Rig・Editor/Pipeline・Tests）と `.claude/skills/author-motion`。
+
 ## スプリント計画（1スプリント = 1機能）
 
 | # | 機能 | ゴール | 完了基準 |
@@ -1989,6 +2010,7 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 | S39 | 画像の書き出し（10-10 追加） | 指定フレームを 4 方向から PNG にできる | S39 の受け入れ条件 |
 | S40 | 外で作った動きを Override として取り込む（10-10 追加） | 生成した Humanoid のクリップを元を壊さず重ねられる | S40 の受け入れ条件 |
 | S41 | 動画からモーションを作る（10-10 追加） | モーキャプのサービスで作った FBX を S40 の口で取り込む | S41 の説明 |
+| S42 | 手の形を窓なしで打つ（10-10 追加） | プリセットと指ごとの muscle で手の形をキーにできる | S42 の受け入れ条件 |
 
 ## 評価指標と閾値
 - 共通: コンパイルエラー0 / エディタ上の例外0 / **Console 警告 0**（Rigging は拘束が invalid だと警告を出す）/ テスト失敗0。
@@ -2233,6 +2255,7 @@ S25a-1 の不具合（09-30 報告「大きくずれる」）:
 - [ ] S37 モーションの検査: 実装済み・テスト通過（10-10）。`MotionLint`（足の滑り・床・muscle の範囲・跳ね・キーの間の回転・左右差。JSON）、窓の Lint のパネル（`LintOverlay`。Check・Copy・行でフレームへ）。跳ねの式に「1 フレームだけ外れる」を足した。足首の点 1 つだけの固定ではつま先が沈むことが分かった（足は 3 点で固定する）。テスト 7 件追加。6.0 でモーションエディタのテスト 378 件すべて通過。残り: 6.6（extrival）での確認・窓のパネルの確認
 - [ ] S38 外部からの操作口: 実装済み・テスト通過（10-10）。`MotionEditorCommands`（JSON の要求 → 応答。open・describe・readPose・writePose・lint・bake・save・close・並べた要求・`-executeMethod`）、`PoseSession.Bake` / `Save`、Unity CLI のコマンド（`motion_*`。`LiliumMotionEditor.Pipeline.Editor`。Pipeline があるときだけ）。検査の muscle は基準姿勢で範囲外の分を除く。テスト 3 件追加。6.0 でモーションエディタのテスト 381 件すべて通過。CLI からデモのキャラで一通り動くのを確かめた。残り: 画面なしの Unity（`-nographics`）での確認・6.6（extrival）での確認
 - [ ] S17 段のマスク: 実装済み・テスト通過（10-10）。`ChannelMask` のアセットとインスペクタ、Override の段に付けて合成・キーの書き込み・つかむのを絞る。任意のプロパティを Override で重ねる（表示・Properties パネル・焼き・統合）。`AvatarMask` の読み書き。既定の組（Body / Upper Body / Hands / Face）を同梱し Stacker の組でも使える。テスト 12 件追加。6.0 でモーションエディタのテスト 398 件すべて通過。窓で Mask 欄・マスク外のハンドルが薄くなること・インスペクタを確認（撮影）。残り: 実キャラでの確認・Stacker のマスクの組の窓での確認・6.6（extrival）での確認
+- [ ] S42 手の形を窓なしで打つ: 実装済み・テスト通過（10-10）。`PoseSession.WriteMuscles`・`PreviewStage.ReadMuscles`・`PoseBank.TryGetMuscle` / `IsFingerMuscle`、操作口の `writeHand` / `readHand`・Unity CLI の `motion_write_hand` / `motion_read_hand`、スキル `author-motion` の「手の形（指）」。テスト 1 件追加。6.0 でモーションエディタのテスト 400 件すべて通過。残り: 6.6（extrival）での確認
 - [ ] S41 動画からモーションを作る: 起票のみ（10-10）。モーキャプのサービスで FBX にして S40 で取り込む方針に変えた。ユーザーのアカウントと動画待ち
 - [ ] S39 画像の書き出し: 実装済み・テスト通過（10-10）。`PoseCapture`（4 方向。正面・右・上は平行投影）、操作口の `capture`・Unity CLI の `motion_capture`、`PoseSession` の描く世界のコンストラクタを public に。歩きを撮って、振り出す足と腕の 2 か所を直した。テスト 2 件追加。6.0 でモーションエディタのテスト 383 件すべて通過。残り: 6.6（extrival）での確認
 - [ ] S40 外で作った動きを Override として取り込む: 実装済み・テスト通過（10-10）。`PoseSession.ImportOverride`（HumanoidImport → 足を床に付ける（滑っている区間だけ・その脚だけ解く）→ 元との差分 → 間引き）、操作口の `importOverride`・Unity CLI の `motion_import_override`。`OverrideMerge.ReduceKeys` のずれの積み重ねを直した（統合も直る）。テスト 3 件追加。6.0 でモーションエディタのテスト 386 件すべて通過。残り: `lockFeet` の調整（S41 の動画で）・6.6（extrival）での確認

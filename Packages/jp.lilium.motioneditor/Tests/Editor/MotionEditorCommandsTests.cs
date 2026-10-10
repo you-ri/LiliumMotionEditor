@@ -209,6 +209,79 @@ namespace Lilium
             AssertFailed (MotionEditorCommands.Run ("{\"command\":\"lint\",\"start\":10,\"end\":5}"), "逆の範囲");
         }
 
+        [System.Serializable]
+        sealed class HandResponse
+        {
+            public bool success;
+            public string error;
+            public MotionEditorHand result;
+        }
+
+        static float MuscleValue (MotionEditorHand hand, string name)
+        {
+            MotionEditorMuscle muscle = hand.muscles.FirstOrDefault (m => m.name == name);
+            Assert.IsNotNull (muscle, name);
+            return muscle.value;
+        }
+
+        [Test]
+        public void WriteHand_AppliesPresetAndMuscles_ToTheChosenHandOnly ()
+        {
+            // 指のあるキャラと、左手だけの握りのプリセット（右手には反対の手の値を写す）
+            GameObject temp = new GameObject ("Hands");
+            created_.Add (temp);
+            Animator display = TestSkeleton.CreateHumanoidWithFingers (created_);
+            display.transform.SetParent (temp.transform, false);
+            AssetDatabase.CreateAsset (display.avatar, kFolder + "/Hands.asset");
+            created_.Remove (display.avatar);
+            string prefab = kFolder + "/Hands.prefab";
+            PrefabUtility.SaveAsPrefabAsset (temp, prefab);
+            AnimationClip fist = new AnimationClip { frameRate = 60 };
+            foreach (string attribute in new[] { "LeftHand.Index.1 Stretched", "LeftHand.Index.2 Stretched", "LeftHand.Index.3 Stretched" }) {
+                AnimationUtility.SetEditorCurve (fist, EditorCurveBinding.FloatCurve ("", typeof (Animator), attribute), AnimationCurve.Constant (0, 0, -1));
+            }
+            string presetPath = kFolder + "/Fist.pose.anim";
+            AssetDatabase.CreateAsset (fist, presetPath);
+
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/Hands.rig.anim", create = true }).success);
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+            foreach (int frame in new[] { 0, 30 }) {
+                Assert.IsTrue (Run<PoseResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, frame, 0) }).success);
+            }
+            HandResponse before = Run<HandResponse> (new MotionEditorRequest { command = "readHand", frame = 30 });
+            Assert.IsTrue (before.success, before.error);
+            Assert.AreEqual (40, before.result.muscles.Count, "両手の指の muscle");
+
+            MotionEditorRequest write = new MotionEditorRequest { command = "writeHand", frame = 30, preset = presetPath, hand = "Right" };
+            write.muscles.Add (new MotionEditorMuscle { name = "Index 3 Stretched", value = 0.2f });
+            HandResponse written = Run<HandResponse> (write);
+            Assert.IsTrue (written.success, written.error);
+            Assert.AreEqual (-1, MuscleValue (written.result, "Right Index 1 Stretched"), 0.02f, "左手のプリセットを右手へ");
+            Assert.AreEqual (-1, MuscleValue (written.result, "Right Index 2 Stretched"), 0.02f);
+            Assert.AreEqual (0.2f, MuscleValue (written.result, "Right Index 3 Stretched"), 0.02f, "個別の値はプリセットの後に当てる");
+            Assert.AreEqual (MuscleValue (before.result, "Left Index 1 Stretched"), MuscleValue (written.result, "Left Index 1 Stretched"), 0.02f, "選ばなかった手は変えない");
+            Assert.AreEqual (MuscleValue (before.result, "Right Middle 1 Stretched"), MuscleValue (written.result, "Right Middle 1 Stretched"), 0.02f, "プリセットに無い指は変えない");
+            HandResponse first = Run<HandResponse> (new MotionEditorRequest { command = "readHand", frame = 0 });
+            Assert.AreEqual (MuscleValue (before.result, "Right Index 1 Stretched"), MuscleValue (first.result, "Right Index 1 Stretched"), 0.02f, "ほかのフレームは変えない");
+
+            // 焼いたクリップに手の形が入る
+            BakeResponse baked = Run<BakeResponse> (new MotionEditorRequest { command = "bake" });
+            Assert.IsTrue (baked.success, baked.error);
+            AnimationCurve index = AnimationUtility.GetEditorCurve (AssetDatabase.LoadAssetAtPath<AnimationClip> (baked.result.path),
+                EditorCurveBinding.FloatCurve ("", typeof (Animator), "RightHand.Index.1 Stretched"));
+            Assert.IsNotNull (index);
+            Assert.AreEqual (-1, index.Evaluate (0.5f), 0.02f);
+
+            // 誤りは理由を返し、何も打たない
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            int keys = AnimationUtility.GetCurveBindings (clip).Sum (b => AnimationUtility.GetEditorCurve (clip, b).length);
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15,\"preset\":\"" + presetPath + "\",\"hand\":\"Tail\"}"), "無い手");
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15,\"preset\":\"NoSuchPreset\"}"), "無いプリセット");
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15,\"muscles\":[{\"name\":\"Left Arm Down-Up\",\"value\":0}]}"), "指でない muscle");
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15}"), "手の形が無い");
+            Assert.AreEqual (keys, AnimationUtility.GetCurveBindings (clip).Sum (b => AnimationUtility.GetEditorCurve (clip, b).length), "誤った要求では打たない");
+        }
+
         [Test]
         public void RunBatch_RunsInOrder_AndCloses ()
         {

@@ -1135,6 +1135,13 @@ namespace Lilium
             return PoseBank.ApplyMuscles (editingRig, editingRigSolver, humanoidWriter_, humanoidPose_, muscles);
         }
 
+        /// <summary>今の姿勢の muscle の値（Humanoid に直したもの。HumanTrait.MuscleName の番号の順）。直せなければ null</summary>
+        public float[] ReadMuscles ()
+        {
+            if (!ApplyHumanoidPose ()) return null;
+            return (float[])humanoidPose_.muscles.Clone ();
+        }
+
         public void BlendHumanoidClip(AnimationClip clip, float time, float weight)
         {
             if (clip == null || weight <= 0 || !canPreviewHumanoid) return;

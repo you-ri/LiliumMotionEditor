@@ -184,29 +184,46 @@ namespace Lilium
         /// </summary>
         public static Dictionary<int, float> ReadMuscles (AnimationClip pose)
         {
+            Dictionary<int, float> result = new Dictionary<int, float> ();
+            foreach (KeyValuePair<EditorCurveBinding, float> pair in Read (pose, b => b.path.Length == 0 && b.type == typeof (Animator))) {
+                if (TryGetMuscle (pair.Key.propertyName, out int index)) result[index] = pair.Value;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// muscle の名前から番号を引く。MuscleName の書き方（"Left Index 1 Stretched"）とクリップの指の書き方（"LeftHand.Index.1 Stretched"）のどちらでもよい
+        /// </summary>
+        public static bool TryGetMuscle (string name, out int index)
+        {
             if (muscleByAttribute_ == null) {
                 muscleByAttribute_ = new Dictionary<string, int> ();
                 string[] names = HumanTrait.MuscleName;
                 string[] fingers = { "Thumb", "Index", "Middle", "Ring", "Little" };
                 for (int i = 0; i < names.Length; i++) {
-                    string name = names[i];
-                    muscleByAttribute_[name] = i;
+                    string muscle = names[i];
+                    muscleByAttribute_[muscle] = i;
                     foreach (string side in new[] { "Left", "Right" }) {
                         foreach (string finger in fingers) {
                             string prefix = side + " " + finger + " ";
-                            if (!name.StartsWith (prefix)) continue;
-                            string rest = name.Substring (prefix.Length);
+                            if (!muscle.StartsWith (prefix)) continue;
+                            string rest = muscle.Substring (prefix.Length);
                             // "1 Stretched" → ".1 Stretched"、"Spread" → ".Spread"
                             muscleByAttribute_[side + "Hand." + finger + "." + rest] = i;
                         }
                     }
                 }
             }
-            Dictionary<int, float> result = new Dictionary<int, float> ();
-            foreach (KeyValuePair<EditorCurveBinding, float> pair in Read (pose, b => b.path.Length == 0 && b.type == typeof (Animator))) {
-                if (muscleByAttribute_.TryGetValue (pair.Key.propertyName, out int index)) result[index] = pair.Value;
-            }
-            return result;
+            index = -1;
+            return name != null && muscleByAttribute_.TryGetValue (name, out index);
+        }
+
+        /// <summary>指の muscle なら、どちらの手か（右手なら true）。指でなければ false を返す</summary>
+        public static bool IsFingerMuscle (int index, out bool right)
+        {
+            int bone = HumanTrait.BoneFromMuscle (index);
+            right = bone >= (int)HumanBodyBones.RightThumbProximal && bone <= (int)HumanBodyBones.RightLittleDistal;
+            return right || (bone >= (int)HumanBodyBones.LeftThumbProximal && bone <= (int)HumanBodyBones.LeftLittleDistal);
         }
 
         /// <summary>

@@ -75,6 +75,24 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "importOverride", source = source, overrideClip = override_clip, create = create, mode = mode, lockFeet = lock_feet });
         }
 
+        [CliCommand ("motion_write_hand", "Key a hand shape at a frame: apply a preset (PoseBank Humanoid pose such as Hand_Fist) to the fingers, then individual finger muscles. Write the body poses first (they key the fingers too). Returns the finger muscles read back", Tags = new[] { kTag })]
+        public static JToken WriteHand (
+            [CliArg ("frame", "Frame to key")] int frame = 0,
+            [CliArg ("preset", "Preset name (motion_read_hand lists them) or pose asset path. Empty applies only the muscles")] string preset = null,
+            [CliArg ("hand", "Left, Right or Both")] string hand = "Both",
+            [CliArg ("muscles", "Finger muscles JSON: [{\"name\":\"Index 1 Stretched\",\"value\":0.5}]. Names without Left/Right apply to the chosen hand")] string muscles = null)
+        {
+            JObject request = new JObject { ["command"] = "writeHand", ["frame"] = frame, ["preset"] = preset ?? "", ["hand"] = hand ?? "Both" };
+            if (!string.IsNullOrEmpty (muscles)) request["muscles"] = JArray.Parse (muscles);
+            return Run (request.ToString ());
+        }
+
+        [CliCommand ("motion_read_hand", "Read the finger muscles of both hands at a frame (-1 curled .. 1 stretched; Spread opens the fingers) and the available hand presets", Tags = new[] { kTag })]
+        public static JToken ReadHand ([CliArg ("frame", "Frame to read")] int frame = 0)
+        {
+            return Run (new MotionEditorRequest { command = "readHand", frame = frame });
+        }
+
         [CliCommand ("motion_save", "Save the edited clips", Tags = new[] { kTag })]
         public static JToken Save ()
         {

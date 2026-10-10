@@ -23,6 +23,9 @@ namespace Lilium
     /// - save: 書き換えたクリップを保存する
     /// - capture: frame の姿勢を 4 方向（正面・右・上・右斜め前）から PNG に書き出す（folder・size。画面のある Unity だけ）
     /// - importOverride: 外で作った Humanoid のクリップ（source）を、元に重ねる Override（overrideClip）として取り込む（mode・lockFeet）
+    /// - writeHand: frame に手の形を打つ。preset（PoseBank の Humanoid の姿勢の名前かパス）を hand（Left / Right / Both）の指に当て、
+    ///   muscles（指の muscle の名前と値）で個別に上書きする。応答は readHand と同じ
+    /// - readHand: frame の両手の指の muscle の値と、使えるプリセットの名前
     /// - close: 閉じる
     ///
     /// 呼び方（パッケージには入れない。Unity でメソッドを呼ぶ手段なら何でもよい）:
@@ -201,8 +204,14 @@ namespace Lilium
                 case "importOverride":
                     return ImportOverride (request, out error);
 
+                case "writeHand":
+                    return WriteHand (request, out error);
+
+                case "readHand":
+                    return ReadHand (request.frame, out error);
+
                 default:
-                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, lint, bake, save, capture, importOverride, close");
+                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, lint, bake, save, capture, importOverride, writeHand, readHand, close");
                     return null;
             }
         }
@@ -259,6 +268,129 @@ namespace Lilium
             session_.overrideWriteIndex = index;
             AssetDatabase.SaveAssetIfDirty (destination);
             return JsonUtility.ToJson (result);
+        }
+
+        /// <summary>
+        /// 手の形を打つ（S42）。プリセットの指の値を選んだ手へ当て（その手の値が無ければ反対の手の値を写す）、muscles で個別に上書きする。
+        /// muscles の名前は左右を付けた名前（"Left Index 1 Stretched" / "LeftHand.Index.1 Stretched"）か、左右を省いた名前
+        /// （"Index 1 Stretched" / "Index.1 Stretched"。選んだ手に当てる）。指でない muscle は受け付けない
+        /// </summary>
+        static string WriteHand (MotionEditorRequest request, out string error)
+        {
+            error = null;
+            bool left, right;
+            if (!ParseHand (request.hand, out left, out right)) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_HAND", request.hand);
+                return null;
+            }
+            Dictionary<int, float> muscles = new Dictionary<int, float> ();
+            if (!string.IsNullOrEmpty (request.preset)) {
+                AnimationClip preset = FindPreset (request.preset.Trim ());
+                if (preset == null || !PoseBank.IsHumanoidPose (preset)) {
+                    error = Tr ("MOTION_EDITOR_COMMANDS_NO_PRESET", request.preset, string.Join (", ", PresetNames ()));
+                    return null;
+                }
+                // 指の値を手ごとに並べ直す（片手だけのプリセットは反対の手にも使う）
+                Dictionary<string, float>[] byHand = { new Dictionary<string, float> (), new Dictionary<string, float> () };
+                foreach (KeyValuePair<int, float> pair in PoseBank.ReadMuscles (preset)) {
+                    bool isRight;
+                    if (!PoseBank.IsFingerMuscle (pair.Key, out isRight)) continue;
+                    byHand[isRight ? 1 : 0][WithoutSide (HumanTrait.MuscleName[pair.Key])] = pair.Value;
+                }
+                foreach ((bool use, string side, int self) in new[] { (left, "Left", 0), (right, "Right", 1) }) {
+                    if (!use) continue;
+                    Dictionary<string, float> values = byHand[self].Count > 0 ? byHand[self] : byHand[1 - self];
+                    foreach (KeyValuePair<string, float> pair in values) {
+                        int index;
+                        if (PoseBank.TryGetMuscle (side + " " + pair.Key, out index)) muscles[index] = pair.Value;
+                    }
+                }
+            }
+            foreach (MotionEditorMuscle entry in request.muscles ?? new List<MotionEditorMuscle> ()) {
+                List<int> indices = new List<int> ();
+                int index;
+                bool isRight;
+                if (PoseBank.TryGetMuscle (entry.name, out index)) {
+                    indices.Add (index);
+                }
+                else {
+                    // 左右を省いた名前は選んだ手へ（"Index.1 Stretched" は "Index 1 Stretched" と同じ）
+                    string name = entry.name != null ? entry.name.Replace ('.', ' ') : "";
+                    if (left && PoseBank.TryGetMuscle ("Left " + name, out index)) indices.Add (index);
+                    if (right && PoseBank.TryGetMuscle ("Right " + name, out index)) indices.Add (index);
+                }
+                if (indices.Count == 0 || indices.Any (i => !PoseBank.IsFingerMuscle (i, out isRight))) {
+                    error = Tr ("MOTION_EDITOR_COMMANDS_NOT_FINGER_MUSCLE", entry.name);
+                    return null;
+                }
+                foreach (int i in indices) muscles[i] = entry.value;
+            }
+            if (muscles.Count == 0) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_HAND_VALUES");
+                return null;
+            }
+            session_.Evaluate (request.frame);
+            error = session_.WriteMuscles (muscles, "Write Hand");
+            return error == null ? ReadHand (request.frame, out error) : null;
+        }
+
+        static string ReadHand (int frame, out string error)
+        {
+            error = null;
+            session_.Evaluate (frame);
+            float[] muscles = session_.stage.ReadMuscles ();
+            // 表示モデルへ当てた分を戻す（当てたままだと、次に読む・撮るまで表示モデルが Humanoid で丸めた姿勢になる）
+            session_.Evaluate (frame);
+            if (muscles == null) {
+                error = Tr ("PREVIEW_WINDOW_POSE_BANK_DISPLAY_NOT_HUMANOID");
+                return null;
+            }
+            MotionEditorHand hand = new MotionEditorHand { frame = frame, presets = PresetNames () };
+            for (int i = 0; i < muscles.Length; i++) {
+                bool isRight;
+                if (PoseBank.IsFingerMuscle (i, out isRight)) hand.muscles.Add (new MotionEditorMuscle { name = HumanTrait.MuscleName[i], value = muscles[i] });
+            }
+            return JsonUtility.ToJson (hand);
+        }
+
+        static bool ParseHand (string hand, out bool left, out bool right)
+        {
+            string value = string.IsNullOrEmpty (hand) ? "Both" : hand.Trim ();
+            bool both = value.Equals ("Both", System.StringComparison.OrdinalIgnoreCase);
+            left = both || value.Equals ("Left", System.StringComparison.OrdinalIgnoreCase);
+            right = both || value.Equals ("Right", System.StringComparison.OrdinalIgnoreCase);
+            return left || right;
+        }
+
+        /// <summary>"Left Index 1 Stretched" → "Index 1 Stretched"</summary>
+        static string WithoutSide (string muscle)
+        {
+            int space = muscle.IndexOf (' ');
+            return space >= 0 ? muscle.Substring (space + 1) : muscle;
+        }
+
+        /// <summary>プリセットを名前（PoseBank の一覧の名前。大文字小文字は問わない）かアセットのパスで引く</summary>
+        static AnimationClip FindPreset (string preset)
+        {
+            if (preset.EndsWith (".anim", System.StringComparison.OrdinalIgnoreCase)) return AssetDatabase.LoadAssetAtPath<AnimationClip> (preset);
+            foreach (string folder in PoseBank.GetFolders (session_.stage.sourcePrefab)) {
+                foreach (PoseBank.Entry entry in PoseBank.List (folder)) {
+                    if (string.Equals (entry.name, preset, System.StringComparison.OrdinalIgnoreCase)) return AssetDatabase.LoadAssetAtPath<AnimationClip> (entry.path);
+                }
+            }
+            return null;
+        }
+
+        /// <summary>このキャラで使える手の形のプリセット（PoseBank の Humanoid の姿勢）の名前</summary>
+        static List<string> PresetNames ()
+        {
+            List<string> names = new List<string> ();
+            foreach (string folder in PoseBank.GetFolders (session_.stage.sourcePrefab)) {
+                foreach (PoseBank.Entry entry in PoseBank.List (folder)) {
+                    if (!names.Contains (entry.name) && PoseBank.IsHumanoidPose (AssetDatabase.LoadAssetAtPath<AnimationClip> (entry.path))) names.Add (entry.name);
+                }
+            }
+            return names;
         }
 
         static string Open (MotionEditorRequest request, out string error)
@@ -436,6 +568,32 @@ namespace Lilium
         public string mode;
         /// <summary>importOverride で足を床に付けるか</summary>
         public bool lockFeet;
+        /// <summary>writeHand のプリセット（PoseBank の姿勢の名前かパス。Hand_Fist など）</summary>
+        public string preset;
+        /// <summary>writeHand で当てる手（Left / Right / Both。省くと Both）</summary>
+        public string hand;
+        /// <summary>writeHand で個別に当てる指の muscle（プリセットの後に当てる）</summary>
+        public List<MotionEditorMuscle> muscles = new List<MotionEditorMuscle> ();
+    }
+
+    /// <summary>muscle の名前と値（writeHand・readHand）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorMuscle
+    {
+        /// <summary>"Left Index 1 Stretched" / "LeftHand.Index.1 Stretched"、writeHand では左右を省いた "Index 1 Stretched" も</summary>
+        public string name;
+        public float value;
+    }
+
+    /// <summary>手の形（readHand・writeHand の応答）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorHand
+    {
+        public int frame;
+        /// <summary>両手の指の muscle の値（HumanTrait.MuscleName の名前）</summary>
+        public List<MotionEditorMuscle> muscles = new List<MotionEditorMuscle> ();
+        /// <summary>このキャラで使えるプリセットの名前（writeHand の preset）</summary>
+        public List<string> presets = new List<string> ();
     }
 
     [System.Serializable]

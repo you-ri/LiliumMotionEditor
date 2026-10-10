@@ -253,6 +253,47 @@ namespace Lilium
         }
 
         /// <summary>
+        /// muscle の値（Humanoid の姿勢の一部。手の形など）を今の姿勢に重ね、その muscle が動かす骨の FK を今のフレームのキーにする
+        /// （窓で PoseBank の Humanoid の姿勢を貼るのと同じ。S42）。ほかの骨・全身 IK の点のキーは変えない。1 回の Undo で戻る。
+        /// 全身 IK のキャラで姿勢を打つ（CommitPose）と指もそのときの値でキーになるので、手の形は姿勢を打った後に打つ
+        /// </summary>
+        /// <returns>打てなかった理由（打てたら null）</returns>
+        public string WriteMuscles (IReadOnlyDictionary<int, float> muscles, string undoName = "Write Muscles")
+        {
+            string problem = GetWriteProblem ();
+            if (problem != null) return problem;
+            if (muscles == null || muscles.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_HUMANOID_VALUES");
+            HashSet<string> moved = stage.ApplyMusclesAsControls (muscles);
+            if (moved == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_APPLY_HUMANOID");
+            if (moved.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_MOVED_BONES");
+
+            // 動いた骨の今の操作値（窓の CapturePose と同じく、全部の対象に書かせて動いた骨の分だけ取る）
+            Dictionary<EditorCurveBinding, float> values = new Dictionary<EditorCurveBinding, float> ();
+            using (CurveWriter capture = CurveWriter.Begin (null, stage.editingRig.root.transform, frame, null)) {
+                foreach (PoseTarget target in targets_) target.WriteKeys (capture);
+                foreach (KeyValuePair<EditorCurveBinding, float> pair in capture.values) {
+                    if (moved.Contains (pair.Key.path)) values[pair.Key] = pair.Value;
+                }
+            }
+
+            Undo.IncrementCurrentGroup ();
+            int group = Undo.GetCurrentGroup ();
+            using (CurveWriter writer = BeginCurves (undoName)) {
+                foreach (KeyValuePair<EditorCurveBinding, float> pair in values) writer.SetTarget (pair.Key, pair.Value);
+            }
+            AnimationClip written = targetClip;
+            if (ClipCycle.Load (written)) {
+                Undo.RecordObject (written, undoName);
+                ClipCycle.Sync (written);
+            }
+            Undo.SetCurrentGroupName (undoName);
+            Undo.CollapseUndoOperations (group);
+            stage.InvalidateClipCurves ();
+            Evaluate (frame);
+            return null;
+        }
+
+        /// <summary>
         /// ゲーム用の Humanoid のクリップを焼いて保存する（窓の Output の段で、段を通さずに焼くときと同じ。S2・S14・S25d）。
         /// 元のクリップと Override を全部重ね、キーの間で前後のキーが Locked の点は全身 IK で解く。焼き先は元のクリップの隣
         /// （HumanoidOutput.GetOutputPath。Override があれば .edited）。焼いた後、今のフレームの姿勢を作り直す
