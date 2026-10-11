@@ -215,11 +215,7 @@ namespace Lilium
         /// </summary>
         public EditRigDefinition rigDefinition
         {
-            get {
-                CharacterSettings settings = characterSettings;
-                if (settings != null && settings.overrideRigDefinition && settings.rigDefinition != null) return settings.rigDefinition;
-                return ProjectSettings.instance.defaultRigDefinition;
-            }
+            get { return RigDefinitionAssets.Resolve (characterSettings); }
         }
 
         /// <summary>

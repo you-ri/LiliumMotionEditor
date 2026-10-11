@@ -211,6 +211,34 @@ namespace Lilium
             definition_.solver = RigSolver.TwoBoneIk;
             Assert.IsEmpty (definition_.GetFullBodyHash (), "2 本骨 IK の定義では、全身 IK の設定は姿勢に効かない");
         }
+
+        // ---- 変更の知らせ ----
+
+        [Test]
+        public void Undo_NotifiesChangedDefinition ()
+        {
+            // 窓は知らせを受けて作り直す（S23・S45b）。Undo で戻したときも OnValidate から知らせが来る
+            int notified = 0;
+            System.Action<EditRigDefinition> onChanged = d => { if (d == definition_) notified++; };
+            EditRigDefinition.changed += onChanged;
+            try {
+                int before = definition_.fullBody.iterations;
+                UnityEditor.Undo.IncrementCurrentGroup ();
+                UnityEditor.SerializedObject serialized = new UnityEditor.SerializedObject (definition_);
+                serialized.FindProperty ("fullBody.iterations").intValue = before + 5;
+                serialized.ApplyModifiedProperties ();
+                UnityEditor.Undo.IncrementCurrentGroup ();
+                int afterEdit = notified;
+
+                UnityEditor.Undo.PerformUndo ();
+
+                Assert.AreEqual (before, definition_.fullBody.iterations, "Undo で戻る");
+                Assert.Greater (notified, afterEdit, "Undo の後に知らせる");
+            }
+            finally {
+                EditRigDefinition.changed -= onChanged;
+            }
+        }
     }
 
 }
