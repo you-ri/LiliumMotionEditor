@@ -35,7 +35,7 @@ namespace Lilium
             /// <summary>焼いたときの Override のファイルの中身のハッシュ（つないだもの）</summary>
             public string overridesHash;
             /// <summary>
-            /// 焼いたときのリグの定義のうち、姿勢を変える設定のハッシュ（全身 IK の設定。S25）。2 本骨 IK の定義・古い対応では空
+            /// 焼いたときのリグの定義のうち、姿勢を変える設定のハッシュ（全身 IK の設定。S25）。古い対応では空
             /// </summary>
             public string definition;
         }

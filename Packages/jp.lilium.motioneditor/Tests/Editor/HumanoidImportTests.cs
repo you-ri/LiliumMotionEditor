@@ -58,8 +58,6 @@ namespace Lilium
             EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (destination);
             Assert.IsNotEmpty (bindings);
             Assert.IsTrue (bindings.All (EditingClip.IsRigBinding), "書くのは編集用リグのカーブだけ");
-            Assert.IsTrue (bindings.Where (b => b.propertyName == IkControl.kIkWeightProperty)
-                .All (b => AnimationUtility.GetEditorCurve (destination, b).Evaluate (0.1f) == 0), "読み込んだ手足は FK");
         }
 
         /// <summary>

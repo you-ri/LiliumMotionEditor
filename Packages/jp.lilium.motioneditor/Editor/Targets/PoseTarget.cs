@@ -35,7 +35,7 @@ namespace Lilium
     }
 
     /// <summary>
-    /// つかむ対象（骨の FK・手足の IK など）。窓・Spinner・Picker・タイムラインはこれだけを見て、
+    /// つかむ対象（骨の FK・全身 IK の点など）。窓・Spinner・Picker・タイムラインはこれだけを見て、
     /// 中身（どのコントローラーで、クリップに何を書くか）は知らない。
     /// 選択は gameObject で持つ（ハンドルが選ぶのも、リロード後に名前で選び直すのもこれ）
     /// </summary>
@@ -73,22 +73,14 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 目標のほかに、肘・膝の向き（Up）を持つか（Spinner が切り替えられる）
-        /// </summary>
-        public virtual bool hasPole
-        {
-            get { return false; }
-        }
-
-        /// <summary>
         /// Spinner で動かせる値
         /// </summary>
-        public abstract TransformChannels GetSpinChannels (bool pole);
+        public abstract TransformChannels GetSpinChannels ();
 
         /// <summary>
         /// Spinner に出す、いま動かすものの名前
         /// </summary>
-        public virtual string GetSpinLabel (bool pole)
+        public virtual string GetSpinLabel ()
         {
             return label;
         }
@@ -97,37 +89,37 @@ namespace Lilium
         /// Spinner の移動。delta は動かすものの親から見た位置の変化（メートル）。
         /// コントロールは保存値（正規化した値）を持つので、Transform を外から直接動かさず、対象に任せる
         /// </summary>
-        public virtual void SpinMove (Vector3 delta, bool pole)
+        public virtual void SpinMove (Vector3 delta)
         {
         }
 
         /// <summary>
         /// Spinner の回転。動かすもののローカル軸まわり（後ろから掛ける）
         /// </summary>
-        public virtual void SpinRotateLocal (Quaternion delta, bool pole)
+        public virtual void SpinRotateLocal (Quaternion delta)
         {
         }
 
         /// <summary>
         /// Spinner の回転。ワールドの軸まわり（前から掛ける）
         /// </summary>
-        public virtual void SpinRotateWorld (Quaternion delta, bool pole)
+        public virtual void SpinRotateWorld (Quaternion delta)
         {
         }
 
         /// <summary>
         /// Spinner のスケール。delta は軸ごとの倍率の変化
         /// </summary>
-        public virtual void SpinScale (Vector3 delta, bool pole)
+        public virtual void SpinScale (Vector3 delta)
         {
         }
 
         /// <summary>
         /// 数値欄（Controller のパネル）に出す値。保存している値そのもので、位置はメートル・回転は値の軸での向き。
-        /// FK は親から見た基準姿勢からの差、IK の目標はルートから見た手足の先、ヒントは曲がる向き（長さ 1）。
+        /// FK は親から見た基準姿勢からの差、全身 IK の点はルートから見た位置。
         /// 出せる値が無ければ false
         /// </summary>
-        public virtual bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)
+        public virtual bool TryGetValues (out Vector3 position, out Quaternion rotation)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
@@ -137,14 +129,14 @@ namespace Lilium
         /// <summary>
         /// 数値欄から値を入れる（channels の分だけ）。動かせない値は無視する。キーは打たない
         /// </summary>
-        public virtual void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
+        public virtual void SetValues (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
         }
 
         /// <summary>
         /// channels の分だけ基準姿勢の値へ戻す。キーは打たない
         /// </summary>
-        public virtual void ResetValues (bool pole, TransformChannels channels)
+        public virtual void ResetValues (TransformChannels channels)
         {
         }
 
@@ -198,14 +190,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// つかんでいるハンドルが替わったとき
-        /// </summary>
-        /// <param name="focused">選ばれている対象（無ければ null）</param>
-        public virtual void OnFocusChange (PoseTarget focused)
-        {
-        }
-
-        /// <summary>
         /// 今の値を、この対象のぶんだけキーとして打つ（打つ先とフレームは writer が持つ）
         /// </summary>
         public abstract void WriteKeys (CurveWriter writer);
@@ -214,7 +198,7 @@ namespace Lilium
         /// Spinner で動かしたぶんだけキーを打つ（ドラッグ中は軽くしたいので、姿勢全体は離したときに WriteKeys で打つ）。
         /// 既定はこの対象のぶん全部
         /// </summary>
-        public virtual void WriteSpinKeys (CurveWriter writer, bool pole, TransformChannels channels)
+        public virtual void WriteSpinKeys (CurveWriter writer, TransformChannels channels)
         {
             WriteKeys (writer);
         }

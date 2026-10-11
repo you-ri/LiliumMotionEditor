@@ -53,7 +53,7 @@ namespace Lilium
                     }
                     break;
                 case EventType.MouseUp:
-                    // 右ボタンを動かさずに離した: つかみを放して、ハンドルの右クリック（固定の付け外し・IK / FK の切り替え）として渡す
+                    // 右ボタンを動かさずに離した: つかみを放して、ハンドルの右クリック（点の固定の付け外し）として渡す
                     if (GUIUtility.hotControl == viewId && IsCameraClick () && ev.button == 1) {
                         GUIUtility.hotControl = 0;
                         EndCameraDrag ();

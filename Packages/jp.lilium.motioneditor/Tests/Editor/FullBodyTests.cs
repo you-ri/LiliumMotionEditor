@@ -33,12 +33,10 @@ namespace Lilium
             public FullBodyRig body;
         }
 
-        /// <param name="fullBody">リグの定義を全身 IK にする</param>
         /// <param name="twistFrames">骨の軸の向きをばらばらにする（体の形は同じで骨の軸だけ違うキャラ）</param>
         /// <param name="toes">つま先の骨を足す（足の点はつま先の骨のあるキャラにだけできる）</param>
-        Setup Create (bool fullBody = true, bool withChest = true, bool twistFrames = false, bool fingers = false, float size = 1, bool toes = false)
+        Setup Create (bool withChest = true, bool twistFrames = false, bool fingers = false, float size = 1, bool toes = false)
         {
-            definition_.solver = fullBody ? RigSolver.FullBodyIk : RigSolver.TwoBoneIk;
             Setup s = new Setup ();
             s.display = CreateCharacter (withChest, size, toes, fingers: fingers, twistFrames: twistFrames);
             s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -81,32 +79,24 @@ namespace Lilium
             s.solver.Solve ();
         }
 
-        // ---- リグの定義のモード ----
+        // ---- 点の割り当て ----
 
         [Test]
-        public void TwoBoneIkDefinition_UsesIkChains_AndHasNoPoints ()
+        public void NoBodyPoints_CreatesNoPointControls ()
         {
-            Setup s = Create (fullBody: false);
+            definition_.bodyPoints.Clear ();
+            Setup s = Create ();
 
-            Assert.AreEqual (4, s.solver.ikCount, "IK の組は今までどおり");
-            Assert.AreEqual (0, s.rig.binding.points.Count, "今の IK の定義では点を並べない");
+            Assert.AreEqual (0, s.rig.binding.points.Count, "点の無い定義では点を並べない");
             Assert.IsNull (s.rig.FindControl (RigPaths.Body (HumanBodyBones.LeftHand)));
             Assert.AreEqual (0, s.body.pointCount);
             Assert.IsNull (s.rig.root.transform.Find (RigPaths.kBody), "Controls/Body を作らない");
         }
 
         [Test]
-        public void FullBodyDefinition_DisablesIkChains_AndCreatesPoints ()
+        public void DefaultDefinition_CreatesPoints ()
         {
-            Setup s = Create (fullBody: true, fingers: true);
-
-            Assert.AreEqual (0, s.solver.ikCount, "IK の組は解かない");
-            foreach (RigBinding.Ik ik in s.rig.binding.ik) {
-                Assert.IsFalse (ik.enabled, ik.chain.name);
-                Assert.AreEqual (RigBinding.kFullBodyIkReason, ik.disabledReason);
-                Assert.IsNull (s.rig.FindControl (ik.path), "IK の組のコントロールを作らない: " + ik.chain.name);
-            }
-            Assert.AreEqual (4, definition_.ikChains.Count, "IK の組の定義は消さない");
+            Setup s = Create (fingers: true);
 
             foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightFoot, HumanBodyBones.LeftLowerArm }) {
                 Transform control = s.rig.FindControl (RigPaths.Body (bone));
@@ -127,7 +117,7 @@ namespace Lilium
         public void Points_FollowBonesWithoutChest ()
         {
             // 必須の骨だけのキャラ（胸・首が無い）でも、ある骨の点だけで組める
-            Setup s = Create (fullBody: true, withChest: false);
+            Setup s = Create (withChest: false);
 
             Assert.IsNull (s.rig.FindControl (RigPaths.Body (HumanBodyBones.Chest)));
             Assert.IsNull (s.rig.FindControl (RigPaths.Body (HumanBodyBones.Neck)));
@@ -138,7 +128,7 @@ namespace Lilium
         [Test]
         public void PointRestValues_AreBonePositions_WithZeroWeights ()
         {
-            Setup s = Create (fullBody: true, size: 1.5f);
+            Setup s = Create (size: 1.5f);
 
             foreach (BodyPointId bone in s.body.pointIds) {
                 Vector3 position;
@@ -385,20 +375,17 @@ namespace Lilium
         }
 
         [Test]
-        public void Targets_FullBodyDefinitionHasPointsAndNoIkTargets ()
+        public void Targets_OnePerPoint ()
         {
             Setup s = Create ();
-            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
-            Assert.IsFalse (targets.Any (t => t.label.StartsWith ("IK ")), "全身 IK の定義では IK の組をつかむ対象が出ない");
-
             List<PoseTarget> points = BodyPointTarget.Create (s.rig, s.body);
             Assert.AreEqual (s.body.pointCount, points.Count);
             Assert.IsTrue (points.All (t => t.gameObject != null && t.anchor != null));
 
-            // 今の IK の定義では点の対象は出ない
-            Setup two = Create (fullBody: false);
-            Assert.AreEqual (0, BodyPointTarget.Create (two.rig, two.body).Count);
-            Assert.AreEqual (4, RigTargets.Create (two.rig, two.solver).Count (t => t.label.StartsWith ("IK ")));
+            // 点の無い定義では点の対象は出ない
+            definition_.bodyPoints.Clear ();
+            Setup none = Create ();
+            Assert.AreEqual (0, BodyPointTarget.Create (none.rig, none.body).Count);
         }
 
         [Test]
@@ -431,7 +418,7 @@ namespace Lilium
 
             Assert.IsFalse (hand.pinned);
             Assert.IsFalse (hand.hasPendingKeys);
-            hand.SetValues (false, TransformChannels.Position, root.InverseTransformPoint (wanted), Quaternion.identity);
+            hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (wanted), Quaternion.identity);
             Assert.IsTrue (hand.positionPinned, "動かすと位置が固定される");
             Assert.IsFalse (hand.rotationPinned, "位置を動かしただけでは向きは固定されない");
             Assert.IsTrue (hand.hasPendingKeys);
@@ -464,13 +451,13 @@ namespace Lilium
             BodyPointTarget elbow = PointTarget (targets, HumanBodyBones.RightLowerArm);
             Transform root = s.rig.root.transform;
 
-            hand.SpinRotateWorld (Quaternion.Euler (0, 30, 0), false);
+            hand.SpinRotateWorld (Quaternion.Euler (0, 30, 0));
             Assert.IsTrue (hand.rotationPinned, "回すと向きが固定される");
             Assert.IsFalse (hand.positionPinned, "回しただけでは位置は固定されない");
             // 位置だけの点は回せない
-            elbow.SpinRotateWorld (Quaternion.Euler (0, 30, 0), false);
+            elbow.SpinRotateWorld (Quaternion.Euler (0, 30, 0));
             Assert.IsFalse (elbow.pinned);
-            Assert.AreEqual (TransformChannels.Position, elbow.GetSpinChannels (false));
+            Assert.AreEqual (TransformChannels.Position, elbow.GetSpinChannels ());
 
             AnimationClip clip = new AnimationClip { frameRate = 60 };
             created_.Add (clip);
@@ -536,7 +523,7 @@ namespace Lilium
             hips.ToggleLock ();
             Assert.IsTrue (hips.locked);
             Vector3 far = bone.position + (bone.position - Bone (s, HumanBodyBones.Hips).position).normalized * 2f;
-            hand.SetValues (false, TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
+            hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
             s.body.CaptureInput ();
             s.body.Solve ();
             Assert.Greater (s.body.GetResidual (HumanBodyBones.LeftHand), 0.5f, "届かない");
@@ -569,7 +556,7 @@ namespace Lilium
 
             // 完全固定の点は、届かない所に置いても合わせ直さない
             hand.ToggleLock ();
-            hand.SetValues (false, TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
+            hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
             s.body.RestoreInput ();
             s.body.Solve ();
             Assert.IsFalse (hand.SyncToBone ());
@@ -606,8 +593,8 @@ namespace Lilium
 
             hand.SetState (BodyPointState.Pin);
             headOffset.SetState (BodyPointState.Pin);
-            hand.ResetValues (false, TransformChannels.All);
-            headOffset.ResetValues (false, TransformChannels.All);
+            hand.ResetValues (TransformChannels.All);
+            headOffset.ResetValues (TransformChannels.All);
             Vector3 handPoint, headPoint;
             Quaternion handRotation, headRotation;
             s.body.TryGetPointWorld (HumanBodyBones.LeftHand, out handPoint, out handRotation);
@@ -687,7 +674,7 @@ namespace Lilium
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftFoot), kPositionTolerance);
             // 動かした点を固定: 置いた場所のまま
             Vector3 wanted = Bone (s, HumanBodyBones.LeftHand).position + new Vector3 (0, 0.1f, 0.05f);
-            hand.SetValues (false, TransformChannels.Position, root.InverseTransformPoint (wanted), Quaternion.identity);
+            hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (wanted), Quaternion.identity);
             Assert.IsFalse (hand.locked);
             hand.SetLocked (true);
             Assert.IsTrue (hand.locked);
@@ -714,7 +701,7 @@ namespace Lilium
             BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
             Vector3 handStart = Bone (s, HumanBodyBones.LeftHand).position;
             Vector3 footPlaced = Bone (s, HumanBodyBones.LeftFoot).position + new Vector3 (0.1f, 0, 0);
-            foot.SetValues (false, TransformChannels.Position, s.rig.root.transform.InverseTransformPoint (footPlaced), Quaternion.identity);
+            foot.SetValues (TransformChannels.Position, s.rig.root.transform.InverseTransformPoint (footPlaced), Quaternion.identity);
             foot.SetState (BodyPointState.Locked);
 
             Vector3 delta = new Vector3 (0.02f, 0.05f, -0.03f);
@@ -936,7 +923,7 @@ namespace Lilium
             BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
             BodyPointTarget palm = targets.OfType<BodyPointTarget> ().Single (p => p.id.name == "LeftPalmIndex");
             hand.SetState (BodyPointState.Pin);
-            hand.SetValues (false, TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (0, 20, 0));
+            hand.SetValues (TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (0, 20, 0));
             elbow.SetState (BodyPointState.Locked);
             foot.SetState (BodyPointState.Pin);
             Vector3 handPosition, elbowPosition, footPosition;
@@ -947,7 +934,7 @@ namespace Lilium
 
             Pose before = new Pose (upperArm.position, upperArm.rotation);
             Quaternion delta = Quaternion.AngleAxis (40, Vector3.forward);
-            fk.SpinRotateWorld (delta, false);
+            fk.SpinRotateWorld (delta);
             Assert.IsTrue (PreviewWindow.CarryPinnedPoints (targets, new Dictionary<Transform, Pose> { { upperArm, before } }));
 
             Vector3 position;
@@ -981,8 +968,8 @@ namespace Lilium
                 { lowerArm, new Pose (lowerArm.position, lowerArm.rotation) },
             };
             Pose lowerBefore = moved[lowerArm];
-            targets.OfType<FkTarget> ().Single (t => t.bone == upperArm).SpinRotateWorld (Quaternion.AngleAxis (30, Vector3.forward), false);
-            targets.OfType<FkTarget> ().Single (t => t.bone == lowerArm).SpinRotateWorld (Quaternion.AngleAxis (45, Vector3.up), false);
+            targets.OfType<FkTarget> ().Single (t => t.bone == upperArm).SpinRotateWorld (Quaternion.AngleAxis (30, Vector3.forward));
+            targets.OfType<FkTarget> ().Single (t => t.bone == lowerArm).SpinRotateWorld (Quaternion.AngleAxis (45, Vector3.up));
             PreviewWindow.CarryPinnedPoints (targets, moved);
 
             Vector3 expected = lowerArm.position + lowerArm.rotation * Quaternion.Inverse (lowerBefore.rotation) * (handPosition - lowerBefore.position);
@@ -1002,8 +989,8 @@ namespace Lilium
             Transform hips = Bone (s, HumanBodyBones.Hips);
             FkTarget arm = targets.OfType<FkTarget> ().Single (t => t.bone == upperArm);
             FkTarget pelvis = targets.OfType<FkTarget> ().Single (t => t.bone == hips);
-            pelvis.SetValues (false, TransformChannels.Position | TransformChannels.Rotation, new Vector3 (0.05f, -0.1f, 0.02f), Quaternion.Euler (10, 0, 5));
-            arm.SetValues (false, TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (20, 30, -10));
+            pelvis.SetValues (TransformChannels.Position | TransformChannels.Rotation, new Vector3 (0.05f, -0.1f, 0.02f), Quaternion.Euler (10, 0, 5));
+            arm.SetValues (TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (20, 30, -10));
             Pose hipsNow = new Pose (hips.position, hips.rotation);
             Pose armNow = new Pose (upperArm.position, upperArm.rotation);
 
@@ -1013,7 +1000,7 @@ namespace Lilium
             Assert.LessOrEqual (Vector3.Distance (upperArm.position, armNow.position), kPositionTolerance, "上腕の位置");
             Assert.Less (Quaternion.Angle (upperArm.rotation, armNow.rotation), kAngleTolerance, "上腕の向き");
 
-            arm.ResetValues (false, TransformChannels.All);
+            arm.ResetValues (TransformChannels.All);
             armNow = new Pose (upperArm.position, upperArm.rotation);
             s.solver.Solve ();
             Assert.Less (Quaternion.Angle (upperArm.rotation, armNow.rotation), kAngleTolerance, "Reset でも同じ");
@@ -1059,7 +1046,7 @@ namespace Lilium
             BodyPointId id = head.id;
             Assert.AreNotEqual (PointTarget (targets, HumanBodyBones.Head).gameObject, head.gameObject, "頭の点とは別のコントロール");
             Assert.AreEqual (RigPaths.BodyDirection (HumanBodyBones.Head), AnimationUtility.CalculateTransformPath (head.gameObject.transform, s.rig.root.transform));
-            Assert.AreEqual (TransformChannels.Position, head.GetSpinChannels (false), "向きの点は回せない");
+            Assert.AreEqual (TransformChannels.Position, head.GetSpinChannels (), "向きの点は回せない");
 
             // Pin にすると、骨の前の点の位置に置かれる
             Transform bone = Bone (s, HumanBodyBones.Head);
@@ -1109,14 +1096,14 @@ namespace Lilium
             // 左手を Locked にして動かし、回す。右手へ反転すると、反転した場所・向きで Locked になる
             Vector3 position;
             Quaternion rotation;
-            left.TryGetValues (false, out position, out rotation);
-            left.SetValues (false, TransformChannels.Position | TransformChannels.Rotation, position + new Vector3 (0.05f, 0.1f, 0.15f), Quaternion.Euler (10, 20, 30));
+            left.TryGetValues (out position, out rotation);
+            left.SetValues (TransformChannels.Position | TransformChannels.Rotation, position + new Vector3 (0.05f, 0.1f, 0.15f), Quaternion.Euler (10, 20, 30));
             left.SetState (BodyPointState.Locked);
             Assert.IsTrue (right.MirrorFrom (left));
             Vector3 leftPosition, rightPosition;
             Quaternion leftRotation, rightRotation;
-            left.TryGetValues (false, out leftPosition, out leftRotation);
-            right.TryGetValues (false, out rightPosition, out rightRotation);
+            left.TryGetValues (out leftPosition, out leftRotation);
+            right.TryGetValues (out rightPosition, out rightRotation);
             Assert.LessOrEqual (Vector3.Distance (mirror (leftPosition), rightPosition), 1e-4f, "場所は左右反転");
             Assert.LessOrEqual (Quaternion.Angle (EditingRigSolver.MirrorRotation (leftRotation, normal), rightRotation), 0.01f, "向きも左右反転");
             Assert.AreEqual (BodyPointState.Locked, right.state);
@@ -1131,11 +1118,11 @@ namespace Lilium
             // 体の中心の点（腰）は自分を反転する
             BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
             Assert.IsNull (MirrorNames.Swap (hips.mirrorKey), "中心の点は相手が自分");
-            hips.TryGetValues (false, out position, out rotation);
+            hips.TryGetValues (out position, out rotation);
             Vector3 moved = position + normal * 0.07f;
-            hips.SetValues (false, TransformChannels.Position, moved, Quaternion.identity);
+            hips.SetValues (TransformChannels.Position, moved, Quaternion.identity);
             Assert.IsTrue (hips.MirrorFrom (hips));
-            hips.TryGetValues (false, out position, out rotation);
+            hips.TryGetValues (out position, out rotation);
             Assert.LessOrEqual (Vector3.Distance (mirror (moved), position), 1e-4f);
             Assert.AreEqual (BodyPointState.Pin, hips.state);
 
@@ -1309,7 +1296,6 @@ namespace Lilium
         {
             // 0F と 20F で左足を Locked（同じ場所）。20F の骨のキーは脚を上げていて、足は点のキーまで届いていない
             // （ほかの点との兼ね合いで届かなかったキー）。キーの間は、20F へ向けてキーの姿勢へなめらかにつながる
-            definition_.solver = RigSolver.FullBodyIk;
             GameObject prefab = new GameObject ("Prefab");
             created_.Add (prefab);
             Animator display = TestSkeleton.CreateHumanoid (created_, true, 1);
@@ -1435,7 +1421,6 @@ namespace Lilium
             EditorCurveBinding rotation = EditorCurveBinding.FloatCurve (RigPaths.Body (HumanBodyBones.LeftHand), typeof (BodyPoint), BodyPoint.kRotationWeightProperty);
             Assert.IsTrue (OverrideApplier.IsSupportedFloat (position));
             Assert.IsTrue (OverrideApplier.IsSupportedFloat (rotation));
-            Assert.IsFalse (IkControl.IsAdditive (BodyPoint.kPositionWeightProperty), "固定の強さは足し合わせでなく置き換え");
 
             // 元が 1 のクリップを、Override の 0 で外せる
             Setup s = Create ();

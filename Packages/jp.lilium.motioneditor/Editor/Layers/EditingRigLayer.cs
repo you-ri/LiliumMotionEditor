@@ -42,7 +42,7 @@ namespace Lilium
             get {
                 EditingRigSolver solver = stage_ != null ? stage_.editingRigSolver : null;
                 if (solver == null) return stage_ != null ? Tr ("EDITING_RIG_LAYER_NO_SOLVER") : "";
-                string text = Tr ("EDITING_RIG_LAYER_SOLVER_COUNTS", solver.fkCount, solver.ikCount);
+                string text = Tr ("EDITING_RIG_LAYER_SOLVER_COUNTS", solver.fkCount);
                 RigProxies proxies = stage_.editingRig.rigProxies;
                 if (proxies != null && proxies.rigs.Count > 0) {
                     text += Tr ("EDITING_RIG_LAYER_RIG_VALUE_COUNTS", proxies.weights.Count, proxies.sources.Count);

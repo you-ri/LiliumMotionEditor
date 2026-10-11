@@ -61,7 +61,7 @@ namespace Lilium
         /// <summary>段の並び。窓と同じ物で、姿勢はこれを上から通して作る</summary>
         public PoseStack stack { get; private set; }
 
-        /// <summary>つかむ対象（FK・IK・全身 IK の点・持ち替えの物）。窓の対象と同じ作り方</summary>
+        /// <summary>つかむ対象（FK・全身 IK の点・持ち替えの物）。窓の対象と同じ作り方</summary>
         public IReadOnlyList<PoseTarget> targets
         {
             get { return targets_; }
@@ -218,8 +218,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今の姿勢（解いた後）を今のフレームのキーにする。全身 IK のキャラは窓で点を離したときと同じく、全身の骨と動かした点を打つ。
-        /// そうでなければ、つかめる物全部の今の値を打つ。1 回の Undo で戻る。打った後、そのフレームの姿勢をクリップから作り直す
+        /// 今の姿勢（解いた後）を今のフレームのキーにする。窓で点を離したときと同じく、全身の骨と動かした点を打つ。
+        /// 全身 IK の点が 1 つも置けなかったキャラでは、つかめる物全部の今の値を打つ。1 回の Undo で戻る。打った後、そのフレームの姿勢をクリップから作り直す
         /// </summary>
         /// <returns>打てなかった理由（打てたら null）</returns>
         public string CommitPose (string undoName = "Key Pose")
@@ -255,7 +255,7 @@ namespace Lilium
         /// <summary>
         /// muscle の値（Humanoid の姿勢の一部。手の形など）を今の姿勢に重ね、その muscle が動かす骨の FK を今のフレームのキーにする
         /// （窓で PoseBank の Humanoid の姿勢を貼るのと同じ。S42）。ほかの骨・全身 IK の点のキーは変えない。1 回の Undo で戻る。
-        /// 全身 IK のキャラで姿勢を打つ（CommitPose）と指もそのときの値でキーになるので、手の形は姿勢を打った後に打つ
+        /// 姿勢を打つ（CommitPose）と指もそのときの値でキーになるので、手の形は姿勢を打った後に打つ
         /// </summary>
         /// <returns>打てなかった理由（打てたら null）</returns>
         public string WriteMuscles (IReadOnlyDictionary<int, float> muscles, string undoName = "Write Muscles")
@@ -395,7 +395,7 @@ namespace Lilium
             string problem = HumanoidImport.GetProblem (source);
             if (problem != null) return problem;
             if (destination == null || destination == clip_ || destination == source) return Tr ("POSE_SESSION_BAD_IMPORT_DESTINATION");
-            if (lockFeet && stage.fullBody == null) return Tr ("POSE_DOCUMENT_NOT_FULL_BODY");
+            if (lockFeet && stage.fullBody == null) return Tr ("POSE_DOCUMENT_NO_POINTS");
 
             EditingRig rig = stage.editingRig;
             Transform root = rig.root.transform;
@@ -429,11 +429,9 @@ namespace Lilium
                     if (useHumanoidBase) stage.SampleHumanoidAsControls (clip_, f / rate);
                     else stage.SampleClip (clip_, f / rate);
                     foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode);
+                    // 数値（点の固定の強さ・Rig の代理の重み）は足し合わせず、Additive でも置き換える
                     foreach (EditorCurveBinding binding in target.Keys) {
-                        if (binding.type == typeof (Transform)) continue;
-                        float current;
-                        if (!AnimationUtility.GetFloatValue (root.gameObject, binding, out current)) current = 0;
-                        stored[binding][f] = OverrideMath.StoreFloat (mode, Lilium.IkControl.IsAdditive (binding.propertyName), current, target[binding][f]);
+                        if (binding.type != typeof (Transform)) stored[binding][f] = target[binding][f];
                     }
                 }
                 HashSet<string> rotationPaths = new HashSet<string> (target.Keys.Where (b => b.propertyName.StartsWith ("m_LocalRotation.")).Select (b => b.path));
@@ -508,7 +506,7 @@ namespace Lilium
 
         /// <summary>
         /// 足の点が低くて止まっている区間を接地とみなし、その区間の最初の場所（床より下なら床の上）に点を留めて全身 IK で解き直す。
-        /// 点ごとに見るので、かかとが先に上がりつま先が残る、のような転がしも残る。target（編集用リグの値）の該当フレームを書き換える。
+        /// 点ごとに見るので、かかとが先に上がりつま先が残る、のような足の動きも残る。target（編集用リグの値）の該当フレームを書き換える。
         /// 解き直したフレームの数を返す
         /// </summary>
         int LockFeet (AnimationClip imported, Dictionary<EditorCurveBinding, float[]> target, int frameCount, float rate)

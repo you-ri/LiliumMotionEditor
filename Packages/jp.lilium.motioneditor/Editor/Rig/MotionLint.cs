@@ -141,34 +141,21 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 床と接地を見る点。全身 IK のキャラは点（骨の上の点。かかと・つま先の先など）で、定義の接地の点（contact）を接地の対象にする。
-        /// そうでなければ骨で、足（足首とつま先の骨）を接地の対象にする
+        /// 床と接地を見る点。全身 IK の点（骨の上の点。かかと・つま先の先など）で、定義の接地の点（contact）を接地の対象にする。
+        /// 点が 1 つも置けなかったキャラ（全身 IK が無い）では床と接地を見ない
         /// </summary>
         static List<(string, System.Func<Vector3>, bool)> CollectPoints (PreviewStage stage)
         {
-            EditingRig rig = stage.editingRig;
-            HashSet<Transform> feet = new HashSet<Transform> ();
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes }) {
-                Transform t = rig.GetEditingBone (bone);
-                if (t != null) feet.Add (t);
-            }
             List<(string, System.Func<Vector3>, bool)> result = new List<(string, System.Func<Vector3>, bool)> ();
             FullBodyRig body = stage.fullBody;
-            if (body != null) {
-                foreach (BodyPointId id in body.pointIds) {
-                    BodyPointId point = id;
-                    result.Add ((id.name, () => {
-                        Vector3 position;
-                        body.TryGetBonePointWorld (point, out position);
-                        return position;
-                    }, body.IsContact (id)));
-                }
-                return result;
-            }
-            foreach (Transform bone in rig.editingBones) {
-                if (bone == null) continue;
-                Transform t = bone;
-                result.Add ((t.name, () => t.position, feet.Contains (t)));
+            if (body == null) return result;
+            foreach (BodyPointId id in body.pointIds) {
+                BodyPointId point = id;
+                result.Add ((id.name, () => {
+                    Vector3 position;
+                    body.TryGetBonePointWorld (point, out position);
+                    return position;
+                }, body.IsContact (id)));
             }
             return result;
         }

@@ -15,7 +15,7 @@ namespace Lilium
     {
         BodyPointTarget contextPoint_;
 
-        /// <summary>今のフレームで、動かした点・固定した点があるか（全身 IK の定義のとき）</summary>
+        /// <summary>今のフレームで、動かした点・固定した点があるか</summary>
         bool hasActivePoints
         {
             get { return stage_ != null && stage_.fullBody != null && stage_.fullBody.hasActivePoint; }
@@ -173,7 +173,7 @@ namespace Lilium
             }
             // 中心は選んだ点の目標（固定していなければ骨の上の点）
             Vector3 pivot = point.isOnBoneOrigin ? bone.position : point.framePosition;
-            fk.SpinRotateWorld (delta, false);
+            fk.SpinRotateWorld (delta);
             if (point.isOnBoneOrigin) point.RotateAround (pivot, delta, false);
             else point.RotateAround (pivot, delta, true);
         }

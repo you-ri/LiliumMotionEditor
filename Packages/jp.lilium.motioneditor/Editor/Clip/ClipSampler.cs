@@ -7,7 +7,7 @@ namespace Lilium
 
     /// <summary>
     /// 編集用クリップを編集用の体へ当てる。Avatar の無い Animator にグラフで流すので、Transform のカーブも
-    /// コンポーネントの数値（IkControl.ikWeight・Rig の代理など）もそのまま当たる。
+    /// コンポーネントの数値（全身 IK の点の固定の強さ・Rig の代理など）もそのまま当たる。
     /// 当たるのはカーブのある値だけで、カーブの無いコントロールは今の値のまま。
     /// カーブの組が変わったら Invalidate で作り直す（Animator の束縛はグラフを作るときに決まる）。
     /// エディタでは Animator.Update がグラフを流さないので、時刻を入れて Evaluate する

@@ -43,31 +43,6 @@ namespace Lilium
             return (string.IsNullOrEmpty (baseName) ? "New Motion" : baseName) + kSuffix;
         }
 
-        static readonly System.Collections.Generic.Dictionary<AnimationClip, int> ikCurveCounts_ = new System.Collections.Generic.Dictionary<AnimationClip, int> ();
-        static bool ikCurveCountsHooked_;
-
-        /// <summary>
-        /// IK の組のカーブ（Controls/IK/...）の数。全身 IK の定義では使われない（S25。消さずに残す）。
-        /// 画面を描くたびに呼ばれるので、クリップごとに覚えておき、カーブが書き換わったら数え直す
-        /// </summary>
-        public static int CountIkCurves (AnimationClip clip)
-        {
-            if (clip == null) return 0;
-            if (!ikCurveCountsHooked_) {
-                ikCurveCountsHooked_ = true;
-                AnimationUtility.onCurveWasModified += (modified, binding, type) => ikCurveCounts_.Remove (modified);
-                Undo.undoRedoPerformed += () => ikCurveCounts_.Clear ();
-            }
-            int count;
-            if (ikCurveCounts_.TryGetValue (clip, out count)) return count;
-            count = 0;
-            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
-                if (binding.path.StartsWith (RigPaths.kIk + "/")) count++;
-            }
-            ikCurveCounts_[clip] = count;
-            return count;
-        }
-
         /// <summary>全身 IK の点 1 つの、状態のキー（フレームの昇順）。値の並びは BodyPoint.kProperties</summary>
         sealed class PointKeys
         {
@@ -108,7 +83,7 @@ namespace Lilium
 
         /// <summary>
         /// 全身 IK の点（Controls/Body/...）の、その時刻の状態（S25）。
-        /// 状態（Pin / Locked）は、次にその点のキーを打つまで引き継ぐ（IK / FK の切り替えと同じ）。キーの間で補間はしない:
+        /// 状態（Pin / Locked）は、次にその点のキーを打つまで引き継ぐ。キーの間で補間はしない:
         /// 値は、その時刻以前でいちばん近いキーの値（最初のキーより前は 0 = Free）。
         /// keyed は、その時刻ちょうどに状態のキーがあるか（あれば、点の位置と向きもそのキーの値を使う。無ければ、その時刻の骨の位置に置く）。
         /// 画面を描くたびに呼ばれるので、クリップごとに覚えておき、カーブが書き換わったら作り直す

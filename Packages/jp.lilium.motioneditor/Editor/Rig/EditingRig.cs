@@ -46,7 +46,7 @@ namespace Lilium
         /// </summary>
         public RigProxies rigProxies { get; private set; }
         /// <summary>
-        /// 表示モデルの体の大きさ。IK の目標を保存するときに割る（割れるよう、人型でない・0 のときは 1）
+        /// 表示モデルの体の大きさ。全身 IK の点を保存するときに割る（割れるよう、人型でない・0 のときは 1）
         /// </summary>
         public float humanScale { get; private set; }
         /// <summary>
@@ -147,7 +147,7 @@ namespace Lilium
 
         /// <summary>
         /// 有効なコントロールだけ GameObject を作る（無効のものはカーブがあっても当たらない。カーブは消さない）。
-        /// 値（FK の差分・IK の目標）は段 4 の解決が入れる。ここでは基準姿勢での初期値（差分なし）にしておく
+        /// 値（FK の差分・全身 IK の点）は段 4 の解決が入れる。ここでは基準姿勢での初期値（差分なし）にしておく
         /// </summary>
         void CreateControls (System.Func<string, GameObject> createGameObject)
         {
@@ -156,12 +156,6 @@ namespace Lilium
 
             foreach (RigBinding.Fk fk in binding.fk) {
                 if (fk.enabled) CreateControl (fk.path, createGameObject);
-            }
-            foreach (RigBinding.Ik ik in binding.ik) {
-                if (!ik.enabled) continue;
-                CreateControl (ik.path, createGameObject).gameObject.AddComponent<IkControl> ();
-                CreateControl (RigPaths.IkTarget (ik.chain.name), createGameObject);
-                CreateControl (RigPaths.IkHint (ik.chain.name), createGameObject);
             }
             foreach (RigBinding.Extra extra in binding.extras) {
                 if (extra.enabled) CreateControl (extra.path, createGameObject);
@@ -238,7 +232,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// パスの途中の GameObject も作る（Controls/IK/LeftArm/Target なら IK と LeftArm も）
+        /// パスの途中の GameObject も作る（Controls/Game/Rig/Arm なら Game と Rig も）
         /// </summary>
         internal Transform CreateControl (string path, System.Func<string, GameObject> createGameObject)
         {

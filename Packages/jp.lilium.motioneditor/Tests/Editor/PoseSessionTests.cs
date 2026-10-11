@@ -390,9 +390,10 @@ namespace Lilium
         }
 
         [Test]
-        public void CommitPose_TwoBoneIk_KeysReproduceThePose ()
+        public void CommitPose_WithoutBodyPoints_KeysReproduceThePose ()
         {
-            definition_.solver = RigSolver.TwoBoneIk;
+            // 全身 IK の点が無いキャラは、つかめる物全部の今の値を打つ
+            definition_.bodyPoints.Clear ();
             PoseSession session = Open (CreatePrefab ());
             Assert.IsNull (session.stage.fullBody);
             AnimationClip clip = NewClip ();

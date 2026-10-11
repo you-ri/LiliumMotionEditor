@@ -10,7 +10,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Picker。骨と手足の IK が骨のつながりの順に並ぶ。クリックで選び、↑↓ / Home / End で移せる。
+    /// Picker。骨と全身 IK の点が骨のつながりの順に並ぶ。クリックで選び、↑↓ / Home / End で移せる。
     /// 表示域でメッシュをクリックしたときの選択（PreviewWindow.SelectByMeshClick）とも一致する
     /// </summary>
     [Icon (Icons.kFolder + "Picker.png")]

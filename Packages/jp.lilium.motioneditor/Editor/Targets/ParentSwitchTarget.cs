@@ -87,23 +87,23 @@ namespace Lilium
             bound_.obj.SetPositionAndRotation (position, rotation);
         }
 
-        public override TransformChannels GetSpinChannels (bool pole)
+        public override TransformChannels GetSpinChannels ()
         {
             return TransformChannels.Position | TransformChannels.Rotation;
         }
 
-        public override void SpinMove (Vector3 delta, bool pole)
+        public override void SpinMove (Vector3 delta)
         {
             // delta は動かすものの親（持ち手ノード）から見た変化
             SetWorld (bound_.obj.position + hold.rotation * delta, bound_.obj.rotation);
         }
 
-        public override void SpinRotateLocal (Quaternion delta, bool pole)
+        public override void SpinRotateLocal (Quaternion delta)
         {
             SetWorld (bound_.obj.position, bound_.obj.rotation * delta);
         }
 
-        public override void SpinRotateWorld (Quaternion delta, bool pole)
+        public override void SpinRotateWorld (Quaternion delta)
         {
             SetWorld (bound_.obj.position, delta * bound_.obj.rotation);
         }
@@ -154,13 +154,13 @@ namespace Lilium
             result.AddRange (bound_.obj.GetComponentsInChildren<Transform> (true));
         }
 
-        public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)
+        public override bool TryGetValues (out Vector3 position, out Quaternion rotation)
         {
             bound_.grip.GetLocalPositionAndRotation (out position, out rotation);
             return true;
         }
 
-        public override void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
+        public override void SetValues (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
             if ((channels & TransformChannels.Position) != 0) bound_.grip.localPosition = position;
             if ((channels & TransformChannels.Rotation) != 0) bound_.grip.localRotation = Quaternion.Normalize (rotation);
@@ -170,7 +170,7 @@ namespace Lilium
         /// 握りを基準（prefab の握りの値＝既定の持ち手で普通に持つ位置）へ戻す。今の親の手に収まる
         /// （右手の置き場は左手の鏡像なので、同じ値で右手にも収まる）。キーは打たない
         /// </summary>
-        public override void ResetValues (bool pole, TransformChannels channels)
+        public override void ResetValues (TransformChannels channels)
         {
             Pose rest;
             if (!TryGetRestGrip (out rest)) return;
@@ -180,7 +180,7 @@ namespace Lilium
 
         public override void ResetPose ()
         {
-            ResetValues (false, TransformChannels.Position | TransformChannels.Rotation);
+            ResetValues (TransformChannels.Position | TransformChannels.Rotation);
         }
 
         /// <summary>prefab（複製元）の握りの local の値</summary>

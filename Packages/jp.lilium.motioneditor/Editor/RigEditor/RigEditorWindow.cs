@@ -489,7 +489,7 @@ namespace Lilium
 
         /// <summary>
         /// 定義の全コントロールを描く。体の中に埋もれても見えるよう、奥行きで隠さない。
-        /// 使えないもの・使われないものは灰色で薄く出す（選べば一覧に理由が出る）
+        /// 使えないものは灰色で薄く出す（選べば一覧に理由が出る）
         /// </summary>
         void DrawControls ()
         {
@@ -502,7 +502,7 @@ namespace Lilium
             Color color = Handles.color;
 
             foreach (RigControlEntry entry in entries_) {
-                Color tint = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, entry.unused ? 0.35f : 0.6f);
+                Color tint = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
                 if (entry.line.Length > 1) {
                     Handles.color = new Color (tint.r, tint.g, tint.b, tint.a * 0.5f);
                     Handles.DrawPolyLine (entry.line);
@@ -514,17 +514,11 @@ namespace Lilium
                     case RigControlKind.Fk:
                         Handles.SphereHandleCap (0, position, Quaternion.identity, size * 0.6f, EventType.Repaint);
                         break;
-                    case RigControlKind.Ik:
-                        Handles.DrawWireDisc (position, facing, size * 1.5f, 2);
-                        break;
                     case RigControlKind.Extra:
                         Handles.CubeHandleCap (0, position, Quaternion.LookRotation (facing), size * 0.6f, EventType.Repaint);
                         break;
                     case RigControlKind.Point:
                         Handles.DrawSolidDisc (position, facing, size * 0.45f);
-                        break;
-                    case RigControlKind.Pivot:
-                        Handles.CubeHandleCap (0, position, Quaternion.LookRotation (facing) * Quaternion.Euler (0, 0, 45), size * 0.35f, EventType.Repaint);
                         break;
                 }
             }
@@ -549,10 +543,8 @@ namespace Lilium
         {
             switch (kind) {
                 case RigControlKind.Fk: return new Color (0.4f, 0.8f, 1f);
-                case RigControlKind.Ik: return new Color (1f, 0.6f, 0.2f);
                 case RigControlKind.Extra: return new Color (0.8f, 0.55f, 1f);
-                case RigControlKind.Point: return new Color (0.35f, 1f, 0.5f);
-                default: return new Color (1f, 0.9f, 0.3f);
+                default: return new Color (0.35f, 1f, 0.5f);
             }
         }
 

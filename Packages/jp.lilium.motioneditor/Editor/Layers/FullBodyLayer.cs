@@ -13,7 +13,7 @@ namespace Lilium
     /// それ以外の再生・フレームの移動では解かず、キーの間は骨の値の補間で動く。
     /// 点の状態（Pin / Locked）は次にその点のキーを打つまで引き継ぐが、場所は引き継がない（そのフレームの骨の位置に置く）。
     ///
-    /// - リグの定義が全身 IK のときだけ並ぶ（EditRigDefinition.solver）。
+    /// - 全身 IK の点が 1 つでも置けたキャラだけに並ぶ（PreviewStage.fullBody）。
     /// - 点の値は Editing Rig の段のクリップにある（保存データから配られた値）。つかむのは点で、間の段を通らずに保存データへ書く。
     /// - 効いている点が無ければ何もしない（素通し）。点のキーが無いクリップは、この段が無いときと同じ姿勢になる。
     /// - 重みは、元の姿勢と解いた姿勢の混ぜ具合（骨のローカルの値）。
@@ -22,12 +22,10 @@ namespace Lilium
     public sealed class FullBodyLayer : PoseLayer
     {
         readonly PreviewStage stage_;
-        readonly IEditClipHost host_;
 
-        public FullBodyLayer (PreviewStage stage, IEditClipHost host = null)
+        public FullBodyLayer (PreviewStage stage)
         {
             stage_ = stage;
-            host_ = host;
         }
 
         FullBodyRig rig
@@ -44,7 +42,7 @@ namespace Lilium
         public override GrabTarget grab { get { return GrabTarget.Values; } }
         public override InverseKind inverse { get { return InverseKind.Approximate; } }
         public override string inverseReason { get { return Tr ("FULL_BODY_LAYER_INVERSE_REASON"); } }
-        public override string unavailableReason { get { return rig == null ? Tr ("FULL_BODY_LAYER_NOT_FULL_BODY") : null; } }
+        public override string unavailableReason { get { return rig == null ? Tr ("FULL_BODY_LAYER_NO_POINTS") : null; } }
 
         protected override string description
         {
@@ -59,13 +57,9 @@ namespace Lilium
                     if (body.GetLocked (bone)) locked++;
                     else active++;
                 }
-                string text = active + locked > 0
+                return active + locked > 0
                     ? Tr ("FULL_BODY_LAYER_POINT_COUNTS", body.pointCount, active, locked)
                     : Tr ("FULL_BODY_LAYER_NO_PINNED_POINTS", body.pointCount);
-                // 今の IK の定義で作ったクリップを全身 IK の定義で開くと、手足が IK で決まらない分だけ姿勢が変わる
-                int ikCurves = host_ != null ? EditingClip.CountIkCurves (host_.clip) : 0;
-                if (ikCurves > 0) text += Tr ("FULL_BODY_LAYER_UNUSED_IK_CURVES", ikCurves);
-                return text;
             }
         }
 

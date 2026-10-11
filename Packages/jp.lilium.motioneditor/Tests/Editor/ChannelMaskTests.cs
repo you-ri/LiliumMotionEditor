@@ -70,7 +70,7 @@ namespace Lilium
 
             Assert.IsTrue (Contains (mask, Rotation (RigPaths.Fk (HumanBodyBones.LeftHand))));
             Assert.IsFalse (Contains (mask, Rotation (RigPaths.Fk (HumanBodyBones.RightHand))), "部位を外した骨");
-            Assert.IsFalse (Contains (mask, Rotation (RigPaths.IkTarget ("RightArm"))), "手の IK は鎖の先の骨の部位");
+            Assert.IsFalse (Contains (mask, Rotation (RigPaths.BodyPoint ("RightPalmIndex"))), "全身 IK の点は点の骨の部位");
             Assert.IsTrue (Contains (mask, Rotation (RigPaths.Fk (HumanBodyBones.RightIndexProximal))), "指は Fingers の部位");
             Assert.IsTrue (Contains (mask, Rotation (RigPaths.Game ("Rig", "Target"))), "部位の無い操作値は含める");
 

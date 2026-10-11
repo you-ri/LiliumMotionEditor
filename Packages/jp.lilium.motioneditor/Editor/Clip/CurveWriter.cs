@@ -25,13 +25,11 @@ namespace Lilium
 
         /// <summary>
         /// 書く前に、Transform の値（狙いの値。パスはルートから）をクリップに入れる値へ直す（Override の差分。S14）。null なら直さない。
-        /// 数値のカーブは storeFloat で直す（無ければそのまま書く）
+        /// 数値のカーブはそのまま書く（Override でも置き換える値なので、差分にしない）
         /// </summary>
         public System.Func<string, Vector3, Vector3> storePosition;
         public System.Func<string, Quaternion, Quaternion> storeRotation;
         public System.Func<string, Vector3, Vector3> storeScale;
-        /// <summary>数値の狙いの値をクリップに入れる値へ直す（足の転がしの角度の差分など）。貼り付けた値（Set）には掛けない</summary>
-        public System.Func<EditorCurveBinding, float, float> storeFloat;
 
         /// <summary>
         /// 今のフレームにキーがある物（パス = 骨・コントローラー 1 つ）のカーブだけ書き、キーの無い物には打たない（キーの自動追加が切のときの操作）。
@@ -226,13 +224,6 @@ namespace Lilium
         /// </summary>
         void ConvertTransforms ()
         {
-            if (storeFloat != null) {
-                List<EditorCurveBinding> floats = new List<EditorCurveBinding> ();
-                foreach (EditorCurveBinding binding in values_.Keys) {
-                    if (binding.type != typeof (Transform) && !raw_.Contains (binding)) floats.Add (binding);
-                }
-                foreach (EditorCurveBinding binding in floats) values_[binding] = storeFloat (binding, values_[binding]);
-            }
             if (storePosition == null && storeRotation == null && storeScale == null) return;
             HashSet<string> paths = new HashSet<string> ();
             foreach (EditorCurveBinding binding in values_.Keys) {

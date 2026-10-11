@@ -16,10 +16,7 @@ namespace Lilium
 
         EditingRig CreateRig ()
         {
-            EditRigDefinition definition = CreateDefinition ();
-            // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
-            definition.solver = RigSolver.TwoBoneIk;
-            return CreateEditingRig (definition, CreateCharacter ());
+            return CreateEditingRig (CreateDefinition (), CreateCharacter ());
         }
 
         static Vector3 RootPosition (EditingRig rig, HumanBodyBones bone)
@@ -115,32 +112,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// IK で動いている左腕を反転すると、右腕も IK になり、手と肘が鏡の位置に来る
-        /// </summary>
-        [Test]
-        public void MirrorIkCopiesTargetHintAndWeight ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            solver.SwitchToIk ("LeftArm");
-            Vector3 position;
-            Quaternion rotation;
-            solver.TryGetIkTargetWorld ("LeftArm", out position, out rotation);
-            solver.SetIkTargetWorld ("LeftArm", position + rig.root.transform.TransformVector (new Vector3 (0.1f, -0.25f, 0.15f)), rotation * Quaternion.Euler (0, 40, 0));
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-
-            Assert.IsTrue (solver.MirrorIk ("LeftArm", "RightArm"));
-            Assert.AreEqual (1, solver.GetIkWeight ("RightArm"), 1e-5f);
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-
-            AssertMirrored (rig, HumanBodyBones.LeftHand, HumanBodyBones.RightHand);
-            AssertMirrored (rig, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm);
-        }
-
-        /// <summary>
         /// 数値欄の値: FK は保存値（位置はメートル）をそのまま出し入れする。行ごとの Reset は基準姿勢の値へ戻す
         /// </summary>
         [Test]
@@ -151,29 +122,31 @@ namespace Lilium
             solver.Capture ();
             List<PoseTarget> targets = RigTargets.Create (rig, solver);
             PoseTarget hips = targets.First (t => t.mirrorKey == "Hips");
-            PoseTarget leftArm = targets.First (t => t.mirrorKey == "LeftArm");
+            PoseTarget leftArm = targets.First (t => t.mirrorKey == "LeftUpperArm");
 
             Quaternion rotation = Quaternion.Euler (10, 20, 30);
-            hips.SetValues (false, TransformChannels.Position | TransformChannels.Rotation, new Vector3 (0, 0.2f, 0), rotation);
+            hips.SetValues (TransformChannels.Position | TransformChannels.Rotation, new Vector3 (0, 0.2f, 0), rotation);
             Vector3 position;
             Quaternion read;
-            Assert.IsTrue (hips.TryGetValues (false, out position, out read));
+            Assert.IsTrue (hips.TryGetValues (out position, out read));
             Assert.That (Vector3.Distance (new Vector3 (0, 0.2f, 0), position), Is.LessThan (1e-5f));
             Assert.That (Quaternion.Angle (rotation, read), Is.LessThan (kAngleTolerance));
 
-            hips.ResetValues (false, TransformChannels.Rotation);
-            hips.TryGetValues (false, out position, out read);
+            hips.ResetValues (TransformChannels.Rotation);
+            hips.TryGetValues (out position, out read);
             Assert.That (Quaternion.Angle (Quaternion.identity, read), Is.LessThan (kAngleTolerance), "回転の行だけ戻る");
             Assert.That (position.y, Is.EqualTo (0.2f).Within (1e-5f), "位置は残る");
 
-            // IK の目標を動かしてから Reset すると、手が基準姿勢の位置へ戻る
-            leftArm.TryGetValues (false, out position, out read);
-            leftArm.SetValues (false, TransformChannels.Position, position + new Vector3 (0, -0.3f, 0), read);
-            leftArm.ResetValues (false, TransformChannels.Position | TransformChannels.Rotation);
-            hips.ResetValues (false, TransformChannels.Position);
+            // 上腕の FK を回してから Reset すると、手が基準姿勢の位置へ戻る
+            hips.ResetValues (TransformChannels.Position);
+            leftArm.SetValues (TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (0, 0, -60));
             rig.ResetBonesToRest ();
             solver.Solve ();
             Vector3 rest = rig.GetRestRootPosition (rig.GetEditingBone (HumanBodyBones.LeftHand));
+            Assert.That (Vector3.Distance (rest, RootPosition (rig, HumanBodyBones.LeftHand)), Is.GreaterThan (0.05f), "前提: 手が動いた");
+            leftArm.ResetValues (TransformChannels.Position | TransformChannels.Rotation);
+            rig.ResetBonesToRest ();
+            solver.Solve ();
             Assert.That (Vector3.Distance (rest, RootPosition (rig, HumanBodyBones.LeftHand)), Is.LessThan (kPositionTolerance), "手が基準姿勢へ");
             foreach (PoseTarget target in targets) target.Dispose ();
         }

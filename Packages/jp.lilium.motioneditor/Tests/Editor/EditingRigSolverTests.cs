@@ -20,8 +20,6 @@ namespace Lilium
         public void SetUp ()
         {
             definition_ = CreateDefinition ();
-            // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
-            definition_.solver = RigSolver.TwoBoneIk;
             Random.InitState (1234);
         }
 
@@ -38,11 +36,6 @@ namespace Lilium
         static Transform Control (EditingRig rig, string path)
         {
             return rig.FindControl (path);
-        }
-
-        static void SetIkWeight (EditingRig rig, string chain, float weight)
-        {
-            Control (rig, RigPaths.IkChain (chain)).GetComponent<IkControl> ().ikWeight = weight;
         }
 
         /// <summary>
@@ -64,7 +57,6 @@ namespace Lilium
             solver.Capture ();
 
             Assert.AreEqual (rig.binding.fk.Count (f => f.enabled), solver.fkCount);
-            Assert.AreEqual (4, solver.ikCount);
             foreach (RigBinding.Fk fk in rig.binding.fk.Where (f => f.enabled)) {
                 Transform control = Control (rig, fk.path);
                 Assert.That (Quaternion.Angle (Quaternion.identity, control.localRotation), Is.LessThan (kAngleTolerance), fk.path);
@@ -85,213 +77,6 @@ namespace Lilium
             solver.Solve ();
 
             AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
-        }
-
-        [Test]
-        public void IkCaptureAndSolveRoundTrip ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            RandomPose (rig);
-            var expected = Snapshot (rig);
-
-            solver.Capture ();
-            foreach (EditRigDefinition.IkChain chain in definition_.ikChains) SetIkWeight (rig, chain.name, 1);
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-
-            AssertSamePose (expected, rig, kPositionTolerance, kAngleTolerance);
-        }
-
-        [Test]
-        public void IkOverridesFkPositionsButNotTwist ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            RandomPose (rig);
-            var expected = Snapshot (rig);
-            solver.Capture ();
-            SetIkWeight (rig, "LeftArm", 1);
-
-            // FK の値を崩しても、IK の組の骨の位置と先端の回転は目標とヒントで戻る（ねじれは FK のまま。IK はねじれを決めない）
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm }) {
-                Control (rig, RigPaths.Fk (bone)).localRotation = Quaternion.Euler (30, 60, 90);
-            }
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-
-            var actual = Snapshot (rig);
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand }) {
-                Transform t = Bone (rig, bone);
-                Assert.That (Vector3.Distance (expected[t].Item1, actual[t].Item1), Is.LessThan (kPositionTolerance), bone + " の位置");
-            }
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            Assert.That (Quaternion.Angle (expected[hand].Item2, actual[hand].Item2), Is.LessThan (kAngleTolerance));
-            Assert.That (Quaternion.Angle (expected[Bone (rig, HumanBodyBones.LeftUpperArm)].Item2, actual[Bone (rig, HumanBodyBones.LeftUpperArm)].Item2),
-                Is.GreaterThan (1), "崩した FK のねじれが残る");
-        }
-
-        [Test]
-        public void IkReachesTargetAndBendsTowardHint ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            SetIkWeight (rig, "LeftArm", 1);
-
-            Transform shoulder = Bone (rig, HumanBodyBones.LeftUpperArm);
-            Transform elbow = Bone (rig, HumanBodyBones.LeftLowerArm);
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            Vector3 goal = shoulder.position + rig.root.transform.TransformDirection (rig.bodyForward) * 0.4f + Vector3.down * 0.1f;
-            Quaternion goalRotation = Quaternion.Euler (10, 20, 30);
-            Assert.IsTrue (solver.SetIkTargetWorld ("LeftArm", goal, goalRotation));
-            Control (rig, RigPaths.IkHint ("LeftArm")).localPosition = Vector3.up;
-
-            solver.Solve ();
-
-            Assert.That (Vector3.Distance (goal, hand.position), Is.LessThan (kPositionTolerance));
-            Assert.That (Quaternion.Angle (goalRotation, hand.rotation), Is.LessThan (kAngleTolerance));
-            // 肘は、肩→手の線に垂直にしたヒントの向きにある
-            Vector3 axis = (hand.position - shoulder.position).normalized;
-            Vector3 bend = elbow.position - shoulder.position;
-            bend -= axis * Vector3.Dot (bend, axis);
-            Vector3 up = rig.root.transform.TransformDirection (Vector3.up);
-            Vector3 expectedBend = (up - axis * Vector3.Dot (up, axis)).normalized;
-            Assert.That (Vector3.Dot (bend.normalized, expectedBend), Is.GreaterThan (0.9999f));
-
-            Vector3 world;
-            Quaternion rotation;
-            Assert.IsTrue (solver.TryGetIkTargetWorld ("LeftArm", out world, out rotation));
-            Assert.That (Vector3.Distance (goal, world), Is.LessThan (kPositionTolerance));
-        }
-
-        [Test]
-        public void UnreachableTargetStretchesTowardIt ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            SetIkWeight (rig, "RightLeg", 1);
-
-            Transform hip = Bone (rig, HumanBodyBones.RightUpperLeg);
-            Transform foot = Bone (rig, HumanBodyBones.RightFoot);
-            float length = Vector3.Distance (hip.position, Bone (rig, HumanBodyBones.RightLowerLeg).position)
-                + Vector3.Distance (Bone (rig, HumanBodyBones.RightLowerLeg).position, foot.position);
-            Vector3 direction = new Vector3 (0.3f, -1, 0.2f).normalized;
-            solver.SetIkTargetWorld ("RightLeg", hip.position + direction * length * 3, Quaternion.identity);
-
-            solver.Solve ();
-
-            Assert.That (Vector3.Distance (hip.position + direction * length, foot.position), Is.LessThan (1e-3f));
-        }
-
-        [Test]
-        public void StraightLimbUsesDefaultHint ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            // 基準姿勢は腕がまっすぐなので、ヒントは既定の向き（肘は後ろ）になる
-            solver.Capture ();
-            Vector3 hint = Control (rig, RigPaths.IkHint ("LeftArm")).localPosition;
-            Assert.That (Vector3.Dot (hint.normalized, -rig.bodyForward), Is.GreaterThan (0.99f));
-            Vector3 legHint = Control (rig, RigPaths.IkHint ("LeftLeg")).localPosition;
-            Assert.That (Vector3.Dot (legHint.normalized, rig.bodyForward), Is.GreaterThan (0.99f));
-
-            // 手を肩へ近づけると、肘は後ろへ曲がる
-            SetIkWeight (rig, "LeftArm", 1);
-            Transform shoulder = Bone (rig, HumanBodyBones.LeftUpperArm);
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            solver.SetIkTargetWorld ("LeftArm", Vector3.Lerp (shoulder.position, hand.position, 0.5f), hand.rotation);
-            solver.Solve ();
-
-            Transform elbow = Bone (rig, HumanBodyBones.LeftLowerArm);
-            Vector3 elbowInRoot = rig.root.transform.InverseTransformPoint (elbow.position) - rig.root.transform.InverseTransformPoint (shoulder.position);
-            Assert.That (Vector3.Dot (elbowInRoot, rig.bodyForward), Is.LessThan (-0.05f));
-        }
-
-        [Test]
-        public void ZeroWeightKeepsFkAndHalfWeightBlends ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            Vector3 fkHand = hand.position;
-            Transform shoulder = Bone (rig, HumanBodyBones.LeftUpperArm);
-            Vector3 goal = Vector3.Lerp (shoulder.position, hand.position, 0.6f) + Vector3.down * 0.2f;
-            solver.SetIkTargetWorld ("LeftArm", goal, hand.rotation);
-
-            SetIkWeight (rig, "LeftArm", 0);
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-            Assert.That (Vector3.Distance (fkHand, hand.position), Is.LessThan (kPositionTolerance));
-
-            SetIkWeight (rig, "LeftArm", 0.5f);
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-            float toFk = Vector3.Distance (fkHand, hand.position);
-            float toGoal = Vector3.Distance (goal, hand.position);
-            Assert.That (toFk, Is.GreaterThan (0.01f));
-            Assert.That (toGoal, Is.GreaterThan (0.01f));
-        }
-
-        /// <summary>
-        /// FK で動かしている間、IK の目標は手の上に付いてくる（切り替えても姿勢が飛ばない）
-        /// </summary>
-        [Test]
-        public void SyncPutsTheIkGoalOnTheHandWhileFkDrives ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            SetIkWeight (rig, "LeftArm", 0);
-
-            Transform elbow = Bone (rig, HumanBodyBones.LeftLowerArm);
-            elbow.rotation = Quaternion.AngleAxis (40, rig.root.transform.up) * elbow.rotation;
-            solver.CaptureFk (elbow);
-            solver.Solve ();
-            solver.SyncIkFk ();
-
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            Vector3 fkPosition = hand.position;
-            Quaternion fkRotation = hand.rotation;
-
-            SetIkWeight (rig, "LeftArm", 1);
-            solver.Solve ();
-
-            Assert.That (Vector3.Distance (fkPosition, hand.position), Is.LessThan (kPositionTolerance));
-            Assert.That (Quaternion.Angle (fkRotation, hand.rotation), Is.LessThan (kAngleTolerance));
-        }
-
-        /// <summary>
-        /// IK で動かしている間、手足 3 本の FK の値は IK の結果に付いてくる（切り替えても姿勢が飛ばない）
-        /// </summary>
-        [Test]
-        public void SyncPutsTheFkValuesOnTheIkResultWhileIkDrives ()
-        {
-            EditingRig rig = CreateRig ();
-            EditingRigSolver solver = new EditingRigSolver (rig);
-            solver.Capture ();
-            SetIkWeight (rig, "LeftArm", 1);
-
-            Transform shoulder = Bone (rig, HumanBodyBones.LeftUpperArm);
-            Transform hand = Bone (rig, HumanBodyBones.LeftHand);
-            solver.SetIkTargetWorld ("LeftArm", Vector3.Lerp (shoulder.position, hand.position, 0.6f), hand.rotation);
-            solver.Solve ();
-            solver.SyncIkFk ();
-
-            Transform elbow = Bone (rig, HumanBodyBones.LeftLowerArm);
-            Vector3 ikPosition = hand.position;
-            Quaternion ikRotation = hand.rotation;
-            Vector3 ikElbow = elbow.position;
-
-            SetIkWeight (rig, "LeftArm", 0);
-            rig.ResetBonesToRest ();
-            solver.Solve ();
-
-            Assert.That (Vector3.Distance (ikPosition, hand.position), Is.LessThan (kPositionTolerance));
-            Assert.That (Quaternion.Angle (ikRotation, hand.rotation), Is.LessThan (kAngleTolerance));
-            Assert.That (Vector3.Distance (ikElbow, elbow.position), Is.LessThan (kPositionTolerance));
         }
 
         [Test]
@@ -420,20 +205,24 @@ namespace Lilium
         }
 
         [Test]
-        public void IkTargetIsNormalizedByHumanScale ()
+        public void HipsPositionIsNormalizedByHumanScale ()
         {
             EditingRig small = CreateRig (size: 1);
             EditingRig large = CreateRig (size: 2);
             EditingRigSolver solverSmall = new EditingRigSolver (small);
             EditingRigSolver solverLarge = new EditingRigSolver (large);
+            Assert.That (large.humanScale, Is.GreaterThan (small.humanScale * 1.5f));
+
+            // 体の大きさに比例して腰を動かすと、大きさが違っても保存値は同じ
+            foreach (EditingRig rig in new[] { small, large }) {
+                Bone (rig, HumanBodyBones.Hips).position += rig.root.transform.TransformDirection (new Vector3 (0.1f, -0.2f, 0.05f)) * rig.humanScale;
+            }
             solverSmall.Capture ();
             solverLarge.Capture ();
-
-            Assert.That (large.humanScale, Is.GreaterThan (small.humanScale * 1.5f));
-            // 同じ体の形なら、大きさが違っても保存値は同じ
-            Vector3 targetSmall = Control (small, RigPaths.IkTarget ("LeftLeg")).localPosition;
-            Vector3 targetLarge = Control (large, RigPaths.IkTarget ("LeftLeg")).localPosition;
-            Assert.That (Vector3.Distance (targetSmall, targetLarge), Is.LessThan (1e-3f));
+            Vector3 hipsSmall = Control (small, RigPaths.Fk (HumanBodyBones.Hips)).localPosition;
+            Vector3 hipsLarge = Control (large, RigPaths.Fk (HumanBodyBones.Hips)).localPosition;
+            Assert.That (hipsSmall.magnitude, Is.GreaterThan (0.1f), "前提: 腰が動いた");
+            Assert.That (Vector3.Distance (hipsSmall, hipsLarge), Is.LessThan (1e-3f));
         }
 
         [Test]
@@ -450,8 +239,6 @@ namespace Lilium
             // 変えていない骨の値はそのまま
             Assert.That (Quaternion.Angle (Quaternion.identity, Control (rig, RigPaths.Fk (HumanBodyBones.RightLowerArm)).localRotation), Is.LessThan (kAngleTolerance));
 
-            Assert.IsTrue (solver.CaptureIk ("LeftArm"));
-            Assert.IsFalse (solver.CaptureIk ("Tail"));
             Assert.IsFalse (solver.CaptureFk (rig.root.transform));
         }
     }

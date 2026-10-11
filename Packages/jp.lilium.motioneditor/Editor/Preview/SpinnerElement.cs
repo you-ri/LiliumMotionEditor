@@ -41,10 +41,6 @@ namespace Lilium
         const int kZoneCenter = 3;
 
         static readonly string[] kAxisNames = { "X", "Y", "Z" };
-        /// <summary>
-        /// 足の転がしのときの扇形（Reverse Foot）。軸が体の右・上・前なので、X に Roll、Y に Twist、Z に Bank を当てる
-        /// </summary>
-        static readonly string[] kFootNames = { "Roll", "Twist", "Bank" };
 
         readonly PreviewWindow window_;
         readonly Label[] labels_ = new Label[4];
@@ -113,9 +109,8 @@ namespace Lilium
             if (float.IsNaN (contentRect.width) || float.IsNaN (contentRect.height)) return;
 
             float r = (radius + radius * kInnerRatio) * 0.5f;
-            string[] names = ZoneNames ();
             for (int zone = 0; zone < 3; zone++) {
-                PlaceLabel (labels_[zone], Polar (center, r, kZoneStart[zone] + 60), names[zone]);
+                PlaceLabel (labels_[zone], Polar (center, r, kZoneStart[zone] + 60), kAxisNames[zone]);
             }
             PlaceLabel (labels_[kZoneCenter], center, CenterLabel ());
 
@@ -131,17 +126,6 @@ namespace Lilium
                 case PreviewWindow.SpinnerMode.Scale: return Tr ("CONTROLLER_OVERLAY_ALL_AXES");
                 default: return "";
             }
-        }
-
-        /// <summary>足の転がしの間は扇形が Roll / Twist / Bank</summary>
-        bool footMode
-        {
-            get { return window_ != null && window_.spinnerFoot; }
-        }
-
-        string[] ZoneNames ()
-        {
-            return footMode ? kFootNames : kAxisNames;
         }
 
         static void PlaceLabel (Label label, Vector2 position, string text)
@@ -194,7 +178,7 @@ namespace Lilium
         bool IsZoneEnabled (int zone)
         {
             if (window_ == null || !window_.CanSpin (window_.spinnerMode)) return false;
-            if (zone != kZoneCenter) return !footMode || window_.CanEditFootAngles ();
+            if (zone != kZoneCenter) return true;
             return window_.spinnerMode != PreviewWindow.SpinnerMode.Move;
         }
 
@@ -340,11 +324,6 @@ namespace Lilium
         void Apply (float delta)
         {
             Vector3 value = Axis () * delta;
-            if (footMode && dragZone_ != kZoneCenter) {
-                // 扇形の X / Y / Z は Roll / Twist / Bank。角度は (roll, bank, twist) の並び
-                window_.SpinFootAngles (new Vector3 (value.x, value.z, value.y));
-                return;
-            }
             switch (window_.spinnerMode) {
                 case PreviewWindow.SpinnerMode.Move: window_.SpinMove (value); break;
                 case PreviewWindow.SpinnerMode.Scale: window_.SpinScale (value); break;
@@ -354,7 +333,7 @@ namespace Lilium
 
         string Readout ()
         {
-            string axis = dragZone_ == kZoneCenter ? Tr ("CONTROLLER_OVERLAY_ALL_AXES") : ZoneNames ()[dragZone_];
+            string axis = dragZone_ == kZoneCenter ? Tr ("CONTROLLER_OVERLAY_ALL_AXES") : kAxisNames[dragZone_];
             switch (window_.spinnerMode) {
                 case PreviewWindow.SpinnerMode.Move: return string.Format ("{0} {1:+0.0;-0.0} cm", axis, applied_ * 100);
                 case PreviewWindow.SpinnerMode.Scale: return string.Format ("{0} {1:+0.00;-0.00}", axis, applied_);

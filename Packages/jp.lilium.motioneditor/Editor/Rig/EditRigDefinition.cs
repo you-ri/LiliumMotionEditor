@@ -8,21 +8,10 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 手足の位置を保つ仕組みの選び方（S25）。両方を同時には効かせない
-    /// </summary>
-    public enum RigSolver
-    {
-        /// <summary>2 本の骨の IK（腕・脚）と足の転がし。solver の項目が無い古い定義はこれで読む</summary>
-        TwoBoneIk,
-        /// <summary>全身 IK。関節の点（Controls/Body/...）にキーを打って固定し、全身を解く。IK の組は使わない。新しく作る定義の既定（SetDefault）</summary>
-        FullBodyIk,
-    }
-
-    /// <summary>
     /// 編集用リグの定義。キャラの骨名ではなく HumanBodyBones で書くので、1 つの定義を全キャラで使える
     /// （キャラへの割り当ては RigBinding が Avatar から引く）。
     /// 定義は骨の上位集合にする。キャラに無い骨のコントロールは、そのキャラでは無効になるだけで、クリップのカーブは消さない。
-    /// キャラごとの調整（足の転がしの折れ角・支点など）も持てるので、キャラごとにアセットを作って使い分けてよい（S23）
+    /// キャラごとの調整（全身 IK の硬さ・点の場所など）も持てるので、キャラごとにアセットを作って使い分けてよい（S23）
     /// </summary>
     [CreateAssetMenu (menuName = "Lilium Motion Editor/Rig Definition", fileName = "RigDefinition")]
     public sealed class EditRigDefinition : ScriptableObject
@@ -59,43 +48,6 @@ namespace Lilium
             {
                 get { return bone >= 0 && bone < HumanBodyBones.LastBone && HumanTrait.RequiredBone ((int)bone); }
             }
-        }
-
-        /// <summary>
-        /// 2 本の骨の IK（腕・脚）。必須の骨だけで組む（肩は含めない）
-        /// </summary>
-        [System.Serializable]
-        public sealed class IkChain
-        {
-            /// <summary>パスに使う名前（LeftArm など）</summary>
-            public string name;
-            public HumanBodyBones root;
-            public HumanBodyBones mid;
-            public HumanBodyBones tip;
-            /// <summary>
-            /// 手足がまっすぐでヒント（肘・膝の向き）が決まらないときの向き。体の向き（x 右・y 上・z 前）で書く
-            /// </summary>
-            public Vector3 defaultHint;
-            /// <summary>
-            /// 足の転がし（Reverse Foot。踵・母趾球・つま先を支点に roll / bank / twist で回す）を付けるか。脚だけ
-            /// </summary>
-            public bool reverseFoot;
-            /// <summary>つま先の骨（転がしでつま先を床に残す。キャラに無ければ戻しだけ無い）</summary>
-            public HumanBodyBones toes;
-            /// <summary>折れ角（度）。roll がこれを越えると、母趾球まわりをやめてつま先の先まわりに回る</summary>
-            public float toeBreak = ReverseFoot.kDefaultToeBreak;
-            /// <summary>支点の上書き（無い支点は骨と Avatar から見積もる）</summary>
-            public List<FootPivot> pivots = new List<FootPivot> ();
-        }
-
-        /// <summary>
-        /// 足の転がしの支点の位置。足首から見た体の向き（x 右・y 上・z 前）で、メートル
-        /// </summary>
-        [System.Serializable]
-        public sealed class FootPivot
-        {
-            public ReverseFoot.Pivot pivot;
-            public Vector3 position;
         }
 
         /// <summary>
@@ -209,13 +161,10 @@ namespace Lilium
 
         public const float kDefaultStiffness = 0.2f;
 
-        /// <summary>手足の位置を保つ仕組み（2 本骨 IK＋足の転がし か 全身 IK）</summary>
-        public RigSolver solver = RigSolver.FullBodyIk;
         public FullBodySettings fullBody = new FullBodySettings ();
         public List<FkControl> fkControls = new List<FkControl> ();
-        public List<IkChain> ikChains = new List<IkChain> ();
         public List<ExtraControl> extraControls = new List<ExtraControl> ();
-        /// <summary>全身 IK の点（全身 IK の定義のときだけ使う）</summary>
+        /// <summary>全身 IK の点</summary>
         public List<BodyPoint> bodyPoints = new List<BodyPoint> ();
 
         /// <summary>パッケージに入れた既定の定義のアセット。中身は SetDefault と同じ</summary>
@@ -232,7 +181,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 既定の定義を一時の物として作る（保存しない）。Humanoid の骨を全部 FK にし（腰だけ位置も）、両腕・両脚に IK を置く
+        /// 既定の定義を一時の物として作る（保存しない）。Humanoid の骨を全部 FK にし（腰だけ位置も）、全身 IK の既定の点を置く
         /// </summary>
         public static EditRigDefinition CreateDefault ()
         {
@@ -249,7 +198,6 @@ namespace Lilium
         public void SetDefault ()
         {
             fkControls.Clear ();
-            ikChains.Clear ();
             extraControls.Clear ();
             for (int i = 0; i < (int)HumanBodyBones.LastBone; i++) {
                 HumanBodyBones bone = (HumanBodyBones)i;
@@ -260,15 +208,8 @@ namespace Lilium
                 SetFullBodyDefaults (control);
                 fkControls.Add (control);
             }
-            solver = RigSolver.FullBodyIk;
             fullBody = new FullBodySettings ();
             bodyPoints = CreateDefaultBodyPoints (fkControls);
-
-            // 肘は後ろ、膝は前へ曲がる
-            ikChains.Add (Chain ("LeftArm", HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, Vector3.back));
-            ikChains.Add (Chain ("RightArm", HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, Vector3.back));
-            ikChains.Add (Leg ("LeftLeg", HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes));
-            ikChains.Add (Leg ("RightLeg", HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightToes));
         }
 
         /// <summary>
@@ -291,12 +232,10 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 定義のうち、全身 IK の姿勢を変える設定のハッシュ（焼いた版が今の定義で焼いたものかを見分ける）。
-        /// 2 本骨 IK の定義では空（全身 IK の設定は姿勢に効かない）
+        /// 定義のうち、全身 IK の姿勢を変える設定のハッシュ（焼いた版が今の定義で焼いたものかを見分ける）
         /// </summary>
         public string GetFullBodyHash ()
         {
-            if (solver != RigSolver.FullBodyIk) return "";
             System.Text.StringBuilder text = new System.Text.StringBuilder ();
             System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.InvariantCulture;
             FullBodySettings settings = fullBody ?? new FullBodySettings ();
@@ -491,21 +430,8 @@ namespace Lilium
             SetDefault ();
         }
 
-        static IkChain Leg (string name, HumanBodyBones root, HumanBodyBones mid, HumanBodyBones tip, HumanBodyBones toes)
-        {
-            IkChain chain = Chain (name, root, mid, tip, Vector3.forward);
-            chain.reverseFoot = true;
-            chain.toes = toes;
-            return chain;
-        }
-
-        static IkChain Chain (string name, HumanBodyBones root, HumanBodyBones mid, HumanBodyBones tip, Vector3 defaultHint)
-        {
-            return new IkChain { name = name, root = root, mid = mid, tip = tip, defaultHint = defaultHint };
-        }
-
         /// <summary>
-        /// 定義の誤り（名前の重複・パスに使えない名前・IK の骨の重複など）。空なら使える
+        /// 定義の誤り（名前の重複・パスに使えない名前・範囲外の値など）。空なら使える
         /// </summary>
         public List<string> Validate ()
         {
@@ -547,24 +473,6 @@ namespace Lilium
                 }
             }
 
-            foreach (IGrouping<string, IkChain> group in ikChains.GroupBy (c => c.name)) {
-                if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_IK_NAME", group.Key));
-            }
-            foreach (IkChain chain in ikChains) {
-                if (!RigPaths.IsValidName (chain.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_IK_NAME", chain.name));
-                if (chain.root == chain.mid || chain.mid == chain.tip || chain.root == chain.tip) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_IK_BONE", chain.name));
-                if (chain.defaultHint.sqrMagnitude < 1e-6f) errors.Add (Tr ("EDIT_RIG_DEFINITION_ZERO_DEFAULT_HINT", chain.name));
-                if (chain.reverseFoot && (chain.toes < 0 || chain.toes >= HumanBodyBones.LastBone || chain.toes == chain.root || chain.toes == chain.mid || chain.toes == chain.tip)) {
-                    errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_TOE_BONE", chain.name, chain.toes));
-                }
-                if (chain.reverseFoot && chain.toeBreak < 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_NEGATIVE_TOE_BREAK", chain.name));
-                if (chain.reverseFoot && chain.pivots != null) {
-                    foreach (IGrouping<ReverseFoot.Pivot, FootPivot> group in chain.pivots.GroupBy (p => p.pivot)) {
-                        if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_PIVOT", chain.name, group.Key));
-                    }
-                }
-            }
-
             foreach (IGrouping<string, ExtraControl> group in extraControls.GroupBy (c => c.name)) {
                 if (group.Count () > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_DUPLICATE_EXTRA_NAME", group.Key));
             }
@@ -592,12 +500,9 @@ namespace Lilium
     {
         public const string kRoot = "Controls";
         public const string kFk = kRoot + "/FK";
-        public const string kIk = kRoot + "/IK";
         public const string kExtra = kRoot + "/Extra";
         /// <summary>全身 IK の点（S25）。骨の名前は HumanBodyBones</summary>
         public const string kBody = kRoot + "/Body";
-        public const string kTarget = "Target";
-        public const string kHint = "Hint";
 
         public static string Fk (HumanBodyBones bone)
         {
@@ -626,21 +531,6 @@ namespace Lilium
         {
             string name = bone.ToString ();
             return name.StartsWith ("Left") ? "Left" : name.StartsWith ("Right") ? "Right" : "";
-        }
-
-        public static string IkChain (string name)
-        {
-            return kIk + "/" + name;
-        }
-
-        public static string IkTarget (string name)
-        {
-            return IkChain (name) + "/" + kTarget;
-        }
-
-        public static string IkHint (string name)
-        {
-            return IkChain (name) + "/" + kHint;
         }
 
         public static string Extra (string name)

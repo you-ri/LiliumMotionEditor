@@ -22,7 +22,6 @@ namespace Lilium
         public void SetUp ()
         {
             definition_ = CreateDefinition ();
-            definition_.solver = RigSolver.FullBodyIk;
         }
 
         sealed class Setup

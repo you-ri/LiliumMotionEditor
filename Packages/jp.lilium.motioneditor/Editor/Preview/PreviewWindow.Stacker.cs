@@ -179,7 +179,7 @@ namespace Lilium
         {
             switch (name) {
                 case kGroupAll: return targets_;
-                case kGroupBody: return targets_.Where (t => (t is FkTarget && !IsFinger (t)) || t is IkTarget || t is BodyPointTarget);
+                case kGroupBody: return targets_.Where (t => (t is FkTarget && !IsFinger (t)) || t is BodyPointTarget);
                 case kGroupHands: return targets_.Where (t => t is FkTarget && IsFinger (t));
                 case kGroupRig: return targets_.Where (t => t is RigSourceTarget);
             }

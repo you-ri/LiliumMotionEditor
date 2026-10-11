@@ -22,10 +22,6 @@ namespace Lilium
         }
 
         [SerializeField] SpinnerMode spinnerMode_ = SpinnerMode.Rotate;
-        /// <summary>
-        /// IK を選んでいるとき、目標（ゴール）ではなく肘・膝の向き（Up）を動かす
-        /// </summary>
-        [SerializeField] bool spinnerPole_;
 
         public SpinnerMode spinnerMode
         {
@@ -83,16 +79,6 @@ namespace Lilium
             }
         }
 
-        public bool spinnerPole
-        {
-            get { return spinnerPole_; }
-            set {
-                if (spinnerPole_ == value) return;
-                spinnerPole_ = value;
-                RaiseStateChanged ();
-            }
-        }
-
         /// <summary>
         /// Spinner に出す、いま動かすものの名前（何も選んでいなければ null）
         /// </summary>
@@ -100,18 +86,7 @@ namespace Lilium
         {
             get {
                 PoseTarget target = selectedTarget;
-                return target != null ? target.GetSpinLabel (spinnerPole_) : null;
-            }
-        }
-
-        /// <summary>
-        /// 選んでいるものが目標と Up（肘・膝の向き）を持つか（Spinner が切り替えられる）
-        /// </summary>
-        public bool isIKSelected
-        {
-            get {
-                PoseTarget target = selectedTarget;
-                return target != null && target.hasPole;
+                return target != null ? target.GetSpinLabel () : null;
             }
         }
 
@@ -122,7 +97,7 @@ namespace Lilium
         {
             PoseTarget target = selectedTarget;
             if (target == null) return false;
-            return (target.GetSpinChannels (spinnerPole_) & ToChannel (mode)) != 0 && CanEditTarget (target);
+            return (target.GetSpinChannels () & ToChannel (mode)) != 0 && CanEditTarget (target);
         }
 
         static TransformChannels ToChannel (SpinnerMode mode)
@@ -139,7 +114,7 @@ namespace Lilium
         {
             if (!CanSpin (SpinnerMode.Move)) return;
             List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinMove (delta, spinnerPole_);
+            selectedTarget.SpinMove (delta);
             CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Position);
         }
@@ -149,7 +124,7 @@ namespace Lilium
         {
             if (!CanSpin (SpinnerMode.Rotate)) return;
             List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinRotateLocal (Quaternion.Euler (euler), spinnerPole_);
+            selectedTarget.SpinRotateLocal (Quaternion.Euler (euler));
             CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Rotation);
         }
@@ -164,7 +139,7 @@ namespace Lilium
             Quaternion view = camera_.rotation;
             Quaternion rotation = Quaternion.AngleAxis (drag.x, view * Vector3.up) * Quaternion.AngleAxis (drag.y, view * Vector3.right);
             List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinRotateWorld (rotation, spinnerPole_);
+            selectedTarget.SpinRotateWorld (rotation);
             CarryPinnedPoints (before);
             AfterSpin (TransformChannels.Rotation);
         }
@@ -173,7 +148,7 @@ namespace Lilium
         public void SpinScale (Vector3 delta)
         {
             if (!CanSpin (SpinnerMode.Scale)) return;
-            selectedTarget.SpinScale (delta, spinnerPole_);
+            selectedTarget.SpinScale (delta);
             AfterSpin (TransformChannels.Scale);
         }
 
@@ -190,7 +165,7 @@ namespace Lilium
             // 全身 IK の点は、離したとき（EndSpin）に姿勢ごとキーを打つ
             if (CanEditClip () && !(target is BodyPointTarget)) {
                 using (CurveWriter writer = BeginCurves ("Spin " + target.label, true)) {
-                    target.WriteSpinKeys (writer, spinnerPole_, channels);
+                    target.WriteSpinKeys (writer, channels);
                 }
                 keyFrames_ = null;
             }
@@ -233,7 +208,7 @@ namespace Lilium
         public bool TryGetSpinValues (out Vector3 position, out Quaternion rotation)
         {
             PoseTarget target = selectedTarget;
-            if (target != null) return target.TryGetValues (spinnerPole_, out position, out rotation);
+            if (target != null) return target.TryGetValues (out position, out rotation);
             position = Vector3.zero;
             rotation = Quaternion.identity;
             return false;
@@ -257,7 +232,7 @@ namespace Lilium
         public bool CanEditValues (TransformChannels channel)
         {
             PoseTarget target = selectedTarget;
-            return target != null && (target.GetSpinChannels (spinnerPole_) & channel) != 0 && CanEditTarget (target);
+            return target != null && (target.GetSpinChannels () & channel) != 0 && CanEditTarget (target);
         }
 
         /// <summary>
@@ -267,7 +242,7 @@ namespace Lilium
         {
             PoseTarget target = selectedTarget;
             if (target == null || !CanEditValues (channels)) return;
-            ApplyValueEdit (target, "Set " + target.label, () => target.SetValues (spinnerPole_, channels, position, rotation));
+            ApplyValueEdit (target, "Set " + target.label, () => target.SetValues (channels, position, rotation));
         }
 
         /// <summary>
@@ -279,7 +254,7 @@ namespace Lilium
             PoseTarget target = selectedTarget;
             if (target == null || !CanEditValues (channels)) return;
             List<FkBefore> before = CaptureFkBefore (new[] { target });
-            target.SetValues (spinnerPole_, channels, position, rotation);
+            target.SetValues (channels, position, rotation);
             CarryPinnedPoints (before);
             AfterSpin (channels);
         }
@@ -291,78 +266,7 @@ namespace Lilium
         {
             PoseTarget target = selectedTarget;
             if (target == null || !CanEditValues (channels)) return;
-            ApplyValueEdit (target, "Reset " + target.label, () => target.ResetValues (spinnerPole_, channels));
-        }
-
-        // ---- 足の転がし（S22b。Controller パネルの roll / bank / twist の行） ----
-
-        /// <summary>選んでいる物が足の転がしを持つ脚の IK なら、その対象。違えば null</summary>
-        IkTarget selectedFoot
-        {
-            get {
-                IkTarget target = selectedTarget as IkTarget;
-                return target != null && target.hasFootAngles ? target : null;
-            }
-        }
-
-        /// <summary>選んでいる脚の足の転がしの角度（度。x = roll・y = bank・z = twist）。足の転がしを持つ脚でなければ false</summary>
-        public bool TryGetFootAngles (out Vector3 angles)
-        {
-            IkTarget target = selectedFoot;
-            if (target != null) return target.TryGetFootAngles (out angles);
-            angles = Vector3.zero;
-            return false;
-        }
-
-        /// <summary>足の転がしの角度を入れられるか（キーの自動追加が切なら、今のフレームにその脚のキーがあるときだけ）</summary>
-        public bool CanEditFootAngles ()
-        {
-            IkTarget target = selectedFoot;
-            return target != null && CanEditTarget (target);
-        }
-
-        /// <summary>
-        /// 数値欄から足の転がしの角度を入れている途中。姿勢へはすぐ出し、キーはその脚だけ打つ。
-        /// 離したとき・確定したときに EndSpin で姿勢全体のキーを打つ（数値欄の位置・回転と同じ流れ）
-        /// </summary>
-        public void SetFootAnglesLive (Vector3 angles)
-        {
-            IkTarget target = selectedFoot;
-            if (target == null || !CanEditTarget (target) || stage_ == null) return;
-            target.SetFootAngles (angles);
-            SolveAfterManipulate ();
-            if (CanEditClip ()) {
-                using (CurveWriter writer = BeginCurves ("Spin " + target.label, true)) {
-                    target.WriteKeys (writer);
-                }
-                keyFrames_ = null;
-            }
-            RepaintView ();
-        }
-
-        /// <summary>
-        /// Spinner の扇形を足の転がし（Roll / Twist / Bank）にするか（Reverse Foot）。
-        /// 足の転がしを持つ脚の IK の目標を、回転のモードで動かすとき。移動・Pole のときは今までどおり X / Y / Z
-        /// </summary>
-        public bool spinnerFoot
-        {
-            get { return spinnerMode_ == SpinnerMode.Rotate && !spinnerPole_ && selectedFoot != null; }
-        }
-
-        /// <summary>Spinner の扇形のドラッグで、足の転がしの角度を足す（度。x = roll・y = bank・z = twist）</summary>
-        public void SpinFootAngles (Vector3 delta)
-        {
-            Vector3 angles;
-            if (!CanEditFootAngles () || !TryGetFootAngles (out angles)) return;
-            SetFootAnglesLive (angles + delta);
-        }
-
-        /// <summary>足の転がしの角度を 0 に戻して、今のフレームにキーを打つ</summary>
-        public void ResetFootAngles ()
-        {
-            IkTarget target = selectedFoot;
-            if (target == null || !CanEditTarget (target)) return;
-            ApplyValueEdit (target, "Reset Foot " + target.label, () => target.SetFootAngles (Vector3.zero));
+            ApplyValueEdit (target, "Reset " + target.label, () => target.ResetValues (channels));
         }
 
         /// <summary>選んでいる物のうち、今のフレームで値を入れられる物（いくつ選んでいても全部）</summary>
@@ -380,7 +284,6 @@ namespace Lilium
 
         /// <summary>
         /// 選んでいる物すべての値を基準姿勢へ戻して、今のフレームにキーを打つ（Controller パネルの Reset）。
-        /// 行の ↺ と違い、Pole の切替によらず IK は目標・Pole・足の転がしまで戻す。
         /// 全身 IK の点は値だけ戻し、固定の強さ（Free / Pin / Lock）は変えない（変えるのは窓の ResetPose）
         /// </summary>
         public void ResetSelectedValues ()
@@ -401,11 +304,7 @@ namespace Lilium
                         point.ResetValues (TransformChannels.All, pointBones);
                         continue;
                     }
-                    target.ResetValues (false, TransformChannels.All);
-                    IkTarget ik = target as IkTarget;
-                    if (ik == null) continue;
-                    ik.ResetValues (true, TransformChannels.Position);
-                    if (ik.hasFootAngles) ik.SetFootAngles (Vector3.zero);
+                    target.ResetValues (TransformChannels.All);
                 }
             });
         }

@@ -12,13 +12,13 @@ namespace Lilium
         public static readonly Color StandardColor = new Color (0, 1, 0, 0.1f);
         public static int focusControl = 0;
         /// <summary>
-        /// IK の目標を選んでいる間に出すギズモを回転にするか（Controller パネルのモードが Rot。ビューのギズモはモードに従う）。
+        /// 全身 IK の点を選んでいる間に出すギズモを回転にするか（Controller パネルのモードが Rot。ビューのギズモはモードに従う）。
         /// 窓がハンドルを描く前に入れる
         /// </summary>
         public static bool goalRotate = false;
 
         /// <summary>
-        /// ハンドルの右クリック（固定の付け外し・IK / FK の切り替え）を、押したときでなく「動かさずに離したとき」に出す。
+        /// ハンドルの右クリック（点の固定の付け外し）を、押したときでなく「動かさずに離したとき」に出す。
         /// プレビュー窓が立てる: 右ボタンは視点の回転にも使うので、押した時点でハンドルが取ると、ハンドルの上から回し始められない
         /// </summary>
         public static bool contextClickOnRelease;
@@ -47,7 +47,7 @@ namespace Lilium
             return meshHover != null && t != null && t.gameObject == meshHover && GUIUtility.hotControl == 0 ? controlHash : 0;
         }
 
-        /// <param name="gizmo">押したときに移動のギズモを出すか（出さないなら呼んだ側が DoGoalGizmo で出す）</param>
+        /// <param name="gizmo">押したときに移動のギズモを出すか（出さないなら呼んだ側が出す）</param>
         /// <param name="selectColor">選んでいる間、選択の色で塗るか（false なら color のまま。色で状態を表す丸は、呼んだ側が選択の色を決める）</param>
         public static Vector3 DoJointHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, bool gizmo = true, bool selectColor = true)
         {
@@ -67,26 +67,6 @@ namespace Lilium
                 outPosition = PoseHandles.PositionHandle (outPosition, GizmoAxes (rotation));
             }
             return outPosition;
-        }
-
-        /// <summary>
-        /// IK の目標のギズモ。Controller パネルのモードが Rot なら回転（軸は axes）、それ以外なら移動。
-        /// 回したら、回した差を rotation に前から掛けて返す（axes と rotation の向きが違っても同じだけ回る）
-        /// </summary>
-        /// <param name="axes">ギズモの軸の向き（骨の見た目の軸。FK の骨の回転ギズモとそろえる）</param>
-        /// <param name="key">ギズモの持ち主を見分ける値（ハンドルの hash など。回している間の向きを持ち主ごとに覚える）</param>
-        public static bool DoGoalGizmo (int key, ref Vector3 position, ref Quaternion rotation, Quaternion axes)
-        {
-            if (goalRotate) {
-                Quaternion delta;
-                if (!DoRotateGizmo (key, position, axes, out delta)) return false;
-                rotation = delta * rotation;
-                return true;
-            }
-            Vector3 moved = PoseHandles.PositionHandle (position, GizmoAxes (axes));
-            if (moved == position) return false;
-            position = moved;
-            return true;
         }
 
         /// <summary>
@@ -124,65 +104,6 @@ namespace Lilium
             turningKey_ = key;
             turningAxes_ = turned;
             return true;
-        }
-
-        /// <summary>IK が入っている手足のリングの色（赤）</summary>
-        public static readonly Color IkRingOnColor = new Color (0.95f, 0.2f, 0.15f, 0.9f);
-        /// <summary>IK が切れている手足のリングの色（灰）</summary>
-        public static readonly Color IkRingOffColor = new Color (0.65f, 0.65f, 0.65f, 0.7f);
-
-        /// <summary>輪の太さ（半径に対する管の太さ）</summary>
-        const float kRingTubeRatio = 0.12f;
-
-        /// <summary>
-        /// 骨の先に出す 3D のリング。左ボタンで押すとその対象を選んでギズモを出し（値は動かさない）、右ボタンは呼んだ側で IK / FK を切り替える。
-        /// 色は状態（IK の入/切）のためにとってあるので、選んでいる間とマウスが乗っている間は色相を変えず、太く明るくする
-        /// </summary>
-        public static PoseHandles.CapsuleResult DoRingHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, float radius, Color ringColor)
-        {
-            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash || MeshHoverControl (controlHash, t) != 0;
-            Color drawColor = ringColor;
-            float tube = radius * kRingTubeRatio;
-            if (highlight) {
-                drawColor = Color.Lerp (ringColor, Color.white, 0.35f);
-                drawColor.a = 1;
-                tube *= 1.6f;
-            }
-            PoseHandles.CapsuleResult result = PoseHandles.RingHandle (controlHash, position, rotation, radius, tube, drawColor);
-            if (result == PoseHandles.CapsuleResult.Pressed) {
-                EditorHost.current.Select (t.gameObject);
-                focusControl = controlHash;
-            }
-            else if (result == PoseHandles.CapsuleResult.ContextClicked) {
-                EditorHost.current.Select (t.gameObject);
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// 足元のカプセル（Reverse Foot のコントローラー）。押すとその対象を選び、つかんで動かすと delta を返す。
-        /// 色は IK の入/切を表すので、選んでいる間とマウスが乗っている間は色相を変えずに太く明るくする（リングと同じ）
-        /// </summary>
-        public static PoseHandles.CapsuleResult DoCapsuleHandle (int controlHash, Transform t, Vector3 heel, Vector3 toe, Vector3 normal, float radius, Color capsuleColor, out Vector3 delta)
-        {
-            bool highlight = EditorHost.current.IsSelected (t.gameObject) || HandleUtility.nearestControl == controlHash || MeshHoverControl (controlHash, t) != 0;
-            Color drawColor = capsuleColor;
-            float tube = EditorHost.current.handleSize * 0.35f;
-            if (highlight) {
-                drawColor = Color.Lerp (capsuleColor, Color.white, 0.35f);
-                drawColor.a = 1;
-                tube *= 1.6f;
-            }
-            PoseHandles.CapsuleResult result = PoseHandles.CapsuleHandle (controlHash, heel, toe, normal, radius, tube, drawColor, out delta);
-            if (result == PoseHandles.CapsuleResult.Pressed) {
-                if (Event.current.type == EventType.Used) EditorHost.current.RecordUndo (t, "Move " + t.name);
-                EditorHost.current.Select (t.gameObject);
-                focusControl = controlHash;
-            }
-            else if (result == PoseHandles.CapsuleResult.ContextClicked) {
-                EditorHost.current.Select (t.gameObject);
-            }
-            return result;
         }
 
         public static Quaternion DoBoneHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, float length)

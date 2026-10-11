@@ -100,10 +100,10 @@ namespace Lilium
         [Test]
         public void WritesFloatOfComponent ()
         {
-            Write (0, w => w.Float (bone_, typeof (IkControl), IkControl.kIkWeightProperty, 0.25f));
-            Write (10, w => w.Float (bone_, typeof (IkControl), IkControl.kIkWeightProperty, 1));
+            Write (0, w => w.Float (bone_, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, 0.25f));
+            Write (10, w => w.Float (bone_, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, 1));
 
-            AnimationCurve curve = Curve ("Controls/Bone", typeof (IkControl), IkControl.kIkWeightProperty);
+            AnimationCurve curve = Curve ("Controls/Bone", typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
             Assert.IsNotNull (curve);
             Assert.AreEqual (2, curve.length);
             Assert.AreEqual (0.25f, curve.keys[0].value);
@@ -118,9 +118,9 @@ namespace Lilium
         public void KeysGetAutoTangents_SoWideningTheGapDoesNotOvershoot ()
         {
             string path = "Controls/Bone";
-            Write (0, w => w.Float (bone_, typeof (IkControl), IkControl.kIkWeightProperty, 0));
-            Write (2, w => w.Float (bone_, typeof (IkControl), IkControl.kIkWeightProperty, 0.25f));
-            AnimationCurve curve = Curve (path, typeof (IkControl), IkControl.kIkWeightProperty);
+            Write (0, w => w.Float (bone_, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, 0));
+            Write (2, w => w.Float (bone_, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, 0.25f));
+            AnimationCurve curve = Curve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
             for (int i = 0; i < curve.length; i++) {
                 Assert.AreEqual (AnimationUtility.TangentMode.ClampedAuto, AnimationUtility.GetKeyLeftTangentMode (curve, i));
                 Assert.AreEqual (AnimationUtility.TangentMode.ClampedAuto, AnimationUtility.GetKeyRightTangentMode (curve, i));
@@ -128,7 +128,7 @@ namespace Lilium
 
             // 2F のキーを 90F へ動かす
             ClipKeyUtility.MoveKeysAtFrame (clip_, 2, 90, false);
-            curve = Curve (path, typeof (IkControl), IkControl.kIkWeightProperty);
+            curve = Curve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
             for (int f = 0; f <= 90; f += 5) {
                 float value = curve.Evaluate (f / 60f);
                 Assert.GreaterOrEqual (value, -1e-4f, f + "F で下へ行き過ぎない");
@@ -136,9 +136,9 @@ namespace Lilium
             }
 
             // 間に打ったキーを消しても同じ
-            Write (45, w => w.Float (bone_, typeof (IkControl), IkControl.kIkWeightProperty, 0.24f));
+            Write (45, w => w.Float (bone_, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, 0.24f));
             ClipKeyUtility.RemoveKeysAtFrame (clip_, 45);
-            curve = Curve (path, typeof (IkControl), IkControl.kIkWeightProperty);
+            curve = Curve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
             Assert.AreEqual (0.125f, curve.Evaluate (0.75f), 0.01f, "真ん中はおよそ半分");
         }
 
@@ -201,14 +201,14 @@ namespace Lilium
             // Override のように「狙いの値 → クリップに入れる値」を直す口（ここでは x を 2 倍）
             string path = "Controls/Bone";
             EditorCurveBinding x = EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalPosition.x");
-            EditorCurveBinding weight = EditorCurveBinding.FloatCurve (path, typeof (IkControl), IkControl.kIkWeightProperty);
+            EditorCurveBinding weight = EditorCurveBinding.FloatCurve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
             using (CurveWriter writer = CurveWriter.Begin (clip_, root_, 0, "Test")) {
                 writer.storePosition = (p, v) => new Vector3 (v.x * 2, v.y, v.z);
                 writer.SetTarget (x, 1.5f);
                 writer.SetTarget (weight, 0.5f);
             }
             Assert.AreEqual (3, Curve (path, typeof (Transform), "m_LocalPosition.x").keys[0].value, 1e-6f, "SetTarget は変換を通す");
-            Assert.AreEqual (0.5f, Curve (path, typeof (IkControl), IkControl.kIkWeightProperty).keys[0].value, 1e-6f, "数値はそのまま");
+            Assert.AreEqual (0.5f, Curve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty).keys[0].value, 1e-6f, "数値はそのまま");
 
             using (CurveWriter writer = CurveWriter.Begin (clip_, root_, 10, "Test")) {
                 writer.storePosition = (p, v) => new Vector3 (v.x * 2, v.y, v.z);

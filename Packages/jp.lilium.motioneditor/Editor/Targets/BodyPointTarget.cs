@@ -8,7 +8,7 @@ namespace Lilium
     /// <summary>
     /// 全身 IK の点（S25）。状態は丸の色で表す（選び方は丸の外の輪の色で表す）。関節の上の丸をつかんで動かすと、全身が付いてくる。
     ///
-    /// 点の状態は 3 つ。状態は、次にその点のキーを打つまで先のフレームへ引き継ぐ（IK / FK の切り替えと同じ）。
+    /// 点の状態は 3 つ。状態は、次にその点のキーを打つまで先のフレームへ引き継ぐ。
     /// 引き継ぐのは状態だけで、場所は引き継がない（キーの無いフレームでは、そのフレームの骨の位置に置く）:
     /// - Free（青）: 体に付いて動く
     /// - Pin（オレンジ）: 動かした点。動かした場所に留まる。手を離すと、実際の骨の位置へ合わせ直す（体が届かない所へ引いても、点が体の形から離れない）
@@ -247,7 +247,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 全身 IK の点の対象を作る（全身 IK の定義でなければ空）
+        /// 全身 IK の点の対象を作る（全身 IK が無ければ空）
         /// </summary>
         public static List<PoseTarget> Create (EditingRig rig, FullBodyRig body)
         {
@@ -562,7 +562,7 @@ namespace Lilium
             bool rotation = other.rotationPinned && hasRotation_;
             Vector3 position;
             Quaternion delta;
-            other.TryGetValues (false, out position, out delta);
+            other.TryGetValues (out position, out delta);
             if (from == BodyPointState.Free) {
                 SetState (BodyPointState.Free);
                 return true;
@@ -571,9 +571,9 @@ namespace Lilium
             float center;
             rig_.GetMirrorPlane (out normal, out center);
             position -= 2 * (Vector3.Dot (position, normal) - center) * normal;
-            SetValues (false, TransformChannels.Position, position, Quaternion.identity);
+            SetValues (TransformChannels.Position, position, Quaternion.identity);
             if (rotation) {
-                SetValues (false, TransformChannels.Rotation, position, EditingRigSolver.MirrorRotation (delta, normal));
+                SetValues (TransformChannels.Rotation, position, EditingRigSolver.MirrorRotation (delta, normal));
             }
             else if (rotationPinned) {
                 body_.SetRotationWeight (human_, 0);
@@ -587,12 +587,12 @@ namespace Lilium
             return true;
         }
 
-        public override TransformChannels GetSpinChannels (bool pole)
+        public override TransformChannels GetSpinChannels ()
         {
             return hasRotation_ ? TransformChannels.Position | TransformChannels.Rotation : TransformChannels.Position;
         }
 
-        public override void SpinMove (Vector3 delta, bool pole)
+        public override void SpinMove (Vector3 delta)
         {
             Vector3 position;
             Quaternion rotation;
@@ -600,7 +600,7 @@ namespace Lilium
             PinPosition (position + rig_.root.transform.TransformVector (delta));
         }
 
-        public override void SpinRotateLocal (Quaternion delta, bool pole)
+        public override void SpinRotateLocal (Quaternion delta)
         {
             Vector3 position;
             Quaternion rotation;
@@ -608,7 +608,7 @@ namespace Lilium
             PinRotation (rotation * delta);
         }
 
-        public override void SpinRotateWorld (Quaternion delta, bool pole)
+        public override void SpinRotateWorld (Quaternion delta)
         {
             Vector3 position;
             Quaternion rotation;
@@ -820,7 +820,7 @@ namespace Lilium
             writer.Float (control_, typeof (BodyPoint), BodyPoint.kRotationWeightProperty, body_.GetRotationWeight (human_));
         }
 
-        public override void WriteSpinKeys (CurveWriter writer, bool pole, TransformChannels channels)
+        public override void WriteSpinKeys (CurveWriter writer, TransformChannels channels)
         {
             WritePendingKeys (writer);
         }
@@ -846,7 +846,7 @@ namespace Lilium
         /// 数値欄に出す値。位置はルートから見た点の位置（メートル）、向きはルートから見た基準姿勢からの差。
         /// 固定していない間は、今の骨の位置と向き
         /// </summary>
-        public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)
+        public override bool TryGetValues (out Vector3 position, out Quaternion rotation)
         {
             Transform root = rig_.root.transform;
             Vector3 world;
@@ -857,7 +857,7 @@ namespace Lilium
             return true;
         }
 
-        public override void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
+        public override void SetValues (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
             Transform root = rig_.root.transform;
             if ((channels & TransformChannels.Position) != 0) PinPosition (root.TransformPoint (position));
@@ -869,7 +869,7 @@ namespace Lilium
         /// 点の値はルートから見た値なので、基準の値そのものへ戻すと、しゃがんだ姿勢などで体から離れた所へ飛ぶ。
         /// 姿勢全体を基準へ戻すのは ResetPose
         /// </summary>
-        public override void ResetValues (bool pole, TransformChannels channels)
+        public override void ResetValues (TransformChannels channels)
         {
             ResetValues (channels, null);
         }

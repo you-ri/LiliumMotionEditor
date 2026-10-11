@@ -26,8 +26,6 @@ namespace Lilium
         public void SetUp ()
         {
             definition_ = CreateDefinition ();
-            // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
-            definition_.solver = RigSolver.TwoBoneIk;
         }
 
         Animator CreateHumanoid (bool withChest, params string[] extraBones)
@@ -45,17 +43,6 @@ namespace Lilium
         }
 
         [Test]
-        public void DefaultIkChainsUseOnlyRequiredBones ()
-        {
-            Assert.AreEqual (4, definition_.ikChains.Count);
-            foreach (EditRigDefinition.IkChain chain in definition_.ikChains) {
-                foreach (HumanBodyBones bone in new[] { chain.root, chain.mid, chain.tip }) {
-                    Assert.IsTrue (HumanTrait.RequiredBone ((int)bone), chain.name + " の " + bone + " が必須の骨でない");
-                }
-            }
-        }
-
-        [Test]
         public void MinimalSkeletonEnablesRequiredAndDisablesOptional ()
         {
             RigBinding binding = RigBinding.Bind (definition_, CreateHumanoid (false));
@@ -65,9 +52,11 @@ namespace Lilium
                 Assert.AreEqual (kRequired.Contains (fk.control.bone), fk.enabled, fk.control.bone.ToString ());
                 if (!fk.enabled) StringAssert.Contains (fk.control.bone.ToString (), fk.disabledReason);
             }
-            Assert.IsTrue (binding.ik.All (c => c.enabled));
-            Assert.AreEqual ("bone_LeftUpperArm", binding.FindIk ("LeftArm").root.name);
-            Assert.AreEqual ("bone_LeftHand", binding.FindIk ("LeftArm").tip.name);
+            Assert.IsNotEmpty (binding.points);
+            Assert.IsTrue (binding.points.All (c => c.enabled));
+            Assert.AreEqual ("bone_LeftHand", binding.FindPoint (HumanBodyBones.LeftHand).bone.name);
+            // キャラに無い骨の付け根の点は、親の骨へ乗せずに作らない
+            Assert.IsNull (binding.FindPoint (HumanBodyBones.Chest));
         }
 
         [Test]
@@ -88,9 +77,8 @@ namespace Lilium
 
             Assert.AreEqual ("Controls/FK/LeftHand", binding.FindFk (HumanBodyBones.LeftHand).path);
             Assert.AreEqual ("Controls/FK/LeftThumbProximal", binding.FindFk (HumanBodyBones.LeftThumbProximal).path);
-            Assert.AreEqual ("Controls/IK/LeftArm", binding.FindIk ("LeftArm").path);
-            Assert.AreEqual ("Controls/IK/LeftArm/Target", RigPaths.IkTarget ("LeftArm"));
-            Assert.AreEqual ("Controls/IK/LeftArm/Hint", RigPaths.IkHint ("LeftArm"));
+            Assert.AreEqual ("Controls/Body/LeftHand", binding.FindPoint (HumanBodyBones.LeftHand).path);
+            Assert.AreEqual ("Controls/Body/HeadDirection", RigPaths.BodyDirection (HumanBodyBones.Head));
             Assert.IsFalse (binding.controls.Any (c => c.path.Contains ("bone_")));
         }
 
@@ -105,7 +93,7 @@ namespace Lilium
 
             Assert.IsNotEmpty (binding.errors);
             Assert.IsTrue (binding.fk.All (c => !c.enabled));
-            Assert.IsTrue (binding.ik.All (c => !c.enabled));
+            Assert.IsEmpty (binding.points, "点の乗る骨が無い");
             // 無効でもコントロールは残す（共有クリップのカーブを消さない）
             Assert.AreEqual (definition_.fkControls.Count, binding.fk.Count);
         }
@@ -134,34 +122,17 @@ namespace Lilium
         [Test]
         public void InvalidDefinitionIsReported ()
         {
-            definition_.ikChains.Add (new EditRigDefinition.IkChain {
-                name = "LeftArm", root = HumanBodyBones.Spine, mid = HumanBodyBones.Head, tip = HumanBodyBones.Head,
-            });
-            definition_.ikChains.Add (new EditRigDefinition.IkChain {
-                name = "Bad/Name", root = HumanBodyBones.Spine, mid = HumanBodyBones.Chest, tip = HumanBodyBones.Head,
-            });
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "LeftHand", bone = HumanBodyBones.LeftHand });
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Bad/Name", bone = HumanBodyBones.Head });
+            definition_.fkControls.Add (new EditRigDefinition.FkControl { bone = HumanBodyBones.Spine });
             definition_.extraControls.Add (new EditRigDefinition.ExtraControl { name = "Broken", pattern = "(" });
 
             List<string> errors = definition_.Validate ();
 
-            Assert.IsTrue (errors.Any (e => e.Contains ("LeftArm") && e.Contains ("名前が重複")));
+            Assert.IsTrue (errors.Any (e => e.Contains ("LeftHand") && e.Contains ("名前が重複")), string.Join (" / ", errors));
             Assert.IsTrue (errors.Any (e => e.Contains ("Bad/Name")));
-            Assert.IsTrue (errors.Any (e => e.Contains ("骨が重複")));
+            Assert.IsTrue (errors.Any (e => e.Contains ("Spine") && e.Contains ("骨が重複")));
             Assert.IsTrue (errors.Any (e => e.Contains ("Broken")));
-        }
-
-        [Test]
-        public void ChainOutOfOrderIsDisabled ()
-        {
-            definition_.ikChains.Add (new EditRigDefinition.IkChain {
-                name = "Reversed", root = HumanBodyBones.LeftHand, mid = HumanBodyBones.LeftLowerArm, tip = HumanBodyBones.LeftUpperArm,
-            });
-
-            RigBinding binding = RigBinding.Bind (definition_, CreateHumanoid (false));
-
-            RigBinding.Ik reversed = binding.FindIk ("Reversed");
-            Assert.IsFalse (reversed.enabled);
-            StringAssert.Contains ("の下に無い", reversed.disabledReason);
         }
     }
 

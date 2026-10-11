@@ -9,7 +9,7 @@ namespace Lilium
 
     /// <summary>
     /// 選んでいるコントローラーのパネル（S8 + S9。Spinner と数値欄を 1 枚にしたもの。10-05 に Transform から改名）。
-    /// 上から、動かす物の名前と Pole の切替・モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）。
+    /// 上から、モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）。
     /// 数値欄は保存している値（位置はメートル、回転はオイラー角）を出し、入力 1 回で今のフレームにキーを打つ
     /// </summary>
     // 右の列の View の下に置く。下寄せにするとタイムラインに重なる。
@@ -25,23 +25,16 @@ namespace Lilium
             new Color (0.42f, 0.62f, 0.98f),
         };
         static readonly string[] kAxisNames = { "X", "Y", "Z" };
-        // 足の転がしの軸は体の右（roll）・前（bank）・上（twist）なので、X・Z・Y の色にそろえる
-        static readonly string[] kFootNames = { "R", "B", "T" };
-        static readonly Color[] kFootColors = { kAxisColors[0], kAxisColors[2], kAxisColors[1] };
         const float kWidth = 208;
 
         PreviewWindow window_;
         SpinnerElement spinner_;
         Button[] modes_;
-        Toggle pole_;
         Toggle floorClamp_;
         ValueRow[] rows_;
-        /// <summary>足の転がし（roll / bank / twist）の行。足の転がしを持つ脚の IK を選んでいるときだけ出す</summary>
-        ValueRow foot_;
         Button resetAll_;
         Label warning_;
         PoseTarget shownTarget_;
-        bool shownPole_;
         Vector3 shownEuler_;
         /// <summary>数値欄を動かしている途中（まだ姿勢全体のキーを打っていない）</summary>
         bool liveEditing_;
@@ -83,11 +76,6 @@ namespace Lilium
             spaces_[1] = AddSpaceButton (spaces, true, "World", Tr ("CONTROLLER_OVERLAY_SPACE_WORLD_TOOLTIP"));
             root.Add (spaces);
 
-            pole_ = new Toggle ("Pole");
-            ShortcutTooltip.Set (pole_, containerWindow, Tr ("CONTROLLER_OVERLAY_POLE_TOOLTIP"), "Spinner Toggle Pole");
-            pole_.RegisterValueChangedCallback (e => window_.spinnerPole = e.newValue);
-            root.Add (pole_);
-
             floorClamp_ = new Toggle ("Floor Clamp") { tooltip = Tr ("CONTROLLER_OVERLAY_FLOOR_CLAMP_TOOLTIP") };
             floorClamp_.RegisterValueChangedCallback (e => window_.floorClamp = e.newValue);
             root.Add (floorClamp_);
@@ -99,9 +87,6 @@ namespace Lilium
             rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("CONTROLLER_OVERLAY_POSITION_TOOLTIP"));
             rows_[1] = AddRow (root, TransformChannels.Rotation, "Rot", Tr ("CONTROLLER_OVERLAY_ROTATION_TOOLTIP"));
             rows_[2] = AddRow (root, TransformChannels.Scale, "Scale", Tr ("CONTROLLER_OVERLAY_SCALE_TOOLTIP"));
-            foot_ = AddRow (root, TransformChannels.None, "Foot",
-                Tr ("CONTROLLER_OVERLAY_FOOT_TOOLTIP"), kFootNames, kFootColors,
-                Tr ("CONTROLLER_OVERLAY_FOOT_ROLL_TOOLTIP"), Tr ("CONTROLLER_OVERLAY_FOOT_BANK_TOOLTIP"), Tr ("CONTROLLER_OVERLAY_FOOT_TWIST_TOOLTIP"));
 
             // 行の ↺ は 1 行だけ。こちらは選んでいる物すべての値をまとめて戻す
             resetAll_ = new Button (() => window_.ResetSelectedValues ()) { text = "Reset", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_SELECTION_TOOLTIP") };
@@ -208,11 +193,8 @@ namespace Lilium
             return button;
         }
 
-        ValueRow AddRow (VisualElement parent, TransformChannels channel, string title, string tooltip,
-            string[] names = null, Color[] colors = null, params string[] fieldTooltips)
+        ValueRow AddRow (VisualElement parent, TransformChannels channel, string title, string tooltip)
         {
-            names = names ?? kAxisNames;
-            colors = colors ?? kAxisColors;
             ValueRow row = new ValueRow { channel = channel, fields = new FloatField[3] };
             row.root = new VisualElement { tooltip = tooltip };
             row.root.style.flexDirection = FlexDirection.Row;
@@ -228,8 +210,7 @@ namespace Lilium
 
             for (int axis = 0; axis < 3; axis++) {
                 // 途中の値もすぐ姿勢へ出す（ラベルのドラッグ・入力中）。姿勢全体のキーは離したとき・確定したとき
-                FloatField field = new FloatField (names[axis]) { isDelayed = false };
-                if (fieldTooltips != null && axis < fieldTooltips.Length) field.tooltip = fieldTooltips[axis];
+                FloatField field = new FloatField (kAxisNames[axis]) { isDelayed = false };
                 field.style.flexGrow = 1;
                 field.style.flexBasis = 0;
                 field.style.marginLeft = 0;
@@ -237,7 +218,7 @@ namespace Lilium
                 field.labelElement.style.minWidth = 0;
                 field.labelElement.style.width = 9;
                 field.labelElement.style.paddingLeft = 0;
-                field.labelElement.style.color = colors[axis];
+                field.labelElement.style.color = kAxisColors[axis];
                 field.labelElement.style.unityFontStyleAndWeight = FontStyle.Bold;
                 field.RegisterValueChangedCallback (e => OnFieldChanged (row));
                 field.RegisterCallback<PointerUpEvent> (e => EndLiveEdit (), TrickleDown.TrickleDown);
@@ -250,9 +231,7 @@ namespace Lilium
                 row.root.Add (field);
             }
 
-            row.reset = channel == TransformChannels.None
-                ? new Button (() => window_.ResetFootAngles ()) { text = "↺", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_FOOT_TOOLTIP") }
-                : new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_ROW_TOOLTIP") };
+            row.reset = new Button (() => window_.ResetSpinValues (channel)) { text = "↺", tooltip = Tr ("CONTROLLER_OVERLAY_RESET_ROW_TOOLTIP") };
             row.reset.style.width = 18;
             row.reset.style.marginLeft = 1;
             row.reset.style.marginRight = 0;
@@ -270,12 +249,6 @@ namespace Lilium
         void OnFieldChanged (ValueRow row)
         {
             Vector3 value = new Vector3 (row.fields[0].value, row.fields[1].value, row.fields[2].value);
-            if (row == foot_) {
-                if (!liveEditing_) window_.BeginSpin ();
-                liveEditing_ = true;
-                window_.SetFootAnglesLive (value);
-                return;
-            }
             Vector3 position;
             Quaternion rotation;
             window_.TryGetSpinValues (out position, out rotation);
@@ -316,8 +289,6 @@ namespace Lilium
                 bool active = (i == 1) == window_.gizmoWorld;
                 AccentStyle.Set (spaces_[i], active);
             }
-            pole_.style.display = window_.isIKSelected ? DisplayStyle.Flex : DisplayStyle.None;
-            pole_.SetValueWithoutNotify (window_.spinnerPole);
             floorClamp_.style.display = window_.hasBodyPoints ? DisplayStyle.Flex : DisplayStyle.None;
             floorClamp_.SetValueWithoutNotify (window_.floorClamp);
             spinner_.Refresh ();
@@ -341,16 +312,14 @@ namespace Lilium
             bool has = window_.TryGetSpinValues (out position, out rotation);
             PoseTarget target = window_.selectedTarget;
             // 対象が替わったら、角度の寄せ先を今の値にし直す
-            if (target != shownTarget_ || window_.spinnerPole != shownPole_) {
+            if (target != shownTarget_) {
                 shownTarget_ = target;
-                shownPole_ = window_.spinnerPole;
                 shownEuler_ = EulerAngles.Wrap (rotation.eulerAngles);
             }
             Vector3 euler = has ? EulerAngles.Closest (rotation, shownEuler_) : Vector3.zero;
             shownEuler_ = euler;
 
-            // 足の転がしの間は、扇形が動かすのは Foot の行
-            int activeRow = window_.spinnerFoot ? -1 : (int)window_.spinnerMode;
+            int activeRow = (int)window_.spinnerMode;
             for (int r = 0; r < rows_.Length; r++) {
                 ValueRow row = rows_[r];
                 bool editable = has && window_.CanEditValues (row.channel);
@@ -369,28 +338,7 @@ namespace Lilium
                 }
             }
 
-            Vector3 angles;
-            bool foot = window_.TryGetFootAngles (out angles);
-            foot_.root.style.display = foot ? DisplayStyle.Flex : DisplayStyle.None;
-            AccentStyle.Set (foot_.root, window_.spinnerFoot);
-            if (foot) {
-                foot_.root.SetEnabled (window_.CanEditFootAngles ());
-                SetFieldsWithoutNotify (foot_, angles, TransformChannels.Rotation);
-            }
             resetAll_.SetEnabled (window_.CanResetSelectedValues ());
-        }
-
-        /// <summary>
-        /// 行の 3 つの欄に値を出す。入力中の欄は上書きしない
-        /// </summary>
-        static void SetFieldsWithoutNotify (ValueRow row, Vector3 value, TransformChannels rounding)
-        {
-            for (int axis = 0; axis < 3; axis++) {
-                FloatField field = row.fields[axis];
-                VisualElement focused = field.focusController != null ? field.focusController.focusedElement as VisualElement : null;
-                if (focused != null && (focused == field || field.Contains (focused))) continue;
-                field.SetValueWithoutNotify (Round (value[axis], rounding));
-            }
         }
 
         static float Round (float value, TransformChannels channel)

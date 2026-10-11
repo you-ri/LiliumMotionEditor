@@ -111,9 +111,6 @@ namespace Lilium
                 poseStack_.EvaluateUntil (poseStack_.Find (LayerKind.HumanoidAnimation), time);
                 // 表示モデルの骨を編集用の体へ写して、操作値として捉える
                 stage_.editingRig.SyncFromDisplay ();
-                foreach (RigBinding.Ik ik in stage_.editingRig.binding.ik) {
-                    if (ik.enabled) stage_.editingRigSolver.SetIkWeight (ik.chain.name, 0);
-                }
                 stage_.editingRigSolver.Capture ();
                 AddKeyAllCurves ();
                 SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_APPLIED", currentFrame), false);

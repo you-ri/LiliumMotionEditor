@@ -76,17 +76,14 @@ namespace Lilium
         Vector3[] controlRestPositions_ = new Vector3[0];
         Quaternion[] controlRestRotations_ = new Quaternion[0];
         Vector3[] controlRestScales_ = new Vector3[0];
-        Lilium.IkControl[] ikControls_ = new Lilium.IkControl[0];
         /// <summary>全身 IK の点（S25）と、その固定の強さの基準（点ごとに BodyPoint.kValueCount 個ずつ並べる）</summary>
         Lilium.BodyPoint[] bodyPoints_ = new Lilium.BodyPoint[0];
         float[] bodyPointRest_ = new float[0];
-        /// <summary>IK の組の数値の基準（組ごとに IkControl.kValueCount 個ずつ並べる）</summary>
-        float[] ikRest_ = new float[0];
         Lilium.RigLayerProxy[] layerProxies_ = new Lilium.RigLayerProxy[0];
         float[] layerProxyRest_ = new float[0];
         Lilium.RigConstraintProxy[] constraintProxies_ = new Lilium.RigConstraintProxy[0];
         float[] constraintProxyRest_ = new float[0];
-        /// <summary>SaveControls の控え（毎フレーム使うので使い回す。IK・点の値は持たない）</summary>
+        /// <summary>SaveControls の控え（毎フレーム使うので使い回す。点の値は持たない）</summary>
         readonly ControlState savedControls_ = new ControlState ();
         // 焼いた後の姿勢を表示モデルへ当てる道具（Humanoid の段）。初めて使うときに作る
         HumanoidBaker humanoidReader_;
@@ -126,7 +123,7 @@ namespace Lilium
         public EditingRig editingRig { get; private set; }
         public EditingRigSolver editingRigSolver { get; private set; }
         /// <summary>
-        /// 全身 IK（S25）。リグの定義が全身 IK のときだけある（無ければ null）
+        /// 全身 IK（S25）。点が 1 つも置けなかったキャラでは null
         /// </summary>
         public FullBodyRig fullBody { get; private set; }
         public string error { get; private set; }
@@ -548,8 +545,6 @@ namespace Lilium
             controlRestPositions_ = controlTransforms_.Select (t => t.localPosition).ToArray ();
             controlRestRotations_ = controlTransforms_.Select (t => t.localRotation).ToArray ();
             controlRestScales_ = controlTransforms_.Select (t => t.localScale).ToArray ();
-            ikControls_ = controls.GetComponentsInChildren<Lilium.IkControl> (true);
-            ikRest_ = ReadIkValues ();
             bodyPoints_ = controls.GetComponentsInChildren<Lilium.BodyPoint> (true);
             bodyPointRest_ = ReadPointValues ();
             layerProxies_ = controls.GetComponentsInChildren<Lilium.RigLayerProxy> (true);
@@ -583,12 +578,6 @@ namespace Lilium
                 t.GetLocalPositionAndRotation (out Vector3 p, out Quaternion q);
                 t.SetLocalPositionAndRotation (Vector3.Lerp (controlRestPositions_[i], p, weight), Quaternion.Slerp (controlRestRotations_[i], q, weight));
                 t.localScale = Vector3.Lerp (controlRestScales_[i], t.localScale, weight);
-            }
-            for (int i = 0; i < ikControls_.Length; i++) {
-                if (ikControls_[i] == null) continue;
-                for (int v = 0; v < Lilium.IkControl.kValueCount; v++) {
-                    ikControls_[i].SetValue (v, Mathf.Lerp (ikRest_[i * Lilium.IkControl.kValueCount + v], ikControls_[i].GetValue (v), weight));
-                }
             }
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
@@ -697,51 +686,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 書き込み先の Override の層の手前の、IK の組・全身 IK の点の数値（パスは編集用の体のルートから）。控えが無い・どちらでもなければ false
-        /// </summary>
-        public bool TryGetOverrideSourceFloat (string path, System.Type type, string property, out float value)
-        {
-            value = 0;
-            if (overrideSource_ == null || editingRig == null || editingRig.root == null) return false;
-            if (type == typeof (Lilium.BodyPoint)) return TryGetOverrideSourcePoint (path, property, out value);
-            if (type != typeof (Lilium.IkControl)) return false;
-            int v = Lilium.IkControl.IndexOf (property);
-            Transform root = editingRig.root.transform;
-            Transform t = path.Length == 0 ? root : root.Find (path);
-            if (v < 0 || t == null) return false;
-            for (int i = 0; i < ikControls_.Length; i++) {
-                if (ikControls_[i] == null || ikControls_[i].transform != t) continue;
-                value = overrideSource_.ikValues[i * Lilium.IkControl.kValueCount + v];
-                return true;
-            }
-            return false;
-        }
-
-        bool TryGetOverrideSourcePoint (string path, string property, out float value)
-        {
-            value = 0;
-            int v = Lilium.BodyPoint.IndexOf (property);
-            Transform root = editingRig.root.transform;
-            Transform t = path.Length == 0 ? root : root.Find (path);
-            if (v < 0 || t == null || overrideSource_.pointValues == null) return false;
-            for (int i = 0; i < bodyPoints_.Length; i++) {
-                if (bodyPoints_[i] == null || bodyPoints_[i].transform != t) continue;
-                value = overrideSource_.pointValues[i * Lilium.BodyPoint.kValueCount + v];
-                return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// 操作値（コントロールの Transform と FK/IK の切替）の控え。表示の骨をつかんで書いた結果が狙いから遠ざかったとき、元へ戻すのに使う
+        /// 操作値（コントロールの Transform と全身 IK の点の固定の強さ）の控え。表示の骨をつかんで書いた結果が狙いから遠ざかったとき、元へ戻すのに使う
         /// </summary>
         public sealed class ControlState
         {
             public Vector3[] positions;
             public Quaternion[] rotations;
             public Vector3[] scales;
-            /// <summary>IK の組の数値（組ごとに IkControl.kValueCount 個ずつ）</summary>
-            public float[] ikValues;
             /// <summary>全身 IK の点の固定の強さ（点ごとに BodyPoint.kValueCount 個ずつ）</summary>
             public float[] pointValues;
         }
@@ -767,38 +718,17 @@ namespace Lilium
             }
         }
 
-        float[] ReadIkValues ()
-        {
-            int n = Lilium.IkControl.kValueCount;
-            float[] values = new float[ikControls_.Length * n];
-            for (int i = 0; i < ikControls_.Length; i++) {
-                if (ikControls_[i] == null) continue;
-                for (int v = 0; v < n; v++) values[i * n + v] = ikControls_[i].GetValue (v);
-            }
-            return values;
-        }
-
-        void WriteIkValues (float[] values)
-        {
-            int n = Lilium.IkControl.kValueCount;
-            for (int i = 0; i < ikControls_.Length; i++) {
-                if (ikControls_[i] == null) continue;
-                for (int v = 0; v < n; v++) ikControls_[i].SetValue (v, values[i * n + v]);
-            }
-        }
-
         public ControlState CaptureControlState ()
         {
-            ControlState state = new ControlState { ikValues = ReadIkValues (), pointValues = ReadPointValues () };
+            ControlState state = new ControlState { pointValues = ReadPointValues () };
             CaptureTransforms (state);
             return state;
         }
 
         public void RestoreControlState (ControlState state)
         {
-            if (state == null || state.positions.Length != controlTransforms_.Length || state.ikValues.Length != ikControls_.Length * Lilium.IkControl.kValueCount) return;
+            if (state == null || state.positions.Length != controlTransforms_.Length) return;
             RestoreTransforms (state);
-            WriteIkValues (state.ikValues);
             WritePointValues (state.pointValues);
         }
 
@@ -840,7 +770,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 全身 IK の点の状態（Pin / Locked）は、次にその点のキーを打つまで引き継ぐ（IK / FK の切り替えと同じ。キーの間で補間しない）。
+        /// 全身 IK の点の状態（Pin / Locked）は、次にその点のキーを打つまで引き継ぐ（キーの間で補間しない）。
         /// クリップを当てた後、状態を「その時刻以前でいちばん近いキーの値」に入れ直す。
         /// その時刻ちょうどのキーが無い点は、位置を引き継がない: 後で、その時刻の骨の位置に置き直す（SnapCarriedPoints）。
         /// 引き継ぐのは「留まる・動かさない」という状態だけで、前のキーフレームの場所へ体を引っ張ることはしない
@@ -1039,7 +969,6 @@ namespace Lilium
                 t.SetLocalPositionAndRotation (controlRestPositions_[i], controlRestRotations_[i]);
                 t.localScale = controlRestScales_[i];
             }
-            WriteIkValues (ikRest_);
             WritePointValues (bodyPointRest_);
             for (int i = 0; i < layerProxies_.Length; i++) {
                 if (layerProxies_[i] != null) layerProxies_[i].weight = layerProxyRest_[i];
@@ -1073,7 +1002,7 @@ namespace Lilium
 
         /// <summary>
         /// Humanoid のクリップをそのフレームの操作値（コントロールの値）にする（S14 の土台）。
-        /// クリップを表示モデルへ当て、その骨を編集用の体へ写して操作値として捉える（手足は FK）。ルートの移動は当てない（その場）。
+        /// クリップを表示モデルへ当て、その骨を編集用の体へ写して FK の操作値として捉える。ルートの移動は当てない（その場）。
         /// この後 Override を重ねて解くので、元のクリップを直せば土台も付いていく
         /// </summary>
         public bool SampleHumanoidAsControls (AnimationClip clip, float time)
@@ -1088,9 +1017,6 @@ namespace Lilium
             // Humanoid のクリップに全身 IK の点のキーは無い（点は Override から入る）
             RestoreBodyPoints ();
             editingRig.SyncFromDisplay ();
-            foreach (RigBinding.Ik ik in editingRig.binding.ik) {
-                if (ik.enabled) editingRigSolver.SetIkWeight (ik.chain.name, 0);
-            }
             editingRigSolver.Capture ();
             return true;
         }
@@ -1262,9 +1188,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 編集用リグを解く（コントロールの値 → 編集用の骨）。
-        /// 解いたあと、使っていない側（FK の間は IK の目標、IK の間は FK の差分）を今の姿勢に合わせる。
-        /// こうしておくと FK と IK の値がいつも同じ姿勢を指すので、どのフレームで切り替えても・重みを動かしても姿勢が飛ばない
+        /// 編集用リグを解く（コントロールの値 → 編集用の骨）
         /// </summary>
         public void Solve ()
         {
@@ -1272,7 +1196,6 @@ namespace Lilium
             // 全身 IK が曲げた分を戻してから解く（S25。コントロールの無い骨に残ると、解き直すたびに積み重なる）
             if (fullBody != null) fullBody.Unsolve ();
             editingRigSolver.Solve ();
-            editingRigSolver.SyncIkFk ();
         }
 
         /// <summary>

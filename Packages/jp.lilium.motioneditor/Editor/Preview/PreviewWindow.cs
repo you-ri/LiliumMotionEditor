@@ -87,7 +87,7 @@ namespace Lilium
         /// <summary>Controller パネルの Spinner の Move で、ドラッグ量に掛ける倍率（1 で 1 ピクセル 2.5mm）</summary>
         [SerializeField] float spinMoveScale_ = 1;
         [SerializeField] bool showBones_ = true;
-        /// <summary>手足の IK のコントロールを常に出すか（骨を隠していても残す）。全身 IK の点も、切ると選んでいる物だけになる</summary>
+        /// <summary>全身 IK の点（固定の印も）を出すか。切ると選んでいる物だけになる</summary>
         [SerializeField] bool showIk_ = true;
         [SerializeField] bool showFloor_ = true;
         [SerializeField] ShowTracksFlag showTracks_ = ShowTracksFlag.Selected;
@@ -129,7 +129,6 @@ namespace Lilium
         /// 今のクリップを編集できない理由（EditingClip.GetProblem）。編集できるなら null
         /// </summary>
         string clipProblem_;
-        int focusControl_;
         /// <summary>
         /// 再生中につかんで時計を止めているもの（ハンドル・Spinner）。両方離したら再生を続ける
         /// </summary>
@@ -486,7 +485,7 @@ namespace Lilium
             }
         }
 
-        /// <summary>手足の IK のコントロールを常に出すか。全身 IK の点（固定の印も）の表示も兼ねる</summary>
+        /// <summary>全身 IK の点（固定の印も）を出すか</summary>
         public bool showIk
         {
             get { return showIk_; }
@@ -637,7 +636,7 @@ namespace Lilium
             if (target is BodyPointTarget) return isPointGrab && !isDisplayGrab && showIk_ && CanEditPoints ();
             FkTarget fk = target as FkTarget;
             if (isPointGrab && fk != null && !fk.fullBodyHandle) return false;
-            if (!showBones_ && !(showIk_ && target is IkTarget)) return false;
+            if (!showBones_) return false;
             if (isDisplayGrab && !target.supportsDisplayHandles && !(target is RigSourceTarget)) return false;
             return CanEditTarget (target);
         }
@@ -800,7 +799,7 @@ namespace Lilium
         static readonly List<string> maskPaths_ = new List<string> ();
 
         /// <summary>
-        /// 物がマスクの外か。物のキーのパスが 1 つでもマスクの中なら中（例えば手の IK は目標とヒントのどちらかが中なら動かせる）。
+        /// 物がマスクの外か。物のキーのパスが 1 つでもマスクの中なら中。
         /// キーのパスを持たない物は外にしない
         /// </summary>
         internal static bool IsOutsideMask (PreviewStage stage, ChannelMask mask, PoseTarget target)

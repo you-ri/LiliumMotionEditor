@@ -63,43 +63,4 @@ namespace Lilium
         }
     }
 
-    /// <summary>
-    /// IK の組の 1 行。足の転がしの項目（つま先の骨・折れ角・支点の上書き）は、転がしを付けたときだけ出す
-    /// </summary>
-    [CustomPropertyDrawer (typeof (EditRigDefinition.IkChain))]
-    sealed class IkChainDrawer : PropertyDrawer
-    {
-        static readonly string[] kChainFields = { "name", "root", "mid", "tip", "defaultHint", "reverseFoot" };
-        static readonly string[] kFootFields = { "toes", "toeBreak", "pivots" };
-
-        public override VisualElement CreatePropertyGUI (SerializedProperty property)
-        {
-            SerializedProperty name = property.FindPropertyRelative ("name");
-            SerializedProperty reverseFoot = property.FindPropertyRelative ("reverseFoot");
-
-            Foldout foldout = new Foldout { value = false };
-            foreach (string field in kChainFields) {
-                foldout.Add (new PropertyField (property.FindPropertyRelative (field)));
-            }
-
-            VisualElement foot = new VisualElement ();
-            foot.style.paddingLeft = 12;
-            foot.Add (new Label (Tr ("EDIT_RIG_DEFINITION_EDITOR_FOOT_ROLL_HELP")) {
-                style = { fontSize = 10, whiteSpace = WhiteSpace.Normal, color = new Color (0.7f, 0.7f, 0.7f) },
-            });
-            foreach (string field in kFootFields) {
-                foot.Add (new PropertyField (property.FindPropertyRelative (field)));
-            }
-            foldout.Add (foot);
-
-            System.Action update = () => {
-                foldout.text = string.IsNullOrEmpty (name.stringValue) ? Tr ("EDIT_RIG_DEFINITION_EDITOR_UNNAMED") : name.stringValue;
-                foot.style.display = reverseFoot.boolValue ? DisplayStyle.Flex : DisplayStyle.None;
-            };
-            update ();
-            foldout.TrackPropertyValue (property, p => update ());
-            return foldout;
-        }
-    }
-
 }

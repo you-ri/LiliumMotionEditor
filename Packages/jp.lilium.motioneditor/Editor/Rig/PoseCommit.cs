@@ -37,12 +37,6 @@ namespace Lilium
                 Vector3 scale;
                 return stage.TryGetOverrideSource (path, out position, out rotation, out scale) ? OverrideMath.StoreScale (mode, scale, value) : value;
             };
-            writer.storeFloat = (binding, value) => {
-                float source;
-                return stage.TryGetOverrideSourceFloat (binding.path, binding.type, binding.propertyName, out source)
-                    ? OverrideMath.StoreFloat (mode, Lilium.IkControl.IsAdditive (binding.propertyName), source, value)
-                    : value;
-            };
         }
 
         /// <summary>

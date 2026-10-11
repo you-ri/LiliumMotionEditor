@@ -61,45 +61,33 @@ namespace Lilium
             get { return bone_ != null ? bone_.position : Vector3.zero; }
         }
 
-        public override TransformChannels GetSpinChannels (bool pole)
+        public override TransformChannels GetSpinChannels ()
         {
             return position_ ? TransformChannels.Position | TransformChannels.Rotation : TransformChannels.Rotation;
         }
 
-        public override string GetSpinLabel (bool pole)
+        public override string GetSpinLabel ()
         {
             return label_ + " (" + bone_.name + ")";
         }
 
-        public override void SpinMove (Vector3 delta, bool pole)
+        public override void SpinMove (Vector3 delta)
         {
             if (!position_) return;
-            BeginEdit ();
             bone_.localPosition += delta;
             solver_.CaptureFk (bone_);
         }
 
-        public override void SpinRotateLocal (Quaternion delta, bool pole)
+        public override void SpinRotateLocal (Quaternion delta)
         {
-            BeginEdit ();
             bone_.localRotation = bone_.localRotation * delta;
             solver_.CaptureFk (bone_);
         }
 
-        public override void SpinRotateWorld (Quaternion delta, bool pole)
+        public override void SpinRotateWorld (Quaternion delta)
         {
-            BeginEdit ();
             bone_.rotation = delta * bone_.rotation;
             solver_.CaptureFk (bone_);
-        }
-
-        /// <summary>
-        /// この骨を IK が動かしているなら、今の見た目のまま FK へ切り替える
-        /// </summary>
-        void BeginEdit ()
-        {
-            string chain = solver_.FindIkChainOf (bone_);
-            if (chain != null) solver_.SwitchToFk (chain);
         }
 
         public override void OnHandleGUI (bool selected)
@@ -109,7 +97,6 @@ namespace Lilium
             if (position_) {
                 Vector3 position = PoseHandleUtility.DoJointHandle (jointHash_, control_, bone_.position, shapes_.GetRotation (bone_));
                 if (position != bone_.position) {
-                    BeginEdit ();
                     bone_.position = position;
                     solver_.CaptureFk (bone_);
                     GUI.changed = true;
@@ -119,7 +106,6 @@ namespace Lilium
             Quaternion shape = shapes_.GetRotation (bone_);
             Quaternion rotated = PoseHandleUtility.DoBoneHandle (boneHash_, control_, bone_.position, shape, shapes_.GetLength (bone_));
             if (rotated != shape) {
-                BeginEdit ();
                 bone_.rotation = shapes_.ToBoneRotation (bone_, rotated);
                 solver_.CaptureFk (bone_);
                 GUI.changed = true;
@@ -156,7 +142,6 @@ namespace Lilium
             if (position_) {
                 Vector3 position = PoseHandleUtility.DoJointHandle (jointHash_, control_, display_.position, shapes_.GetRotation (bone_, display_.rotation));
                 if (position != display_.position) {
-                    BeginEdit ();
                     bone_.position += position - display_.position;
                     solver_.CaptureFk (bone_);
                     goal.position = position;
@@ -170,7 +155,6 @@ namespace Lilium
             if (rotated != shape) {
                 Quaternion target = shapes_.ToBoneRotation (bone_, rotated);
                 Quaternion delta = Quaternion.Inverse (display_.rotation) * target;
-                BeginEdit ();
                 bone_.localRotation = bone_.localRotation * delta;
                 solver_.CaptureFk (bone_);
                 goal.rotation = target;
@@ -216,32 +200,30 @@ namespace Lilium
             get { return fullBodyHandle_; }
         }
 
-        public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)
+        public override bool TryGetValues (out Vector3 position, out Quaternion rotation)
         {
             position = control_.localPosition * humanScale;
             rotation = control_.localRotation;
             return true;
         }
 
-        public override void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
+        public override void SetValues (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
-            BeginEdit ();
             Quaternion current = CurrentValue ();
             if ((channels & TransformChannels.Rotation) != 0) control_.localRotation = Quaternion.Normalize (rotation);
             if (position_ && (channels & TransformChannels.Position) != 0) control_.localPosition = position / humanScale;
             FollowControl (current);
         }
 
-        public override void ResetValues (bool pole, TransformChannels channels)
+        public override void ResetValues (TransformChannels channels)
         {
-            BeginEdit ();
             Quaternion current = CurrentValue ();
             if ((channels & TransformChannels.Rotation) != 0) control_.localRotation = Quaternion.identity;
             if (position_ && (channels & TransformChannels.Position) != 0) control_.localPosition = Vector3.zero;
             FollowControl (current);
         }
 
-        /// <summary>今の骨の見た目を FK の値にしたもの（コントロールの値は、IK が骨を動かした分だけ見た目とずれていることがある）</summary>
+        /// <summary>今の骨の見た目を FK の値にしたもの（コントロールの値は、全身 IK が骨を動かした分だけ見た目とずれていることがある）</summary>
         Quaternion CurrentValue ()
         {
             Quaternion rotation;

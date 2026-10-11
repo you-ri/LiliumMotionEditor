@@ -17,17 +17,11 @@ namespace Lilium
         [SetUp]
         public void SetUp ()
         {
-            // 既定のまま（ソルバーは全身 IK。DefaultDefinition_UsesFullBodyIk で確かめる）
+            // 既定のまま
             definition_ = CreateDefinition ();
         }
 
         // ---- 既定 ----
-
-        [Test]
-        public void DefaultDefinition_UsesFullBodyIk ()
-        {
-            Assert.AreEqual (RigSolver.FullBodyIk, definition_.solver, "新しく作る定義の既定は全身 IK");
-        }
 
         [Test]
         public void Defaults_StiffnessGrowsTowardBodyCenter_AndFingersAreNotSolved ()
@@ -84,9 +78,8 @@ namespace Lilium
         }
 
         [Test]
-        public void CopyFrom_KeepsSolverAndFullBodyValues ()
+        public void CopyFrom_KeepsFullBodyValues ()
         {
-            definition_.solver = RigSolver.FullBodyIk;
             definition_.fullBody.iterations = 33;
             definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness = 0.33f;
 
@@ -94,13 +87,12 @@ namespace Lilium
             created_.Add (copy);
             copy.CopyFrom (definition_);
 
-            Assert.AreEqual (RigSolver.FullBodyIk, copy.solver);
             Assert.AreEqual (33, copy.fullBody.iterations);
             Assert.AreEqual (0.33f, copy.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness, 1e-6f);
         }
 
         [Test]
-        public void FullBodyHash_ChangesWithSettings_AndIsEmptyForTwoBoneIk ()
+        public void FullBodyHash_ChangesWithSettings ()
         {
             string hash = definition_.GetFullBodyHash ();
             Assert.IsNotEmpty (hash);
@@ -110,8 +102,6 @@ namespace Lilium
             Assert.AreNotEqual (hash, stiffer, "硬さを変えると変わる");
             definition_.fullBody.hipsPin = 0.11f;
             Assert.AreNotEqual (stiffer, definition_.GetFullBodyHash (), "腰を留める強さを変えると変わる");
-            definition_.solver = RigSolver.TwoBoneIk;
-            Assert.IsEmpty (definition_.GetFullBodyHash (), "2 本骨 IK の定義では、全身 IK の設定は姿勢に効かない");
         }
 
         // ---- 変更の知らせ ----

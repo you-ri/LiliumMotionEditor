@@ -134,7 +134,7 @@ namespace Lilium
 
         /// <summary>
         /// 右半身（right = true）か左半身をまとめて選ぶ。
-        /// 見分けるのはコントロールの名前の頭で、Humanoid の骨（LeftUpperArm など）と IK の組（LeftArm など）が当たる。
+        /// 見分けるのはコントロールの名前の頭で、Humanoid の骨（LeftUpperArm など）と全身 IK の点（LeftHeel など）が当たる。
         /// 背骨・頭・腰のような中心の骨と、名前で左右の付かないコントロール（武器・尻尾）はどちらにも入れない
         /// </summary>
         public void SelectPickerSide (bool right)
@@ -181,10 +181,9 @@ namespace Lilium
         };
 
         /// <summary>
-        /// 上半身（背骨から上と腕・指、腕の IK）か下半身（腰と脚、脚の IK）をまとめて選ぶ。
+        /// 上半身（背骨から上と腕・指）か下半身（腰と脚）をまとめて選ぶ。
         /// FK のコントロールは名前が `HumanBodyBones` そのものなので、名前を enum に戻して見分ける。
-        /// IK の組（LeftArm / LeftLeg など）は enum に無いので名前の終わりで見る。
-        /// 左右の付かない追加のコントロール（武器・尻尾）はどちらにも入れない
+        /// 追加のコントロール（武器・尻尾）はどちらにも入れない
         /// </summary>
         public void SelectPickerBody (bool upper)
         {
@@ -197,8 +196,7 @@ namespace Lilium
         static bool IsBodyName (string name, bool upper)
         {
             HumanBodyBones bone;
-            if (System.Enum.TryParse (name, out bone)) return kLowerBodyBones.Contains (bone) != upper;
-            return name.EndsWith (upper ? "Arm" : "Leg", System.StringComparison.Ordinal);
+            return System.Enum.TryParse (name, out bone) && kLowerBodyBones.Contains (bone) != upper;
         }
 
         /// <summary>

@@ -11,7 +11,7 @@ namespace Lilium
     public class CurveEditTests
     {
         const string kPath = "Controls/FK/LeftUpperArm";
-        static readonly EditorCurveBinding kWeight = EditorCurveBinding.FloatCurve ("Controls/IK/LeftArm", typeof (Component), "ikWeight");
+        static readonly EditorCurveBinding kWeight = EditorCurveBinding.FloatCurve ("Controls/Body/LeftHand", typeof (BodyPoint), "positionWeight");
 
         AnimationClip clip_;
 

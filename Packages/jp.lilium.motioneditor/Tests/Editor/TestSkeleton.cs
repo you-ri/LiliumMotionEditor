@@ -27,7 +27,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 胸と首と、両足のつま先を持つ人型（足の転がしを試すとき）。toeOut だけ、つま先の付け根を体の外へずらす（つま先が外を向いた足）
+        /// 胸と首と、両足のつま先を持つ人型（足の点を試すとき）。toeOut だけ、つま先の付け根を体の外へずらす（つま先が外を向いた足）
         /// </summary>
         public static Animator CreateHumanoidWithToes (List<Object> created, float size = 1, float toeOut = 0)
         {

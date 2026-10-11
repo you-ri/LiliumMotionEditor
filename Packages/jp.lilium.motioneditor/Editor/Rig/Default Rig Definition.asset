@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
   m_Name: Default Rig Definition
   m_EditorClassIdentifier: 
-  solver: 1
   fullBody:
     iterations: 48
     pull: 1
@@ -403,43 +402,6 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
-  ikChains:
-  - name: LeftArm
-    root: 13
-    mid: 15
-    tip: 17
-    defaultHint: {x: 0, y: 0, z: -1}
-    reverseFoot: 0
-    toes: 0
-    toeBreak: 30
-    pivots: []
-  - name: RightArm
-    root: 14
-    mid: 16
-    tip: 18
-    defaultHint: {x: 0, y: 0, z: -1}
-    reverseFoot: 0
-    toes: 0
-    toeBreak: 30
-    pivots: []
-  - name: LeftLeg
-    root: 1
-    mid: 3
-    tip: 5
-    defaultHint: {x: 0, y: 0, z: 1}
-    reverseFoot: 1
-    toes: 19
-    toeBreak: 30
-    pivots: []
-  - name: RightLeg
-    root: 2
-    mid: 4
-    tip: 6
-    defaultHint: {x: 0, y: 0, z: 1}
-    reverseFoot: 1
-    toes: 20
-    toeBreak: 30
-    pivots: []
   extraControls: []
   bodyPoints:
   - enabled: 1

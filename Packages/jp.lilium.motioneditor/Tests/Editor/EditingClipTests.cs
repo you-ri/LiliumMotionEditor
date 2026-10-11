@@ -34,7 +34,7 @@ namespace Lilium
         {
             Assert.IsNull (EditingClip.GetProblem (clip_));
             AddCurve (clip_, "Controls/FK/Hips");
-            AddCurve (clip_, "Controls/IK/LeftArm/Target");
+            AddCurve (clip_, "Controls/Body/LeftHand");
             Assert.IsNull (EditingClip.GetProblem (clip_));
             Assert.IsNull (EditingClip.GetProblem (null));
         }

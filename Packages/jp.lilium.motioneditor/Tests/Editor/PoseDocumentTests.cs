@@ -207,10 +207,12 @@ namespace Lilium
         }
 
         [Test]
-        public void TwoBoneIk_ExplainsThatItCannotReadOrWrite ()
+        public void NoBodyPoints_ExplainsThatItCannotReadOrWrite ()
         {
-            definition_.solver = RigSolver.TwoBoneIk;
+            // 点が 1 つも無ければ全身 IK が作られず、点で姿勢を表せない
+            definition_.bodyPoints.Clear ();
             PoseSession session = Open ();
+            Assert.IsNull (session.stage.fullBody);
             string problem;
             Assert.IsNull (PoseDocument.Read (session, 0, out problem));
             Assert.IsNotNull (problem);

@@ -20,27 +20,19 @@ namespace Lilium
         }
 
         [Test]
-        public void FullBodyDefinitionListsEveryControl ()
+        public void DefaultDefinitionListsEveryControl ()
         {
             EditRigDefinition definition = CreateDefinition ();
             EditingRig rig = CreateEditingRig (definition, CreateCharacter ());
             List<RigControlEntry> entries = RigControlList.Build (rig);
 
             Assert.That (OfKind (entries, RigControlKind.Fk).Count (), Is.EqualTo (definition.fkControls.Count));
-            // 全身 IK の定義では IK の組を使わないので、理由つきの「使われない」で並ぶ
-            List<RigControlEntry> chains = OfKind (entries, RigControlKind.Ik).ToList ();
-            Assert.That (chains.Count, Is.EqualTo (definition.ikChains.Count));
-            Assert.That (chains.All (e => e.unused && e.disabledReason == RigBinding.kFullBodyIkReason), Is.True);
 
             List<RigControlEntry> points = OfKind (entries, RigControlKind.Point).ToList ();
             Assert.That (points.Count, Is.EqualTo (rig.binding.points.Count));
             Assert.That (points.Count, Is.GreaterThan (0));
             Assert.That (points.All (e => e.enabled && e.position.HasValue), Is.True);
-
-            // 脚の組 2 つの支点 7 種類。全身 IK の定義では足の点の置き場所に使うので使える
-            List<RigControlEntry> pivots = OfKind (entries, RigControlKind.Pivot).ToList ();
-            Assert.That (pivots.Count, Is.EqualTo (2 * ReverseFoot.kPivotCount));
-            Assert.That (pivots.All (e => e.enabled && e.position.HasValue), Is.True);
+            Assert.That (entries.Count, Is.EqualTo (definition.fkControls.Count + points.Count), "FK と点のほかには並ばない（追加コントロールの無い定義）");
 
             Assert.That (entries.Select (e => e.id).Distinct ().Count (), Is.EqualTo (entries.Count), "選択に使う名前が重ならない");
         }
@@ -68,35 +60,12 @@ namespace Lilium
         }
 
         [Test]
-        public void TwoBoneDefinitionUsesChainsAndFootRoll ()
-        {
-            EditRigDefinition definition = CreateDefinition ();
-            definition.solver = RigSolver.TwoBoneIk;
-            definition.ikChains.Single (c => c.name == "LeftLeg").reverseFoot = false;
-            Animator display = CreateCharacter ();
-            EditingRig rig = CreateEditingRig (definition, display);
-            List<RigControlEntry> entries = RigControlList.Build (rig);
-
-            Assert.That (OfKind (entries, RigControlKind.Point), Is.Empty);
-            RigControlEntry arm = entries.Single (e => e.id == "Ik/LeftArm");
-            Assert.That (arm.enabled, Is.True);
-            Assert.That (arm.line.Length, Is.EqualTo (3), "根 → 中 → 先");
-            Assert.That (Vector3.Distance (arm.position.Value, display.GetBoneTransform (HumanBodyBones.LeftHand).position), Is.LessThan (kTolerance));
-
-            // 腕の組には支点が無い。足の転がしを切った脚の支点は「使われない」
-            Assert.That (OfKind (entries, RigControlKind.Pivot).Any (e => e.id.StartsWith ("Pivot/LeftArm/")), Is.False);
-            Assert.That (OfKind (entries, RigControlKind.Pivot).Where (e => e.id.StartsWith ("Pivot/RightLeg/")).All (e => e.enabled), Is.True);
-            Assert.That (OfKind (entries, RigControlKind.Pivot).Where (e => e.id.StartsWith ("Pivot/LeftLeg/")).All (e => !e.enabled && e.unused), Is.True);
-        }
-
-        [Test]
         public void MissingBoneIsListedWithReason ()
         {
             EditingRig rig = CreateEditingRig (CreateDefinition (), CreateCharacter (withChest: false));
             RigControlEntry chest = RigControlList.Build (rig).Single (e => e.id == "Fk/" + HumanBodyBones.Chest);
 
             Assert.That (chest.enabled, Is.False);
-            Assert.That (chest.unused, Is.False, "骨が無いのは、解き方で使わないのとは別");
             Assert.That (chest.disabledReason, Is.Not.Empty);
             Assert.That (chest.position.HasValue, Is.False);
         }
@@ -152,8 +121,6 @@ namespace Lilium
             Assert.That (serialized.FindProperty (hand.propertyPath + ".bone").enumNames[serialized.FindProperty (hand.propertyPath + ".bone").enumValueIndex], Is.EqualTo ("LeftHand"));
             RigControlEntry point = entries.Single (e => e.id == "Point/" + HumanBodyBones.Hips);
             Assert.That (serialized.FindProperty (point.propertyPath + ".name").stringValue, Is.EqualTo ("Hips"));
-            RigControlEntry pivot = entries.First (e => e.kind == RigControlKind.Pivot && e.id.StartsWith ("Pivot/LeftLeg/"));
-            Assert.That (serialized.FindProperty (pivot.propertyPath + ".name").stringValue, Is.EqualTo ("LeftLeg"), "支点は脚の組の項目");
             // 定義を渡さなければ、項目は指さない
             Assert.That (RigControlList.Build (rig).All (e => e.propertyPath == null), Is.True);
         }

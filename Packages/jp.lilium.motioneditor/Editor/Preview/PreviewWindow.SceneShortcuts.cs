@@ -102,12 +102,6 @@ namespace Lilium
         {
             Run (args, window => window.spinnerMode = SpinnerMode.Scale);
         }
-
-        [Shortcut ("Lilium Motion Editor (Scene)/Spinner Toggle Pole", typeof (SceneWindow), KeyCode.U)]
-        static void SceneSpinnerPoleShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.spinnerPole = !window.spinnerPole);
-        }
     }
 
 }

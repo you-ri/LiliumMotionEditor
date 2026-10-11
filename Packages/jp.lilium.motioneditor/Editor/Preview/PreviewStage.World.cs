@@ -157,13 +157,13 @@ namespace Lilium
             CaptureRestPose ();
             editingRig = EditingRig.Create (definition_, animator, CreateGameObject, RigProbe.Describe (model));
             editingRigSolver = new EditingRigSolver (editingRig);
-            // 全身 IK（S25）。リグの定義が全身 IK で、点が 1 つでも置けたときだけ
-            if (editingRig.binding.solver == RigSolver.FullBodyIk && editingRig.binding.points.Count > 0) {
+            // 全身 IK（S25）。点が 1 つでも置けたときだけ
+            if (editingRig.binding.points.Count > 0) {
                 fullBody = new FullBodyRig (editingRig, definition_);
             }
             clipSampler_ = new ClipSampler (editingRig.animator);
             genericSampler_ = new ClipSampler (editingRig.animator);
-            // コントロールの初期値は基準姿勢から取る（FK の差分は 0、IK の目標は今の手足の先）
+            // コントロールの初期値は基準姿勢から取る（FK の差分は 0）
             editingRigSolver.Capture ();
             CaptureControlRest ();
             foreach (string problem in editingRig.errors) {

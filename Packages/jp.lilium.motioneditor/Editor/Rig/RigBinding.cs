@@ -32,14 +32,6 @@ namespace Lilium
             public Transform bone;
         }
 
-        public sealed class Ik : Control
-        {
-            public EditRigDefinition.IkChain chain;
-            public Transform root;
-            public Transform mid;
-            public Transform tip;
-        }
-
         public sealed class Extra : Control
         {
             public EditRigDefinition.ExtraControl control;
@@ -65,15 +57,10 @@ namespace Lilium
             public Transform blendBone;
         }
 
-        public static string kFullBodyIkReason => Tr ("RIG_BINDING_FULL_BODY_IK_UNUSED");
-
         public readonly List<Fk> fk = new List<Fk> ();
-        public readonly List<Ik> ik = new List<Ik> ();
         public readonly List<Extra> extras = new List<Extra> ();
-        /// <summary>全身 IK の点（S25）。全身 IK の定義のときだけ並ぶ</summary>
+        /// <summary>全身 IK の点（S25）</summary>
         public readonly List<Point> points = new List<Point> ();
-        /// <summary>定義の、手足の位置を保つ仕組み</summary>
-        public RigSolver solver { get; private set; }
         /// <summary>
         /// キャラ全体の問題（Avatar が人型でない・定義の誤りなど）
         /// </summary>
@@ -87,17 +74,12 @@ namespace Lilium
 
         public IEnumerable<Control> controls
         {
-            get { return fk.Cast<Control> ().Concat (ik.Cast<Control> ()).Concat (extras.Cast<Control> ()).Concat (points.Cast<Control> ()); }
+            get { return fk.Cast<Control> ().Concat (extras.Cast<Control> ()).Concat (points.Cast<Control> ()); }
         }
 
         public Fk FindFk (HumanBodyBones bone)
         {
             return fk.FirstOrDefault (c => c.control.bone == bone);
-        }
-
-        public Ik FindIk (string name)
-        {
-            return ik.FirstOrDefault (c => c.chain.name == name);
         }
 
         /// <summary>骨の付け根の点（既定の一覧での名前は骨の名前）</summary>
@@ -119,8 +101,6 @@ namespace Lilium
                 return binding;
             }
             binding.errors.AddRange (definition.Validate ());
-            binding.solver = definition.solver;
-            bool fullBody = definition.solver == RigSolver.FullBodyIk;
 
             bool isHuman = animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman;
             string humanReason = animator == null ? Tr ("RIG_BINDING_NO_ANIMATOR")
@@ -137,19 +117,7 @@ namespace Lilium
                 });
             }
 
-            foreach (EditRigDefinition.IkChain chain in definition.ikChains) {
-                Ik entry = new Ik { chain = chain, path = RigPaths.IkChain (chain.name) };
-                if (isHuman) {
-                    entry.root = animator.GetBoneTransform (chain.root);
-                    entry.mid = animator.GetBoneTransform (chain.mid);
-                    entry.tip = animator.GetBoneTransform (chain.tip);
-                }
-                // 全身 IK の定義では IK の組を使わない（消さずに無効にする。コントロールも、解く処理も、ハンドルも、この印で外れる）
-                entry.disabledReason = humanReason ?? (fullBody ? kFullBodyIkReason : ChainProblem (entry));
-                binding.ik.Add (entry);
-            }
-
-            if (fullBody && definition.bodyPoints != null) {
+            if (definition.bodyPoints != null) {
                 foreach (EditRigDefinition.BodyPoint entry in definition.bodyPoints) {
                     if (entry == null || !entry.enabled || !RigPaths.IsValidName (entry.name)) continue;
                     // 乗る骨: 定義の骨がこのキャラに無い・解かない骨なら、親の骨をたどって最初に当たる解く骨（つま先の骨が無ければ足）。
@@ -195,23 +163,6 @@ namespace Lilium
         {
             if (entry.origin != HumanBodyBones.LastBone && animator.GetBoneTransform (entry.origin) == null) return false;
             return entry.toward == HumanBodyBones.LastBone || animator.GetBoneTransform (entry.toward) != null || entry.fallback != Vector3.zero;
-        }
-
-        /// <summary>
-        /// IK の 3 本の骨がそろい、親子の順（root → mid → tip）になっているか
-        /// </summary>
-        static string ChainProblem (Ik entry)
-        {
-            EditRigDefinition.IkChain chain = entry.chain;
-            List<string> missing = new List<string> ();
-            if (entry.root == null) missing.Add (chain.root.ToString ());
-            if (entry.mid == null) missing.Add (chain.mid.ToString ());
-            if (entry.tip == null) missing.Add (chain.tip.ToString ());
-            if (missing.Count > 0) return Tr ("RIG_BINDING_MISSING_CHAIN_BONES", string.Join (Tr ("RIG_BINDING_BONE_SEPARATOR"), missing));
-
-            if (!entry.mid.IsChildOf (entry.root) || entry.mid == entry.root) return Tr ("RIG_BINDING_NOT_CHILD_OF", chain.mid, chain.root);
-            if (!entry.tip.IsChildOf (entry.mid) || entry.tip == entry.mid) return Tr ("RIG_BINDING_NOT_CHILD_OF", chain.tip, chain.mid);
-            return null;
         }
 
         static Extra BindExtra (RigBinding binding, EditRigDefinition.ExtraControl control, Animator animator)

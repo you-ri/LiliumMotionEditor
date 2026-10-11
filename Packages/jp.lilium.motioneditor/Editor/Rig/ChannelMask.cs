@@ -227,7 +227,7 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 編集用クリップのパスを Humanoid の部位へ振り分ける（S17）。FK は骨、手足の IK は鎖の先の骨、全身 IK の点は点の骨で決める。
+    /// 編集用クリップのパスを Humanoid の部位へ振り分ける（S17）。FK は骨、全身 IK の点は点の骨で決める。
     /// 部位の無いもの（Rig の代理・任意のプロパティ・Extra）は LastBodyPart
     /// </summary>
     public sealed class ChannelMaskParts
@@ -238,9 +238,6 @@ namespace Lilium
         public ChannelMaskParts (EditRigDefinition definition)
         {
             if (definition == null) return;
-            foreach (EditRigDefinition.IkChain chain in definition.ikChains) {
-                if (chain != null && !string.IsNullOrEmpty (chain.name)) byName_[RigPaths.IkChain (chain.name)] = PartOf (chain.tip);
-            }
             foreach (EditRigDefinition.BodyPoint point in definition.bodyPoints) {
                 if (point == null || string.IsNullOrEmpty (point.name)) continue;
                 byName_[RigPaths.BodyPoint (point.name)] = PartOf (point.bone);
@@ -267,12 +264,11 @@ namespace Lilium
                 if (System.Enum.TryParse (name, out bone) && bone != HumanBodyBones.LastBone) return PartOf (bone);
                 return AvatarMaskBodyPart.LastBodyPart;
             }
-            // 手足の IK（Controls/IK/<鎖>/Target など）と全身 IK の点（Controls/Body/<点>。向きの点は <骨>Direction）
-            foreach (string root in new[] { RigPaths.kIk, RigPaths.kBody }) {
-                if (!path.StartsWith (root + "/")) continue;
-                string name = FirstSegment (path, root.Length + 1);
+            // 全身 IK の点（Controls/Body/<点>。向きの点は <骨>Direction）
+            if (path.StartsWith (RigPaths.kBody + "/")) {
+                string name = FirstSegment (path, RigPaths.kBody.Length + 1);
                 AvatarMaskBodyPart part;
-                if (byName_.TryGetValue (root + "/" + name, out part)) return part;
+                if (byName_.TryGetValue (RigPaths.kBody + "/" + name, out part)) return part;
                 HumanBodyBones bone;
                 const string kDirection = "Direction";
                 if (name.EndsWith (kDirection) && System.Enum.TryParse (name.Substring (0, name.Length - kDirection.Length), out bone) && bone != HumanBodyBones.LastBone) return PartOf (bone);

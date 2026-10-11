@@ -181,8 +181,8 @@ namespace Lilium
             }
             RigControlEntry entry = row.entry;
             label.text = entry.label;
-            label.style.unityFontStyleAndWeight = entry.unused ? FontStyle.Italic : FontStyle.Normal;
-            // 使えるものは種類の色、使えない・使われないものは灰色
+            label.style.unityFontStyleAndWeight = FontStyle.Normal;
+            // 使えるものは種類の色、使えないものは灰色
             label.style.color = entry.enabled ? (StyleColor)RigEditorWindow.KindColor (entry.kind) : new StyleColor (new Color (0.55f, 0.55f, 0.55f));
             label.tooltip = entry.disabledReason;
         }

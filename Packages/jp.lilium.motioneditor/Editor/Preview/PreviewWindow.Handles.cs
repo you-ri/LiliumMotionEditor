@@ -17,7 +17,7 @@ namespace Lilium
         {
             // 窓が複数開いていると入れ替わるので、描く直前に自分を入れる
             EditorHost.current = this;
-            // IK の目標のギズモは Controller パネルのモードに従う（Rot なら回転、それ以外は移動）
+            // 全身 IK の点のギズモは Controller パネルのモードに従う（Rot なら回転、それ以外は移動）
             PoseHandleUtility.goalRotate = spinnerMode_ == SpinnerMode.Rotate;
             PoseHandleUtility.gizmoWorld = gizmoWorld_;
             bool displayGrab = isDisplayGrab;
@@ -93,9 +93,8 @@ namespace Lilium
                     FkTarget fk = target as FkTarget;
                     // 線から選んだ骨の FK は出す（回転のギズモで回せる）
                     if (pointGrab && fk != null && !fk.fullBodyHandle && !selected) continue;
-                    // 骨を隠している間は、選んでいる物だけ出す（選択したまま見た目を確かめ、そのまま動かせるように）。
-                    // 手足の IK は View の IK が入っていれば隠さない
-                    if (!showBones_ && !selected && !(showIk_ && target is IkTarget)) continue;
+                    // 骨を隠している間は、選んでいる物だけ出す（選択したまま見た目を確かめ、そのまま動かせるように）
+                    if (!showBones_ && !selected) continue;
                     PoseHandles.locked = !CanEditTarget (target);
                     if (!displayGrab) {
                         target.OnHandleGUI (selected);
@@ -131,15 +130,6 @@ namespace Lilium
             }
             // FK で骨を動かした: 子の Pin の点を一緒に動かす（動かした点は、点を動かしたときと同じ流れでキーを打つ）
             if (changed) CarryPinnedPoints (fkBefore);
-
-            // つかんでいるハンドルが変わったら知らせる（IK が IK と FK を切り替える）
-            if (focusControl_ != GUIUtility.hotControl) {
-                PoseTarget focused = selectedTarget;
-                foreach (PoseTarget target in targets_) {
-                    target.OnFocusChange (focused);
-                }
-                focusControl_ = GUIUtility.hotControl;
-            }
 
             // 再生中につかんだら止め、離したら続ける
             if (changed && clock_.isPlaying) {

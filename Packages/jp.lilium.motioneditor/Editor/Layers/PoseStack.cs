@@ -127,7 +127,7 @@ namespace Lilium
                 for (int i = 0; i < host.overrides.Count; i++) stack.Add (new OverrideLayer (stage, host, i));
             }
             // 全身 IK（S25）。リグの定義が全身 IK のときだけ
-            if (stage.fullBody != null) stack.Add (new FullBodyLayer (stage, host));
+            if (stage.fullBody != null) stack.Add (new FullBodyLayer (stage));
             // Generic Pose（GenericPoseLayer）は既定の並びに入れない。段の並びを選べるようにしたときに足す
             // Humanoid Pose は置くと決めたときだけ（S21。既定は置かない）
             if (stage.animator.isHuman && (host == null || host.humanoidPoseLayer)) stack.Add (new HumanoidLayer (stage, host));

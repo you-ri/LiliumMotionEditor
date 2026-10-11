@@ -92,7 +92,6 @@ namespace Lilium
             Assert.IsNotNull (AnimationUtility.GetEditorCurve (destination, stray), "それ以外のカーブは残る");
             EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (destination);
             Assert.IsTrue (bindings.Where (b => b.path != "Stray").All (EditingClip.IsRigBinding));
-            Assert.IsTrue (bindings.Where (b => b.propertyName == IkControl.kIkWeightProperty).All (b => AnimationUtility.GetEditorCurve (destination, b).Evaluate (0.1f) == 0), "取り込んだ手足は FK");
 
             Transform root = rig.root.transform;
             Transform[] bones = { rig.GetEditingBone (HumanBodyBones.LeftLowerArm), rig.GetEditingBone (HumanBodyBones.RightUpperLeg), rig.GetEditingBone (HumanBodyBones.LeftHand) };

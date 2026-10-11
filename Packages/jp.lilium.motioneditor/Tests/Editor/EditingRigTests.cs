@@ -17,8 +17,6 @@ namespace Lilium
         public void SetUp ()
         {
             definition_ = CreateDefinition ();
-            // 2 本骨 IK の組を見るテストなので、既定（全身 IK）から切り替える
-            definition_.solver = RigSolver.TwoBoneIk;
         }
 
         /// <summary>
@@ -77,12 +75,14 @@ namespace Lilium
             display.GetBoneTransform (HumanBodyBones.Hips).gameObject.AddComponent<BoxCollider> ();
             EditingRig rig = CreateRig (display);
 
-            // 骨の複製は Transform だけ。ほかに付くのはルートの Animator と、IK の組の切替（IkControl）だけ
+            // 骨の複製は Transform だけ。ほかに付くのはルートの Animator と、全身 IK の点（BodyPoint）だけ
             Component[] components = rig.root.GetComponentsInChildren<Component> (true)
-                .Where (c => !(c is Transform) && !(c is Lilium.IkControl)).ToArray ();
+                .Where (c => !(c is Transform) && !(c is Lilium.BodyPoint)).ToArray ();
             Assert.AreEqual (1, components.Length);
-            Assert.AreEqual (4, rig.root.GetComponentsInChildren<Lilium.IkControl> (true).Length);
-            Assert.IsTrue (rig.root.GetComponentsInChildren<Lilium.IkControl> (true).All (c => c.transform.parent.name == "IK"));
+            Lilium.BodyPoint[] points = rig.root.GetComponentsInChildren<Lilium.BodyPoint> (true);
+            Assert.AreEqual (rig.binding.points.Count (p => p.enabled), points.Length);
+            Assert.IsNotEmpty (points);
+            Assert.IsTrue (points.All (c => c.transform.parent.name == "Body"));
             Animator animator = components[0] as Animator;
             Assert.IsNotNull (animator);
             Assert.AreSame (rig.animator, animator);
@@ -102,15 +102,14 @@ namespace Lilium
                 Assert.AreEqual (fk.enabled, control != null, fk.path);
                 if (control != null) Assert.AreEqual (fk.path, PathOf (control, rig.root.transform));
             }
-            foreach (RigBinding.Ik ik in rig.binding.ik) {
-                Transform target = rig.FindControl (RigPaths.IkTarget (ik.chain.name));
-                Transform hint = rig.FindControl (RigPaths.IkHint (ik.chain.name));
-                Assert.IsNotNull (target, ik.chain.name);
-                Assert.IsNotNull (hint, ik.chain.name);
-                Assert.AreEqual (RigPaths.IkTarget (ik.chain.name), PathOf (target, rig.root.transform));
-                // 目標は編集用ルートから見た値をそのまま持つので、途中の GameObject は動かさない
-                Assert.AreEqual (Vector3.zero, target.parent.localPosition);
-                Assert.AreEqual (Quaternion.identity, target.parent.localRotation);
+            Assert.IsNotEmpty (rig.binding.points);
+            foreach (RigBinding.Point point in rig.binding.points) {
+                Transform control = rig.FindControl (point.path);
+                Assert.IsNotNull (control, point.name);
+                Assert.AreEqual (point.path, PathOf (control, rig.root.transform));
+                // 点は編集用ルートから見た値をそのまま持つので、途中の GameObject は動かさない
+                Assert.AreEqual (Vector3.zero, control.parent.localPosition);
+                Assert.AreEqual (Quaternion.identity, control.parent.localRotation);
             }
         }
 

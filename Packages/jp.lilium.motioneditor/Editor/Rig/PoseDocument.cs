@@ -16,7 +16,7 @@ namespace Lilium
     /// 書くと、点を置いて全身 IK で解き、窓で点を離したときと同じくキーを打つ（PoseSession.CommitPose）。
     /// 書くのは並べた点だけで、並べなかった点はそのフレームの状態のまま。
     /// 1 つのキーは全身の骨のキーになる（手だけを打つことはできない）。接地を保ちたい区間は、両端のキーでその点を Locked にする。
-    /// 全身 IK の定義のキャラだけ読み書きできる（2 本骨 IK の定義では、キーごとに FK と IK が混ざると手足が読めなくなる）
+    /// 全身 IK の点が 1 つも置けなかったキャラ（PreviewStage.fullBody が無い）は読み書きできない
     /// </summary>
     [System.Serializable]
     public sealed class PoseDocument
@@ -123,7 +123,7 @@ namespace Lilium
                 }
                 bool rotation = point.hasRotation && point.pinRotation && body.PointHasRotation (new BodyPointId (point.name));
                 TransformChannels channels = TransformChannels.Position | (rotation ? TransformChannels.Rotation : 0);
-                target.SetValues (false, channels, toRoot * point.position, toRoot * Quaternion.Euler (point.rotation) * Quaternion.Inverse (toRoot));
+                target.SetValues (channels, toRoot * point.position, toRoot * Quaternion.Euler (point.rotation) * Quaternion.Inverse (toRoot));
                 if (!rotation) target.ReleaseRotation ();
                 target.SetState (state);
             }
@@ -137,7 +137,7 @@ namespace Lilium
             if (session == null || session.stage == null || session.stage.editingRig == null) {
                 return session != null && session.error != null ? session.error : Tr ("POSE_SESSION_NO_CHARACTER");
             }
-            if (session.stage.fullBody == null) return Tr ("POSE_DOCUMENT_NOT_FULL_BODY");
+            if (session.stage.fullBody == null) return Tr ("POSE_DOCUMENT_NO_POINTS");
             return null;
         }
 

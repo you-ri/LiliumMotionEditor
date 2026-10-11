@@ -36,8 +36,9 @@ namespace Lilium
 
     /// <summary>
     /// Override の合成の式。値はコントロール（操作値）ごとに、その値の空間の中で合成する。
-    /// 同じコントロールの値同士しか混ぜないので、空間の違う値（IK の目標と骨の回転など）が混ざることは無い。
-    /// - Additive: 回転は元の後ろに掛ける（元 × 差分）、位置は足す、大きさは掛ける。足の転がしの角度は足す。ほかの数値（IK の重みなど）は置き換える。
+    /// 同じコントロールの値同士しか混ぜないので、空間の違う値（全身 IK の点の位置と骨の回転など）が混ざることは無い。
+    /// - Additive: 回転は元の後ろに掛ける（元 × 差分）、位置は足す、大きさは掛ける。数値は、足し合わせる値（任意のプロパティの数値）だけ足し、
+    ///   ほかの数値（点の固定の強さ・Rig の代理の重みなど）は置き換える。
     /// - Override: キーのある値を置き換え、重みで元と混ぜる。
     /// 書くときは逆に、狙いの値と元の値から、クリップに入れる値（差分か、そのままの値）を求める
     /// </summary>
@@ -66,7 +67,7 @@ namespace Lilium
             return Mathf.LerpUnclamped (source, stored, weight);
         }
 
-        /// <param name="additive">足し合わせで重ねる値か（足の転がしの角度）。そうでない値（IK の重みなど）は Additive でも置き換える</param>
+        /// <param name="additive">足し合わせで重ねる値か（任意のプロパティの数値。PropertyPlayer.IsAdditive）。そうでない値（点の固定の強さなど）は Additive でも置き換える</param>
         public static float ComposeFloat (OverrideMode mode, bool additive, float source, float stored, float weight)
         {
             if (mode == OverrideMode.Additive && additive) return source + stored * weight;
@@ -110,7 +111,7 @@ namespace Lilium
     /// <summary>
     /// Override のクリップを編集用の体のコントロールへ重ねる。クリップのカーブはクリップごとにまとめて覚え、
     /// カーブが書き換わったら（onCurveWasModified・Undo）捨てる。
-    /// 重ねるのはコントロールの Transform（位置・回転・大きさ）と、IK の切替・Rig の代理の重み。それ以外のプロパティは v1 では扱わない
+    /// 重ねるのはコントロールの Transform（位置・回転・大きさ）と、全身 IK の点の固定の強さ・Rig の代理の重み。それ以外のプロパティは v1 では扱わない
     /// </summary>
     public static class OverrideApplier
     {
@@ -210,7 +211,7 @@ namespace Lilium
                 if (component == null) continue;
                 float current;
                 if (!TryGetFloat (component, channel.property, out current)) continue;
-                SetFloat (component, channel.property, OverrideMath.ComposeFloat (mode, IkControl.IsAdditive (channel.property) && component is IkControl, current, channel.curve.Evaluate (time), weight));
+                SetFloat (component, channel.property, OverrideMath.ComposeFloat (current, channel.curve.Evaluate (time), weight));
             }
         }
 
@@ -219,11 +220,10 @@ namespace Lilium
             return parts != null ? parts.PartOf (path) : AvatarMaskBodyPart.LastBodyPart;
         }
 
-        /// <summary>重ねられる数値のプロパティか（IK の切替と足の転がしの角度・全身 IK の点の固定の強さ・Rig の代理の重み）</summary>
+        /// <summary>重ねられる数値のプロパティか（全身 IK の点の固定の強さ・Rig の代理の重み）</summary>
         public static bool IsSupportedFloat (EditorCurveBinding binding)
         {
-            return (binding.type == typeof (IkControl) && IkControl.IndexOf (binding.propertyName) >= 0)
-                || (binding.type == typeof (BodyPoint) && BodyPoint.IndexOf (binding.propertyName) >= 0)
+            return (binding.type == typeof (BodyPoint) && BodyPoint.IndexOf (binding.propertyName) >= 0)
                 || (binding.type == typeof (RigLayerProxy) && binding.propertyName == RigLayerProxy.kWeightProperty)
                 || (binding.type == typeof (RigConstraintProxy) && binding.propertyName == RigConstraintProxy.kWeightProperty);
         }
@@ -231,13 +231,6 @@ namespace Lilium
         static bool TryGetFloat (Component component, string property, out float value)
         {
             value = 0;
-            IkControl ik = component as IkControl;
-            if (ik != null) {
-                int index = IkControl.IndexOf (property);
-                if (index < 0) return false;
-                value = ik.GetValue (index);
-                return true;
-            }
             BodyPoint point = component as BodyPoint;
             if (point != null) {
                 int index = BodyPoint.IndexOf (property);
@@ -254,11 +247,6 @@ namespace Lilium
 
         static void SetFloat (Component component, string property, float value)
         {
-            IkControl ik = component as IkControl;
-            if (ik != null) {
-                ik.SetValue (IkControl.IndexOf (property), value);
-                return;
-            }
             BodyPoint point = component as BodyPoint;
             if (point != null) {
                 point.SetValue (BodyPoint.IndexOf (property), value);

@@ -51,24 +51,24 @@ namespace Lilium
             get { return 0.15f * Mathf.Max (0.1f, rig_.humanScale); }
         }
 
-        public override TransformChannels GetSpinChannels (bool pole)
+        public override TransformChannels GetSpinChannels ()
         {
             return TransformChannels.Position | TransformChannels.Rotation;
         }
 
-        public override void SpinMove (Vector3 delta, bool pole)
+        public override void SpinMove (Vector3 delta)
         {
             source_.editing.localPosition += delta;
             rig_.rigProxies.Capture (source_);
         }
 
-        public override void SpinRotateLocal (Quaternion delta, bool pole)
+        public override void SpinRotateLocal (Quaternion delta)
         {
             source_.editing.localRotation = source_.editing.localRotation * delta;
             rig_.rigProxies.Capture (source_);
         }
 
-        public override void SpinRotateWorld (Quaternion delta, bool pole)
+        public override void SpinRotateWorld (Quaternion delta)
         {
             source_.editing.rotation = delta * source_.editing.rotation;
             rig_.rigProxies.Capture (source_);
@@ -130,20 +130,20 @@ namespace Lilium
             get { return rig_.humanScale; }
         }
 
-        public override bool TryGetValues (bool pole, out Vector3 position, out Quaternion rotation)
+        public override bool TryGetValues (out Vector3 position, out Quaternion rotation)
         {
             source_.proxy.GetLocalPositionAndRotation (out position, out rotation);
             position *= humanScale;
             return true;
         }
 
-        public override void SetValues (bool pole, TransformChannels channels, Vector3 position, Quaternion rotation)
+        public override void SetValues (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
             if ((channels & TransformChannels.Position) != 0) source_.proxy.localPosition = position / humanScale;
             if ((channels & TransformChannels.Rotation) != 0) source_.proxy.localRotation = Quaternion.Normalize (rotation);
         }
 
-        public override void ResetValues (bool pole, TransformChannels channels)
+        public override void ResetValues (TransformChannels channels)
         {
             if ((channels & TransformChannels.Position) != 0) source_.proxy.localPosition = source_.defaultPosition;
             if ((channels & TransformChannels.Rotation) != 0) source_.proxy.localRotation = source_.defaultRotation;

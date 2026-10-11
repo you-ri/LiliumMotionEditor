@@ -6,14 +6,14 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 編集用リグのつかむ対象を作る。FK は骨ごと、IK は組ごと、ゲームの Rig のターゲットは 1 つずつ
+    /// 編集用リグのつかむ対象を作る。FK は骨ごと、全身 IK は点ごと、ゲームの Rig のターゲットは 1 つずつ
     /// </summary>
     public static class RigTargets
     {
         public static List<PoseTarget> Create (PreviewStage stage)
         {
             List<PoseTarget> targets = Create (stage != null ? stage.editingRig : null, stage != null ? stage.editingRigSolver : null);
-            // 全身 IK の点（S25。リグの定義が全身 IK のときだけ）
+            // 全身 IK の点（S25）
             if (stage != null && stage.fullBody != null) targets.AddRange (BodyPointTarget.Create (stage.editingRig, stage.fullBody));
             // 物の持ち替え（キャラの設定の parentSwitches）の物。表示モデルの上でつかんで、握りを動かす
             if (stage != null) targets.AddRange (ParentSwitchTarget.Create (stage));
@@ -39,12 +39,6 @@ namespace Lilium
                 Transform bone = rig.GetEditingBone (extra.bone);
                 if (control == null || bone == null) continue;
                 targets.Add (new FkTarget (rig, solver, shapes, control, bone, extra.bone, extra.control.name, extra.control.position, extra.control.fullBodyHandle));
-            }
-            foreach (RigBinding.Ik ik in rig.binding.ik) {
-                if (!ik.enabled) continue;
-                Transform chain = rig.FindControl (ik.path);
-                if (chain == null) continue;
-                targets.Add (new IkTarget (rig, solver, shapes, chain, ik));
             }
             if (rig.rigProxies != null) {
                 foreach (RigProxies.Source source in rig.rigProxies.sources) {

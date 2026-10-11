@@ -56,10 +56,6 @@ namespace Lilium
             float rate = destination.frameRate > 0 ? destination.frameRate : 60;
             int frameCount = Mathf.Max (1, Mathf.RoundToInt (options.length * rate) + 1);
 
-            List<string> chains = new List<string> ();
-            foreach (RigBinding.Ik ik in rig.binding.ik) {
-                if (ik.enabled) chains.Add (ik.chain.name);
-            }
             Dictionary<EditorCurveBinding, float[]> values = new Dictionary<EditorCurveBinding, float[]> ();
             HashSet<string> rotationPaths = new HashSet<string> ();
             Vector3[] expected = new Vector3[bones.Count];
@@ -74,8 +70,6 @@ namespace Lilium
                     root.localScale = rootScale;
                     for (int b = 0; b < bones.Count; b++) expected[b] = root.InverseTransformPoint (bones[b].position);
 
-                    // 取り込んだ手足は FK（IK の重み 0）。IK で触ると、その時点の見た目から IK へ切り替わる
-                    foreach (string chain in chains) solver.SetIkWeight (chain, 0);
                     solver.Capture ();
 
                     using (CurveWriter writer = CurveWriter.Begin (null, root, f, null)) {

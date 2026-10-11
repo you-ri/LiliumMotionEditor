@@ -42,7 +42,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 既定のリグの定義（ソルバーは全身 IK）。TearDown で捨てる
+        /// 既定のリグの定義。TearDown で捨てる
         /// </summary>
         protected EditRigDefinition CreateDefinition ()
         {
