@@ -504,7 +504,13 @@ MonoBehaviour:
   - enabled: 1
     name: Hips
     bone: 0
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -514,7 +520,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -524,7 +536,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightUpperLeg
     bone: 2
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -534,7 +552,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -544,7 +568,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightLowerLeg
     bone: 4
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -554,7 +584,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftFoot
     bone: 5
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -564,7 +600,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightFoot
     bone: 6
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -574,7 +616,13 @@ MonoBehaviour:
   - enabled: 1
     name: Spine
     bone: 7
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -584,7 +632,13 @@ MonoBehaviour:
   - enabled: 1
     name: Chest
     bone: 8
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -594,7 +648,13 @@ MonoBehaviour:
   - enabled: 1
     name: Neck
     bone: 9
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -604,7 +664,13 @@ MonoBehaviour:
   - enabled: 1
     name: Head
     bone: 10
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -614,7 +680,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftShoulder
     bone: 11
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -624,7 +696,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightShoulder
     bone: 12
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -634,7 +712,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftUpperArm
     bone: 13
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -644,7 +728,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightUpperArm
     bone: 14
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -654,7 +744,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftLowerArm
     bone: 15
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -664,7 +760,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightLowerArm
     bone: 16
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -674,7 +776,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftHand
     bone: 17
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -684,7 +792,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightHand
     bone: 18
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
     pullStrength: 1
@@ -694,7 +808,13 @@ MonoBehaviour:
   - enabled: 1
     name: UpperChest
     bone: 54
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -704,7 +824,13 @@ MonoBehaviour:
   - enabled: 1
     name: HipsDirection
     bone: 0
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
@@ -714,7 +840,13 @@ MonoBehaviour:
   - enabled: 1
     name: UpperChestDirection
     bone: 54
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
@@ -724,7 +856,13 @@ MonoBehaviour:
   - enabled: 1
     name: HeadDirection
     bone: 10
-    anchor: 8
+    origin: 55
+    toward: 21
+    along: 1
+    across: 0
+    axes: {x: 0, y: 1, z: 0}
+    ground: 0
+    fallback: {x: 0, y: 0.095, z: 0}
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
@@ -734,7 +872,13 @@ MonoBehaviour:
   - enabled: 1
     name: HeadTop
     bone: 10
-    anchor: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0.25, z: 0}
     rotation: 0
     pullStrength: 0
@@ -744,7 +888,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftKneePole
     bone: 1
-    anchor: 7
+    origin: 3
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
@@ -754,7 +904,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightKneePole
     bone: 2
-    anchor: 7
+    origin: 4
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0.25}
     rotation: 0
     pullStrength: 0
@@ -764,7 +920,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftHeel
     bone: 5
-    anchor: 1
+    origin: 5
+    toward: 19
+    along: -0.15
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -774,7 +936,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftSoleBall
     bone: 5
-    anchor: 5
+    origin: 5
+    toward: 19
+    along: 1
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -784,7 +952,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
-    anchor: 6
+    origin: 5
+    toward: 19
+    along: 1
+    across: -0.35
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -794,7 +968,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftToeTip
     bone: 19
-    anchor: 2
+    origin: 5
+    toward: 19
+    along: 1.45
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -804,7 +984,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
-    anchor: 3
+    origin: 27
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -814,7 +1000,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
-    anchor: 4
+    origin: 36
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -824,7 +1016,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightHeel
     bone: 6
-    anchor: 1
+    origin: 6
+    toward: 20
+    along: -0.15
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -834,7 +1032,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightSoleBall
     bone: 6
-    anchor: 5
+    origin: 6
+    toward: 20
+    along: 1
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -844,7 +1048,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
-    anchor: 6
+    origin: 6
+    toward: 20
+    along: 1
+    across: 0.35
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -854,7 +1064,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightToeTip
     bone: 20
-    anchor: 2
+    origin: 6
+    toward: 20
+    along: 1.45
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -864,7 +1080,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightPalmIndex
     bone: 18
-    anchor: 3
+    origin: 42
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -874,7 +1096,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightPalmLittle
     bone: 18
-    anchor: 4
+    origin: 51
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
@@ -884,7 +1112,13 @@ MonoBehaviour:
   - enabled: 1
     name: LeftElbowPole
     bone: 13
-    anchor: 9
+    origin: 15
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: -0.25}
     rotation: 0
     pullStrength: 0
@@ -894,7 +1128,13 @@ MonoBehaviour:
   - enabled: 1
     name: RightElbowPole
     bone: 14
-    anchor: 9
+    origin: 16
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: -0.25}
     rotation: 0
     pullStrength: 0

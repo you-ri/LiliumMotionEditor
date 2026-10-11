@@ -139,7 +139,6 @@
     "EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW": "Full-body IK iterations are less than 1",
     "EDIT_RIG_DEFINITION_NEGATIVE_TOE_BREAK": "Foot roll toe break angle is negative: {0}",
     "EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL": "A full-body IK point on the bone origin cannot have pull strength 0 (it has nothing to aim): {0}",
-    "EDIT_RIG_DEFINITION_POINT_ANCHOR_NEEDS_SIDE": "Full-body IK point anchor ({0}) requires a left or right bone: {1}",
     "EDIT_RIG_DEFINITION_POINT_BLEND_BONE_OUT_OF_RANGE": "The blend bone of a full-body IK point is out of range: {0}",
     "EDIT_RIG_DEFINITION_POINT_BLEND_NEEDS_AIM": "Only full-body IK points with pull strength 0 can blend their offset with another bone: {0}",
     "EDIT_RIG_DEFINITION_POINT_BLEND_OUT_OF_RANGE": "The blend of a full-body IK point must be between 0 and 1: {0}",

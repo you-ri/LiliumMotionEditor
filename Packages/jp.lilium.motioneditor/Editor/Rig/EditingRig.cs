@@ -190,13 +190,7 @@ namespace Lilium
 
         /// <summary>
         /// 全身 IK の点が、乗る骨の付け根からどれだけ離れているか（基準姿勢で。ルートから見た向き・メートル）。
-        /// 定義の基準の場所に、定義のずれ（体の向き・humanScale に対する割合）を足した所:
-        /// - 骨の付け根: 0
-        /// - かかと・つま先の先・足裏の中心・小指側: 同じ側の脚の IK の組の、足の転がしの支点を地面（基準姿勢のルートの高さ）へ落とした所
-        ///   （組の上書きも効く。組が無ければ 0）
-        /// - 膝: 同じ側の下腿の骨の付け根
-        /// - 目の高さ: 頭の骨の付け根の真上の、目の高さ（GetEyeHeight）
-        /// - 人差し指・小指の付け根: 同じ側の指の付け根（指の骨が無ければ、前腕の向きへ前腕の長さの 0.35 倍の所から前後へ開く）
+        /// 定義の基準の場所（origin・toward・along・across・axes・ground）に、定義のずれ（体の向き・humanScale に対する割合）を足した所
         /// </summary>
         public Vector3 GetPointRestOffset (RigBinding.Point point)
         {
@@ -221,139 +215,26 @@ namespace Lilium
         Vector3 GetAnchorRestOffset (RigBinding.Point point)
         {
             Transform host = GetEditingBone (point.bone);
-            if (host == null) return Vector3.zero;
             EditRigDefinition.BodyPoint definition = point.definition;
-            bool left = RigPaths.SideOf (definition.bone) == "Left";
-            switch (definition.anchor) {
-                case BodyPointAnchor.Heel:
-                case BodyPointAnchor.ToeTip:
-                case BodyPointAnchor.SoleBall:
-                case BodyPointAnchor.LittleToeSide: {
-                    HumanBodyBones footBone = left ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
-                    RigBinding.Ik leg = null;
-                    foreach (RigBinding.Ik ik in binding.ik) {
-                        if (ik.chain.tip == footBone) leg = ik;
-                    }
-                    Transform foot = leg != null ? GetEditingBone (leg.tip) : null;
-                    Transform shin = leg != null ? GetEditingBone (leg.mid) : null;
-                    if (foot == null || shin == null) return Vector3.zero;
-                    ReverseFoot shape = ReverseFoot.Create (this, shin, foot, GetEditingBone (leg.chain.toes), leg.chain);
-                    Vector3 pivot = GetRestRootPosition (foot) + GetRestRootRotation (foot) * shape.GetPivot (ToFootPivot (definition.anchor));
-                    // 足の点は地面（基準姿勢のルートの高さ）に置く。足の転がしの支点は Avatar の足裏の高さなので、少し浮くキャラがある
-                    pivot -= bodyUp * Vector3.Dot (pivot, bodyUp);
-                    return pivot - GetRestRootPosition (host);
-                }
-                case BodyPointAnchor.Knee: {
-                    Transform knee = GetEditingBone (left ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg);
-                    return knee != null ? GetRestRootPosition (knee) - GetRestRootPosition (host) : Vector3.zero;
-                }
-                case BodyPointAnchor.Elbow: {
-                    Transform elbow = GetEditingBone (left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
-                    return elbow != null ? GetRestRootPosition (elbow) - GetRestRootPosition (host) : Vector3.zero;
-                }
-                case BodyPointAnchor.Eyes: {
-                    Transform head = GetEditingBone (HumanBodyBones.Head);
-                    if (head == null) return Vector3.zero;
-                    return GetRestRootPosition (head) + bodyUp * GetEyeHeight () - GetRestRootPosition (host);
-                }
-                case BodyPointAnchor.IndexBase:
-                case BodyPointAnchor.LittleBase: {
-                    bool index = definition.anchor == BodyPointAnchor.IndexBase;
-                    Transform hand = GetEditingBone (left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
-                    Transform finger = GetEditingBone (index
-                        ? (left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal)
-                        : (left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal));
-                    if (finger != null) return GetRestRootPosition (finger) - GetRestRootPosition (host);
-                    // 指の骨が無い: 前腕の向きへ前腕の長さの 0.35 倍、そこから体の前後へ開く（基準姿勢では人差し指が前）
-                    Transform forearm = GetEditingBone (left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
-                    if (forearm == null || hand == null) return Vector3.zero;
-                    Vector3 along = (GetRestRootPosition (hand) - GetRestRootPosition (forearm)) * 0.35f;
-                    return GetRestRootPosition (hand) - GetRestRootPosition (host) + along + BodyToRoot (Vector3.forward) * (along.magnitude * (index ? 0.4f : -0.4f));
-                }
+            Transform origin = definition.origin == HumanBodyBones.LastBone ? host : GetEditingBone (definition.origin);
+            // 基準の骨・先の骨の無い点は、割り当て（RigBinding）が作らない
+            if (host == null || origin == null) return Vector3.zero;
+            Vector3 start = GetRestRootPosition (origin);
+            Vector3 d = Vector3.zero;
+            if (definition.toward != HumanBodyBones.LastBone) {
+                Transform toward = GetEditingBone (definition.toward);
+                d = toward != null ? KeepAxes (GetRestRootPosition (toward) - start, definition.axes) : BodyToRoot (definition.fallback) * humanScale;
             }
-            return Vector3.zero;
+            Vector3 place = start + d * definition.along + Vector3.Cross (bodyUp, d) * definition.across;
+            if (definition.ground) place -= bodyUp * Vector3.Dot (place, bodyUp);
+            return place - GetRestRootPosition (host);
         }
 
-        /// <summary>目の高さを、頭に付いたメッシュの高さ（頭の付け根からてっぺんまで）の何倍に見積もるか（デモのキャラの目のメッシュで 0.47）</summary>
-        const float kEyeMeshRatio = 0.47f;
-        /// <summary>メッシュも無いときの目の高さ（humanScale に対する割合。デモのキャラで 0.095）</summary>
-        const float kEyeScaleRatio = 0.095f;
-        float eyeHeight_ = -1;
-
-        /// <summary>
-        /// 目の高さ（基準姿勢で、頭の骨の付け根から体の上の向きに測る。メートル）。目の骨があればその高さ（両目なら平均）、
-        /// 無ければ頭に付いたメッシュの高さから見積もり、メッシュも無ければ体の大きさから見積もる。キャラごとに 1 回だけ測る
-        /// </summary>
-        public float GetEyeHeight ()
+        /// <summary>ルートから見た向きのうち、体の向き（x 右・y 上・z 前）の axes が 1 の成分だけを残す</summary>
+        Vector3 KeepAxes (Vector3 value, Vector3 axes)
         {
-            if (eyeHeight_ >= 0) return eyeHeight_;
-            Transform head = GetEditingBone (HumanBodyBones.Head);
-            if (head == null) return eyeHeight_ = 0;
-            Vector3 origin = GetRestRootPosition (head);
-            float sum = 0;
-            int count = 0;
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.LeftEye, HumanBodyBones.RightEye }) {
-                Transform eye = GetEditingBone (bone);
-                if (eye == null) continue;
-                sum += Vector3.Dot (GetRestRootPosition (eye) - origin, bodyUp);
-                count++;
-            }
-            if (count > 0) return eyeHeight_ = Mathf.Max (0, sum / count);
-            float top = GetHeadMeshHeight ();
-            return eyeHeight_ = top > 0 ? top * kEyeMeshRatio : humanScale * kEyeScaleRatio;
-        }
-
-        /// <summary>
-        /// 頭（と頭より先の骨）に半分以上の重みで付いた頂点の、頭の骨の付け根からいちばん高い所までの高さ（メートル。無ければ 0）。
-        /// 表示モデルは今の姿勢とは限らないので、バインドポーズのメッシュで測る。上の向きと長さは、腰から頭への向きと長さを基準姿勢の値に合わせて決める
-        /// </summary>
-        float GetHeadMeshHeight ()
-        {
-            if (displayAnimator == null || !displayAnimator.isHuman) return 0;
-            Transform displayHead = displayAnimator.GetBoneTransform (HumanBodyBones.Head);
-            Transform displayHips = displayAnimator.GetBoneTransform (HumanBodyBones.Hips);
-            Transform head = GetEditingBone (HumanBodyBones.Head);
-            Transform hips = GetEditingBone (HumanBodyBones.Hips);
-            if (displayHead == null || displayHips == null || head == null || hips == null) return 0;
-            float restLength = Vector3.Distance (GetRestRootPosition (head), GetRestRootPosition (hips));
-            float best = 0;
-            foreach (SkinnedMeshRenderer renderer in displayAnimator.GetComponentsInChildren<SkinnedMeshRenderer> (true)) {
-                Mesh mesh = renderer.sharedMesh;
-                Transform[] bones = renderer.bones;
-                if (mesh == null || bones == null || mesh.bindposes.Length != bones.Length) continue;
-                int headIndex = System.Array.IndexOf (bones, displayHead);
-                int hipsIndex = System.Array.IndexOf (bones, displayHips);
-                if (headIndex < 0 || hipsIndex < 0) continue;
-                Matrix4x4[] bindposes = mesh.bindposes;
-                Vector3 headBind = bindposes[headIndex].inverse.MultiplyPoint3x4 (Vector3.zero);
-                Vector3 hipsBind = bindposes[hipsIndex].inverse.MultiplyPoint3x4 (Vector3.zero);
-                float bindLength = Vector3.Distance (headBind, hipsBind);
-                if (bindLength < 1e-6f || restLength < 1e-6f) continue;
-                Vector3 up = (headBind - hipsBind) / bindLength;
-                bool[] onHead = new bool[bones.Length];
-                for (int i = 0; i < bones.Length; i++) onHead[i] = bones[i] != null && (bones[i] == displayHead || bones[i].IsChildOf (displayHead));
-                Vector3[] vertices = mesh.vertices;
-                BoneWeight[] weights = mesh.boneWeights;
-                if (weights.Length != vertices.Length) continue;
-                for (int i = 0; i < vertices.Length; i++) {
-                    BoneWeight w = weights[i];
-                    float weight = (onHead[w.boneIndex0] ? w.weight0 : 0) + (onHead[w.boneIndex1] ? w.weight1 : 0)
-                        + (onHead[w.boneIndex2] ? w.weight2 : 0) + (onHead[w.boneIndex3] ? w.weight3 : 0);
-                    if (weight < 0.5f) continue;
-                    best = Mathf.Max (best, Vector3.Dot (vertices[i] - headBind, up) * restLength / bindLength);
-                }
-            }
-            return best;
-        }
-
-        static ReverseFoot.Pivot ToFootPivot (BodyPointAnchor anchor)
-        {
-            switch (anchor) {
-                case BodyPointAnchor.Heel: return ReverseFoot.Pivot.Heel;
-                case BodyPointAnchor.SoleBall: return ReverseFoot.Pivot.SoleBall;
-                case BodyPointAnchor.LittleToeSide: return ReverseFoot.Pivot.LittleToeSide;
-            }
-            return ReverseFoot.Pivot.ToeTip;
+            return bodyRight * (Vector3.Dot (value, bodyRight) * axes.x) + bodyUp * (Vector3.Dot (value, bodyUp) * axes.y)
+                + bodyForward * (Vector3.Dot (value, bodyForward) * axes.z);
         }
 
         /// <summary>

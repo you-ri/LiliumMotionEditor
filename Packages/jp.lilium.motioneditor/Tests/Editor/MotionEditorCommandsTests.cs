@@ -78,10 +78,11 @@ namespace Lilium
             MotionEditorCommands.Close ();
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
             AssetDatabase.CreateFolder ("Assets", "__MktCommandsTest");
-            // キャラの prefab（Avatar もアセットにしてから保存する。でないと prefab の Animator から Avatar が外れる）
+            // キャラの prefab（Avatar もアセットにしてから保存する。でないと prefab の Animator から Avatar が外れる）。
+            // 足を踵・つま先の先・小指側で置くので、つま先の骨のあるキャラにする（足の点はつま先の骨のあるキャラにだけできる）
             GameObject temp = new GameObject ("Hero");
             created_.Add (temp);
-            Animator display = TestSkeleton.CreateHumanoid (created_, true, 1);
+            Animator display = TestSkeleton.CreateHumanoidWithToes (created_);
             display.transform.SetParent (temp.transform, false);
             Avatar avatar = display.avatar;
             AssetDatabase.CreateAsset (avatar, kFolder + "/Hero.asset");
@@ -227,10 +228,10 @@ namespace Lilium
         [Test]
         public void WriteHand_AppliesPresetAndMuscles_ToTheChosenHandOnly ()
         {
-            // 指のあるキャラと、左手だけの握りのプリセット（右手には反対の手の値を写す）
+            // 指のあるキャラと、左手だけの握りのプリセット（右手には反対の手の値を写す）。足の点で立たせるので、つま先も付ける
             GameObject temp = new GameObject ("Hands");
             created_.Add (temp);
-            Animator display = TestSkeleton.CreateHumanoidWithFingers (created_);
+            Animator display = TestSkeleton.CreateHumanoidWithFingers (created_, toes: true);
             display.transform.SetParent (temp.transform, false);
             AssetDatabase.CreateAsset (display.avatar, kFolder + "/Hands.asset");
             created_.Remove (display.avatar);

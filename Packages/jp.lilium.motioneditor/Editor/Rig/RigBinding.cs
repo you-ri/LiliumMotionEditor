@@ -154,7 +154,8 @@ namespace Lilium
                     if (entry == null || !entry.enabled || !RigPaths.IsValidName (entry.name)) continue;
                     // 乗る骨: 定義の骨がこのキャラに無い・解かない骨なら、親の骨をたどって最初に当たる解く骨（つま先の骨が無ければ足）。
                     // ただし骨の付け根そのものの点は親へ乗せない（親の付け根の点と重なるだけなので、作らない）
-                    bool onOrigin = entry.anchor == BodyPointAnchor.BoneOrigin && entry.offset == Vector3.zero;
+                    bool onOrigin = entry.onBoneOrigin;
+                    if (isHuman && !HasAnchorBones (entry, animator)) continue;
                     Fk host = null;
                     for (int b = (int)entry.bone; b >= 0 && b < (int)HumanBodyBones.LastBone && host == null; b = HumanTrait.GetParentBone (b)) {
                         Fk fk = binding.FindFk ((HumanBodyBones)b);
@@ -185,6 +186,15 @@ namespace Lilium
                 binding.extras.Add (BindExtra (binding, control, animator));
             }
             return binding;
+        }
+
+        /// <summary>
+        /// 点の置き場所の基準の骨があるか（無い点は作らない）。先の骨が無いときは、代わりの向き（fallback）があれば作る
+        /// </summary>
+        static bool HasAnchorBones (EditRigDefinition.BodyPoint entry, Animator animator)
+        {
+            if (entry.origin != HumanBodyBones.LastBone && animator.GetBoneTransform (entry.origin) == null) return false;
+            return entry.toward == HumanBodyBones.LastBone || animator.GetBoneTransform (entry.toward) != null || entry.fallback != Vector3.zero;
         }
 
         /// <summary>

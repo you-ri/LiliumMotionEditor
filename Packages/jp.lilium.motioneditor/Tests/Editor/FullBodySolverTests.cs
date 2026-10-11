@@ -34,11 +34,12 @@ namespace Lilium
             public Vector3 up;
         }
 
-        Setup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, System.Action<Animator> decorate = null)
+        /// <param name="toes">つま先の骨を足す（足の点はつま先の骨のあるキャラにだけできる）</param>
+        /// <param name="fingers">親指・人差し指を足す（手のひらの人差し指側の点は指の骨のあるキャラにだけできる）。littleFingers なら小指も</param>
+        Setup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, bool fingers = false, bool littleFingers = false)
         {
             Setup s = new Setup ();
-            Animator display = CreateCharacter (withChest, size, toes, toeOut, eyes: eyes);
-            if (decorate != null) decorate (display);
+            Animator display = CreateCharacter (withChest, size, toes, toeOut, fingers: fingers, eyes: eyes, littleFingers: littleFingers);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             s.rig = CreateEditingRig (definition_, display);
             s.solver = new EditingRigSolver (s.rig);
@@ -338,12 +339,13 @@ namespace Lilium
 
         /// <summary>
         /// つま先の先を Locked にし、腰を位置だけ固定して、足首をつま先のまわりに回して持ち上げる（かかとを上げる）。
-        /// 足だけで届くので、上半身は動かず、つま先の先も外れない（つま先の骨があるキャラでは、以前はつま先の先が数 cm 外れていた）
+        /// 足だけで届くので、上半身は動かず、つま先の先も外れない（つま先の骨があるキャラでは、以前はつま先の先が数 cm 外れていた）。
+        /// つま先の先はつま先の骨のあるキャラにだけできるので、つま先の骨のあるキャラだけで試す
         /// </summary>
         [Test]
-        public void HeelRaisedOnLockedToeTip_WithHipsPinned_KeepsUpperBody ([Values (false, true)] bool toes)
+        public void HeelRaisedOnLockedToeTip_WithHipsPinned_KeepsUpperBody ()
         {
-            Setup s = Create (toes: toes);
+            Setup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform hips = Bone (s, HumanBodyBones.Hips);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
@@ -355,8 +357,8 @@ namespace Lilium
             LockPoint (s, tip, Vector3.zero);
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
-            // つま先の付け根（つま先の骨が無ければつま先の先）を中心に、足首が上がる向きへ 25° 回した所
-            Vector3 pivot = toes ? Bone (s, HumanBodyBones.LeftToes).position : tipPosition;
+            // つま先の付け根を中心に、足首が上がる向きへ 25° 回した所
+            Vector3 pivot = Bone (s, HumanBodyBones.LeftToes).position;
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
             Vector3 raised = pivot + Quaternion.AngleAxis (25, side) * (foot.position - pivot);
             Vector3 lowered = pivot + Quaternion.AngleAxis (-25, side) * (foot.position - pivot);
@@ -377,7 +379,8 @@ namespace Lilium
         [Test]
         public void HipsPulledBack_BeyondLegReach_KeepsUpperBodyUpright ([Values (false, true)] bool contactPoints, [Values (0.2f, 0.3f)] float back)
         {
-            Setup s = Create ();
+            // 足の点（踵・つま先の先）はつま先の骨のあるキャラにだけできる。足首で固定する側も同じキャラで比べる
+            Setup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform hips = Bone (s, HumanBodyBones.Hips);
             Quaternion hipsRotation = hips.rotation;
@@ -814,7 +817,7 @@ namespace Lilium
             // 顔の前の点は、目の高さ（S31）にする前の置き方で比べる。引く強さ 1 で点どうしが引き合うこの組み合わせは、
             // Burst とマネージドの数学関数のわずかな差が広がり、点の高さで差が 0.009〜0.14mm と揺れる（10-05 実測。引く強さ 0 は 0）
             EditRigDefinition.BodyPoint face = definition_.bodyPoints.First (p => p.name == "HeadDirection");
-            face.anchor = BodyPointAnchor.BoneOrigin;
+            face.toward = HumanBodyBones.LastBone;
             face.offset = new Vector3 (0, 0.075f, 0.25f);
             Setup s = Create ();
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
@@ -923,7 +926,8 @@ namespace Lilium
         [Test]
         public void ContactPoints_AreCreatedForFeetAndHands ()
         {
-            Setup s = Create ();
+            // 足の点はつま先の骨、手のひらの点は指の付け根から置くので、両方を持つキャラで
+            Setup s = Create (toes: true, fingers: true, littleFingers: true);
             foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
                 Vector3 ankle = Bone (s, foot).position;
                 Vector3 heel, toe;
@@ -963,8 +967,8 @@ namespace Lilium
             Assert.AreEqual ("Controls/Body/LeftPalmIndex", RigPaths.BodyPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand).name));
             Assert.AreEqual ("Controls/Body/RightPalmLittle", RigPaths.BodyPoint (BodyPointId.PalmLittle (HumanBodyBones.RightHand).name));
 
-            definition_.bodyPoints.RemoveAll (p => p.anchor != BodyPointAnchor.BoneOrigin);
-            Setup none = Create ();
+            definition_.bodyPoints.RemoveAll (p => p.origin != HumanBodyBones.LastBone || p.toward != HumanBodyBones.LastBone);
+            Setup none = Create (toes: true, fingers: true, littleFingers: true);
             Assert.IsFalse (none.body.HasPoint (BodyPointId.Heel (HumanBodyBones.LeftFoot)), "定義の一覧から消すと無くなる");
             Assert.IsFalse (none.body.HasPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand)));
         }
@@ -1007,19 +1011,21 @@ namespace Lilium
         [Test]
         public void HeelAndToeLocked_KeepFootPlanted_WhenHipsGoDown ()
         {
-            Setup s = Create ();
+            // 足の骨の上の 2 点（かかとと足裏の中心）を固定すれば、足は回らない。
+            // つま先の先はつま先の骨に乗るので、かかととつま先の先の 2 点では足の骨の向きは決まらない
+            Setup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
             Quaternion[] rotations = feet.Select (f => Bone (s, f).rotation).ToArray ();
             foreach (HumanBodyBones foot in feet) {
                 LockPoint (s, BodyPointId.Heel (foot), Vector3.zero);
-                LockPoint (s, BodyPointId.ToeTip (foot), Vector3.zero);
+                LockPoint (s, BodyPointId.SoleBall (foot), Vector3.zero);
             }
             Pin (s, HumanBodyBones.Hips, -s.up * 0.15f + s.forward * 0.03f);
             Solve (s);
             for (int i = 0; i < feet.Length; i++) {
                 Assert.LessOrEqual (s.body.GetResidual (BodyPointId.Heel (feet[i])), kReach, feet[i] + " のかかとは動かない");
-                Assert.LessOrEqual (s.body.GetResidual (BodyPointId.ToeTip (feet[i])), kReach, feet[i] + " のつま先の先は動かない");
+                Assert.LessOrEqual (s.body.GetResidual (BodyPointId.SoleBall (feet[i])), kReach, feet[i] + " の足裏の中心は動かない");
                 Assert.LessOrEqual (Quaternion.Angle (rotations[i], Bone (s, feet[i]).rotation), 0.1f, feet[i] + " は回らない（足裏が付いたまま）");
             }
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰は下がる");
@@ -1027,9 +1033,10 @@ namespace Lilium
         }
 
         [Test]
-        public void ToeTipLocked_LetsHeelRise_WhenHipsGoUp ([Values (false, true)] bool toes)
+        public void ToeTipLocked_LetsHeelRise_WhenHipsGoUp ()
         {
-            Setup s = Create (toes: toes);
+            // つま先の先はつま先の骨のあるキャラにだけできる
+            Setup s = Create (toes: true);
             HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
             Quaternion[] rotations = feet.Select (f => Bone (s, f).rotation).ToArray ();
             Vector3[] ankles = feet.Select (f => Bone (s, f).position).ToArray ();
@@ -1079,7 +1086,7 @@ namespace Lilium
         {
             // 足首の位置を固定し、小指側の点を下へ: 足が足首まわりに回って小指側が下がる。脛から根の側は動かない
             // （小指側は引く強さ 1 だが、同じ骨の足首を固定しているので、足首まわりに回るだけ）
-            Setup s = Create ();
+            Setup s = Create (toes: true);
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
             Solve (s);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
@@ -1099,10 +1106,11 @@ namespace Lilium
         }
 
         [Test]
-        public void FootTipPoints_PullLeg_LikePalmPoints ([Values (false, true)] bool toeTip, [Values (false, true)] bool toes)
+        public void FootTipPoints_PullLeg_LikePalmPoints ([Values (false, true)] bool toeTip)
         {
-            // 小指側・足先（つま先の先）の点だけを固定して前上へ動かす: 手の 2 点と同じく、点が目標に届くまで脚ごと引く（向けるだけにしない）
-            Setup s = Create (toes: toes);
+            // 小指側・足先（つま先の先）の点だけを固定して前上へ動かす: 手の 2 点と同じく、点が目標に届くまで脚ごと引く（向けるだけにしない）。
+            // 足の点はつま先の骨のあるキャラにだけできる
+            Setup s = Create (toes: true);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
             Vector3 ankle = foot.position;
             BodyPointId side = toeTip ? BodyPointId.ToeTip (HumanBodyBones.LeftFoot) : BodyPointId.LittleToeSide (HumanBodyBones.LeftFoot);
@@ -1114,36 +1122,13 @@ namespace Lilium
 
         // ---- 顔の前の点の高さ ----
 
-        /// <summary>
-        /// 頭に付いたメッシュを足す（頭の付け根から上へ 0.2m の頂点を頭に、腰の頂点を腰に付ける）。表示モデルは T ポーズのまま、
-        /// メッシュは 2 倍の大きさで作る（バインドポーズの長さを基準姿勢の長さへ直すかを確かめる）
-        /// </summary>
-        void AddHeadMesh (Animator display)
-        {
-            Transform head = display.GetBoneTransform (HumanBodyBones.Head);
-            Transform hips = display.GetBoneTransform (HumanBodyBones.Hips);
-            GameObject body = new GameObject ("Body");
-            body.transform.SetParent (display.transform, false);
-            body.transform.localScale = Vector3.one * 0.5f;
-            SkinnedMeshRenderer renderer = body.AddComponent<SkinnedMeshRenderer> ();
-            Mesh mesh = new Mesh ();
-            created_.Add (mesh);
-            Matrix4x4 toMesh = body.transform.worldToLocalMatrix;
-            mesh.vertices = new[] { toMesh.MultiplyPoint3x4 (head.position + Vector3.up * 0.2f), toMesh.MultiplyPoint3x4 (hips.position) };
-            mesh.boneWeights = new[] { new BoneWeight { boneIndex0 = 0, weight0 = 1 }, new BoneWeight { boneIndex0 = 1, weight0 = 1 } };
-            mesh.bindposes = new[] { head.worldToLocalMatrix * body.transform.localToWorldMatrix, hips.worldToLocalMatrix * body.transform.localToWorldMatrix };
-            renderer.sharedMesh = mesh;
-            renderer.bones = new[] { head, hips };
-        }
-
         [Test]
-        public void HeadDirection_IsAtEyeHeight ([Values ("eyes", "mesh", "none")] string source)
+        public void HeadDirection_IsAtEyeHeight ([Values ("eyes", "none")] string source)
         {
-            // 顔の前の点は、頭の付け根の真上の目の高さに置き、そこから前へ出す。目の高さは目の骨・頭のメッシュ・体の大きさの順に決める
-            Setup s = Create (eyes: source == "eyes", decorate: source == "mesh" ? (System.Action<Animator>)AddHeadMesh : null);
+            // 顔の前の点は、頭の付け根の真上の目の高さに置き、そこから前へ出す。目の高さは目の骨から、無ければ体の大きさから決める
+            Setup s = Create (eyes: source == "eyes");
             Transform head = Bone (s, HumanBodyBones.Head);
-            float expected = source == "eyes" ? 0.08f : source == "mesh" ? 0.2f * 0.47f : s.rig.humanScale * 0.095f;
-            Assert.AreEqual (expected, s.rig.GetEyeHeight (), 1e-4f, "目の高さ");
+            float expected = source == "eyes" ? 0.08f : s.rig.humanScale * EditRigDefinition.kEyeHeight;
             Vector3 onBone;
             Assert.IsTrue (s.body.TryGetBonePointWorld (BodyPointId.Direction (HumanBodyBones.Head), out onBone));
             Assert.AreEqual (head.position.y + expected, onBone.y, 1e-4f, "顔の前の点は目の高さ");
@@ -1332,7 +1317,7 @@ namespace Lilium
             Assert.AreEqual (count + 1, definition_.bodyPoints.Count, "左だけ足す");
             EditRigDefinition.BodyPoint left = definition_.bodyPoints[definition_.bodyPoints.Count - 1];
             Assert.AreEqual ("LeftElbowPole", left.name, "最後に足す");
-            Assert.AreEqual (BodyPointAnchor.Elbow, left.anchor);
+            Assert.AreEqual (HumanBodyBones.LeftLowerArm, left.origin);
             Assert.AreEqual (HumanBodyBones.LeftLowerArm, left.blendBone);
             Assert.AreEqual ("LeftLowerArm", left.link, "肘へ線でつなぐ");
             Assert.AreEqual (new Vector3 (0, -0.2f, 0), definition_.bodyPoints.First (p => p.name == "RightElbowPole").offset, "自分で足した点は変えない");
@@ -1422,10 +1407,41 @@ namespace Lilium
         [Test]
         public void BodyPoint_OnMissingBone_RidesOnParent ([Values (false, true)] bool toes)
         {
-            // つま先の先はつま先の骨に置く。つま先の骨が無いキャラでは足の骨へ乗る（親をたどる）
+            // つま先の骨に乗せた点（基準は乗る骨の付け根で、前へずらすだけ）。つま先の骨が無いキャラでは足の骨へ乗る（親をたどる）。
+            // 既定のつま先の先は、つま先の骨が無いと作らない（足の点の並ぶ向きが決まらない）ので、自分で足した点で確かめる
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "ToeCap", bone = HumanBodyBones.LeftToes, offset = new Vector3 (0, 0, 0.05f) });
             Setup s = Create (toes: toes);
-            BodyPointId tip = BodyPointId.ToeTip (HumanBodyBones.LeftFoot);
-            Assert.AreEqual (Bone (s, toes ? HumanBodyBones.LeftToes : HumanBodyBones.LeftFoot), s.body.GetBone (tip));
+            BodyPointId cap = new BodyPointId ("ToeCap");
+            Assert.IsTrue (s.body.HasPoint (cap));
+            Assert.AreEqual (Bone (s, toes ? HumanBodyBones.LeftToes : HumanBodyBones.LeftFoot), s.body.GetBone (cap));
+            if (toes) {
+                Assert.AreEqual (Bone (s, HumanBodyBones.LeftToes), s.body.GetBone (BodyPointId.ToeTip (HumanBodyBones.LeftFoot)), "既定のつま先の先はつま先の骨に乗る");
+            }
+        }
+
+        [Test]
+        public void FootAndPalmPoints_AreNotCreated_WithoutToesAndFingers ()
+        {
+            // 足の点はつま先の骨への向きで、手のひらの点は指の付け根に置く。その骨が無いキャラには作らない（足首・手首から見積もらない）。
+            // ほかの点（膝の Pole・顔の前）はそのまま作る
+            Setup s = Create ();
+            foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
+                foreach (BodyPointId id in new[] { BodyPointId.Heel (foot), BodyPointId.SoleBall (foot), BodyPointId.LittleToeSide (foot), BodyPointId.ToeTip (foot) }) {
+                    Assert.IsFalse (s.body.HasPoint (id), "つま先の骨が無いと足の点は無い: " + id.name);
+                    Assert.IsNull (s.rig.FindControl (RigPaths.BodyPoint (id.name)), "コントロールも作らない: " + id.name);
+                }
+            }
+            foreach (HumanBodyBones hand in new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand }) {
+                Assert.IsFalse (s.body.HasPoint (BodyPointId.PalmIndex (hand)), "指の骨が無いと手のひらの点は無い: " + hand);
+                Assert.IsFalse (s.body.HasPoint (BodyPointId.PalmLittle (hand)), "指の骨が無いと手のひらの点は無い: " + hand);
+            }
+            Assert.IsTrue (s.body.HasPoint (new BodyPointId ("LeftKneePole")), "膝の Pole はある");
+            Assert.IsTrue (s.body.HasPoint (BodyPointId.Direction (HumanBodyBones.Head)), "顔の前の点はある");
+
+            // 人差し指だけあって小指が無いキャラは、人差し指側の点だけ作る
+            Setup index = Create (fingers: true);
+            Assert.IsTrue (index.body.HasPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand)));
+            Assert.IsFalse (index.body.HasPoint (BodyPointId.PalmLittle (HumanBodyBones.LeftHand)));
         }
 
         [Test]
@@ -1454,7 +1470,8 @@ namespace Lilium
         public void LockedContactPoint_WinsOverDraggedJointPoint_OnSameBone ()
         {
             // 手のひらを Locked にして手首の点を動かす: 手のひらは動かず、手首は手のひらを支点に届く所まで寄る
-            Setup s = Create ();
+            // （手のひらの点は指の骨のあるキャラにだけできる）
+            Setup s = Create (fingers: true);
             BodyPointId palm = BodyPointId.PalmIndex (HumanBodyBones.LeftHand);
             Transform hand = Bone (s, HumanBodyBones.LeftHand);
             Quaternion rotation = hand.rotation;
@@ -1466,28 +1483,31 @@ namespace Lilium
             Assert.Greater (Quaternion.Angle (rotation, hand.rotation), 5f, "手が手のひらを支点に回る");
             Assert.Greater (hand.position.y, wrist.y + 0.005f, "手首は上がる");
 
-            // 逆: 足首を Locked にしてつま先の先を動かす。足首は動かず、足が足首を支点に回る
-            Setup t = Create ();
-            BodyPointId toe = BodyPointId.ToeTip (HumanBodyBones.LeftFoot);
+            // 逆: 足首を Locked にして、同じ足の骨の上の足裏の中心を動かす。足首は動かず、足が足首を支点に回る。
+            // 足の点はつま先の骨のあるキャラにだけでき、そのキャラのつま先の先はつま先の骨（足とは別の骨）に乗るので、足に乗る足裏の中心で試す
+            Setup t = Create (toes: true);
+            BodyPointId ball = BodyPointId.SoleBall (HumanBodyBones.LeftFoot);
             Transform foot = Bone (t, HumanBodyBones.LeftFoot);
+            Assert.AreEqual (foot, t.body.GetBone (ball), "足裏の中心は足首と同じ骨");
             rotation = foot.rotation;
             LockPoint (t, HumanBodyBones.LeftFoot, Vector3.zero);
-            PinDirection (t, toe, t.up * 0.05f);
+            PinDirection (t, ball, t.up * 0.05f);
             Solve (t);
             Assert.LessOrEqual (t.body.GetResidual (HumanBodyBones.LeftFoot), kReach, "足首は動かない");
             Assert.Greater (Quaternion.Angle (rotation, foot.rotation), 5f, "足が足首を支点に回る");
             Vector3 onBone, target;
             Quaternion ignored;
-            t.body.TryGetBonePointWorld (toe, out onBone);
-            t.body.TryGetPointWorld (toe, out target, out ignored);
-            Assert.LessOrEqual (Vector3.Angle (onBone - foot.position, target - foot.position), 0.1f, "つま先の先は点の方を向く");
+            t.body.TryGetBonePointWorld (ball, out onBone);
+            t.body.TryGetPointWorld (ball, out target, out ignored);
+            Assert.LessOrEqual (Vector3.Angle (onBone - foot.position, target - foot.position), 0.1f, "足裏の中心は点の方を向く");
         }
 
         [Test]
         public void HandPoints_ThreePointsSetHandOrientation ()
         {
             // 手首と人差し指側を Locked にして、小指側を動かす: 先の 2 点は動かず、手がその 2 点の軸まわりに回る
-            Setup s = Create ();
+            // （手のひらの 2 点は人差し指・小指の付け根に置くので、小指まであるキャラで）
+            Setup s = Create (fingers: true, littleFingers: true);
             HumanBodyBones hand = HumanBodyBones.LeftHand;
             BodyPointId index = BodyPointId.PalmIndex (hand);
             BodyPointId little = BodyPointId.PalmLittle (hand);
@@ -1517,7 +1537,7 @@ namespace Lilium
                 "小指側は、先の 2 点の軸まわりで点の方へ回る");
 
             // 手の 2 点を Locked にして手首を動かす: 2 点は動かず、手首は届く所まで
-            Setup t = Create ();
+            Setup t = Create (fingers: true, littleFingers: true);
             rotation = Bone (t, hand).rotation;
             LockPoint (t, index, Vector3.zero);
             LockPoint (t, little, Vector3.zero);
@@ -1533,7 +1553,8 @@ namespace Lilium
         public void ContactPointAlone_PullsArm ()
         {
             // 手のひらの点だけを動かす: 点が届くように腕が付いてくる。骨の上で固定した点が 1 つだけなので、手の向きは決めない（S26）
-            Setup s = Create ();
+            // （手のひらの点は指の骨のあるキャラにだけできる）
+            Setup s = Create (fingers: true);
             BodyPointId palm = BodyPointId.PalmIndex (HumanBodyBones.RightHand);
             Dictionary<Transform, float> lengths = Lengths (s);
             PinDirection (s, palm, -ArmDirection (s, true) * 0.1f + s.forward * 0.15f - s.up * 0.1f);
@@ -1545,7 +1566,8 @@ namespace Lilium
         [Test]
         public void ContactPoints_BurstMatchesManaged ()
         {
-            Setup s = Create ();
+            // 足の点と手のひらの 2 点を使うので、つま先と小指までの指を持つキャラで
+            Setup s = Create (toes: true, fingers: true, littleFingers: true);
             LockPoint (s, BodyPointId.Heel (HumanBodyBones.LeftFoot), Vector3.zero);
             LockPoint (s, BodyPointId.ToeTip (HumanBodyBones.LeftFoot), Vector3.zero);
             LockPoint (s, BodyPointId.ToeTip (HumanBodyBones.RightFoot), Vector3.zero);

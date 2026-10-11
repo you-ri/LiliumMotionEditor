@@ -53,14 +53,15 @@ namespace Lilium
 
         /// <summary>
         /// テスト用の人型を作り、prefab の中に置く（PlaceInPrefab）。toes・fingers・eyes は TestSkeleton の作り分けのまま
-        /// （どれも胸と首が付き、fingers と eyes は size を使わない）。
+        /// （どれも胸と首が付き、fingers と eyes は size を使わない）。fingers と toes は両方付けられる（足の点と手のひらの点を両方使うとき。
+        /// このときは toeOut も使わない）。littleFingers は fingers のときだけ、小指も足す（手のひらの小指側の点が要るとき）。
         /// twistFrames なら骨の軸の向きをばらばらにする（位置は変えない。体の形は同じで骨の軸だけ違うキャラ）
         /// </summary>
         protected Animator CreateCharacter (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0,
-            bool fingers = false, bool eyes = false, bool twistFrames = false)
+            bool fingers = false, bool eyes = false, bool twistFrames = false, bool littleFingers = false)
         {
             Animator display = eyes ? TestSkeleton.CreateHumanoidWithEyes (created_)
-                : fingers ? TestSkeleton.CreateHumanoidWithFingers (created_)
+                : fingers ? TestSkeleton.CreateHumanoidWithFingers (created_, toes, littleFingers)
                 : toes ? TestSkeleton.CreateHumanoidWithToes (created_, size, toeOut)
                 : TestSkeleton.CreateHumanoid (created_, withChest, size);
             PlaceInPrefab (display);
