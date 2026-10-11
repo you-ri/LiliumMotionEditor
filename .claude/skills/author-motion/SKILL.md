@@ -15,7 +15,7 @@ Background and the reasons behind the rules: `Docs/Specs/motion-editor.md`, sect
 
 - The project is open in the Editor and the Pipeline server is reachable (`unity pipeline list` shows reachable = true).
   If not, ask the user to press Ctrl+R in the Editor. General CLI usage: skill `unity-pipeline`
-- **Only characters with a full-body IK rig definition** can be written (a two-bone IK definition returns a reason). The default rig definition is full-body IK
+- Characters whose rig definition has no full-body IK points cannot be written (the reason is returned). The default rig definition has them
 - Always pass `--project-path`, take results with `--json`, and read `data.result` (failures: `success:false` and `errors`)
 
 ```bash
@@ -80,7 +80,7 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
   - Body: `Hips` `HipsDirection` `Spine` `Chest` `UpperChest` `UpperChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
   - Arms: `Left/RightShoulder` `Left/RightUpperArm` `Left/RightElbowPole` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
   - Legs: `Left/RightUpperLeg` `Left/RightKneePole` `Left/RightLowerLeg` `Left/RightFoot`
-  - Soles: `Left/RightHeel` `Left/RightSoleBall` `Left/RightLittleToeSide` `Left/RightToeTip`
+  - Soles: `Left/RightHeel` `Left/RightSoleBall` `Left/RightLittleToeSide` `Left/RightToeTip` (only on characters with toe bones; palm points need finger bones)
 
   The list depends on the rig definition; check `points` from `motion_describe` before use.
   The direction points (`HipsDirection`, `UpperChestDirection`, `HeadDirection`) do not pull by default: turn the hips and head with their rotation instead

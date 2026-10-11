@@ -48,6 +48,16 @@
 
 ### Changed
 
+- リグ定義の全身 IK の点の置き場所を、部位ごとの基準（踵・つま先・膝・目など 9 種）から、1 つの式（基準の骨 `origin`・先の骨 `toward`・割合 `along`・横 `across`・残す成分 `axes`・地面 `ground`・骨が無いときの向き `fallback`）にした。既定の点の名前と場所は変わりません。
+
+- つま先の骨が無いキャラには足の点（踵・足裏の中心・小指側・つま先の先）を、指の骨が無いキャラには手のひらの点を作らないようにした。
+
+- 顔の前の点の高さを、目の骨から求めるようにした。目の骨が無いキャラは決まった高さです（頭のメッシュから見積もるのはやめました）。
+
+- 肘・膝の曲がる向きをリグ定義の骨の項目（`hinge`・`bendDirection`）に、接地の点を点の項目（`contact`）に持つようにした。定義が変わるので、焼いた Humanoid 版は一度「焼き直しが要る」になります。
+
+- リグ定義の版と、古い版の定義の読み替えをやめた（後方互換は保ちません）。古い定義のアセットは、インスペクタの「既定に戻す」で作り直してください。
+
 - Transform のパネルの名前を Controller にした。中身と操作、パネルの置き場所・開閉はそのままです。
 
 - Stacker の Loop のトグルを、サイクルキーの付け外しにした。前の Loop を入れてあったクリップは、開くとサイクルキーが付いています。
@@ -107,6 +117,8 @@
 - タイムラインの Reset で姿勢を基準へ戻しても、全身 IK の点が元の場所に固定されたまま残っていたのを直した。戻した点の値（固定を外した値）もキーに打ちます。
 
 ### Removed
+
+- 2 本骨 IK と足の転がし（roll / bank / twist）を削除した。手足は全身 IK で動かします。リグ定義の解き方の選択（`solver`）・IK の組（`ikChains`）・足の支点、Controller パネルの Pole と足の角度、ショートカット `Spinner Toggle Pole` も無くなりました。`Controls/IK` のキーを持つクリップのキーは当たりません。
 
 - どこからも使っていなかった public API を外した。`TrackGUI`、`GLDraw.sceneGUIMaterial` と Scene GUI のシェーダ、`PreviewWindow` の `SetLayerParameter`・`orbitCamera`・`MovePickerSelection`・`BakeHumanoid`・`GetBakeProblem`・`GetMirrorTarget`・`MirrorSpinValues`、`PreviewStage` の `scene`・`contexts`、`IEditorHost.currentFrame`、`Clock` の `masterRate`・`speed`、`ContextHooks.hooks`、`LogSlider.value`、`PoseHandleUtility` の `isMouseOver`・`IsSelectedController`・`IsFocusedController`・`JointHandle`・`BoneHandle`（`Do` の付く版は残す）、`GeometryMath.GetDistanceRayToDot`、`AxisSlider.RaycastHitToJoint`、`ReverseFoot.SetPivot`、`ClipSampler.isValid`、`CurveWriter` の `clip`・`frame`・`count`、`RigProxies` の `Weight.rigName`・`Source.rigName`、`HumanoidGoals` の `bodyPosition`・`bodyRotation`・`humanScale`、`HumanoidMirror` の `Mirror`・`MirrorPosition` です。`PreviewStage.StripPolicy` と `ShortcutTooltip.Format` は private にしました。
 

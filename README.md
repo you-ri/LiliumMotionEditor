@@ -5,7 +5,7 @@ English | [日本語](README.ja.md)
 An editor extension for creating character motions inside the Unity Editor.
 
 + You pose a character through an "editing rig" that duplicates its bones, and the rig values are saved to an animation clip.
-+ Handles FK, two-bone IK for arms and legs, full-body IK, and Animation Rigging values.
++ Handles FK, full-body IK, and Animation Rigging values.
 + Clips made with the same editing rig can be shared between characters with different body proportions.
 + Under development. The specification will change in future versions.
 
