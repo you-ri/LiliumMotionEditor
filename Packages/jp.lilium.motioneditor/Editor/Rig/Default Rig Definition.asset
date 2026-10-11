@@ -28,330 +28,440 @@ MonoBehaviour:
     fullBodyPoint: 1
     stiffness: 0.95
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 1
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 2
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 3
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: 1}
   - bone: 4
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: 1}
   - bone: 5
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 6
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 7
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.8
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 8
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.6
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 9
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 10
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 11
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 12
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 13
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 14
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 15
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: -1}
   - bone: 16
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: -1}
   - bone: 17
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 18
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 19
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 20
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 21
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 22
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 23
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 24
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 25
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 26
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 27
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 28
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 29
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 30
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 31
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 32
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 33
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 34
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 35
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 36
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 37
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 38
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 39
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 40
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 41
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 42
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 43
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 44
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 45
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 46
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 47
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 48
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 49
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 50
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 51
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 52
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 53
     position: 0
     fullBodySolve: 0
     fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   - bone: 54
     position: 0
     fullBodySolve: 1
     fullBodyPoint: 1
     stiffness: 0.6
     fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
   ikChains:
   - name: LeftArm
     root: 13

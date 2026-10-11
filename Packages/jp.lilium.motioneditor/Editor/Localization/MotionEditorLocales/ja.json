@@ -147,6 +147,7 @@
     "EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE": "全身 IK の引く強さが 0〜1 の外",
     "EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE": "全身 IK の硬さが 0〜1 の外: {0}",
     "EDIT_RIG_DEFINITION_ZERO_DEFAULT_HINT": "IK の既定のヒントが 0: {0}",
+    "EDIT_RIG_DEFINITION_ZERO_BEND_DIRECTION": "蝶番の曲がる向きが 0: {0}",
     "FULL_BODY_LAYER_INVERSE_REASON": "全身 IK は骨から点の値を一意に求められない",
     "FULL_BODY_LAYER_NOT_FULL_BODY": "リグの定義が全身 IK でない",
     "FULL_BODY_LAYER_NO_PINNED_POINTS": "点 {0}・Pin / Locked の点は無い",

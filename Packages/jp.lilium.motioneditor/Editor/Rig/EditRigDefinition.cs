@@ -79,6 +79,13 @@ namespace Lilium
             /// 点の無い骨（指・目・顎）は隠すと見えず動かせない。既定は全身 IK で解かない骨だけ出す
             /// </summary>
             public bool fullBodyHandle;
+            /// <summary>
+            /// 一方向にだけ曲がる関節か（肘・膝）。全身 IK では、親の骨と bendDirection の両方に直交する軸のまわりだけで回す
+            /// （位置だけでは曲がる向きが決まらず、反復の途中経過しだいでばらつくため）
+            /// </summary>
+            public bool hinge;
+            /// <summary>蝶番（hinge）の曲がる向き。関節が出る向きを、体の向き（x 右・y 上・z 前）で書く（肘は後ろ・膝は前）</summary>
+            public Vector3 bendDirection;
 
             /// <summary>Humanoid で必須の骨か（無ければ Avatar が作れないので、どのキャラにもある）</summary>
             public bool required
@@ -392,6 +399,10 @@ namespace Lilium
             foreach (FkControl control in fkControls) {
                 if (control == null) continue;
                 text.Append ('|').Append ((int)control.bone).Append (control.fullBodySolve ? 's' : '-').Append (control.stiffness.ToString ("R", culture));
+                if (control.hinge) {
+                    text.Append ('h').Append (control.bendDirection.x.ToString ("R", culture)).Append (',')
+                        .Append (control.bendDirection.y.ToString ("R", culture)).Append (',').Append (control.bendDirection.z.ToString ("R", culture));
+                }
             }
             if (bodyPoints != null) {
                 foreach (BodyPoint point in bodyPoints) {
@@ -404,11 +415,6 @@ namespace Lilium
                     // 向きを混ぜる点（S34）だけ足す（混ぜない定義は、項目を足す前と同じハッシュのまま）
                     if (point.blends) text.Append ('b').Append ((int)point.blendBone).Append (',').Append (point.blend.ToString ("R", culture));
                 }
-            }
-            foreach (IkChain chain in ikChains) {
-                if (chain == null) continue;
-                text.Append ('|').Append ((int)chain.mid).Append (chain.defaultHint.x.ToString ("R", culture)).Append (',')
-                    .Append (chain.defaultHint.y.ToString ("R", culture)).Append (',').Append (chain.defaultHint.z.ToString ("R", culture));
             }
             return Hash128.Compute (text.ToString ()).ToString ();
         }
@@ -424,6 +430,11 @@ namespace Lilium
             control.fullBodyPoint = solve;
             control.fullBodyHandle = !solve;
             control.stiffness = DefaultStiffness (bone);
+            // 肘は後ろ、膝は前へ曲がる
+            bool elbow = bone == HumanBodyBones.LeftLowerArm || bone == HumanBodyBones.RightLowerArm;
+            bool knee = bone == HumanBodyBones.LeftLowerLeg || bone == HumanBodyBones.RightLowerLeg;
+            control.hinge = elbow || knee;
+            control.bendDirection = elbow ? Vector3.back : knee ? Vector3.forward : Vector3.zero;
         }
 
         /// <summary>全身 IK で解く骨か（指・目・顎は解かない）</summary>
@@ -618,6 +629,7 @@ namespace Lilium
             foreach (FkControl control in fkControls) {
                 if (control.bone < 0 || control.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_FK_BONE_OUT_OF_RANGE", control.bone));
                 if (control.stiffness < 0 || control.stiffness > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE", control.bone));
+                if (control.hinge && control.bendDirection.sqrMagnitude < 1e-6f) errors.Add (Tr ("EDIT_RIG_DEFINITION_ZERO_BEND_DIRECTION", control.bone));
             }
             if (fullBody != null) {
                 if (fullBody.iterations < 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW"));

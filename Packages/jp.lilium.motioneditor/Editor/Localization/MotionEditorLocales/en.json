@@ -147,6 +147,7 @@
     "EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE": "Full-body IK pull strength is outside 0-1",
     "EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE": "Full-body IK stiffness is outside 0-1: {0}",
     "EDIT_RIG_DEFINITION_ZERO_DEFAULT_HINT": "IK default hint is zero: {0}",
+    "EDIT_RIG_DEFINITION_ZERO_BEND_DIRECTION": "Hinge bend direction is zero: {0}",
     "FULL_BODY_LAYER_INVERSE_REASON": "Full-body IK cannot uniquely recover point values from the bones",
     "FULL_BODY_LAYER_NOT_FULL_BODY": "The rig definition is not full-body IK",
     "FULL_BODY_LAYER_NO_PINNED_POINTS": "Points: {0}, no Pin / Locked points",

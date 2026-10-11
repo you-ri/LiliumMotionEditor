@@ -217,7 +217,7 @@ namespace Lilium
                 // 同じ深さは定義の順（List.Sort は安定でないので、順番も比べる）
                 List<Point> order = new List<Point> (points_);
                 points_.Sort ((a, b) => a.depth != b.depth ? a.depth.CompareTo (b.depth) : order.IndexOf (a).CompareTo (order.IndexOf (b)));
-                CreateBodies (definition);
+                CreateBodies ();
             }
             bones_ = bones.ToArray ();
             inputPositions_ = new Vector3[bones_.Length];
@@ -228,7 +228,7 @@ namespace Lilium
         /// 解く骨（定義で「解く」にした FK の骨のうち、このキャラにあるもの）を剛体の並びにする。
         /// 親は、骨の階層を上へたどって最初に当たる解く骨（間の解かない骨は、親に付いて動く）
         /// </summary>
-        void CreateBodies (EditRigDefinition definition)
+        void CreateBodies ()
         {
             Transform root = rig_.root.transform;
             List<RigBinding.Fk> solved = new List<RigBinding.Fk> ();
@@ -258,27 +258,18 @@ namespace Lilium
                 int parent = -1;
                 for (Transform t = bodies_[i].parent; t != null && t != root && parent < 0; t = t.parent) parent = bodies_.IndexOf (t);
                 bodyParents_.Add (parent);
-                HumanBodyBones human = fk.control.bone;
-                bool arm = human == HumanBodyBones.LeftLowerArm || human == HumanBodyBones.RightLowerArm;
-                bool leg = human == HumanBodyBones.LeftLowerLeg || human == HumanBodyBones.RightLowerLeg;
-                // 曲がる向きの既定は、IK の組の定義（消していないので読める）。無ければ肘は後ろ・膝は前
-                Vector3 hint = arm ? Vector3.back : Vector3.forward;
-                if (definition != null) {
-                    foreach (EditRigDefinition.IkChain chain in definition.ikChains) {
-                        if (chain.mid == human && chain.defaultHint.sqrMagnitude > kEpsilon) hint = chain.defaultHint;
-                    }
-                }
-                // 蝶番の軸は基準姿勢で決める: 親の骨の向きと、関節が出る向きの両方に直交する向き。親の骨の枠で持つ
+                // 蝶番の軸は基準姿勢で決める: 親の骨の向きと、関節が出る向き（定義の bendDirection）の両方に直交する向き。親の骨の枠で持つ
+                bool hinge = fk.control.hinge && parent >= 0;
                 Vector3 axis = Vector3.zero;
-                if ((arm || leg) && parent >= 0) {
+                if (hinge) {
                     Vector3 upper = rig_.GetRestRootPosition (bodies_[i]) - rig_.GetRestRootPosition (bodies_[parent]);
-                    Vector3 cross = Vector3.Cross (rig_.BodyToRoot (hint), upper);
+                    Vector3 cross = Vector3.Cross (rig_.BodyToRoot (fk.control.bendDirection), upper);
                     if (cross.sqrMagnitude > kEpsilon) axis = Quaternion.Inverse (rig_.GetRestRootRotation (bodies_[parent])) * cross.normalized;
                 }
                 data_.bones[i] = new FullBodyIkBone {
                     parent = parent,
                     stiffness = Mathf.Clamp01 (fk.control.stiffness),
-                    hinge = (arm || leg) && parent >= 0 ? 1 : 0,
+                    hinge = hinge ? 1 : 0,
                     hingeAxis = axis,
                 };
             }
