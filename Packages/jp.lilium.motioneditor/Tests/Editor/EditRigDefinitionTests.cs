@@ -64,6 +64,10 @@ namespace Lilium
             Assert.IsFalse (definition_.bodyPoints.First (p => p.name == "LeftLowerArm").rotation, "肘は位置だけ");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Jaw"), "解かない骨には置かない");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftToes" || p.name == "RightToes"), "つま先の骨の付け根には置かない");
+            // 接地の点は足首と足裏の点だけ
+            string[] contacts = definition_.bodyPoints.Where (p => p.contact).Select (p => p.name).OrderBy (n => n).ToArray ();
+            CollectionAssert.AreEquivalent (new[] { "LeftFoot", "LeftHeel", "LeftLittleToeSide", "LeftSoleBall", "LeftToeTip",
+                "RightFoot", "RightHeel", "RightLittleToeSide", "RightSoleBall", "RightToeTip" }, contacts);
             Assert.IsEmpty (definition_.Validate ());
         }
 

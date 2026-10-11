@@ -516,12 +516,7 @@ namespace Lilium
             EditingRig rig = stage.editingRig;
             FullBodyRig body = stage.fullBody;
             float scale = rig.humanScale > 0 ? rig.humanScale : 1;
-            HashSet<Transform> feet = new HashSet<Transform> ();
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes }) {
-                Transform t = rig.GetEditingBone (bone);
-                if (t != null) feet.Add (t);
-            }
-            List<BodyPointId> points = body.pointIds.Where (id => feet.Contains (body.GetBone (id))).ToList ();
+            List<BodyPointId> points = body.pointIds.Where (body.IsContact).ToList ();
 
             // 足の点の場所（フレームごと）
             Vector3[,] positions = new Vector3[frameCount, points.Count];

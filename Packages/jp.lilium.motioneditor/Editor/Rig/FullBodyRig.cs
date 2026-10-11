@@ -154,6 +154,8 @@ namespace Lilium
             public bool hasRotation;
             /// <summary>向けるだけの点か（定義の引く強さが 0）</summary>
             public bool aim;
+            /// <summary>接地の点か（定義の contact）</summary>
+            public bool contact;
             public Quaternion restRootRotation;
             public Vector3 restRootPosition;
             /// <summary>骨の階層での深さ</summary>
@@ -209,6 +211,7 @@ namespace Lilium
                         bone = bone,
                         hasRotation = point.hasRotation,
                         aim = point.definition != null && point.definition.pullStrength <= 0,
+                        contact = point.definition != null && point.definition.contact,
                         restRootRotation = restRotation,
                         restRootPosition = rig.GetRestRootPosition (bone) + offset,
                         depth = Depth (bone, rig.root.transform),
@@ -399,6 +402,13 @@ namespace Lilium
         }
 
         /// <summary>点が動かす編集用の骨（無ければ null）</summary>
+        /// <summary>接地の点か（定義の contact。床に留める・床と滑りを見る点）</summary>
+        public bool IsContact (BodyPointId bone)
+        {
+            Point point = Find (bone);
+            return point != null && point.contact;
+        }
+
         public Transform GetBone (BodyPointId bone)
         {
             Point point = Find (bone);

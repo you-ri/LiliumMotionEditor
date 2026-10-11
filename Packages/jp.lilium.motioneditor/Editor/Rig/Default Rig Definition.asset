@@ -458,6 +458,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
@@ -474,6 +475,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightUpperLeg
     bone: 2
@@ -490,6 +492,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
@@ -506,6 +509,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightLowerLeg
     bone: 4
@@ -522,6 +526,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftFoot
     bone: 5
@@ -538,6 +543,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -554,6 +560,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: Spine
     bone: 7
@@ -570,6 +577,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: Chest
     bone: 8
@@ -586,6 +594,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: Neck
     bone: 9
@@ -602,6 +611,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: Head
     bone: 10
@@ -618,6 +628,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftShoulder
     bone: 11
@@ -634,6 +645,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightShoulder
     bone: 12
@@ -650,6 +662,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftUpperArm
     bone: 13
@@ -666,6 +679,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightUpperArm
     bone: 14
@@ -682,6 +696,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftLowerArm
     bone: 15
@@ -698,6 +713,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -714,6 +730,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftHand
     bone: 17
@@ -730,6 +747,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightHand
     bone: 18
@@ -746,6 +764,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: UpperChest
     bone: 54
@@ -762,6 +781,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: HipsDirection
     bone: 0
@@ -778,6 +798,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: UpperChestDirection
     bone: 54
@@ -794,6 +815,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
@@ -810,6 +832,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: HeadTop
     bone: 10
@@ -826,6 +849,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftKneePole
     bone: 1
@@ -842,6 +866,7 @@ MonoBehaviour:
     link: LeftLowerLeg
     blendBone: 3
     blend: 0.5
+    contact: 0
   - enabled: 1
     name: RightKneePole
     bone: 2
@@ -858,6 +883,7 @@ MonoBehaviour:
     link: RightLowerLeg
     blendBone: 4
     blend: 0.5
+    contact: 0
   - enabled: 1
     name: LeftHeel
     bone: 5
@@ -874,6 +900,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: LeftSoleBall
     bone: 5
@@ -890,6 +917,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
@@ -906,6 +934,7 @@ MonoBehaviour:
     link: LeftSoleBall
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: LeftToeTip
     bone: 19
@@ -922,6 +951,7 @@ MonoBehaviour:
     link: LeftSoleBall
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
@@ -938,6 +968,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
@@ -954,6 +985,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightHeel
     bone: 6
@@ -970,6 +1002,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: RightSoleBall
     bone: 6
@@ -986,6 +1019,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
@@ -1002,6 +1036,7 @@ MonoBehaviour:
     link: RightSoleBall
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: RightToeTip
     bone: 20
@@ -1018,6 +1053,7 @@ MonoBehaviour:
     link: RightSoleBall
     blendBone: 0
     blend: 0
+    contact: 1
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -1034,6 +1070,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -1050,6 +1087,7 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
+    contact: 0
   - enabled: 1
     name: LeftElbowPole
     bone: 13
@@ -1066,6 +1104,7 @@ MonoBehaviour:
     link: LeftLowerArm
     blendBone: 15
     blend: 0.5
+    contact: 0
   - enabled: 1
     name: RightElbowPole
     bone: 14
@@ -1082,3 +1121,4 @@ MonoBehaviour:
     link: RightLowerArm
     blendBone: 16
     blend: 0.5
+    contact: 0

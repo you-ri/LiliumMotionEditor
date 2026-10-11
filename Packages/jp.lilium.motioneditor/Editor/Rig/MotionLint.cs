@@ -141,8 +141,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 床と接地を見る点。全身 IK のキャラは点（骨の上の点。かかと・つま先の先など）、そうでなければ骨。
-        /// 足（足首とつま先の骨）に乗る物を接地の対象にする
+        /// 床と接地を見る点。全身 IK のキャラは点（骨の上の点。かかと・つま先の先など）で、定義の接地の点（contact）を接地の対象にする。
+        /// そうでなければ骨で、足（足首とつま先の骨）を接地の対象にする
         /// </summary>
         static List<(string, System.Func<Vector3>, bool)> CollectPoints (PreviewStage stage)
         {
@@ -161,7 +161,7 @@ namespace Lilium
                         Vector3 position;
                         body.TryGetBonePointWorld (point, out position);
                         return position;
-                    }, feet.Contains (body.GetBone (id))));
+                    }, body.IsContact (id)));
                 }
                 return result;
             }

@@ -188,6 +188,12 @@ namespace Lilium
             [Tooltip ("How much the offset turns with Blend Bone instead of the host bone (0: host bone only, 1: Blend Bone only). 0.5 keeps a knee pole between the thigh and the shin when the knee bends. Only for points with pull strength 0.")]
             public float blend;
 
+            /// <summary>
+            /// 接地の点か（足首・足裏の点）。読み込んだ動きの足を床に留める（PoseSession）・モーションの点検で床と滑りを見る（MotionLint）のは、この点だけ。
+            /// 解き方は変わらない
+            /// </summary>
+            public bool contact;
+
             /// <summary>乗る骨の付け根そのものの点か（基準の骨も d も無く、ずれも 0）</summary>
             public bool onBoneOrigin
             {
@@ -367,7 +373,8 @@ namespace Lilium
             foreach (FkControl control in fk) {
                 if (control == null || !control.fullBodySolve) continue;
                 if (control.bone == HumanBodyBones.LeftToes || control.bone == HumanBodyBones.RightToes) continue;
-                points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone) });
+                bool foot = control.bone == HumanBodyBones.LeftFoot || control.bone == HumanBodyBones.RightFoot;
+                points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone), contact = foot });
             }
             // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
             foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
@@ -422,7 +429,7 @@ namespace Lilium
         static BodyPoint SolePoint (string name, HumanBodyBones bone, HumanBodyBones foot, HumanBodyBones toes, float along, float across, string link)
         {
             return new BodyPoint {
-                name = name, bone = bone, origin = foot, toward = toes, along = along, across = across, axes = new Vector3 (1, 0, 1), ground = true, link = link,
+                name = name, bone = bone, origin = foot, toward = toes, along = along, across = across, axes = new Vector3 (1, 0, 1), ground = true, link = link, contact = true,
             };
         }
 
