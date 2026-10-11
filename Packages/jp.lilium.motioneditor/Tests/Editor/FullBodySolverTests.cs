@@ -1148,7 +1148,7 @@ namespace Lilium
                 Vector3 onBone;
                 Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), thigh + " の膝の Pole");
                 Assert.AreEqual (Bone (s, thigh), s.body.GetBone (pole), "太ももに乗る");
-                Vector3 expected = knee.position + s.forward * definition_.fullBody.directionLength * s.rig.humanScale;
+                Vector3 expected = knee.position + s.forward * EditRigDefinition.kDirectionLength * s.rig.humanScale;
                 Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "膝の前");
                 Assert.AreEqual (0, definition_.bodyPoints.First (p => p.name == pole.name).pullStrength, "向けるだけの点");
             }
@@ -1184,7 +1184,7 @@ namespace Lilium
         {
             // 腿を前へ 90° 上げ、膝を 90° 曲げて脛を真下に戻す。太ももだけの向き（0）なら Pole は膝の真上、
             // 脛と半分ずつ混ぜる（既定の 0.5。S34）なら膝の前上 45°（膝の曲がりの二等分の向き）に出る
-            Assert.AreEqual (EditRigDefinition.kKneePoleBlend, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blend, "既定は 0.5");
+            Assert.AreEqual (EditRigDefinition.kPoleBlend, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blend, "既定は 0.5");
             Assert.AreEqual (HumanBodyBones.LeftLowerLeg, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blendBone, "脛と混ぜる");
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
                 if (point.name.EndsWith ("KneePole")) point.blend = blend;
@@ -1199,7 +1199,7 @@ namespace Lilium
             Vector3 onBone;
             Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone));
             Vector3 direction = blend > 0 ? (s.forward + s.up).normalized : s.up;
-            Vector3 expected = shin.position + direction * definition_.fullBody.directionLength * s.rig.humanScale;
+            Vector3 expected = shin.position + direction * EditRigDefinition.kDirectionLength * s.rig.humanScale;
             Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "膝の Pole の場所");
         }
 
@@ -1237,11 +1237,11 @@ namespace Lilium
                 Vector3 onBone;
                 Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), upper + " の肘の Pole");
                 Assert.AreEqual (Bone (s, upper), s.body.GetBone (pole), "上腕に乗る");
-                Vector3 expected = elbow.position - s.forward * definition_.fullBody.directionLength * s.rig.humanScale;
+                Vector3 expected = elbow.position - s.forward * EditRigDefinition.kDirectionLength * s.rig.humanScale;
                 Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "肘の後ろ（基準姿勢で肘が向く方）");
                 EditRigDefinition.BodyPoint point = definition_.bodyPoints.First (p => p.name == pole.name);
                 Assert.AreEqual (0, point.pullStrength, "向けるだけの点");
-                Assert.AreEqual (EditRigDefinition.kElbowPoleBlend, point.blend, "前腕と半分ずつ混ぜる");
+                Assert.AreEqual (EditRigDefinition.kPoleBlend, point.blend, "前腕と半分ずつ混ぜる");
             }
         }
 
@@ -1302,30 +1302,6 @@ namespace Lilium
         }
 
         [Test]
-        public void Version7Definition_GetsElbowPoles ()
-        {
-            // 版 8 で肘の Pole を足した。版 7 の定義には最後に足すだけ（ほかの点・自分で足した同じ名前の点はそのまま）
-            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("ElbowPole"));
-            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
-            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint {
-                name = "RightElbowPole", bone = HumanBodyBones.RightUpperArm, offset = new Vector3 (0, -0.2f, 0), pullStrength = 0,
-            });
-            int count = definition_.bodyPoints.Count;
-            definition_.version = 7;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.AreEqual (count + 1, definition_.bodyPoints.Count, "左だけ足す");
-            EditRigDefinition.BodyPoint left = definition_.bodyPoints[definition_.bodyPoints.Count - 1];
-            Assert.AreEqual ("LeftElbowPole", left.name, "最後に足す");
-            Assert.AreEqual (HumanBodyBones.LeftLowerArm, left.origin);
-            Assert.AreEqual (HumanBodyBones.LeftLowerArm, left.blendBone);
-            Assert.AreEqual ("LeftLowerArm", left.link, "肘へ線でつなぐ");
-            Assert.AreEqual (new Vector3 (0, -0.2f, 0), definition_.bodyPoints.First (p => p.name == "RightElbowPole").offset, "自分で足した点は変えない");
-            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "Nose"));
-            Assert.IsEmpty (definition_.Validate ());
-        }
-
-        [Test]
         public void BlendedBodyPoint_WorksOnOtherLimbs_AndNeedsZeroPull ()
         {
             // 上腕の付け根の後ろに置き、前腕と半分ずつ混ぜる点を自分で足す（既定の肘の Pole とは別の名前）
@@ -1357,26 +1333,6 @@ namespace Lilium
             elbow.pullStrength = 0;
             elbow.blend = 1.5f;
             Assert.IsNotEmpty (definition_.Validate ());
-        }
-
-        [Test]
-        public void Version6Definition_GetsKneePoleBlend ()
-        {
-            // 版 7 で膝の Pole を脛と混ぜるようにした。版 6 の定義は、混ぜる設定の無い膝の Pole だけ直す（ほかの点・自分で入れた設定はそのまま）
-            EditRigDefinition.BodyPoint left = definition_.bodyPoints.First (p => p.name == "LeftKneePole");
-            EditRigDefinition.BodyPoint right = definition_.bodyPoints.First (p => p.name == "RightKneePole");
-            left.blend = 0;
-            right.blendBone = HumanBodyBones.RightFoot;
-            right.blend = 0.3f;
-            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = Vector3.forward * 0.1f });
-            definition_.version = 6;
-            definition_.UpgradeIfNeeded ();
-            Assert.AreEqual (EditRigDefinition.kVersion, definition_.version);
-            Assert.AreEqual (EditRigDefinition.kKneePoleBlend, left.blend);
-            Assert.AreEqual (HumanBodyBones.LeftLowerLeg, left.blendBone);
-            Assert.AreEqual (0.3f, right.blend, "自分で入れた割合は変えない");
-            Assert.AreEqual (HumanBodyBones.RightFoot, right.blendBone);
-            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "Nose"), "版 6 からは一覧を作り直さない");
         }
 
         [Test]

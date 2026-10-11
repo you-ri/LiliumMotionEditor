@@ -12,20 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
   m_Name: Default Rig Definition
   m_EditorClassIdentifier: 
-  version_: 8
   solver: 1
   fullBody:
     iterations: 48
     pull: 1
     hipsPin: 0.6
-    directionPoints: 1
-    directionLength: 0.25
-    contactPoints: 1
   fkControls:
   - bone: 0
     position: 1
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.95
     fullBodyHandle: 0
     hinge: 0
@@ -33,7 +28,6 @@ MonoBehaviour:
   - bone: 1
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 0
@@ -41,7 +35,6 @@ MonoBehaviour:
   - bone: 2
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 0
@@ -49,7 +42,6 @@ MonoBehaviour:
   - bone: 3
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 1
@@ -57,7 +49,6 @@ MonoBehaviour:
   - bone: 4
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 1
@@ -65,7 +56,6 @@ MonoBehaviour:
   - bone: 5
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -73,7 +63,6 @@ MonoBehaviour:
   - bone: 6
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -81,7 +70,6 @@ MonoBehaviour:
   - bone: 7
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.8
     fullBodyHandle: 0
     hinge: 0
@@ -89,7 +77,6 @@ MonoBehaviour:
   - bone: 8
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.6
     fullBodyHandle: 0
     hinge: 0
@@ -97,7 +84,6 @@ MonoBehaviour:
   - bone: 9
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
     hinge: 0
@@ -105,7 +91,6 @@ MonoBehaviour:
   - bone: 10
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -113,7 +98,6 @@ MonoBehaviour:
   - bone: 11
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
     hinge: 0
@@ -121,7 +105,6 @@ MonoBehaviour:
   - bone: 12
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.5
     fullBodyHandle: 0
     hinge: 0
@@ -129,7 +112,6 @@ MonoBehaviour:
   - bone: 13
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 0
@@ -137,7 +119,6 @@ MonoBehaviour:
   - bone: 14
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 0
@@ -145,7 +126,6 @@ MonoBehaviour:
   - bone: 15
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 1
@@ -153,7 +133,6 @@ MonoBehaviour:
   - bone: 16
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.1
     fullBodyHandle: 0
     hinge: 1
@@ -161,7 +140,6 @@ MonoBehaviour:
   - bone: 17
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -169,7 +147,6 @@ MonoBehaviour:
   - bone: 18
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -177,7 +154,6 @@ MonoBehaviour:
   - bone: 19
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -185,7 +161,6 @@ MonoBehaviour:
   - bone: 20
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.2
     fullBodyHandle: 0
     hinge: 0
@@ -193,7 +168,6 @@ MonoBehaviour:
   - bone: 21
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -201,7 +175,6 @@ MonoBehaviour:
   - bone: 22
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -209,7 +182,6 @@ MonoBehaviour:
   - bone: 23
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -217,7 +189,6 @@ MonoBehaviour:
   - bone: 24
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -225,7 +196,6 @@ MonoBehaviour:
   - bone: 25
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -233,7 +203,6 @@ MonoBehaviour:
   - bone: 26
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -241,7 +210,6 @@ MonoBehaviour:
   - bone: 27
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -249,7 +217,6 @@ MonoBehaviour:
   - bone: 28
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -257,7 +224,6 @@ MonoBehaviour:
   - bone: 29
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -265,7 +231,6 @@ MonoBehaviour:
   - bone: 30
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -273,7 +238,6 @@ MonoBehaviour:
   - bone: 31
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -281,7 +245,6 @@ MonoBehaviour:
   - bone: 32
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -289,7 +252,6 @@ MonoBehaviour:
   - bone: 33
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -297,7 +259,6 @@ MonoBehaviour:
   - bone: 34
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -305,7 +266,6 @@ MonoBehaviour:
   - bone: 35
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -313,7 +273,6 @@ MonoBehaviour:
   - bone: 36
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -321,7 +280,6 @@ MonoBehaviour:
   - bone: 37
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -329,7 +287,6 @@ MonoBehaviour:
   - bone: 38
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -337,7 +294,6 @@ MonoBehaviour:
   - bone: 39
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -345,7 +301,6 @@ MonoBehaviour:
   - bone: 40
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -353,7 +308,6 @@ MonoBehaviour:
   - bone: 41
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -361,7 +315,6 @@ MonoBehaviour:
   - bone: 42
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -369,7 +322,6 @@ MonoBehaviour:
   - bone: 43
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -377,7 +329,6 @@ MonoBehaviour:
   - bone: 44
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -385,7 +336,6 @@ MonoBehaviour:
   - bone: 45
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -393,7 +343,6 @@ MonoBehaviour:
   - bone: 46
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -401,7 +350,6 @@ MonoBehaviour:
   - bone: 47
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -409,7 +357,6 @@ MonoBehaviour:
   - bone: 48
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -417,7 +364,6 @@ MonoBehaviour:
   - bone: 49
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -425,7 +371,6 @@ MonoBehaviour:
   - bone: 50
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -433,7 +378,6 @@ MonoBehaviour:
   - bone: 51
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -441,7 +385,6 @@ MonoBehaviour:
   - bone: 52
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -449,7 +392,6 @@ MonoBehaviour:
   - bone: 53
     position: 0
     fullBodySolve: 0
-    fullBodyPoint: 0
     stiffness: 0.2
     fullBodyHandle: 1
     hinge: 0
@@ -457,7 +399,6 @@ MonoBehaviour:
   - bone: 54
     position: 0
     fullBodySolve: 1
-    fullBodyPoint: 1
     stiffness: 0.6
     fullBodyHandle: 0
     hinge: 0
