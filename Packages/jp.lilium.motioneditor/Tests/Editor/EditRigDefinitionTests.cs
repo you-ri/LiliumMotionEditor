@@ -50,7 +50,7 @@ namespace Lilium
         public void DefaultBodyPoints_Names ()
         {
             string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
-            foreach (string name in new[] { "Hips", "Head", "LeftHand", "RightFoot", "HipsDirection", "UpperChestDirection", "HeadDirection", "HeadTop",
+            foreach (string name in new[] { "Hips", "Head", "LeftHand", "RightFoot", "Chest", "HipsDirection", "ChestDirection", "HeadDirection", "HeadTop",
                 "LeftKneePole", "RightKneePole", "LeftElbowPole", "RightElbowPole", "LeftHeel", "RightSoleBall", "LeftLittleToeSide", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
                 Assert.Contains (name, names, name);
             }
@@ -58,6 +58,14 @@ namespace Lilium
             Assert.IsFalse (definition_.bodyPoints.First (p => p.name == "LeftLowerArm").rotation, "肘は位置だけ");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Jaw"), "解かない骨には置かない");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftToes" || p.name == "RightToes"), "つま先の骨の付け根には置かない");
+            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftShoulder" || p.name == "RightShoulder"), "肩には置かない");
+            // 背骨は胸の点 1 つにまとめる。腰と頭（必須の骨）の間に置くので、背骨の数が違うキャラでも同じ点ができる
+            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Spine" || p.name == "UpperChest" || p.name == "UpperChestDirection"), "背骨の骨ごとの点は置かない");
+            EditRigDefinition.BodyPoint chest = definition_.bodyPoints.Single (p => p.name == "Chest");
+            Assert.AreEqual (HumanBodyBones.UpperChest, chest.bone);
+            Assert.AreEqual (HumanBodyBones.Hips, chest.origin);
+            Assert.AreEqual (HumanBodyBones.Head, chest.toward);
+            Assert.AreEqual (1, chest.pullStrength, "胸の点は引く点");
             // 接地の点は足首と足裏の点だけ
             string[] contacts = definition_.bodyPoints.Where (p => p.contact).Select (p => p.name).OrderBy (n => n).ToArray ();
             CollectionAssert.AreEquivalent (new[] { "LeftFoot", "LeftHeel", "LeftLittleToeSide", "LeftSoleBall", "LeftToeTip",

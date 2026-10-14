@@ -31,6 +31,11 @@ namespace Lilium
         static readonly int kViewportHash = "LiliumRigEditorViewport".GetHashCode ();
         /// <summary>クリックでコントロールを拾う距離（表示域のピクセル）</summary>
         const float kPickRadius = 12;
+        /// <summary>全身 IK の点の丸の半径（ハンドルの大きさの何倍か）</summary>
+        const float kPointScale = 0.45f;
+        /// <summary>骨の線の端に空ける隙間の上限（骨の長さの何倍か）</summary>
+        const float kMaxLineGap = 0.3f;
+        static readonly Color kDisabledLineColor = new Color (0.55f, 0.55f, 0.55f, 0.35f);
 
         [SerializeField] GameObject prefab_;
         /// <summary>直す定義。空ならキャラが使う定義（キャラの設定、無ければプロジェクト設定）</summary>
@@ -463,6 +468,7 @@ namespace Lilium
 
         /// <summary>
         /// 表示域の位置に一番近いコントロール（kPickRadius 以内）。無ければ null。
+        /// 骨（FK・追加）は線、点は丸で拾う。線は丸より少し遠いことにして、線の端と丸が近いときは丸を選ぶ（モーションエディタの点の線と同じ）。
         /// 場所の換算はモーションエディタの枠選択と同じ（描画のカメラのビューポート座標。左下が原点）
         /// </summary>
         string Pick (Vector2 mousePosition, Rect rect)
@@ -474,11 +480,17 @@ namespace Lilium
             string best = null;
             float bestDistance = kPickRadius;
             foreach (RigControlEntry entry in entries_) {
-                if (!entry.position.HasValue) continue;
-                Vector3 viewport = camera.WorldToViewportPoint (entry.position.Value);
-                if (viewport.z <= 0) continue;
-                Vector2 point = new Vector2 (viewport.x * rect.width, (1 - viewport.y) * rect.height);
-                float distance = Vector2.Distance (point, mousePosition);
+                float distance;
+                Vector3 start, end;
+                Vector2 point, startPoint, endPoint;
+                if (entry.line.Length > 1) {
+                    if (!TryGetLine (entry, out start, out end) || !ToView (camera, start, rect, out startPoint) || !ToView (camera, end, rect, out endPoint)) continue;
+                    distance = DistanceToSegment (mousePosition, startPoint, endPoint) + BodyPointTarget.kLinkPickBias;
+                }
+                else {
+                    if (!entry.position.HasValue || !ToView (camera, entry.position.Value, rect, out point)) continue;
+                    distance = Vector2.Distance (point, mousePosition);
+                }
                 if (distance < bestDistance) {
                     best = entry.id;
                     bestDistance = distance;
@@ -487,8 +499,50 @@ namespace Lilium
             return best;
         }
 
+        /// <summary>ワールドの位置を表示域の位置へ（左上が原点）。カメラの後ろなら false</summary>
+        static bool ToView (Camera camera, Vector3 world, Rect rect, out Vector2 point)
+        {
+            Vector3 viewport = camera.WorldToViewportPoint (world);
+            point = new Vector2 (viewport.x * rect.width, (1 - viewport.y) * rect.height);
+            return viewport.z > 0;
+        }
+
+        static float DistanceToSegment (Vector2 point, Vector2 start, Vector2 end)
+        {
+            Vector2 delta = end - start;
+            float t = delta.sqrMagnitude > 1e-6f ? Mathf.Clamp01 (Vector2.Dot (point - start, delta) / delta.sqrMagnitude) : 0;
+            return Vector2.Distance (point, start + delta * t);
+        }
+
+        /// <summary>
+        /// 骨の線の両端。点の丸がある端は、丸に重ならないよう隙間を空ける（モーションエディタの点の線と同じ）。
+        /// 指のような短い骨で線が消えないよう、隙間は骨の長さの一部までに抑える
+        /// </summary>
+        bool TryGetLine (RigControlEntry entry, out Vector3 start, out Vector3 end)
+        {
+            start = entry.line[0];
+            end = entry.line[entry.line.Length - 1];
+            Vector3 delta = end - start;
+            float length = delta.magnitude;
+            if (length < 1e-5f) return false;
+            Vector3 direction = delta / length;
+            float gap = Mathf.Min (handleSize_ * kPointScale * BodyPointTarget.kLinkGap, length * kMaxLineGap);
+            if (HasPointAt (start)) start += direction * gap;
+            if (HasPointAt (end)) end -= direction * gap;
+            return true;
+        }
+
+        bool HasPointAt (Vector3 position)
+        {
+            foreach (RigControlEntry entry in entries_) {
+                if (entry.kind == RigControlKind.Point && entry.position.HasValue && (entry.position.Value - position).sqrMagnitude < 1e-8f) return true;
+            }
+            return false;
+        }
+
         /// <summary>
         /// 定義の全コントロールを描く。体の中に埋もれても見えるよう、奥行きで隠さない。
+        /// 骨（FK・追加）はモーションエディタの全身 IK の点の線と同じ見た目の線、全身 IK の点は丸。線を先に描き、丸を上に重ねる。
         /// 使えないものは灰色で薄く出す（選べば一覧に理由が出る）
         /// </summary>
         void DrawControls ()
@@ -502,28 +556,24 @@ namespace Lilium
             Color color = Handles.color;
 
             foreach (RigControlEntry entry in entries_) {
-                Color tint = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
-                if (entry.line.Length > 1) {
-                    Handles.color = new Color (tint.r, tint.g, tint.b, tint.a * 0.5f);
-                    Handles.DrawPolyLine (entry.line);
-                }
-                if (!entry.position.HasValue) continue;
-                Vector3 position = entry.position.Value;
-                Handles.color = tint;
-                switch (entry.kind) {
-                    case RigControlKind.Fk:
-                        Handles.SphereHandleCap (0, position, Quaternion.identity, size * 0.6f, EventType.Repaint);
-                        break;
-                    case RigControlKind.Extra:
-                        Handles.CubeHandleCap (0, position, Quaternion.LookRotation (facing), size * 0.6f, EventType.Repaint);
-                        break;
-                    case RigControlKind.Point:
-                        Handles.DrawSolidDisc (position, facing, size * 0.45f);
-                        break;
-                }
+                Vector3 start, end;
+                if (entry.line.Length < 2 || !TryGetLine (entry, out start, out end)) continue;
+                bool selected = entry.id == selectedId_;
+                bool hover = entry.id == hoverId_;
+                Handles.color = selected ? BodyPointTarget.kRingSelectedColor
+                    : hover ? BodyPointTarget.kRingHoverColor
+                    : entry.enabled ? BodyPointTarget.kLinkColor
+                    : kDisabledLineColor;
+                float width = BodyPointTarget.kLinkWidth;
+                Handles.DrawAAPolyLine (selected || hover ? width * BodyPointTarget.kLinkHighlightWidth : width, start, end);
+            }
+            foreach (RigControlEntry entry in entries_) {
+                if (entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
+                Handles.color = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
+                Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale);
             }
 
-            // 指している物・選んでいる物は、最後に重ねて輪と名前を出す
+            // 指している物・選んでいる物は、最後に重ねて名前を出す（点は輪も。骨の線は上で太く描いた）
             DrawHighlight (Find (hoverId_), facing, size, new Color (1, 1, 1, 0.8f));
             DrawHighlight (selectedEntry, facing, size, new Color (1, 0.85f, 0.2f, 1));
 
@@ -533,7 +583,12 @@ namespace Lilium
 
         static void DrawHighlight (RigControlEntry entry, Vector3 facing, float size, Color color)
         {
-            if (entry == null || !entry.position.HasValue) return;
+            if (entry == null) return;
+            if (entry.line.Length > 1) {
+                Handles.Label ((entry.line[0] + entry.line[entry.line.Length - 1]) * 0.5f, entry.label, EditorStyles.whiteMiniLabel);
+                return;
+            }
+            if (!entry.position.HasValue) return;
             Handles.color = color;
             Handles.DrawWireDisc (entry.position.Value, facing, size * 1.1f, 2);
             Handles.Label (entry.position.Value, entry.label, EditorStyles.whiteMiniLabel);

@@ -12,7 +12,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// リグエディタの上端のツールバー（見るキャラ・直す定義・作り直し）
+    /// リグエディタの上端のツールバー（見るキャラ・直す定義・定義の複製・作り直し）
     /// </summary>
     [Icon (Icons.kFolder + "RigValues.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-toolbar", "Rig Editor", defaultDisplay = true,
@@ -22,6 +22,7 @@ namespace Lilium
         RigEditorWindow window_;
         ObjectField model_;
         ObjectField definition_;
+        EditorToolbarButton duplicate_;
 
         public override VisualElement CreatePanelContent ()
         {
@@ -50,6 +51,10 @@ namespace Lilium
             });
             toolbar.Add (definition_);
 
+            // 定義の欄の横に置く（パッケージの既定など、ここで直せない定義は複製して直す）
+            duplicate_ = new EditorToolbarButton (ShowDuplicateMenu) { tooltip = Tr ("RIG_EDITOR_DUPLICATE_TOOLTIP") };
+            toolbar.Add (duplicate_);
+
             toolbar.Add (new EditorToolbarButton ("Reload", window_.Rebuild) { tooltip = Tr ("RIG_EDITOR_RELOAD_TOOLTIP") });
 
             Refresh ();
@@ -68,7 +73,24 @@ namespace Lilium
         {
             if (window_ == null || model_ == null) return;
             model_.SetValueWithoutNotify (window_.model);
-            definition_.SetValueWithoutNotify (window_.definition);
+            EditRigDefinition definition = window_.definition;
+            definition_.SetValueWithoutNotify (definition);
+            // 定義のアセットが無いときは、既定の中身を保存して直す
+            duplicate_.text = definition == null || !EditorUtility.IsPersistent (definition) ? Tr ("RIG_EDITOR_SAVE") : Tr ("RIG_EDITOR_DUPLICATE");
+            duplicate_.SetEnabled (window_.model != null);
+        }
+
+        /// <summary>複製をどこに使うかを選ぶ</summary>
+        void ShowDuplicateMenu ()
+        {
+            GenericMenu menu = new GenericMenu ();
+            GameObject model = window_.model;
+            if (model != null && EditorUtility.IsPersistent (model)) {
+                menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_CHARACTER", model.name)), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.Character));
+            }
+            menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_PROJECT")), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.Project));
+            menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_NONE")), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.None));
+            menu.DropDown (duplicate_.worldBound);
         }
     }
 
@@ -224,7 +246,7 @@ namespace Lilium
     /// <summary>
     /// リグエディタの右のパネル（S45b）。選んだコントロールの値を定義の欄で直す（選んでいなければ定義全体の解き方）。
     /// 値は欄を変えるたびに定義へ書き、窓とモーションエディタはまとめて 1 回作り直す（インスペクタで直したときと同じ）。
-    /// パッケージの既定など直せない定義では欄を触れなくし、複製して直す口を出す。下に、その定義を使っているキャラを出し、押すとそのキャラに替える
+    /// パッケージの既定など直せない定義では欄を触れなくし、理由を出す（複製はツールバーの定義の欄の横）。下に、その定義を使っているキャラを出し、押すとそのキャラに替える
     /// </summary>
     [Icon (Icons.kFolder + "Properties.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-inspector", "Inspector", defaultDisplay = true,
@@ -235,7 +257,6 @@ namespace Lilium
 
         RigEditorWindow window_;
         HelpBox readOnly_;
-        Button duplicate_;
         Label title_;
         VisualElement fields_;
         Foldout users_;
@@ -255,9 +276,6 @@ namespace Lilium
 
             readOnly_ = new HelpBox ("", HelpBoxMessageType.Info);
             root.Add (readOnly_);
-            duplicate_ = new Button (ShowDuplicateMenu);
-            duplicate_.style.alignSelf = Align.FlexStart;
-            root.Add (duplicate_);
 
             ScrollView scroll = new ScrollView (ScrollViewMode.Vertical);
             scroll.style.flexShrink = 1;
@@ -294,9 +312,6 @@ namespace Lilium
             string reason = window_.model != null ? window_.readOnlyReason : null;
             readOnly_.text = reason ?? "";
             readOnly_.style.display = reason != null ? DisplayStyle.Flex : DisplayStyle.None;
-            // 定義のアセットが無いときは、既定の中身を保存して直す
-            duplicate_.text = definition == null || !EditorUtility.IsPersistent (definition) ? Tr ("RIG_EDITOR_SAVE") : Tr ("RIG_EDITOR_DUPLICATE");
-            duplicate_.style.display = reason != null ? DisplayStyle.Flex : DisplayStyle.None;
 
             RigControlEntry selected = window_.selectedEntry;
             title_.text = selected != null ? RigControlList.KindLabel (selected.kind) + ": " + selected.label : Tr ("RIG_EDITOR_DEFINITION_SETTINGS");
@@ -348,19 +363,6 @@ namespace Lilium
             if (definition != null && definition == ProjectSettings.instance.defaultRigDefinition) {
                 users_.Add (new Label (Tr ("RIG_EDITOR_USERS_PROJECT_DEFAULT_NOTE")) { style = { whiteSpace = WhiteSpace.Normal, marginTop = 2 } });
             }
-        }
-
-        /// <summary>複製をどこに使うかを選ぶ</summary>
-        void ShowDuplicateMenu ()
-        {
-            GenericMenu menu = new GenericMenu ();
-            GameObject model = window_.model;
-            if (model != null && EditorUtility.IsPersistent (model)) {
-                menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_CHARACTER", model.name)), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.Character));
-            }
-            menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_PROJECT")), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.Project));
-            menu.AddItem (new GUIContent (Tr ("RIG_EDITOR_ASSIGN_NONE")), false, () => window_.DuplicateDefinition (RigDefinitionAssets.AssignTarget.None));
-            menu.ShowAsContext ();
         }
     }
 

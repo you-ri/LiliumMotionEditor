@@ -77,13 +77,15 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
   Listing every point you manage (with `Free` for unused ones) on every key avoids surprises from states carried over
 - To reuse a pose on a character of a different size, scale positions by the ratio of `humanScale` (same as `PoseDocument.Rescale`)
 - Points of the default rig definition:
-  - Body: `Hips` `HipsDirection` `Spine` `Chest` `UpperChest` `UpperChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
-  - Arms: `Left/RightShoulder` `Left/RightUpperArm` `Left/RightElbowPole` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
+  - Body: `Hips` `HipsDirection` `Chest` `ChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
+    (`Chest` stands for the whole spine: one point at the middle of the torso (halfway from the hips to the head base), on every character whatever its spine bone count;
+    the spine bones between follow by stiffness)
+  - Arms: `Left/RightUpperArm` `Left/RightElbowPole` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
   - Legs: `Left/RightUpperLeg` `Left/RightKneePole` `Left/RightLowerLeg` `Left/RightFoot`
   - Soles: `Left/RightHeel` `Left/RightSoleBall` `Left/RightLittleToeSide` `Left/RightToeTip` (only on characters with toe bones; palm points need finger bones)
 
   The list depends on the rig definition; check `points` from `motion_describe` before use.
-  The direction points (`HipsDirection`, `UpperChestDirection`, `HeadDirection`) do not pull by default: turn the hips and head with their rotation instead
+  The direction points (`HipsDirection`, `ChestDirection`, `HeadDirection`) do not pull by default: turn the hips and head with their rotation instead
 
 ## Hands
 

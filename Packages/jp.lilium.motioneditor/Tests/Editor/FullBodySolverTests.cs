@@ -452,8 +452,8 @@ namespace Lilium
 
         static BodyPointId Direction (Setup s, params HumanBodyBones[] candidates)
         {
-            // 既定の一覧では、胸の点は UpperChest に置く（無いキャラでは親の骨へ乗る）。名前は置いた骨で変わらない
-            return BodyPointId.Direction (candidates.Contains (HumanBodyBones.UpperChest) || candidates.Contains (HumanBodyBones.Chest) ? HumanBodyBones.UpperChest : candidates[0]);
+            // 既定の一覧では、胸の前の点は UpperChest に置く（無いキャラでは親の骨へ乗る）。名前は背骨をまとめた胸の点に合わせて ChestDirection
+            return BodyPointId.Direction (candidates.Contains (HumanBodyBones.UpperChest) || candidates.Contains (HumanBodyBones.Chest) ? HumanBodyBones.Chest : candidates[0]);
         }
 
         static BodyPointId ChestDirection (Setup s)

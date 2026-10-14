@@ -56,7 +56,9 @@ namespace Lilium
             Assert.IsTrue (binding.points.All (c => c.enabled));
             Assert.AreEqual ("bone_LeftHand", binding.FindPoint (HumanBodyBones.LeftHand).bone.name);
             // キャラに無い骨の付け根の点は、親の骨へ乗せずに作らない
-            Assert.IsNull (binding.FindPoint (HumanBodyBones.Chest));
+            Assert.IsNull (binding.FindPoint (HumanBodyBones.Neck));
+            // 背骨をまとめた胸の点は、ある背骨へ乗る
+            Assert.AreEqual (HumanBodyBones.Spine, binding.FindPoint (HumanBodyBones.Chest).humanBone);
         }
 
         [Test]

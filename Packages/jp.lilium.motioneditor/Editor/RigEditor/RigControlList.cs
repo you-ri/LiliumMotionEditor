@@ -25,7 +25,10 @@ namespace Lilium
         public string label;
         /// <summary>描く場所（基準姿勢のワールド）。骨が無いコントロールは null</summary>
         public Vector3? position;
-        /// <summary>線を引く先（FK は親の骨）。無ければ空</summary>
+        /// <summary>
+        /// 骨の線（FK と追加のコントロール）。骨の根元から子の骨へ（子が無ければ親から続く向き。モーションエディタの骨の形と同じ）。
+        /// 窓はこの線で骨を描いて選ばせる（点の丸と同じ場所に出すと、点と骨を押し分けられない）。無ければ空
+        /// </summary>
         public Vector3[] line = System.Array.Empty<Vector3> ();
         /// <summary>定義のどの項目か（SerializedObject のパス）。定義を渡さずに作ったときは null</summary>
         public string propertyPath;
@@ -49,6 +52,7 @@ namespace Lilium
             List<RigControlEntry> entries = new List<RigControlEntry> ();
             if (rig == null || rig.binding == null) return entries;
             RigBinding binding = rig.binding;
+            BoneShapes shapes = new BoneShapes (rig);
 
             foreach (RigBinding.Fk fk in binding.fk) {
                 Transform bone = rig.GetEditingBone (fk.bone);
@@ -59,21 +63,21 @@ namespace Lilium
                     position = Position (rig, bone),
                     propertyPath = ElementPath (definition, "fkControls", definition != null ? definition.fkControls.IndexOf (fk.control) : -1),
                     disabledReason = fk.disabledReason,
+                    line = BoneLine (rig, shapes, bone),
                 };
-                // 骨のつながりが見えるよう、親の FK の骨へ線を引く
-                Transform parent = ParentFkBone (rig, fk.control.bone);
-                if (bone != null && parent != null) entry.line = new[] { Position (rig, parent).Value, entry.position.Value };
                 entries.Add (entry);
             }
 
             foreach (RigBinding.Extra extra in binding.extras) {
+                Transform bone = rig.GetEditingBone (extra.bone);
                 entries.Add (new RigControlEntry {
                     id = "Extra/" + extra.control.name,
                     kind = RigControlKind.Extra,
                     label = extra.control.name,
-                    position = Position (rig, rig.GetEditingBone (extra.bone)),
+                    position = Position (rig, bone),
                     propertyPath = ElementPath (definition, "extraControls", definition != null ? definition.extraControls.IndexOf (extra.control) : -1),
                     disabledReason = extra.disabledReason,
+                    line = BoneLine (rig, shapes, bone),
                 });
             }
 
@@ -103,14 +107,13 @@ namespace Lilium
             return rig.root.transform.TransformPoint (rig.GetRestRootPosition (editingBone));
         }
 
-        /// <summary>人型の親をたどって、最初に当たる FK の骨（編集用）。無ければ null</summary>
-        static Transform ParentFkBone (EditingRig rig, HumanBodyBones bone)
+        /// <summary>骨の根元から、骨の形（BoneShapes）の向きと長さだけ伸ばした線（基準姿勢のワールド）。骨が無ければ空</summary>
+        static Vector3[] BoneLine (EditingRig rig, BoneShapes shapes, Transform editingBone)
         {
-            for (int b = HumanTrait.GetParentBone ((int)bone); b >= 0 && b < (int)HumanBodyBones.LastBone; b = HumanTrait.GetParentBone (b)) {
-                Transform parent = rig.GetEditingBone ((HumanBodyBones)b);
-                if (parent != null) return parent;
-            }
-            return null;
+            if (editingBone == null) return System.Array.Empty<Vector3> ();
+            Vector3 start = Position (rig, editingBone).Value;
+            Quaternion rotation = shapes.GetRotation (editingBone, rig.root.transform.rotation * rig.GetRestRootRotation (editingBone));
+            return new[] { start, start + rotation * Vector3.forward * shapes.GetLength (editingBone) };
         }
 
         /// <summary>

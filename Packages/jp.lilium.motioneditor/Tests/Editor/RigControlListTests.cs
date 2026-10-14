@@ -53,10 +53,13 @@ namespace Lilium
                 RigControlEntry point = entries.Single (e => e.id == "Point/" + bone);
                 Assert.That (Vector3.Distance (point.position.Value, expected), Is.LessThan (kTolerance), bone + " の点");
             }
-            // FK は親の FK の骨から線を引く
-            RigControlEntry hand = entries.Single (e => e.id == "Fk/" + HumanBodyBones.LeftHand);
-            Assert.That (hand.line.Length, Is.EqualTo (2));
-            Assert.That (Vector3.Distance (hand.line[0], display.GetBoneTransform (HumanBodyBones.LeftLowerArm).position), Is.LessThan (kTolerance));
+            // FK の線は骨そのもの（根元から子の骨へ）。上腕は肩から肘まで
+            RigControlEntry upperArm = entries.Single (e => e.id == "Fk/" + HumanBodyBones.LeftUpperArm);
+            Assert.That (upperArm.line.Length, Is.EqualTo (2));
+            Assert.That (Vector3.Distance (upperArm.line[0], display.GetBoneTransform (HumanBodyBones.LeftUpperArm).position), Is.LessThan (kTolerance));
+            Assert.That (Vector3.Distance (upperArm.line[1], display.GetBoneTransform (HumanBodyBones.LeftLowerArm).position), Is.LessThan (kTolerance));
+            // 子の無い骨も線を持つ（線で選ぶので、無いと選べない）
+            Assert.That (entries.Where (e => e.kind == RigControlKind.Fk && e.enabled).All (e => e.line.Length == 2), Is.True);
         }
 
         [Test]

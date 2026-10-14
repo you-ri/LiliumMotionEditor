@@ -524,40 +524,6 @@ MonoBehaviour:
     blend: 0
     contact: 1
   - enabled: 1
-    name: Spine
-    bone: 7
-    origin: 55
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
-    pullStrength: 1
-    link: 
-    blendBone: 0
-    blend: 0
-    contact: 0
-  - enabled: 1
-    name: Chest
-    bone: 8
-    origin: 55
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
-    pullStrength: 1
-    link: 
-    blendBone: 0
-    blend: 0
-    contact: 0
-  - enabled: 1
     name: Neck
     bone: 9
     origin: 55
@@ -586,40 +552,6 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
-    pullStrength: 1
-    link: 
-    blendBone: 0
-    blend: 0
-    contact: 0
-  - enabled: 1
-    name: LeftShoulder
-    bone: 11
-    origin: 55
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
-    pullStrength: 1
-    link: 
-    blendBone: 0
-    blend: 0
-    contact: 0
-  - enabled: 1
-    name: RightShoulder
-    bone: 12
-    origin: 55
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0}
-    rotation: 0
     pullStrength: 1
     link: 
     blendBone: 0
@@ -728,11 +660,11 @@ MonoBehaviour:
     blend: 0
     contact: 0
   - enabled: 1
-    name: UpperChest
+    name: Chest
     bone: 54
-    origin: 55
-    toward: 55
-    along: 0
+    origin: 0
+    toward: 10
+    along: 0.5
     across: 0
     axes: {x: 1, y: 1, z: 1}
     ground: 0
@@ -762,7 +694,7 @@ MonoBehaviour:
     blend: 0
     contact: 0
   - enabled: 1
-    name: UpperChestDirection
+    name: ChestDirection
     bone: 54
     origin: 55
     toward: 55

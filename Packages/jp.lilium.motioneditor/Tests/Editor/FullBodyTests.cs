@@ -98,7 +98,7 @@ namespace Lilium
         {
             Setup s = Create (fingers: true);
 
-            foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightFoot, HumanBodyBones.LeftLowerArm }) {
+            foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.Chest, HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightFoot, HumanBodyBones.LeftLowerArm }) {
                 Transform control = s.rig.FindControl (RigPaths.Body (bone));
                 Assert.IsNotNull (control, "点がある: " + bone);
                 Assert.IsNotNull (control.GetComponent<BodyPoint> (), "固定の強さの受け皿が付いている: " + bone);
@@ -116,12 +116,13 @@ namespace Lilium
         [Test]
         public void Points_FollowBonesWithoutChest ()
         {
-            // 必須の骨だけのキャラ（胸・首が無い）でも、ある骨の点だけで組める
+            // 必須の骨だけのキャラ（胸・首が無い）でも、ある骨の点だけで組める。背骨をまとめた胸の点は、ある背骨（Spine）に乗る
             Setup s = Create (withChest: false);
 
-            Assert.IsNull (s.rig.FindControl (RigPaths.Body (HumanBodyBones.Chest)));
             Assert.IsNull (s.rig.FindControl (RigPaths.Body (HumanBodyBones.Neck)));
-            Assert.IsTrue (s.body.HasPoint (HumanBodyBones.Spine));
+            Assert.IsFalse (s.body.HasPoint (HumanBodyBones.Spine), "背骨の骨ごとの点は無い");
+            Assert.IsTrue (s.body.HasPoint (HumanBodyBones.Chest));
+            Assert.AreEqual (Bone (s, HumanBodyBones.Spine), s.body.GetBone (HumanBodyBones.Chest));
             Assert.IsTrue (s.body.HasPoint (HumanBodyBones.LeftHand));
         }
 
@@ -766,23 +767,24 @@ namespace Lilium
             Setup s = Create (toes: true);
             List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
             BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
-            BodyPointTarget spine = PointTarget (targets, HumanBodyBones.Spine);
-            BodyPointTarget chest = PointTarget (targets, HumanBodyBones.Chest);
+            BodyPointTarget head = PointTarget (targets, HumanBodyBones.Head);
             BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
             BodyPointTarget knee = PointTarget (targets, HumanBodyBones.LeftLowerLeg);
             BodyPointTarget ankle = PointTarget (targets, HumanBodyBones.LeftFoot);
             System.Func<string, BodyPointTarget> named = name => targets.OfType<BodyPointTarget> ().Single (p => p.id.name == name);
             BodyPointTarget heel = named ("LeftHeel");
             BodyPointTarget ball = named ("LeftSoleBall");
+            // 背骨をまとめた胸の点は骨の付け根から離れた点なので、名前で引く
+            BodyPointTarget chest = named ("Chest");
 
             // 子をつかむと、Free の親は一緒に動く
             CollectionAssert.AreEquivalent (new[] { hips }, PreviewWindow.PointsMovedWith (targets, new[] { hips, hand }, hand), "手をつかむと腰も動く");
             // 付け根の点の子には同じ骨の上の点が入る。骨の上の点の子には入らない
             CollectionAssert.IsEmpty (PreviewWindow.PointsMovedWith (targets, new[] { ankle, heel, ball }, ankle), "足首をつかむと踵・足裏は体に付いて動く");
             CollectionAssert.AreEquivalent (new[] { ankle }, PreviewWindow.PointsMovedWith (targets, new[] { ankle, heel, ball }, heel), "踵をつかむと足首は動く");
-            // 連鎖: 腰（Pin）・背骨（つかむ）・胸（Free）
+            // 連鎖: 腰（Pin）・胸（つかむ）・頭（Free）
             hips.SetState (BodyPointState.Pin);
-            CollectionAssert.AreEquivalent (new[] { hips }, PreviewWindow.PointsMovedWith (targets, new[] { hips, spine, chest }, spine), "胸は背骨の子なので動かさない");
+            CollectionAssert.AreEquivalent (new[] { hips }, PreviewWindow.PointsMovedWith (targets, new[] { hips, chest, head }, chest), "頭は胸の子なので動かさない");
             // Locked の子は一緒に動く
             hips.SetState (BodyPointState.Free);
             ankle.SetState (BodyPointState.Locked);
@@ -906,6 +908,10 @@ namespace Lilium
             Assert.AreSame (Bone (s, HumanBodyBones.LeftFoot), named ("LeftHeel").linkBone, "踵 → 足首の線は足");
             Assert.AreSame (Bone (s, HumanBodyBones.LeftUpperLeg), named ("LeftKneePole").linkBone, "膝の Pole → 膝の線は太もも");
             Assert.IsNull (PointTarget (targets, HumanBodyBones.Hips).linkBone, "腰はつなぐ相手が無い");
+            // 関節の点の無い背骨は、背骨をまとめた胸の点が関節の代わりになる（首・上腕の線が腰まで飛ばない）
+            Transform chest = s.body.GetBone (HumanBodyBones.Chest);
+            Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.Neck).linkBone, "首 → 胸の点の線は胸の骨");
+            Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.LeftUpperArm).linkBone, "上腕 → 胸の点の線は胸の骨（肩は点を持たない）");
         }
 
         [Test]

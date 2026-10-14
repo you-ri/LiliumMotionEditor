@@ -36,14 +36,17 @@ namespace Lilium
 
     public sealed class BodyPointTarget : PoseTarget
     {
-        /// <summary>点どうしをつなぐ線の太さ（ピクセル）と、丸との間に空ける隙間（丸の中心から。ハンドルの大きさの何倍か）</summary>
-        const float kLinkWidth = 4.5f;
-        const float kLinkGap = 1.7f;
-        static readonly Color kLinkColor = new Color (0.8f, 0.85f, 0.9f, 0.55f);
+        /// <summary>
+        /// 点どうしをつなぐ線の太さ（ピクセル）と、丸との間に空ける隙間（丸の中心から。ハンドルの大きさの何倍か）。
+        /// リグエディタの骨の線も同じ見た目で描く（RigEditorWindow）
+        /// </summary>
+        internal const float kLinkWidth = 4.5f;
+        internal const float kLinkGap = 1.7f;
+        internal static readonly Color kLinkColor = new Color (0.8f, 0.85f, 0.9f, 0.55f);
         /// <summary>線を押す当たりで、丸より後に当たるよう足す距離（ピクセル）。線の端と丸が近いとき、丸を優先する</summary>
-        const float kLinkPickBias = 2;
+        internal const float kLinkPickBias = 2;
         /// <summary>マウスが乗っている・線に当たる骨（FK）を選んでいる線の太さ（線の太さの何倍か）</summary>
-        const float kLinkHighlightWidth = 1.8f;
+        internal const float kLinkHighlightWidth = 1.8f;
         /// <summary>点をつかまない間に出す、固定した点の印の大きさ（ハンドルの大きさの何倍か）</summary>
         const float kMarkScale = 0.6f;
         static readonly Color kPinnedColor = new Color (1f, 0.55f, 0.1f, 0.8f);
@@ -55,8 +58,8 @@ namespace Lilium
         /// </summary>
         const float kRingGap = 0.4f;
         const float kRingWidth = 2.5f;
-        static readonly Color kRingHoverColor = new Color (1f, 1f, 1f, 0.7f);
-        static readonly Color kRingSelectedColor = new Color (0.3f, 1f, 0.45f, 1f);
+        internal static readonly Color kRingHoverColor = new Color (1f, 1f, 1f, 0.7f);
+        internal static readonly Color kRingSelectedColor = new Color (0.3f, 1f, 0.45f, 1f);
 
         readonly EditingRig rig_;
         readonly FullBodyRig body_;
@@ -68,6 +71,8 @@ namespace Lilium
         readonly string linkName_;
         /// <summary>関節の点でないか（骨の付け根から離れた、骨の上の点。骨から線でつないで描く）</summary>
         readonly bool offsetPoint_;
+        /// <summary>引く点か（引く強さ 1。向けるだけの点でない）</summary>
+        readonly bool pulls_;
         readonly HumanBodyBones humanBone_;
         readonly Transform control_;
         readonly Transform bone_;
@@ -259,7 +264,8 @@ namespace Lilium
                 targets.Add (new BodyPointTarget (rig, body, shapes, point));
             }
             // 線でつなぐ相手。定義で名前を指していればその点（つま先の先 → 母趾球など）。
-            // 無ければ、関節の点は骨の階層を上へたどって最初に当たる関節の点、骨の上の点はその骨の関節の点
+            // 無ければ、関節の点は骨の階層を上へたどって最初に当たる関節の点、骨の上の点はその骨の関節の点。
+            // 関節の点の無い骨（背骨をまとめた胸の点の骨）は、その骨を引く点を関節の代わりにする（首・上腕の線が腰まで飛ばない）
             Dictionary<Transform, BodyPointTarget> joints = new Dictionary<Transform, BodyPointTarget> ();
             Dictionary<string, BodyPointTarget> byName = new Dictionary<string, BodyPointTarget> ();
             foreach (PoseTarget target in targets) {
@@ -269,10 +275,15 @@ namespace Lilium
             }
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
+                if (point.offsetPoint_ && point.pulls_ && !joints.ContainsKey (point.bone_)) joints[point.bone_] = point;
+            }
+            foreach (PoseTarget target in targets) {
+                BodyPointTarget point = (BodyPointTarget)target;
                 if (!string.IsNullOrEmpty (point.linkName_)) byName.TryGetValue (point.linkName_, out point.link_);
                 Transform root = rig.root.transform;
                 for (Transform t = point.offsetPoint_ ? point.bone_ : point.bone_.parent; t != null && t != root && point.link_ == null; t = t.parent) {
-                    joints.TryGetValue (t, out point.link_);
+                    BodyPointTarget joint;
+                    if (joints.TryGetValue (t, out joint) && joint != point) point.link_ = joint;
                 }
             }
             return targets;
@@ -287,6 +298,7 @@ namespace Lilium
             humanBone_ = point.humanBone;
             linkName_ = point.definition != null ? point.definition.link : null;
             offsetPoint_ = rig.GetPointRestOffset (point).sqrMagnitude > 1e-10f;
+            pulls_ = point.definition == null || point.definition.pullStrength > 0;
             control_ = body.GetControl (human_);
             bone_ = body.GetBone (human_);
             displayBone_ = point.bone;

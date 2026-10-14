@@ -298,8 +298,10 @@ namespace Lilium
 
         /// <summary>
         /// 既定の点の一覧:
-        /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨には置かない（足の点で足りる）
-        /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝と肘の Pole。顔の前の点は目の高さ。胸は UpperChest に置き、無いキャラでは親の骨（Chest・Spine）へ乗る。
+        /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨（足の点で足りる）と肩（上腕の点で足りる）には置かない
+        /// - 背骨（Spine・Chest・UpperChest）は骨ごとに置かず、胸の点 1 つにまとめる。キャラによって背骨の数が違っても、同じ名前の点が同じ場所（腰から頭の付け根への kChestHeight 倍）に
+        ///   できるので、点の値をキャラの間で使い回せる。点は UpperChest に乗り、無いキャラでは親の骨（Chest・Spine）へ乗る。間の背骨は硬さの分だけ付いてくる（肩と同じ）
+        /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝と肘の Pole。顔の前の点は目の高さ。胸の前の点も胸の点と同じ骨に乗る。
         ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前、肘の Pole は上腕に乗せて肘の後ろに置き、
         ///   ずれの向きは脛・前腕の向きと半分ずつ混ぜる（S34・S43。曲げても関節が出る向きに置かれる）
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根。踵と足裏の中心は足に乗り、足首とつなぐ。
@@ -312,12 +314,19 @@ namespace Lilium
             foreach (FkControl control in fk) {
                 if (control == null || !control.fullBodySolve) continue;
                 if (control.bone == HumanBodyBones.LeftToes || control.bone == HumanBodyBones.RightToes) continue;
+                // 肩は点を持たず、上腕の点に引かれて硬さの分だけ付いてくる（解く骨のまま）
+                if (control.bone == HumanBodyBones.LeftShoulder || control.bone == HumanBodyBones.RightShoulder) continue;
+                // 背骨は下の胸の点 1 つにまとめる
+                if (IsSpineBone (control.bone)) continue;
                 bool foot = control.bone == HumanBodyBones.LeftFoot || control.bone == HumanBodyBones.RightFoot;
                 points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone), contact = foot });
             }
+            // 胸の点は、腰と頭の付け根（どちらも Humanoid で必須の骨）を結ぶ線の上に置く（首の骨は無いキャラがある）
+            points.Add (new BodyPoint { name = kChestPoint, bone = HumanBodyBones.UpperChest, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kChestHeight });
             // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
             foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
-                BodyPoint direction = new BodyPoint { name = bone + "Direction", bone = bone, offset = new Vector3 (0, 0, kDirectionLength), pullStrength = 0 };
+                string owner = bone == HumanBodyBones.UpperChest ? kChestPoint : bone.ToString ();
+                BodyPoint direction = new BodyPoint { name = owner + "Direction", bone = bone, offset = new Vector3 (0, 0, kDirectionLength), pullStrength = 0 };
                 if (bone == HumanBodyBones.Head) {
                     // 顔の前の点は目の高さ（頭を目線で向ける）。目の骨の高さだけを借りる。目の骨が無いキャラは決まった高さ
                     direction.toward = HumanBodyBones.LeftEye;
@@ -370,6 +379,20 @@ namespace Lilium
             return new BodyPoint {
                 name = name, bone = bone, origin = foot, toward = toes, along = along, across = across, axes = new Vector3 (1, 0, 1), ground = true, link = link, contact = true,
             };
+        }
+
+        /// <summary>背骨をまとめた胸の点の名前</summary>
+        public const string kChestPoint = "Chest";
+        /// <summary>
+        /// 胸の点の高さ（腰から頭の付け根までの何倍の所か）。胴の真ん中に置く（10-11 ユーザー指示）。
+        /// デモのキャラで Chest の付け根が 0.36〜0.38、UpperChest の付け根が 0.56〜0.58。乗る骨（UpperChest）の付け根より少し下になるが、骨に付いた点として解ける
+        /// </summary>
+        public const float kChestHeight = 0.5f;
+
+        /// <summary>背骨（胸の点 1 つにまとめる骨）か</summary>
+        public static bool IsSpineBone (HumanBodyBones bone)
+        {
+            return bone == HumanBodyBones.Spine || bone == HumanBodyBones.Chest || bone == HumanBodyBones.UpperChest;
         }
 
         /// <summary>目の骨が無いキャラの、頭の付け根から目までの高さ（humanScale に対する割合。デモのキャラで 0.095）</summary>
