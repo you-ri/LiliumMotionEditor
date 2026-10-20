@@ -23,7 +23,9 @@ namespace Lilium
                 case EventType.MouseDown:
                     if ((HandleUtility.nearestControl == controlID && ev.button == 0)) {
                         Ray mouseRay = HandleUtility.GUIPointToWorldRay (ev.mousePosition);
-                        Vector3 projectPoint = GeometryMath.GetClosestPointToLine (mouseRay.origin, position, endPosition);
+                        // 軸をまっすぐ見ていて決まらないときは、つかんだ所を軸の根元とする
+                        Vector3 projectPoint;
+                        GeometryMath.GetClosestPointToRay (mouseRay, position, endPosition, out projectPoint);
                         GUIUtility.hotControl = controlID;
 
                         hangPoint_ = projectPoint - position;
@@ -41,9 +43,12 @@ namespace Lilium
                 case EventType.MouseDrag:
                     if (GUIUtility.hotControl == controlID && ev.button == 0) {
                         Ray mouseRay = HandleUtility.GUIPointToWorldRay (ev.mousePosition);
-                        Vector3 projectPoint = GeometryMath.GetClosestPointToLine (mouseRay.origin, position, endPosition);
-                        position = projectPoint - hangPoint_;
-                        GUI.changed = true;
+                        // マウスの光線にいちばん近い軸の上の点へ（光線と軸がほぼ平行なら動かさない）
+                        Vector3 projectPoint;
+                        if (GeometryMath.GetClosestPointToRay (mouseRay, position, endPosition, out projectPoint)) {
+                            position = projectPoint - hangPoint_;
+                            GUI.changed = true;
+                        }
                         ev.Use ();
                     }
                     break;

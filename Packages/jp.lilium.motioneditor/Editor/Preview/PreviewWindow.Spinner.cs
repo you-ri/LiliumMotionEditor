@@ -95,9 +95,7 @@ namespace Lilium
         /// </summary>
         public bool CanSpin (SpinnerMode mode)
         {
-            PoseTarget target = selectedTarget;
-            if (target == null) return false;
-            return (target.GetSpinChannels () & ToChannel (mode)) != 0 && CanEditTarget (target);
+            return CanEditValues (ToChannel (mode));
         }
 
         static TransformChannels ToChannel (SpinnerMode mode)
@@ -112,21 +110,13 @@ namespace Lilium
         /// <param name="delta">親から見た位置の変化（メートル）</param>
         public void SpinMove (Vector3 delta)
         {
-            if (!CanSpin (SpinnerMode.Move)) return;
-            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinMove (delta);
-            CarryPinnedPoints (before);
-            AfterSpin (TransformChannels.Position);
+            SpinEdit (TransformChannels.Position, target => target.SpinMove (delta));
         }
 
         /// <param name="euler">ローカル軸まわりの角度（度）</param>
         public void SpinRotate (Vector3 euler)
         {
-            if (!CanSpin (SpinnerMode.Rotate)) return;
-            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinRotateLocal (Quaternion.Euler (euler));
-            CarryPinnedPoints (before);
-            AfterSpin (TransformChannels.Rotation);
+            SpinEdit (TransformChannels.Rotation, target => target.SpinRotateLocal (Quaternion.Euler (euler)));
         }
 
         /// <summary>
@@ -135,21 +125,38 @@ namespace Lilium
         /// <param name="drag">画面上の動き（度）</param>
         public void SpinRotateView (Vector2 drag)
         {
-            if (!CanSpin (SpinnerMode.Rotate)) return;
-            Quaternion view = camera_.rotation;
-            Quaternion rotation = Quaternion.AngleAxis (drag.x, view * Vector3.up) * Quaternion.AngleAxis (drag.y, view * Vector3.right);
-            List<FkBefore> before = CaptureFkBefore (new[] { selectedTarget });
-            selectedTarget.SpinRotateWorld (rotation);
-            CarryPinnedPoints (before);
-            AfterSpin (TransformChannels.Rotation);
+            SpinEdit (TransformChannels.Rotation, target => {
+                Quaternion view = camera_.rotation;
+                target.SpinRotateWorld (Quaternion.AngleAxis (drag.x, view * Vector3.up) * Quaternion.AngleAxis (drag.y, view * Vector3.right));
+            });
         }
 
         /// <param name="delta">軸ごとの倍率の変化（0.1 なら 1.0 → 1.1）</param>
         public void SpinScale (Vector3 delta)
         {
-            if (!CanSpin (SpinnerMode.Scale)) return;
-            selectedTarget.SpinScale (delta);
-            AfterSpin (TransformChannels.Scale);
+            SpinEdit (TransformChannels.Scale, target => target.SpinScale (delta));
+        }
+
+        /// <summary>
+        /// Spinner・数値欄で選んでいる物を動かす共通の流れ: 動かせるか見る → 動かす（子の Pin の点も連れていく） → 解き直して動かした物のキー
+        /// </summary>
+        void SpinEdit (TransformChannels channels, System.Action<PoseTarget> edit)
+        {
+            PoseTarget target = selectedTarget;
+            if (target == null || !CanEditValues (channels)) return;
+            EditCarryingPinnedPoints (new[] { target }, () => edit (target));
+            AfterSpin (channels);
+        }
+
+        /// <summary>
+        /// targets を edit で動かす。全身 IK の点をつかむ間に FK の骨を動かしたなら、子の Pin の点を一緒に動かす
+        /// （動かす前の骨を控えて、動かした骨の差を掛ける。CarryPinnedPoints）
+        /// </summary>
+        void EditCarryingPinnedPoints (IEnumerable<PoseTarget> targets, System.Action edit)
+        {
+            List<FkBefore> before = CaptureFkBefore (targets);
+            edit ();
+            CarryPinnedPoints (before);
         }
 
         /// <summary>
@@ -251,12 +258,7 @@ namespace Lilium
         /// </summary>
         public void SetSpinValuesLive (TransformChannels channels, Vector3 position, Quaternion rotation)
         {
-            PoseTarget target = selectedTarget;
-            if (target == null || !CanEditValues (channels)) return;
-            List<FkBefore> before = CaptureFkBefore (new[] { target });
-            target.SetValues (channels, position, rotation);
-            CarryPinnedPoints (before);
-            AfterSpin (channels);
+            SpinEdit (channels, target => target.SetValues (channels, position, rotation));
         }
 
         /// <summary>
@@ -324,9 +326,7 @@ namespace Lilium
             Undo.IncrementCurrentGroup ();
             int group = Undo.GetCurrentGroup ();
             // 全身 IK の点をつかむ間に FK の値を入れた・戻した: 子の Pin の点を一緒に動かす
-            List<FkBefore> before = CaptureFkBefore (targets);
-            edit ();
-            CarryPinnedPoints (before);
+            EditCarryingPinnedPoints (targets, edit);
             SolveAfterManipulate ();
             if (targets.Any (t => t is BodyPointTarget) || hasActivePoints) {
                 CommitFullBodyPose ();

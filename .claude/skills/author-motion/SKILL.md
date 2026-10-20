@@ -77,11 +77,11 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
   Listing every point you manage (with `Free` for unused ones) on every key avoids surprises from states carried over
 - To reuse a pose on a character of a different size, scale positions by the ratio of `humanScale` (same as `PoseDocument.Rescale`)
 - Points of the default rig definition:
-  - Body: `Hips` `HipsDirection` `Chest` `ChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
-    (`Chest` stands for the whole spine: one point at the middle of the torso (halfway from the hips to the head base), on every character whatever its spine bone count;
-    the spine bones between follow by stiffness)
-  - Arms: `Left/RightUpperArm` `Left/RightElbowPole` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
-  - Legs: `Left/RightUpperLeg` `Left/RightKneePole` `Left/RightLowerLeg` `Left/RightFoot`
+  - Body: `Hips` `HipsDirection` `Stomach` `Chest` `ChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
+    (`Chest` is the upper spine: one point at the middle of the torso (halfway from the hips to the head base); `Stomach` is the lower spine, halfway from the hips to `Chest`.
+    Both exist on every character whatever its spine bone count; the spine bones between follow by stiffness)
+  - Arms: `Left/RightUpperArm` `Left/RightLowerArm` `Left/RightHand` `Left/RightPalmIndex` `Left/RightPalmLittle`
+  - Legs: `Left/RightUpperLeg` `Left/RightLowerLeg` `Left/RightFoot`
   - Soles: `Left/RightHeel` `Left/RightSoleBall` `Left/RightLittleToeSide` `Left/RightToeTip` (only on characters with toe bones; palm points need finger bones)
 
   The list depends on the rig definition; check `points` from `motion_describe` before use.
@@ -119,11 +119,8 @@ These follow from how the editor interpolates. Breaking them trips lint or break
 - **A planted foot needs more than the ankle**: lock `Heel`, `ToeTip` and `LittleToeSide` (and `SoleBall` when the foot pivots on the ball).
   `LittleToeSide` does not pull, so it does not stop the foot from rolling onto its side: also lock `Foot` with its rotation (yaw of the foot, pitch when the heel is up).
   With only the ankle point, the foot turns around the ankle and the toes sink into the floor
-- **Keep the knee over the toes** on a planted leg: pin `KneePole` above and in front of the ankle, in the direction the foot points. Otherwise the thigh can twist out of range when the hips turn
-- **Turn an elbow with `ElbowPole`** (rig definition version 8+; behind the elbow in the T-pose): pin it where the elbow should point and the arm turns about the shoulder–hand axis without moving the hand.
-  It is an alternative to pinning `LowerArm` (computing an elbow position that the bones can reach); use one or the other, as with the knee below
-- **Never pin `KneePole` while `LowerLeg` (the knee) is pinned** (same for `ElbowPole` and `LowerArm`). With a knee point the pole stops being a pole and aims the thigh instead; it fights the knee pin and drags the feet through the floor.
-  When the knee is placed (kneeling), leave `KneePole` Free. Lint then reports `FloorPenetration` for the Free pole under the floor; that is the control point only, not the mesh
+- **Keep the knee over the toes** on a planted leg: pin `LowerLeg` (the knee) above and in front of the ankle, in the direction the foot points. Otherwise the thigh can twist out of range when the hips turn
+- **Turn an elbow by pinning `LowerArm`** at a position the bones can reach (keep the shoulder–elbow and elbow–hand lengths). The default rig definition has no knee or elbow poles
 - **`Locked` also works off the ground**. For spans where a point should travel on a straight line (just before landing, just after lift-off), lock it on both end keys (straight line between keys).
   With Pin, keys interpolate bone angles, the heel path curves as the body moves, and the foot slides at contact
 - **Lift a foot straight up and put it straight down**: before lift-off and before landing, add a key with the sole points `Locked` a few cm above the floor, right above the contact spot.

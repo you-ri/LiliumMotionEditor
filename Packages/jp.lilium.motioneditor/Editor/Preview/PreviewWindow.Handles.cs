@@ -78,11 +78,13 @@ namespace Lilium
                             if (dragged != Vector3.zero && selected && selection_.Count > 1) {
                                 MoveSelectedPoints (targets_, GetSelectedPoints (), point, draggedFrom, dragged);
                             }
-                            // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（固定している点は付いて回らない）
+                            // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（その骨より先の固定している点も一緒に回る）
                             Quaternion turned = point.ConsumeRotateDelta ();
+                            // ドラッグの始めの姿勢へ戻し、始めからの合計で回し直す（ねじれを積み上げない。PointTurn）
                             if (turned != Quaternion.identity) {
-                                if (selected && selection_.Count > 1) RotateSelectedPoints (point, turned);
-                                else RotatePointFk (targets_, point, turned);
+                                Quaternion total = pointTurn_.Add (stage_, point, turned, SolveAfterManipulate);
+                                if (selected && selection_.Count > 1) RotateSelectedPoints (point, total);
+                                else RotatePointFk (targets_, point, total);
                                 pointTurned = true;
                             }
                         }
@@ -128,14 +130,17 @@ namespace Lilium
                 linkClicked.FocusHandle ();
                 RepaintView ();
             }
-            // FK で骨を動かした: 子の Pin の点を一緒に動かす（動かした点は、点を動かしたときと同じ流れでキーを打つ）
-            if (changed) CarryPinnedPoints (fkBefore);
+            // FK で骨を動かした: 子の Pin の点を一緒に動かす（動かした点は、点を動かしたときと同じ流れでキーを打つ）。
+            // 点を回したときは除く: 回し方が固定している点も動かしてあり、ドラッグの始めへ戻した分や回した骨の分を
+            // 「FK で動かした」と見て、選んでいる骨の先の Pin の点をもう一度ずらしてしまう
+            if (changed && !pointTurned) CarryPinnedPoints (fkBefore);
 
             // 再生中につかんだら止め、離したら続ける
             if (changed && clock_.isPlaying) {
                 handleHold_ = true;
                 HoldClock ();
             }
+            if (GUIUtility.hotControl == 0) pointTurn_.End ();
             if (handleHold_ && GUIUtility.hotControl == 0) {
                 handleHold_ = false;
                 ReleaseClock ();

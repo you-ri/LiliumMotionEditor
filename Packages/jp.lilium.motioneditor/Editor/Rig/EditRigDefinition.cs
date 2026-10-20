@@ -301,9 +301,9 @@ namespace Lilium
         /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨（足の点で足りる）と肩（上腕の点で足りる）には置かない
         /// - 背骨（Spine・Chest・UpperChest）は骨ごとに置かず、胸の点 1 つにまとめる。キャラによって背骨の数が違っても、同じ名前の点が同じ場所（腰から頭の付け根への kChestHeight 倍）に
         ///   できるので、点の値をキャラの間で使い回せる。点は UpperChest に乗り、無いキャラでは親の骨（Chest・Spine）へ乗る。間の背骨は硬さの分だけ付いてくる（肩と同じ）
-        /// - 腰・胸・頭の前の点と頭のてっぺんの点、膝と肘の Pole。顔の前の点は目の高さ。胸の前の点も胸の点と同じ骨に乗る。
-        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝の Pole は太ももに乗せて膝の前、肘の Pole は上腕に乗せて肘の後ろに置き、
-        ///   ずれの向きは脛・前腕の向きと半分ずつ混ぜる（S34・S43。曲げても関節が出る向きに置かれる）
+        /// - 胸の点の下に、お腹の点（Cascadeur の stomach）。腰と胸の点の真ん中（kStomachHeight）に置き、Spine に乗る。お腹と胸を別々に曲げられる
+        /// - 腰・胸・頭の前の点と頭のてっぺんの点。顔の前の点は目の高さ。胸の前の点も胸の点と同じ骨に乗る。
+        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝・肘の Pole は置かない（膝・肘の点で足りる。S56）
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根。踵と足裏の中心は足に乗り、足首とつなぐ。
         ///   小指側は足に乗る向けるだけの点（引く強さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
         ///   つま先の先はつま先の骨に乗り、足裏の中心とつなぐ。つま先・指の骨が無いキャラには置かない
@@ -321,8 +321,11 @@ namespace Lilium
                 bool foot = control.bone == HumanBodyBones.LeftFoot || control.bone == HumanBodyBones.RightFoot;
                 points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone), contact = foot });
             }
-            // 胸の点は、腰と頭の付け根（どちらも Humanoid で必須の骨）を結ぶ線の上に置く（首の骨は無いキャラがある）
-            points.Add (new BodyPoint { name = kChestPoint, bone = HumanBodyBones.UpperChest, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kChestHeight });
+            // 胸とお腹の点は、腰と頭の付け根（どちらも Humanoid で必須の骨）を結ぶ線の上に置く（首の骨は無いキャラがある）。
+            // 線は腰 → お腹 → 胸とつなぐ。背骨が Spine だけのキャラでは両方が Spine に乗るので、骨の階層からは決められない。
+            // 胸を先に並べるのは、同じ骨に乗ったとき首・上腕の線が胸へつながるように（骨を引く点は先に並んだ方。BodyPointTarget.Create）
+            points.Add (new BodyPoint { name = kChestPoint, bone = HumanBodyBones.UpperChest, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kChestHeight, link = kStomachPoint });
+            points.Add (new BodyPoint { name = kStomachPoint, bone = HumanBodyBones.Spine, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kStomachHeight, link = HumanBodyBones.Hips.ToString () });
             // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
             foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
                 string owner = bone == HumanBodyBones.UpperChest ? kChestPoint : bone.ToString ();
@@ -339,14 +342,6 @@ namespace Lilium
             points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, kDirectionLength, 0), pullStrength = 0 });
             foreach (string side in new[] { "Left", "Right" }) {
                 bool left = side == "Left";
-                HumanBodyBones shin = left ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
-                points.Add (new BodyPoint {
-                    name = side + "KneePole", bone = left ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg, origin = shin,
-                    offset = new Vector3 (0, 0, kDirectionLength), pullStrength = 0, link = shin.ToString (), blendBone = shin, blend = kPoleBlend,
-                });
-            }
-            foreach (string side in new[] { "Left", "Right" }) {
-                bool left = side == "Left";
                 HumanBodyBones foot = left ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
                 HumanBodyBones toes = left ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
                 HumanBodyBones hand = left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
@@ -359,14 +354,6 @@ namespace Lilium
                 // 手のひらの 2 点は指の付け根
                 points.Add (new BodyPoint { name = side + "PalmIndex", bone = hand, origin = left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal });
                 points.Add (new BodyPoint { name = side + "PalmLittle", bone = hand, origin = left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal });
-            }
-            foreach (string side in new[] { "Left", "Right" }) {
-                bool left = side == "Left";
-                HumanBodyBones forearm = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
-                points.Add (new BodyPoint {
-                    name = side + "ElbowPole", bone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm, origin = forearm,
-                    offset = new Vector3 (0, 0, -kDirectionLength), pullStrength = 0, link = forearm.ToString (), blendBone = forearm, blend = kPoleBlend,
-                });
             }
             return points;
         }
@@ -389,6 +376,14 @@ namespace Lilium
         /// </summary>
         public const float kChestHeight = 0.5f;
 
+        /// <summary>背骨の下側（お腹）の点の名前（Cascadeur の stomach。10-19 ユーザー指示）</summary>
+        public const string kStomachPoint = "Stomach";
+        /// <summary>
+        /// お腹の点の高さ（腰から頭の付け根までの何倍の所か）。腰と胸の点の真ん中。
+        /// デモのキャラで Spine の付け根が 0.19〜0.20、Chest の付け根が 0.35〜0.38 なので、Spine の骨の上に来る
+        /// </summary>
+        public const float kStomachHeight = 0.25f;
+
         /// <summary>背骨（胸の点 1 つにまとめる骨）か</summary>
         public static bool IsSpineBone (HumanBodyBones bone)
         {
@@ -397,10 +392,8 @@ namespace Lilium
 
         /// <summary>目の骨が無いキャラの、頭の付け根から目までの高さ（humanScale に対する割合。デモのキャラで 0.095）</summary>
         public const float kEyeHeight = 0.095f;
-        /// <summary>向きの点・Pole を、骨からどれだけ離して置くか（humanScale に対する割合）</summary>
+        /// <summary>向きの点を、骨からどれだけ離して置くか（humanScale に対する割合）</summary>
         public const float kDirectionLength = 0.25f;
-        /// <summary>膝・肘の Pole の、脛・前腕の向きを混ぜる割合（S34・S43）</summary>
-        public const float kPoleBlend = 0.5f;
 
         /// <summary>全身 IK の点が向きも持つ骨か（手・足首・頭・腰。ほかは位置だけ）</summary>
         public static bool PointHasRotation (HumanBodyBones bone)

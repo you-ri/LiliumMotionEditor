@@ -51,6 +51,42 @@ namespace Lilium
             return definition;
         }
 
+        /// <summary>膝・肘の Pole の、脛・前腕の向きを混ぜる割合（S34・S43）</summary>
+        protected const float kPoleBlend = 0.5f;
+
+        /// <summary>
+        /// 膝・肘の Pole を定義へ足す。既定の一覧には置かない（S56）が、引く強さ 0 の点を Pole として解く仕組みは残っているので、それを確かめるテストで足す。
+        /// 膝の Pole は太ももに乗せて膝の前、肘の Pole は上腕に乗せて肘の後ろに置き、ずれの向きは脛・前腕の向きと半分ずつ混ぜる（S34・S43）
+        /// </summary>
+        protected static void AddPoles (EditRigDefinition definition)
+        {
+            foreach (string side in new[] { "Left", "Right" }) {
+                bool left = side == "Left";
+                HumanBodyBones shin = left ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
+                HumanBodyBones forearm = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
+                definition.bodyPoints.Add (new EditRigDefinition.BodyPoint {
+                    name = side + "KneePole", bone = left ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg, origin = shin,
+                    offset = new Vector3 (0, 0, EditRigDefinition.kDirectionLength), pullStrength = 0, link = shin.ToString (), blendBone = shin, blend = kPoleBlend,
+                });
+                definition.bodyPoints.Add (new EditRigDefinition.BodyPoint {
+                    name = side + "ElbowPole", bone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm, origin = forearm,
+                    offset = new Vector3 (0, 0, -EditRigDefinition.kDirectionLength), pullStrength = 0, link = forearm.ToString (), blendBone = forearm, blend = kPoleBlend,
+                });
+            }
+        }
+
+        /// <summary>AddPoles で足した膝の Pole（thigh は太ももの骨）</summary>
+        protected static BodyPointId KneePole (HumanBodyBones thigh)
+        {
+            return new BodyPointId (RigPaths.SideOf (thigh) + "KneePole");
+        }
+
+        /// <summary>AddPoles で足した肘の Pole（upperArm は上腕の骨）</summary>
+        protected static BodyPointId ElbowPole (HumanBodyBones upperArm)
+        {
+            return new BodyPointId (RigPaths.SideOf (upperArm) + "ElbowPole");
+        }
+
         /// <summary>
         /// テスト用の人型を作り、prefab の中に置く（PlaceInPrefab）。toes・fingers・eyes は TestSkeleton の作り分けのまま
         /// （どれも胸と首が付き、fingers と eyes は size を使わない）。fingers と toes は両方付けられる（足の点と手のひらの点を両方使うとき。

@@ -58,8 +58,15 @@ namespace Lilium
             Assert.That (upperArm.line.Length, Is.EqualTo (2));
             Assert.That (Vector3.Distance (upperArm.line[0], display.GetBoneTransform (HumanBodyBones.LeftUpperArm).position), Is.LessThan (kTolerance));
             Assert.That (Vector3.Distance (upperArm.line[1], display.GetBoneTransform (HumanBodyBones.LeftLowerArm).position), Is.LessThan (kTolerance));
+            // 子が複数ある骨は、子それぞれへ線を引く（腰 → 背骨・両脚）
+            RigControlEntry hips = entries.Single (e => e.id == "Fk/" + HumanBodyBones.Hips);
+            foreach (HumanBodyBones child in new[] { HumanBodyBones.Spine, HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg }) {
+                Vector3 expected = display.GetBoneTransform (child).position;
+                Assert.That (hips.line.Skip (1).Any (end => Vector3.Distance (end, expected) < kTolerance), Is.True, "腰 → " + child);
+            }
+            Assert.That (hips.line.Length, Is.EqualTo (4), "腰の線は背骨・両脚の 3 本");
             // 子の無い骨も線を持つ（線で選ぶので、無いと選べない）
-            Assert.That (entries.Where (e => e.kind == RigControlKind.Fk && e.enabled).All (e => e.line.Length == 2), Is.True);
+            Assert.That (entries.Where (e => e.kind == RigControlKind.Fk && e.enabled).All (e => e.line.Length >= 2), Is.True);
         }
 
         [Test]

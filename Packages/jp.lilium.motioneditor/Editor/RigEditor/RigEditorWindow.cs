@@ -484,8 +484,12 @@ namespace Lilium
                 Vector3 start, end;
                 Vector2 point, startPoint, endPoint;
                 if (entry.line.Length > 1) {
-                    if (!TryGetLine (entry, out start, out end) || !ToView (camera, start, rect, out startPoint) || !ToView (camera, end, rect, out endPoint)) continue;
-                    distance = DistanceToSegment (mousePosition, startPoint, endPoint) + BodyPointTarget.kLinkPickBias;
+                    // 骨の線は根元から先それぞれへ。どれかの線に近ければその骨
+                    distance = float.MaxValue;
+                    for (int i = 1; i < entry.line.Length; i++) {
+                        if (!TryGetLine (entry, i, out start, out end) || !ToView (camera, start, rect, out startPoint) || !ToView (camera, end, rect, out endPoint)) continue;
+                        distance = Mathf.Min (distance, DistanceToSegment (mousePosition, startPoint, endPoint) + BodyPointTarget.kLinkPickBias);
+                    }
                 }
                 else {
                     if (!entry.position.HasValue || !ToView (camera, entry.position.Value, rect, out point)) continue;
@@ -515,13 +519,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 骨の線の両端。点の丸がある端は、丸に重ならないよう隙間を空ける（モーションエディタの点の線と同じ）。
+        /// 骨の線（根元から index 番目の先まで）の両端。点の丸がある端は、丸に重ならないよう隙間を空ける（モーションエディタの点の線と同じ）。
         /// 指のような短い骨で線が消えないよう、隙間は骨の長さの一部までに抑える
         /// </summary>
-        bool TryGetLine (RigControlEntry entry, out Vector3 start, out Vector3 end)
+        bool TryGetLine (RigControlEntry entry, int index, out Vector3 start, out Vector3 end)
         {
             start = entry.line[0];
-            end = entry.line[entry.line.Length - 1];
+            end = entry.line[index];
             Vector3 delta = end - start;
             float length = delta.magnitude;
             if (length < 1e-5f) return false;
@@ -556,8 +560,6 @@ namespace Lilium
             Color color = Handles.color;
 
             foreach (RigControlEntry entry in entries_) {
-                Vector3 start, end;
-                if (entry.line.Length < 2 || !TryGetLine (entry, out start, out end)) continue;
                 bool selected = entry.id == selectedId_;
                 bool hover = entry.id == hoverId_;
                 Handles.color = selected ? BodyPointTarget.kRingSelectedColor
@@ -565,7 +567,12 @@ namespace Lilium
                     : entry.enabled ? BodyPointTarget.kLinkColor
                     : kDisabledLineColor;
                 float width = BodyPointTarget.kLinkWidth;
-                Handles.DrawAAPolyLine (selected || hover ? width * BodyPointTarget.kLinkHighlightWidth : width, start, end);
+                // 子が複数ある骨（腰・胸など）は、子それぞれへ線を引く
+                for (int i = 1; i < entry.line.Length; i++) {
+                    Vector3 start, end;
+                    if (!TryGetLine (entry, i, out start, out end)) continue;
+                    Handles.DrawAAPolyLine (selected || hover ? width * BodyPointTarget.kLinkHighlightWidth : width, start, end);
+                }
             }
             foreach (RigControlEntry entry in entries_) {
                 if (entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
@@ -585,7 +592,8 @@ namespace Lilium
         {
             if (entry == null) return;
             if (entry.line.Length > 1) {
-                Handles.Label ((entry.line[0] + entry.line[entry.line.Length - 1]) * 0.5f, entry.label, EditorStyles.whiteMiniLabel);
+                // 名前は 1 本目の線の真ん中に出す（子が複数でも 1 つだけ）
+                Handles.Label ((entry.line[0] + entry.line[1]) * 0.5f, entry.label, EditorStyles.whiteMiniLabel);
                 return;
             }
             if (!entry.position.HasValue) return;

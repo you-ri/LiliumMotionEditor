@@ -60,8 +60,31 @@ public static class GeometryMath
 		float bl = rv.magnitude;
 		float pl = dp / bl;
 		return rv * (pl / bl) + beginPoint;
-	}	
-		
+	}
+
+	/**
+	  *  線（beginPoint → endPoint を伸ばした直線）の上で、光線にいちばん近い点。
+	  *  光線の起点を線へ落とすだけだと、透視のカメラでは起点（近いクリップ面の上）がマウスに合わせてほとんど動かず、軸をつかんでも点が動かない。
+	  *  光線と線がほぼ平行（軸をまっすぐ見ている）なら決まらないので false
+	  */
+	public static bool GetClosestPointToRay (Ray ray, Vector3 beginPoint, Vector3 endPoint, out Vector3 point)
+	{
+		Vector3 u = endPoint - beginPoint;
+		Vector3 d = ray.direction;
+		Vector3 w = ray.origin - beginPoint;
+		float a = Vector3.Dot (d, d);
+		float b = Vector3.Dot (d, u);
+		float c = Vector3.Dot (u, u);
+		float denom = a * c - b * b;
+		if (denom <= 1e-6f * a * c) {
+			point = beginPoint;
+			return false;
+		}
+		float t = (a * Vector3.Dot (u, w) - b * Vector3.Dot (d, w)) / denom;
+		point = beginPoint + u * t;
+		return true;
+	}
+
 	/**
 	  *  線と点との距離を算出
 	  */

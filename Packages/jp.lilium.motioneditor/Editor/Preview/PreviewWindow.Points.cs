@@ -133,7 +133,9 @@ namespace Lilium
         /// Floor Clamp が入っていれば、選んでいる点をひとかたまりとして床に当てる（10-09 ユーザー指示。点ごとに当てると、
         /// つかんだ点だけ床で止まり、ほかの点は床の下へ潜っていた）: 一番低い点が床より下へ行くなら、まとめて動かす量の Y を
         /// その点が床に着く所まで上げる（横の動きはそのまま効き、かたまりは床の上を滑る。1 つの点を床に当てるときと同じ）。
-        /// 一緒に動かさない Free の点（親を動かせば体に付いて動く）も、同じだけ動くとみなして低さに入れる
+        /// 一緒に動かさない Free の点（親を動かせば体に付いて動く）も、同じだけ動くとみなして低さに入れる。
+        /// 選んだ点の骨のうちいちばん根の方の骨が腰なら、腰の FK も同じだけ動かす（10-20 ユーザー指示。点の目標だけ動かすと、全身 IK は動かす前の姿勢から寄せるので、
+        /// 体ごと動かす形に届かず背骨が曲がっていた。全部の点を選んで腰を動かすと、固定していない頭などが 35cm ずれていた）
         /// </summary>
         internal static void MoveSelectedPoints (IList<PoseTarget> targets, IList<BodyPointTarget> selected, BodyPointTarget grabbed, Vector3 from, Vector3 delta)
         {
@@ -147,35 +149,50 @@ namespace Lilium
                 grabbed.MoveTo (from + delta);
             }
             foreach (BodyPointTarget other in PointsMovedWith (targets, selected, grabbed)) other.MoveBy (delta);
+            // 点を先に動かす（Free の点は今の骨の上の点から動かすので、骨を先に動かすと二重に動く）。腰より先の骨は位置を持たないので動かない
+            foreach (FkTarget fk in TopFkTargets (targets, selected)) fk.MoveWorld (delta);
         }
 
         /// <summary>
         /// 点を 1 つ選んで回した: その点を中心に、点が乗る骨を回す（S26。点の種類で変えない）。
-        /// 骨は FK で回すので、子の骨と、骨に付いて動く Free の点は一緒に回る。固定している点（Pin・Locked。同じ骨の上の点も）は回さず、
-        /// 置いた場所と向きのまま（S29。移動と同じく、ほかの点の操作に連動しない。全身 IK が手足を曲げて届かせる）。
-        /// 付け根から離れた点は、FK だけでは中心が骨の付け根になるので、選んだ点をその場に留め（Pin）、骨の付け根は全身 IK で点に合わせて動かす。
+        /// 骨は FK で回すので、子の骨と、骨に付いて動く Free の点は一緒に回る。その骨と子の骨に乗る固定している点（Pin・Locked。同じ骨の上の点も）も、
+        /// 選んだ点を中心に同じだけ回す（10-19 ユーザー指示。S29 では置いた場所のままにしていたが、固定した手先が残って腕だけ回り、
+        /// 回したい所が回らなかった）。ほかの枝の点は動かさない。
+        /// 付け根から離れた点は、FK だけでは中心が骨の付け根になるので、選んだ点をその場に留め（Pin）、骨の付け根は全身 IK で点に合わせて動かす
+        /// （解いた後は選んだ点を中心に回った形になるので、固定している点も選んだ点を中心に回す）。
         /// 骨を FK で回せないとき（FK の対象が無い）は、向きを持つ点の向きだけ回す
         /// </summary>
         internal static void RotatePointFk (IList<PoseTarget> targets, BodyPointTarget point, Quaternion delta)
         {
             Transform bone = point.editingBone;
-            FkTarget fk = null;
-            foreach (PoseTarget target in targets) {
-                FkTarget candidate = target as FkTarget;
-                if (candidate != null && candidate.bone == bone) {
-                    fk = candidate;
-                    break;
-                }
-            }
-            if (bone == null || fk == null) {
+            FkTarget fk = FindFkTarget (targets, bone);
+            if (fk == null) {
                 point.RotateAround (point.framePosition, delta, true);
                 return;
             }
             // 中心は選んだ点の目標（固定していなければ骨の上の点）
             Vector3 pivot = point.isOnBoneOrigin ? bone.position : point.framePosition;
+            // 点を先に回す（Free の点は今の骨の上の点から回すので、骨を先に回すと二重に回る）。
+            // 付け根の点は骨と一緒に回るので固定している値だけ、離れた点はその場に留める（Pin）
+            point.RotateAround (pivot, delta, !point.isOnBoneOrigin);
+            foreach (PoseTarget target in targets) {
+                BodyPointTarget other = target as BodyPointTarget;
+                // IsChildOf は自分自身でも true（同じ骨の上の点も回す）
+                if (other == null || other == point || !other.pinned || other.editingBone == null || !other.editingBone.IsChildOf (bone)) continue;
+                other.RotateAround (pivot, delta, false);
+            }
             fk.SpinRotateWorld (delta);
-            if (point.isOnBoneOrigin) point.RotateAround (pivot, delta, false);
-            else point.RotateAround (pivot, delta, true);
+        }
+
+        /// <summary>bone を動かす FK の対象（無ければ null）</summary>
+        static FkTarget FindFkTarget (IList<PoseTarget> targets, Transform bone)
+        {
+            if (bone == null) return null;
+            foreach (PoseTarget target in targets) {
+                FkTarget fk = target as FkTarget;
+                if (fk != null && fk.bone == bone) return fk;
+            }
+            return null;
         }
 
         /// <summary>
@@ -184,12 +201,96 @@ namespace Lilium
         /// </summary>
         void RotateSelectedPoints (BodyPointTarget pivotPoint, Quaternion delta)
         {
+            RotatePointsAround (targets_, GetSelectedPoints (), pivotPoint, delta);
+        }
+
+        /// <summary>
+        /// selected の点を、中心の点 pivotPoint のまわりで delta だけ回す（Free の点も、回した場所に置いて Pin にする）。
+        /// 選んだ点の骨のうち、ほかの選んだ点の骨の子でない骨（いちばん根の方の骨）も FK で回す（10-20 ユーザー指示。
+        /// 点の目標だけ回すと、全身 IK は回す前の姿勢から目標へ寄せるので、体ごと大きく回す形に届かず、届かない分が背骨や手足のねじれになっていた）。
+        /// 腰を選んでいれば、腰は付け根ごと中心のまわりに回るので、全部の点を選んで回すと体がそのまま回る。
+        /// 腰より先の骨は付け根を動かせないので、付け根を中心に回す（残りは全身 IK が目標へ寄せる）
+        /// </summary>
+        internal static void RotatePointsAround (IList<PoseTarget> targets, IList<BodyPointTarget> selected, BodyPointTarget pivotPoint, Quaternion delta)
+        {
             // 中心は中心の点の目標（Locked ならその場所）。ほかの点は骨の上の点から回す（目標から回すと、届いていない分の食い違いが残る）
             Vector3 pivot = pivotPoint.framePosition;
             Vector3 pivotOnBone = pivotPoint.bonePosition;
-            foreach (BodyPointTarget point in GetSelectedPoints ()) {
+            List<FkTarget> tops = TopFkTargets (targets, selected);
+            // 点を先に回す（点は今の骨の上の点から回すので、骨を先に回すと二重に回る）
+            foreach (BodyPointTarget point in selected) {
                 if (point == pivotPoint) point.RotateAround (pivot, delta, true);
                 else point.RotateBodyAround (pivot, pivotOnBone, delta, true);
+            }
+            // 腰の付け根も点と同じく、中心の点の骨の上の点のまわりに回して中心の点の目標へ重ねる（RotateBodyAround と同じ動かし方）
+            foreach (FkTarget fk in tops) fk.RotateAroundWorld (pivotOnBone, pivot, delta);
+        }
+
+        /// <summary>
+        /// selected の点の骨のうち、ほかの選んだ点の骨の子でない骨（いちばん根の方の骨）の FK。いくつか選んで動かす・回すときに、点と一緒に動かす
+        /// </summary>
+        static List<FkTarget> TopFkTargets (IList<PoseTarget> targets, IList<BodyPointTarget> selected)
+        {
+            HashSet<Transform> bones = new HashSet<Transform> ();
+            foreach (BodyPointTarget point in selected) {
+                if (point.editingBone != null) bones.Add (point.editingBone);
+            }
+            List<FkTarget> result = new List<FkTarget> ();
+            foreach (PoseTarget target in targets) {
+                FkTarget fk = target as FkTarget;
+                if (fk != null && bones.Contains (fk.bone) && !HasAncestorIn (fk.bone, bones)) result.Add (fk);
+            }
+            return result;
+        }
+
+        /// <summary>t の親（t 自身は含まない）のどれかが bones にあるか</summary>
+        static bool HasAncestorIn (Transform t, HashSet<Transform> bones)
+        {
+            for (Transform parent = t.parent; parent != null; parent = parent.parent) {
+                if (bones.Contains (parent)) return true;
+            }
+            return false;
+        }
+
+        readonly PointTurn pointTurn_ = new PointTurn ();
+
+        /// <summary>
+        /// ギズモで点を回す 1 回のドラッグ。ドラッグの間は、毎回ドラッグの始めの操作値へ戻して解き直し、始めからの回転の合計で回し直す（10-19 ユーザー指示）。
+        /// 少しずつ回すたびに今の姿勢へ足すと、FK は全身 IK で解いた後の骨を回してその値を焼くので（FkTarget.SpinRotateWorld）、
+        /// 前の回で IK が足したねじれ（固定点だけでは決まらない、背骨の軸まわりなど）が次の回の始めの姿勢になって積み上がっていた。
+        /// 始めから当て直せば、細かく回しても一度に回したのと同じ姿勢になる
+        /// </summary>
+        internal sealed class PointTurn
+        {
+            PreviewStage.ControlState start_;
+            BodyPointTarget point_;
+            Quaternion total_ = Quaternion.identity;
+
+            /// <summary>
+            /// point を delta だけ回した: 始めからの回転の合計を返す。回しはじめなら今の操作値を控え、そうでなければ控えた操作値へ戻して solve で解き直す
+            /// （呼ぶ側は、返した合計で回す）
+            /// </summary>
+            public Quaternion Add (PreviewStage stage, BodyPointTarget point, Quaternion delta, System.Action solve)
+            {
+                if (start_ == null || point_ != point) {
+                    start_ = stage.CaptureControlState ();
+                    point_ = point;
+                    total_ = Quaternion.identity;
+                }
+                else {
+                    stage.RestoreControlState (start_);
+                    solve ();
+                }
+                total_ = delta * total_;
+                return total_;
+            }
+
+            /// <summary>ドラッグを終えた（次に回すときは、そのときの姿勢から始める）</summary>
+            public void End ()
+            {
+                start_ = null;
+                point_ = null;
+                total_ = Quaternion.identity;
             }
         }
 

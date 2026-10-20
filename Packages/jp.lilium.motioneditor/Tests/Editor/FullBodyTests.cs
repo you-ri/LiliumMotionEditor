@@ -123,6 +123,10 @@ namespace Lilium
             Assert.IsFalse (s.body.HasPoint (HumanBodyBones.Spine), "背骨の骨ごとの点は無い");
             Assert.IsTrue (s.body.HasPoint (HumanBodyBones.Chest));
             Assert.AreEqual (Bone (s, HumanBodyBones.Spine), s.body.GetBone (HumanBodyBones.Chest));
+            // お腹の点も Spine に乗る（背骨が 1 本でも、胸とお腹の点の名前はそろう）
+            BodyPointId stomach = new BodyPointId (EditRigDefinition.kStomachPoint);
+            Assert.IsTrue (s.body.HasPoint (stomach));
+            Assert.AreEqual (Bone (s, HumanBodyBones.Spine), s.body.GetBone (stomach));
             Assert.IsTrue (s.body.HasPoint (HumanBodyBones.LeftHand));
         }
 
@@ -390,9 +394,9 @@ namespace Lilium
         }
 
         [Test]
-        public void FootAndKneePoints_AreLinkedLikeAFootRig ()
+        public void FootPoints_AreLinkedLikeAFootRig ()
         {
-            // 踵・足裏の中心は足首へ、小指側とつま先の先は足裏の中心へ、膝の Pole は膝へ線でつなぐ（足の点はつま先の骨のあるキャラにだけできる）
+            // 踵・足裏の中心は足首へ、小指側とつま先の先は足裏の中心へ線でつなぐ（足の点はつま先の骨のあるキャラにだけできる）
             Setup s = Create (toes: true);
             List<BodyPointTarget> points = BodyPointTarget.Create (s.rig, s.body).OfType<BodyPointTarget> ().ToList ();
             System.Func<string, BodyPointTarget> named = name => points.Single (p => p.id.name == name);
@@ -403,8 +407,6 @@ namespace Lilium
                 Assert.AreSame (ankle, ball.link, side + " 足裏の中心 → 足首");
                 Assert.AreSame (ball, named (side + "LittleToeSide").link, side + " 小指側 → 足裏の中心");
                 Assert.AreSame (ball, named (side + "ToeTip").link, side + " つま先の先 → 足裏の中心");
-                Assert.AreSame (named (side + "LowerLeg"), named (side + "KneePole").link, side + " 膝の Pole → 膝");
-                Assert.AreSame (named (side + "LowerArm"), named (side + "ElbowPole").link, side + " 肘の Pole → 肘");
             }
         }
 
@@ -624,7 +626,8 @@ namespace Lilium
         public void ResetValues_OfWholeLeg_MatchesLegResetFromRoot ()
         {
             // 脚の点（股関節・膝・膝の Pole・足首・足の点）をまとめて戻すと、太もも・脛・足を根から順に基準へ戻した脚の上にそろう
-            // （足の点はつま先の骨のあるキャラにだけできる）
+            // （足の点はつま先の骨のあるキャラにだけできる。膝の Pole は既定の一覧に無いので足す）
+            AddPoles (definition_);
             Setup s = Create (toes: true);
             HumanBodyBones[] legBones = { HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot };
             List<BodyPointTarget> leg = BodyPointTarget.Create (s.rig, s.body).OfType<BodyPointTarget> ()
@@ -865,34 +868,45 @@ namespace Lilium
         }
 
         [Test]
-        public void RotatingPoint_DoesNotCarryPinnedPoints ()
+        public void RotatingPoint_CarriesPinnedAndLockedPoints ()
         {
-            // 点を 1 つ選んで回すと骨を FK で回すだけで、固定している点（Pin・Locked）は付いて回らない（移動と同じ。S29）
+            // 点を 1 つ選んで回すと骨を FK で回し、その骨より先の固定している点（Pin・Locked）も選んだ点を中心に一緒に回る（10-19）。
+            // ほかの枝の固定している点は動かない。状態はそのまま
             Setup s = Create ();
             List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
             targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
             BodyPointTarget shoulder = PointTarget (targets, HumanBodyBones.LeftUpperArm);
             BodyPointTarget elbow = PointTarget (targets, HumanBodyBones.LeftLowerArm);
             BodyPointTarget hand = PointTarget (targets, HumanBodyBones.LeftHand);
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
             elbow.SetState (BodyPointState.Pin);
             hand.SetState (BodyPointState.Locked);
-            Vector3 elbowPosition, handPosition;
-            Quaternion elbowRotation, handRotation;
+            hand.SetValues (TransformChannels.Rotation, Vector3.zero, Quaternion.Euler (0, 20, 0));
+            foot.SetState (BodyPointState.Locked);
+            Vector3 elbowPosition, handPosition, footPosition;
+            Quaternion elbowRotation, handRotation, footRotation;
             s.body.TryGetPointWorld (elbow.id, out elbowPosition, out elbowRotation);
             s.body.TryGetPointWorld (hand.id, out handPosition, out handRotation);
+            s.body.TryGetPointWorld (foot.id, out footPosition, out footRotation);
             Transform fk = s.rig.FindControl (RigPaths.Fk (HumanBodyBones.LeftUpperArm));
             Quaternion fkRotation = fk.localRotation;
+            Vector3 pivot = Bone (s, HumanBodyBones.LeftUpperArm).position;
+            Quaternion delta = Quaternion.AngleAxis (30, Vector3.up);
 
-            PreviewWindow.RotatePointFk (targets, shoulder, Quaternion.AngleAxis (30, Vector3.up));
+            PreviewWindow.RotatePointFk (targets, shoulder, delta);
             Assert.Greater (Quaternion.Angle (fkRotation, fk.localRotation), 29f, "回した点の骨は FK で回る");
             Vector3 position;
             Quaternion rotation;
             s.body.TryGetPointWorld (elbow.id, out position, out rotation);
-            Assert.LessOrEqual (Vector3.Distance (elbowPosition, position), 1e-5f, "Pin の肘は付いて回らない");
-            Assert.LessOrEqual (Quaternion.Angle (elbowRotation, rotation), 0.01f);
+            Assert.LessOrEqual (Vector3.Distance (pivot + delta * (elbowPosition - pivot), position), kPositionTolerance, "Pin の肘は付いて回る");
             s.body.TryGetPointWorld (hand.id, out position, out rotation);
-            Assert.LessOrEqual (Vector3.Distance (handPosition, position), 1e-5f, "Locked の手は付いて回らない");
-            Assert.LessOrEqual (Quaternion.Angle (handRotation, rotation), 0.01f);
+            Assert.LessOrEqual (Vector3.Distance (pivot + delta * (handPosition - pivot), position), kPositionTolerance, "Locked の手は付いて回る");
+            Assert.Less (Quaternion.Angle (delta * handRotation, rotation), kAngleTolerance, "向きを固定した手は向きも回る");
+            s.body.TryGetPointWorld (foot.id, out position, out rotation);
+            Assert.LessOrEqual (Vector3.Distance (footPosition, position), 1e-5f, "ほかの枝の Locked の足は動かない");
+            Assert.LessOrEqual (Quaternion.Angle (footRotation, rotation), 0.01f);
+            Assert.AreEqual (BodyPointState.Pin, elbow.state);
+            Assert.AreEqual (BodyPointState.Locked, hand.state);
         }
 
         [Test]
@@ -906,12 +920,15 @@ namespace Lilium
             Assert.AreSame (Bone (s, HumanBodyBones.LeftUpperArm), PointTarget (targets, HumanBodyBones.LeftLowerArm).linkBone, "肘 → 肩の線は上腕");
             Assert.AreSame (Bone (s, HumanBodyBones.LeftLowerLeg), PointTarget (targets, HumanBodyBones.LeftFoot).linkBone, "足首 → 膝の線は下腿");
             Assert.AreSame (Bone (s, HumanBodyBones.LeftFoot), named ("LeftHeel").linkBone, "踵 → 足首の線は足");
-            Assert.AreSame (Bone (s, HumanBodyBones.LeftUpperLeg), named ("LeftKneePole").linkBone, "膝の Pole → 膝の線は太もも");
             Assert.IsNull (PointTarget (targets, HumanBodyBones.Hips).linkBone, "腰はつなぐ相手が無い");
             // 関節の点の無い背骨は、背骨をまとめた胸の点が関節の代わりになる（首・上腕の線が腰まで飛ばない）
             Transform chest = s.body.GetBone (HumanBodyBones.Chest);
             Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.Neck).linkBone, "首 → 胸の点の線は胸の骨");
             Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.LeftUpperArm).linkBone, "上腕 → 胸の点の線は胸の骨（肩は点を持たない）");
+            // 背骨は腰 → お腹 → 胸とつなぐ
+            BodyPointTarget stomach = named ("Stomach");
+            Assert.AreSame (stomach, named ("Chest").link, "胸 → お腹");
+            Assert.AreSame (PointTarget (targets, HumanBodyBones.Hips), stomach.link, "お腹 → 腰");
         }
 
         [Test]

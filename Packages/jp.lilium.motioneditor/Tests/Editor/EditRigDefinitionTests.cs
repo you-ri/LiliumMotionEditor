@@ -51,7 +51,7 @@ namespace Lilium
         {
             string[] names = definition_.bodyPoints.Select (p => p.name).ToArray ();
             foreach (string name in new[] { "Hips", "Head", "LeftHand", "RightFoot", "Chest", "HipsDirection", "ChestDirection", "HeadDirection", "HeadTop",
-                "LeftKneePole", "RightKneePole", "LeftElbowPole", "RightElbowPole", "LeftHeel", "RightSoleBall", "LeftLittleToeSide", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
+                "LeftHeel", "RightSoleBall", "LeftLittleToeSide", "RightToeTip", "LeftPalmIndex", "RightPalmLittle" }) {
                 Assert.Contains (name, names, name);
             }
             Assert.IsTrue (definition_.bodyPoints.First (p => p.name == "LeftHand").rotation, "手は向きを持つ");
@@ -59,6 +59,7 @@ namespace Lilium
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Jaw"), "解かない骨には置かない");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftToes" || p.name == "RightToes"), "つま先の骨の付け根には置かない");
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "LeftShoulder" || p.name == "RightShoulder"), "肩には置かない");
+            Assert.IsFalse (definition_.bodyPoints.Any (p => p.name.EndsWith ("Pole")), "膝・肘の Pole は置かない（膝・肘の点で足りる）");
             // 背骨は胸の点 1 つにまとめる。腰と頭（必須の骨）の間に置くので、背骨の数が違うキャラでも同じ点ができる
             Assert.IsFalse (definition_.bodyPoints.Any (p => p.name == "Spine" || p.name == "UpperChest" || p.name == "UpperChestDirection"), "背骨の骨ごとの点は置かない");
             EditRigDefinition.BodyPoint chest = definition_.bodyPoints.Single (p => p.name == "Chest");
@@ -66,6 +67,16 @@ namespace Lilium
             Assert.AreEqual (HumanBodyBones.Hips, chest.origin);
             Assert.AreEqual (HumanBodyBones.Head, chest.toward);
             Assert.AreEqual (1, chest.pullStrength, "胸の点は引く点");
+            // 胸の点の下にお腹の点（Cascadeur の stomach）。腰と胸の点の間で Spine に乗り、線は腰 → お腹 → 胸
+            EditRigDefinition.BodyPoint stomach = definition_.bodyPoints.Single (p => p.name == "Stomach");
+            Assert.AreEqual (HumanBodyBones.Spine, stomach.bone);
+            Assert.AreEqual (HumanBodyBones.Hips, stomach.origin);
+            Assert.AreEqual (HumanBodyBones.Head, stomach.toward);
+            Assert.Less (stomach.along, chest.along, "お腹は胸より下");
+            Assert.AreEqual (1, stomach.pullStrength, "お腹の点は引く点");
+            Assert.IsFalse (stomach.rotation, "お腹の点は位置だけ");
+            Assert.AreEqual ("Stomach", chest.link);
+            Assert.AreEqual ("Hips", stomach.link);
             // 接地の点は足首と足裏の点だけ
             string[] contacts = definition_.bodyPoints.Where (p => p.contact).Select (p => p.name).OrderBy (n => n).ToArray ();
             CollectionAssert.AreEquivalent (new[] { "LeftFoot", "LeftHeel", "LeftLittleToeSide", "LeftSoleBall", "LeftToeTip",

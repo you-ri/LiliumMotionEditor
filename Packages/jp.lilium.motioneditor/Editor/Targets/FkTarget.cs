@@ -90,6 +90,25 @@ namespace Lilium
             solver_.CaptureFk (bone_);
         }
 
+        /// <summary>位置を持つ骨（腰）を delta（ワールド）だけ動かす。位置を持たない骨は動かさない</summary>
+        public void MoveWorld (Vector3 delta)
+        {
+            if (!position_) return;
+            bone_.position += delta;
+            solver_.CaptureFk (bone_);
+        }
+
+        /// <summary>
+        /// 骨を from（ワールド）を中心に delta だけ回し、from を to へ重ねる。位置を持つ骨（腰）は付け根もそのとおりに動かす。
+        /// 位置を持たない骨は付け根を動かせないので、付け根を中心に回すだけ（SpinRotateWorld と同じ）
+        /// </summary>
+        public void RotateAroundWorld (Vector3 from, Vector3 to, Quaternion delta)
+        {
+            if (position_) bone_.position = to + delta * (bone_.position - from);
+            bone_.rotation = delta * bone_.rotation;
+            solver_.CaptureFk (bone_);
+        }
+
         public override void OnHandleGUI (bool selected)
         {
             if (bone_ == null) return;

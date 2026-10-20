@@ -114,10 +114,7 @@ namespace Lilium
         /// <summary>点を delta（ワールド）だけ動かす。Free の点は、今の骨の位置から動かして Pin にする</summary>
         public void MoveBy (Vector3 delta)
         {
-            Vector3 position;
-            Quaternion rotation;
-            GetPoint (out position, out rotation);
-            PinPosition (position + delta);
+            PinPosition (framePosition + delta);
         }
 
         /// <summary>点を position（ワールド）へ置いて Pin にする</summary>
@@ -137,7 +134,7 @@ namespace Lilium
 
         /// <summary>
         /// 回転のギズモで回した量（ワールド。前から掛ける差。読むと消える）。点は自分では回さず、窓が回し方を決める
-        /// （1 つだけ選んでいれば骨を FK で回す。固定している点は付いて回らない。いくつか選んでいれば選んだ点だけをこの点を中心に）
+        /// （1 つだけ選んでいれば骨を FK で回す。その骨より先の固定している点も一緒に回る。いくつか選んでいれば選んだ点だけをこの点を中心に）
         /// </summary>
         public Quaternion ConsumeRotateDelta ()
         {
@@ -155,7 +152,17 @@ namespace Lilium
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);
-            if (pinFree || positionPinned) PinPosition (pivot + delta * (position - pivot));
+            PlaceRotated (position, rotation, pivot, pivot, delta, pinFree);
+        }
+
+        /// <summary>
+        /// 点の回し方の芯（回す・体ごと回す・骨に付けて動かすは、どこから回すかが違うだけ）:
+        /// position・rotation を from を中心に delta だけ回し、from を to へ重ねた所に置く。
+        /// pinFree なら Free の点も Pin にする。そうでなければ、固定している値だけ置き直す
+        /// </summary>
+        void PlaceRotated (Vector3 position, Quaternion rotation, Vector3 from, Vector3 to, Quaternion delta, bool pinFree)
+        {
+            if (pinFree || positionPinned) PinPosition (to + delta * (position - from));
             if (hasRotation_ && (pinFree || rotationPinned)) PinRotation (delta * rotation);
         }
 
@@ -173,8 +180,7 @@ namespace Lilium
         /// </summary>
         public void RotateBodyAround (Vector3 pivot, Vector3 pivotOnBone, Quaternion delta, bool pinFree)
         {
-            if (pinFree || positionPinned) PinPosition (pivot + delta * (bonePoint - pivotOnBone));
-            if (hasRotation_ && (pinFree || rotationPinned)) PinRotation (delta * bone_.rotation);
+            PlaceRotated (bonePoint, bone_.rotation, pivotOnBone, pivot, delta, pinFree);
         }
 
         /// <summary>点が付いている骨の上の点の今の位置（目標ではない）</summary>
@@ -232,15 +238,15 @@ namespace Lilium
 
         /// <summary>
         /// 骨を FK で動かした（pivot を中心に delta だけ回し、offset だけずらした）とき、固定している値を骨と一緒に動かす。
-        /// Free の値は骨に付いて動くので触らない。Locked の点は置いた場所に残すので、呼ぶ側が外す
+        /// Free の値は骨に付いて動くので触らない。Locked の点も動かすかは呼ぶ側が決める
+        /// （FK で骨を動かしたときは置いた場所に残し、点を回したときは一緒に回す）
         /// </summary>
         public void CarryWith (Vector3 pivot, Quaternion delta, Vector3 offset)
         {
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);
-            if (positionPinned) PinPosition (pivot + offset + delta * (position - pivot));
-            if (rotationPinned) PinRotation (delta * rotation);
+            PlaceRotated (position, rotation, pivot, pivot + offset, delta, false);
         }
 
         /// <summary>右ボタンで押されたか（読むと消える）。窓が、選んでいる点をまとめて固定 / 解除する</summary>
@@ -265,7 +271,8 @@ namespace Lilium
             }
             // 線でつなぐ相手。定義で名前を指していればその点（つま先の先 → 母趾球など）。
             // 無ければ、関節の点は骨の階層を上へたどって最初に当たる関節の点、骨の上の点はその骨の関節の点。
-            // 関節の点の無い骨（背骨をまとめた胸の点の骨）は、その骨を引く点を関節の代わりにする（首・上腕の線が腰まで飛ばない）
+            // 関節の点の無い骨（背骨の胸・お腹の点の骨）は、その骨を引く点を関節の代わりにする（首・上腕の線が腰まで飛ばない）。
+            // 同じ骨を引く点が複数あれば、先に並んだ点
             Dictionary<Transform, BodyPointTarget> joints = new Dictionary<Transform, BodyPointTarget> ();
             Dictionary<string, BodyPointTarget> byName = new Dictionary<string, BodyPointTarget> ();
             foreach (PoseTarget target in targets) {
@@ -606,10 +613,7 @@ namespace Lilium
 
         public override void SpinMove (Vector3 delta)
         {
-            Vector3 position;
-            Quaternion rotation;
-            GetPoint (out position, out rotation);
-            PinPosition (position + rig_.root.transform.TransformVector (delta));
+            MoveBy (rig_.root.transform.TransformVector (delta));
         }
 
         public override void SpinRotateLocal (Quaternion delta)

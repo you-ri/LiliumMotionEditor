@@ -511,9 +511,9 @@ namespace Lilium
         [Test]
         public void DirectionPoints_DefaultToPullStrengthZero ()
         {
-            // 既定の一覧では、向きの点（膝・肘の Pole も）は引く強さ 0、ほかの点は 1（足の小指側も、手の小指側と同じく 1。10-07）
+            // 既定の一覧では、向きの点は引く強さ 0、ほかの点は 1（足の小指側も、手の小指側と同じく 1。10-07）
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
-                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop" || point.name.EndsWith ("KneePole") || point.name.EndsWith ("ElbowPole");
+                bool direction = point.name.EndsWith ("Direction") || point.name == "HeadTop";
                 Assert.AreEqual (direction ? 0 : 1, point.pullStrength, point.name);
             }
             Assert.IsEmpty (definition_.Validate ());
@@ -614,6 +614,36 @@ namespace Lilium
                 Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kReach, "左手は点に留まる");
                 Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "右手は点に留まる");
             }
+        }
+
+        [Test]
+        public void AimPoint_WithPinnedOffsetPointOnSameBone_TurnsAroundThatPoint ()
+        {
+            // 胸の点（付け根から離れた点）を Pin にしたまま胸の前の点を横へ: 胸は胸の点を中心に回り、胸の点はその場に残る
+            // （背骨が Spine だけのキャラでは、胸の点と胸の前の点が同じ Spine に乗る。10-20 まで、付け根まわりに向けると胸の点が外れるので、まったく回らなかった）
+            Setup s = Create (false);
+            BodyPointId chestPoint = s.body.pointIds.Single (id => id.name == "Chest");
+            BodyPointId id = ChestDirection (s);
+            Transform chest = s.body.GetBone (id);
+            Assert.AreSame (chest, s.body.GetBone (chestPoint), "胸の点と胸の前の点は同じ骨に乗る");
+            PinDirection (s, chestPoint, Vector3.zero);
+            Solve (s);
+            Vector3 pivot;
+            s.body.TryGetBonePointWorld (chestPoint, out pivot);
+            Assert.Greater (Vector3.Distance (pivot, chest.position), 0.01f, "胸の点は付け根から離れている");
+            Quaternion before = chest.rotation;
+
+            Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
+            PinDirection (s, id, side * 0.1f);
+            Solve (s);
+            Assert.Greater (Quaternion.Angle (before, chest.rotation), 10f, "胸が回った");
+            Assert.LessOrEqual (s.body.GetResidual (chestPoint), kReach, "胸の点はその場に残る");
+            Vector3 onBone, target;
+            Quaternion rotation;
+            s.body.TryGetBonePointWorld (chestPoint, out pivot);
+            s.body.TryGetBonePointWorld (id, out onBone);
+            s.body.TryGetPointWorld (id, out target, out rotation);
+            Assert.LessOrEqual (Vector3.Angle (onBone - pivot, target - pivot), 1f, "胸の前の点が、胸の点から見て目標の方を向く");
         }
 
         [Test]
@@ -1135,14 +1165,15 @@ namespace Lilium
             Assert.IsEmpty (definition_.Validate ());
         }
 
-        // ---- 膝の Pole ----
+        // ---- 膝の Pole（既定の一覧には無いので AddPoles で足す。S56） ----
 
         [Test]
         public void KneePole_IsPlacedInFrontOfKnee_OnThigh ()
         {
+            AddPoles (definition_);
             Setup s = Create ();
             foreach (HumanBodyBones thigh in new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg }) {
-                BodyPointId pole = BodyPointId.KneePole (thigh);
+                BodyPointId pole = KneePole (thigh);
                 Transform knee = Bone (s, thigh == HumanBodyBones.LeftUpperLeg ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg);
                 Vector3 onBone;
                 Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), thigh + " の膝の Pole");
@@ -1157,6 +1188,7 @@ namespace Lilium
         public void KneePole_TurnsKneeOutward_WithFeetPinned ()
         {
             // 足を固定して腰を下げる（膝は前へ曲がる）。左の膝の Pole を外へ動かすと、足首は動かずに膝が外を向く
+            AddPoles (definition_);
             Setup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
@@ -1168,7 +1200,7 @@ namespace Lilium
             Vector3 rightKnee = Bone (s, HumanBodyBones.RightLowerLeg).position;
             Vector3 outside = Vector3.ProjectOnPlane (Bone (s, HumanBodyBones.LeftFoot).position - Bone (s, HumanBodyBones.Hips).position, s.up).normalized;
 
-            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            BodyPointId pole = KneePole (HumanBodyBones.LeftUpperLeg);
             PinDirection (s, pole, outside * 0.3f);
             Solve (s);
             Assert.Greater (Vector3.Dot (knee.position - bent, outside), 0.02f, "左膝が外へ向く");
@@ -1182,8 +1214,8 @@ namespace Lilium
         public void KneePole_TurnsHalfWithShin_WhenKneeBends ([Values (0f, 0.5f)] float blend)
         {
             // 腿を前へ 90° 上げ、膝を 90° 曲げて脛を真下に戻す。太ももだけの向き（0）なら Pole は膝の真上、
-            // 脛と半分ずつ混ぜる（既定の 0.5。S34）なら膝の前上 45°（膝の曲がりの二等分の向き）に出る
-            Assert.AreEqual (EditRigDefinition.kPoleBlend, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blend, "既定は 0.5");
+            // 脛と半分ずつ混ぜる（0.5。S34）なら膝の前上 45°（膝の曲がりの二等分の向き）に出る
+            AddPoles (definition_);
             Assert.AreEqual (HumanBodyBones.LeftLowerLeg, definition_.bodyPoints.First (p => p.name == "LeftKneePole").blendBone, "脛と混ぜる");
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
                 if (point.name.EndsWith ("KneePole")) point.blend = blend;
@@ -1194,7 +1226,7 @@ namespace Lilium
             thigh.rotation = Quaternion.FromToRotation (-s.up, s.forward) * thigh.rotation;
             shin.rotation = Quaternion.FromToRotation (s.forward, -s.up) * shin.rotation;
 
-            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            BodyPointId pole = KneePole (HumanBodyBones.LeftUpperLeg);
             Vector3 onBone;
             Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone));
             Vector3 direction = blend > 0 ? (s.forward + s.up).normalized : s.up;
@@ -1206,6 +1238,7 @@ namespace Lilium
         public void KneePole_PinnedWhereItIs_KeepsBentKnee ()
         {
             // 膝を曲げた姿勢で、膝の Pole を今の場所に固定しても姿勢は変わらない（表示の場所と解く側の場所が同じ。S34）
+            AddPoles (definition_);
             Setup s = Create ();
             Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
             Pin (s, HumanBodyBones.LeftFoot, s.forward * 0.1f + s.up * 0.25f, true);
@@ -1217,7 +1250,7 @@ namespace Lilium
             Vector3 shinDirection = (Bone (s, HumanBodyBones.LeftFoot).position - knee.position).normalized;
             Assert.Greater (Vector3.Angle (thighDirection, shinDirection), 30f, "膝が曲がっている");
 
-            BodyPointId pole = BodyPointId.KneePole (HumanBodyBones.LeftUpperLeg);
+            BodyPointId pole = KneePole (HumanBodyBones.LeftUpperLeg);
             PinDirection (s, pole, Vector3.zero);
             Solve (s);
             Assert.LessOrEqual (Vector3.Distance (bent, knee.position), 1e-4f, "膝は動かない");
@@ -1229,9 +1262,10 @@ namespace Lilium
         [Test]
         public void ElbowPole_IsPlacedBehindElbow_OnUpperArm ()
         {
+            AddPoles (definition_);
             Setup s = Create ();
             foreach (HumanBodyBones upper in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm }) {
-                BodyPointId pole = BodyPointId.ElbowPole (upper);
+                BodyPointId pole = ElbowPole (upper);
                 Transform elbow = Bone (s, upper == HumanBodyBones.LeftUpperArm ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
                 Vector3 onBone;
                 Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out onBone), upper + " の肘の Pole");
@@ -1240,7 +1274,7 @@ namespace Lilium
                 Assert.LessOrEqual (Vector3.Distance (expected, onBone), 1e-4f, "肘の後ろ（基準姿勢で肘が向く方）");
                 EditRigDefinition.BodyPoint point = definition_.bodyPoints.First (p => p.name == pole.name);
                 Assert.AreEqual (0, point.pullStrength, "向けるだけの点");
-                Assert.AreEqual (EditRigDefinition.kPoleBlend, point.blend, "前腕と半分ずつ混ぜる");
+                Assert.AreEqual (kPoleBlend, point.blend, "前腕と半分ずつ混ぜる");
             }
         }
 
@@ -1248,6 +1282,7 @@ namespace Lilium
         public void ElbowPole_TurnsElbow_WithHandPinned ()
         {
             // 手を胸の前へ寄せて肘を曲げる。左の肘の Pole を外上へ動かすと、手は動かずに肘がそちらへ回る
+            AddPoles (definition_);
             Setup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
@@ -1262,7 +1297,7 @@ namespace Lilium
             Vector3 handAt = hand.position;
             Assert.Greater (Vector3.Angle (elbow.position - upper.position, hand.position - elbow.position), 30f, "肘が曲がっている");
 
-            BodyPointId pole = BodyPointId.ElbowPole (HumanBodyBones.LeftUpperArm);
+            BodyPointId pole = ElbowPole (HumanBodyBones.LeftUpperArm);
             Vector3 offset = (outward + s.up) * 0.3f * s.rig.humanScale;
             Vector3 target;
             Assert.IsTrue (s.body.TryGetBonePointWorld (pole, out target));
@@ -1277,7 +1312,7 @@ namespace Lilium
         [Test]
         public void ElbowPole_Free_DoesNotChangeSolve ()
         {
-            // 版 8 で足した肘の Pole は、Free（キーの無い今までのクリップ）なら解いた姿勢を変えない（今までのクリップの互換）
+            // 肘の Pole は、Free なら解いた姿勢を変えない（Pole を足しても、キーを打つまでは今までと同じ姿勢）
             System.Func<Setup, Pose[]> solve = s => {
                 s.body.useBurst = false;
                 Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
@@ -1289,10 +1324,10 @@ namespace Lilium
                 Solve (s);
                 return Poses (s.rig.editingBones.ToArray ());
             };
-            Pose[] with = solve (Create ());
-            Assert.IsTrue (definition_.bodyPoints.Any (p => p.name == "LeftElbowPole"));
-            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("ElbowPole"));
             Pose[] without = solve (Create ());
+            AddPoles (definition_);
+            definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("KneePole"));
+            Pose[] with = solve (Create ());
             Assert.AreEqual (without.Length, with.Length);
             for (int i = 0; i < with.Length; i++) {
                 Assert.LessOrEqual (Vector3.Distance (without[i].position, with[i].position), 1e-5f, i + " の位置");
@@ -1303,7 +1338,7 @@ namespace Lilium
         [Test]
         public void BlendedBodyPoint_WorksOnOtherLimbs_AndNeedsZeroPull ()
         {
-            // 上腕の付け根の後ろに置き、前腕と半分ずつ混ぜる点を自分で足す（既定の肘の Pole とは別の名前）
+            // 上腕の付け根の後ろに置き、前腕と半分ずつ混ぜる点を自分で足す（肘の Pole とは別の場所）
             EditRigDefinition.BodyPoint elbow = new EditRigDefinition.BodyPoint {
                 name = "LeftArmBack", bone = HumanBodyBones.LeftUpperArm, offset = new Vector3 (0, 0, -0.25f),
                 pullStrength = 0, blendBone = HumanBodyBones.LeftLowerArm, blend = 0.5f,
@@ -1378,7 +1413,7 @@ namespace Lilium
         public void FootAndPalmPoints_AreNotCreated_WithoutToesAndFingers ()
         {
             // 足の点はつま先の骨への向きで、手のひらの点は指の付け根に置く。その骨が無いキャラには作らない（足首・手首から見積もらない）。
-            // ほかの点（膝の Pole・顔の前）はそのまま作る
+            // ほかの点（顔の前）はそのまま作る
             Setup s = Create ();
             foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
                 foreach (BodyPointId id in new[] { BodyPointId.Heel (foot), BodyPointId.SoleBall (foot), BodyPointId.LittleToeSide (foot), BodyPointId.ToeTip (foot) }) {
@@ -1390,7 +1425,6 @@ namespace Lilium
                 Assert.IsFalse (s.body.HasPoint (BodyPointId.PalmIndex (hand)), "指の骨が無いと手のひらの点は無い: " + hand);
                 Assert.IsFalse (s.body.HasPoint (BodyPointId.PalmLittle (hand)), "指の骨が無いと手のひらの点は無い: " + hand);
             }
-            Assert.IsTrue (s.body.HasPoint (new BodyPointId ("LeftKneePole")), "膝の Pole はある");
             Assert.IsTrue (s.body.HasPoint (BodyPointId.Direction (HumanBodyBones.Head)), "顔の前の点はある");
 
             // 人差し指だけあって小指が無いキャラは、人差し指側の点だけ作る

@@ -596,6 +596,18 @@ namespace Lilium
                 d.effectorBody[e] = bone;
                 d.effectorPoint[e] = d.effectors[e].offset;
             }
+            // 向けるだけの点の骨に、付け根から離れた所を位置で固定した点があるとき（胸の点を Pin にして胸の前の点を動かす）は、
+            // 解き終わってから付け根まわりに向けると固定した点が外れるので、向けられない（SnapAim。10-20 まで胸が回らなかった）。
+            // 固定した点を中心に向けた向きを先に決め、回らない物にして解く（付け根は、手前の骨を曲げて固定した点のまわりに動かす）
+            for (int e = 0; e < effectorCount; e++) {
+                int bone = d.effectorBody[e];
+                if (bone < 0 || !IsUsed (ref d, e, n) || !IsAim (ref d, e)) continue;
+                if (d.inverseMass[bone] > 0 || d.inverseInertia[bone] <= 0 || math.lengthsq (d.centerLocal[bone]) <= 1e-12f) continue;
+                int hinge, end;
+                if (IsPole (ref d, n, e, effectorCount, out hinge, out end)) continue;
+                d.rotations[bone] = AimRotation (ref d, e, d.centers[bone], d.centerLocal[bone]);
+                d.inverseInertia[bone] = 0;
+            }
         }
 
         static bool IsUsed (ref FullBodyIkData d, int e, int n)

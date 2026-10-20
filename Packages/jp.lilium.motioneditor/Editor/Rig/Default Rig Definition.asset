@@ -672,7 +672,24 @@ MonoBehaviour:
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
     pullStrength: 1
-    link: 
+    link: Stomach
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: Stomach
+    bone: 7
+    origin: 0
+    toward: 10
+    along: 0.25
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: Hips
     blendBone: 0
     blend: 0
     contact: 0
@@ -743,40 +760,6 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
-    contact: 0
-  - enabled: 1
-    name: LeftKneePole
-    bone: 1
-    origin: 3
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0.25}
-    rotation: 0
-    pullStrength: 0
-    link: LeftLowerLeg
-    blendBone: 3
-    blend: 0.5
-    contact: 0
-  - enabled: 1
-    name: RightKneePole
-    bone: 2
-    origin: 4
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: 0.25}
-    rotation: 0
-    pullStrength: 0
-    link: RightLowerLeg
-    blendBone: 4
-    blend: 0.5
     contact: 0
   - enabled: 1
     name: LeftHeel
@@ -981,38 +964,4 @@ MonoBehaviour:
     link: 
     blendBone: 0
     blend: 0
-    contact: 0
-  - enabled: 1
-    name: LeftElbowPole
-    bone: 13
-    origin: 15
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: -0.25}
-    rotation: 0
-    pullStrength: 0
-    link: LeftLowerArm
-    blendBone: 15
-    blend: 0.5
-    contact: 0
-  - enabled: 1
-    name: RightElbowPole
-    bone: 14
-    origin: 16
-    toward: 55
-    along: 0
-    across: 0
-    axes: {x: 1, y: 1, z: 1}
-    ground: 0
-    fallback: {x: 0, y: 0, z: 0}
-    offset: {x: 0, y: 0, z: -0.25}
-    rotation: 0
-    pullStrength: 0
-    link: RightLowerArm
-    blendBone: 16
-    blend: 0.5
     contact: 0

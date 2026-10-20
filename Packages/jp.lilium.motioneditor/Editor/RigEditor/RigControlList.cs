@@ -26,7 +26,8 @@ namespace Lilium
         /// <summary>描く場所（基準姿勢のワールド）。骨が無いコントロールは null</summary>
         public Vector3? position;
         /// <summary>
-        /// 骨の線（FK と追加のコントロール）。骨の根元から子の骨へ（子が無ければ親から続く向き。モーションエディタの骨の形と同じ）。
+        /// 骨の線（FK と追加のコントロール）。[0] が骨の根元、[1] 以降が骨の先で、根元から先それぞれへ 1 本ずつ引く。
+        /// 先は子の骨の根元すべて（腰 → 背骨・両脚。子が複数でも全部へ引く）。子が無ければ親から続く向きに 1 つ（モーションエディタの骨の形と同じ）。
         /// 窓はこの線で骨を描いて選ばせる（点の丸と同じ場所に出すと、点と骨を押し分けられない）。無ければ空
         /// </summary>
         public Vector3[] line = System.Array.Empty<Vector3> ();
@@ -107,13 +108,13 @@ namespace Lilium
             return rig.root.transform.TransformPoint (rig.GetRestRootPosition (editingBone));
         }
 
-        /// <summary>骨の根元から、骨の形（BoneShapes）の向きと長さだけ伸ばした線（基準姿勢のワールド）。骨が無ければ空</summary>
+        /// <summary>骨の根元と、骨の先すべて（BoneShapes.GetRestEnds。基準姿勢のワールド）。骨が無ければ空</summary>
         static Vector3[] BoneLine (EditingRig rig, BoneShapes shapes, Transform editingBone)
         {
             if (editingBone == null) return System.Array.Empty<Vector3> ();
-            Vector3 start = Position (rig, editingBone).Value;
-            Quaternion rotation = shapes.GetRotation (editingBone, rig.root.transform.rotation * rig.GetRestRootRotation (editingBone));
-            return new[] { start, start + rotation * Vector3.forward * shapes.GetLength (editingBone) };
+            List<Vector3> line = new List<Vector3> { Position (rig, editingBone).Value };
+            line.AddRange (shapes.GetRestEnds (editingBone));
+            return line.ToArray ();
         }
 
         /// <summary>

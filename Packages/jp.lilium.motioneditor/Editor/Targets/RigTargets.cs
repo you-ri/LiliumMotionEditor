@@ -158,6 +158,27 @@ namespace Lilium
             };
         }
 
+        /// <summary>
+        /// 骨の先（基準姿勢のワールド）。コントロールのある子の骨の根元すべて（腰 → 背骨・両脚、胸 → 首・両肩）。
+        /// 子が無い（手先・頭など）ときは、骨の形の向きと長さだけ伸ばした所 1 つ
+        /// </summary>
+        public List<Vector3> GetRestEnds (Transform bone)
+        {
+            Vector3 position = RestWorld (bone);
+            List<Transform> children = new List<Transform> ();
+            CollectControlledChildren (bone, children);
+            List<Vector3> ends = new List<Vector3> ();
+            foreach (Transform child in children) {
+                Vector3 end = RestWorld (child);
+                if ((end - position).sqrMagnitude >= 1e-8f) ends.Add (end);
+            }
+            if (ends.Count == 0) {
+                Quaternion rotation = GetRotation (bone, rig_.root.transform.rotation * rig_.GetRestRootRotation (bone));
+                ends.Add (position + rotation * Vector3.forward * GetLength (bone));
+            }
+            return ends;
+        }
+
         Vector3 RestWorld (Transform bone)
         {
             return rig_.root.transform.TransformPoint (rig_.GetRestRootPosition (bone));
