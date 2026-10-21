@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.ShortcutManagement;
+using UnityEngine.UIElements;
 using System.Collections.Generic;
 using System.Linq;
 using static Lilium.MotionEditorLocalization;
@@ -53,16 +54,74 @@ namespace Lilium
             Run (args, window => window.TogglePlay ());
         }
 
-        [Shortcut ("Lilium Motion Editor/Copy Pose", typeof (PreviewWindow), KeyCode.C)]
-        static void CopyPoseShortcut (ShortcutArguments args)
+        /// <summary>
+        /// Ctrl+C / Ctrl+V / Ctrl+A（Unity の Edit メニューの Copy / Paste / Select All のコマンド）で、姿勢のコピー・貼り付けと全選択（10-21 ユーザー指示）。
+        /// [Shortcut] で同じキーを取ると、文字欄やタイムラインのキー欄（選んだキーのコピー・貼り付け。TimebarElement）より先に取ってしまうので、
+        /// コマンドで受ける。フォーカスのある要素が先に受け、受けなかったものがここまで上がってくる。キーは Edit > Shortcuts の Main Menu/Edit で変わる。
+        /// オーバーレイ（パネル）は rootVisualElement の外にあるので、パネルのボタンにフォーカスがあるときも受けられるよう、窓ごとの根で受ける。
+        /// Motion Scene の窓も同じ口を使う（resolve が、今コマンドを受けるプレビュー窓を返す。受けないときは null）
+        /// </summary>
+        internal static void RegisterEditCommands (EditorWindow host, System.Func<PreviewWindow> resolve)
         {
-            Run (args, window => window.CopyPose ());
+            VisualElement root = WindowRoot (host);
+            root.RegisterCallback<ValidateCommandEvent, System.Func<PreviewWindow>> (OnValidateEditCommand, resolve);
+            root.RegisterCallback<ExecuteCommandEvent, System.Func<PreviewWindow>> (OnExecuteEditCommand, resolve);
         }
 
-        [Shortcut ("Lilium Motion Editor/Paste Pose", typeof (PreviewWindow), KeyCode.V)]
-        static void PastePoseShortcut (ShortcutArguments args)
+        internal static void UnregisterEditCommands (EditorWindow host)
         {
-            Run (args, window => window.PastePose ());
+            VisualElement root = WindowRoot (host);
+            root.UnregisterCallback<ValidateCommandEvent, System.Func<PreviewWindow>> (OnValidateEditCommand);
+            root.UnregisterCallback<ExecuteCommandEvent, System.Func<PreviewWindow>> (OnExecuteEditCommand);
+        }
+
+        /// <summary>窓ごとの根（rootVisualElement とオーバーレイを含む。パネルの根のすぐ下）</summary>
+        static VisualElement WindowRoot (EditorWindow host)
+        {
+            VisualElement root = host.rootVisualElement;
+            while (root.parent != null && root.parent.parent != null) root = root.parent;
+            return root;
+        }
+
+        static void OnValidateEditCommand (ValidateCommandEvent e, System.Func<PreviewWindow> resolve)
+        {
+            PreviewWindow window = resolve ();
+            if (window != null && window.CanRunEditCommand (e.commandName)) e.StopPropagation ();
+        }
+
+        static void OnExecuteEditCommand (ExecuteCommandEvent e, System.Func<PreviewWindow> resolve)
+        {
+            PreviewWindow window = resolve ();
+            if (window != null && window.RunEditCommand (e.commandName)) e.StopPropagation ();
+        }
+
+        /// <summary>窓の IMGUI に来たコマンド（UI Toolkit の要素のどれにもフォーカスが無いとき。Motion Scene の窓からも呼ぶ）</summary>
+        internal void HandleEditCommandGUI ()
+        {
+            Event ev = Event.current;
+            if (ev.type == EventType.ValidateCommand && CanRunEditCommand (ev.commandName)) ev.Use ();
+            else if (ev.type == EventType.ExecuteCommand && RunEditCommand (ev.commandName)) ev.Use ();
+        }
+
+        bool CanRunEditCommand (string command)
+        {
+            switch (command) {
+                case "Copy": return targetClip != null;
+                case "Paste": return CanEditClip () && !PoseClipboard.isEmpty;
+                case "SelectAll": return stage_ != null;
+            }
+            return false;
+        }
+
+        bool RunEditCommand (string command)
+        {
+            if (!CanRunEditCommand (command)) return false;
+            switch (command) {
+                case "Copy": CopyPose (); break;
+                case "Paste": PastePose (); break;
+                case "SelectAll": SelectAll (); break;
+            }
+            return true;
         }
 
         // Unity の Animation 窓でキーを打つのと同じ K

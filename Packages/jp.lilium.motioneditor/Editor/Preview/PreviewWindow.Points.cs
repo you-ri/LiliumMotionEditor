@@ -243,6 +243,43 @@ namespace Lilium
             return result;
         }
 
+        /// <summary>
+        /// 点に関する骨の FK（10-21 ユーザー指示。点を選ぶと、関する骨も選んだことにする）。
+        /// 全身 IK のキーフレームは解いた骨の値と点の両方で姿勢を持つので、点だけ写して貼ると、骨は貼り先の前の姿勢のまま残っていた。
+        /// 骨は、自分から根の方へたどって最初に当たる「点の乗る骨」の点に属する（点の無い肩・上胸は胸の点、指は手の点）。
+        /// どの骨もどれかの点に属するので、全部の点を選べば全部の骨になる
+        /// </summary>
+        internal static List<FkTarget> RelatedFkTargets (IList<PoseTarget> targets, IEnumerable<BodyPointTarget> points)
+        {
+            HashSet<Transform> pointBones = new HashSet<Transform> ();
+            foreach (PoseTarget target in targets) {
+                BodyPointTarget point = target as BodyPointTarget;
+                if (point != null && point.editingBone != null) pointBones.Add (point.editingBone);
+            }
+            HashSet<Transform> selected = new HashSet<Transform> (points.Select (p => p.editingBone).Where (b => b != null));
+            List<FkTarget> result = new List<FkTarget> ();
+            foreach (PoseTarget target in targets) {
+                FkTarget fk = target as FkTarget;
+                if (fk == null || fk.bone == null) continue;
+                Transform owner = fk.bone;
+                while (owner != null && !pointBones.Contains (owner)) owner = owner.parent;
+                if (owner != null && selected.Contains (owner)) result.Add (fk);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 選んでいる物がキーを打つカーブのパス。全身 IK の点を選んでいれば、点に関する骨（RelatedFkTargets）のパスも入れる
+        /// </summary>
+        HashSet<string> CollectSelectedPaths ()
+        {
+            HashSet<string> paths = new HashSet<string> ();
+            List<PoseTarget> selected = SelectedTargets ().ToList ();
+            foreach (PoseTarget target in selected) target.CollectKeyedPaths (paths);
+            foreach (FkTarget fk in RelatedFkTargets (targets_, selected.OfType<BodyPointTarget> ())) fk.CollectKeyedPaths (paths);
+            return paths;
+        }
+
         /// <summary>t の親（t 自身は含まない）のどれかが bones にあるか</summary>
         static bool HasAncestorIn (Transform t, HashSet<Transform> bones)
         {

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
 using UnityEditor.ShortcutManagement;
@@ -16,11 +17,18 @@ namespace Lilium
         const string kPreviewPrefix = "Lilium Motion Editor/";
         const string kScenePrefix = "Lilium Motion Editor (Scene)/";
 
+        /// <summary>窓が Edit メニューのコマンドで受ける操作（[Shortcut] は無く、キーは Edit メニューのもの。PreviewWindow.RegisterEditCommands）</summary>
+        static readonly Dictionary<string, string> kEditMenu = new Dictionary<string, string> {
+            { "Copy Pose", "Main Menu/Edit/Copy" },
+            { "Paste Pose", "Main Menu/Edit/Paste" },
+        };
+
         /// <param name="host">パネルが載っている窓。ショートカットは窓ごとに別に持つ（Motion Scene は "(Scene)" の付く方）</param>
         /// <param name="name">ショートカットの名前（[Shortcut] の ID の、窓の名前より後ろ。"Next Key" など）</param>
         public static void Set (VisualElement element, EditorWindow host, string text, string name)
         {
-            string id = (host is SceneWindow ? kScenePrefix : kPreviewPrefix) + name;
+            string menu;
+            string id = kEditMenu.TryGetValue (name, out menu) ? menu : (host is SceneWindow ? kScenePrefix : kPreviewPrefix) + name;
             element.tooltip = Format (text, id);
             element.RegisterCallback<PointerEnterEvent> (e => element.tooltip = Format (text, id));
         }

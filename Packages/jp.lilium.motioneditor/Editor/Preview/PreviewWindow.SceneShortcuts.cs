@@ -7,7 +7,8 @@ namespace Lilium
 
     /// <summary>
     /// Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）のショートカット。中身はプレビュー窓の同じ操作を呼ぶ（2 窓構成）。
-    /// Scene ビューのキーとぶつかるもの（F: 選んだ物に寄る・F1〜F3: 視点・V: 頂点スナップ）は割り当てない（視点は Scene ビューのものを使う）
+    /// Scene ビューのキーとぶつかるもの（F: 選んだ物に寄る・F1〜F3: 視点・V: 頂点スナップ）は割り当てない（視点は Scene ビューのものを使う）。
+    /// 姿勢のコピー・貼り付けと全選択（Ctrl+C / Ctrl+V / Ctrl+A）は、プレビュー窓と同じく Edit メニューのコマンドで受ける（SceneWindow）
     /// </summary>
     public partial class PreviewWindow
     {
@@ -15,12 +16,6 @@ namespace Lilium
         static void ScenePlayShortcut (ShortcutArguments args)
         {
             Run (args, window => window.TogglePlay ());
-        }
-
-        [Shortcut ("Lilium Motion Editor (Scene)/Copy Pose", typeof (SceneWindow), KeyCode.C)]
-        static void SceneCopyPoseShortcut (ShortcutArguments args)
-        {
-            Run (args, window => window.CopyPose ());
         }
 
         [Shortcut ("Lilium Motion Editor (Scene)/Key All", typeof (SceneWindow), KeyCode.K)]

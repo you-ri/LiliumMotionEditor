@@ -795,6 +795,28 @@ namespace Lilium
         }
 
         [Test]
+        public void RelatedFkTargets_AllPointsCoverAllBones ()
+        {
+            // 点に関する骨: 骨は根の方へたどって最初に当たる点の乗る骨の点に属する。全部の点を選べば全部の骨（指も）になる
+            Setup s = Create (fingers: true, toes: true);
+            List<PoseTarget> targets = RigTargets.Create (s.rig, s.solver);
+            targets.AddRange (BodyPointTarget.Create (s.rig, s.body));
+            List<FkTarget> fks = targets.OfType<FkTarget> ().ToList ();
+            List<BodyPointTarget> points = targets.OfType<BodyPointTarget> ().ToList ();
+            CollectionAssert.AreEquivalent (fks, PreviewWindow.RelatedFkTargets (targets, points), "全部の点を選べば全部の骨");
+
+            List<FkTarget> hand = PreviewWindow.RelatedFkTargets (targets, new[] { PointTarget (targets, HumanBodyBones.LeftHand) });
+            Assert.IsTrue (hand.Any (t => t.bone == Bone (s, HumanBodyBones.LeftHand)), "点の乗る骨");
+            Assert.IsTrue (hand.Any (t => t.bone == Bone (s, HumanBodyBones.LeftIndexProximal)), "点の無い指は手の点に属する");
+            Assert.IsFalse (hand.Any (t => t.bone == Bone (s, HumanBodyBones.LeftLowerArm)), "親の骨は入らない");
+            Assert.IsFalse (hand.Any (t => t.bone == Bone (s, HumanBodyBones.RightHand)), "ほかの枝は入らない");
+
+            // 同じ骨の上の点（手のひらの点）でも、その骨に属する骨が入る
+            BodyPointTarget palm = points.Single (p => p.id.name == "LeftPalmIndex");
+            CollectionAssert.AreEquivalent (hand, PreviewWindow.RelatedFkTargets (targets, new[] { palm }));
+        }
+
+        [Test]
         public void FloorClamp_KeepsMovedPointsAboveFloor ([Values (false, true)] bool clamp)
         {
             // Floor Clamp が入っていれば、床（ワールドの Y = 0）より下へ動かした点は床の高さに置く。横の動きはそのまま（床の上を滑る）

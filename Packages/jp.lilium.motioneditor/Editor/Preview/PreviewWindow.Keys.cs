@@ -131,19 +131,16 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今のフレームのポーズをコピーする（C）。対象（骨・手足の IK・全身 IK の点など）を選んでいれば、選んだ物（複数可）の
-        /// カーブだけを写す。貼る（V）と写した物にだけキーを打つので、腕だけ別のフレームの形にする、などができる。
+        /// 今のフレームのポーズをコピーする（Ctrl+C）。対象（骨・手足の IK・全身 IK の点など）を選んでいれば、選んだ物（複数可）の
+        /// カーブだけを写す。貼る（Ctrl+V）と写した物にだけキーを打つので、腕だけ別のフレームの形にする、などができる。
+        /// 全身 IK の点を選んでいれば、点に関する骨も選んだことにして写す（RelatedFkTargets）。
         /// 何も選んでいなければクリップ全体を写す
         /// </summary>
         public void CopyPose ()
         {
             if (targetClip == null) return;
-            HashSet<string> paths = new HashSet<string> ();
-            int count = 0;
-            foreach (PoseTarget target in SelectedTargets ()) {
-                target.CollectKeyedPaths (paths);
-                count++;
-            }
+            int count = SelectedTargets ().Count ();
+            HashSet<string> paths = CollectSelectedPaths ();
             if (count == 0) {
                 PoseClipboard.Copy (targetClip, currentFrame);
                 ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_COPIED_WHOLE_POSE")), 0.8);

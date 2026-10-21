@@ -39,6 +39,17 @@ namespace Lilium
             titleContent = new GUIContent ("Motion Scene", Icons.Load ("MotionScene"));
             beforeSceneGui += BeforeSceneGui;
             duringSceneGui += DuringSceneGui;
+            PreviewWindow.RegisterEditCommands (this, () => editingSource);
+        }
+
+        /// <summary>
+        /// キャラを編集している間の、姿勢を作る窓（していなければ null）。
+        /// 編集している間は Ctrl+C / Ctrl+V / Ctrl+A（Edit メニューのコマンド）を姿勢のコピー・貼り付けと全選択にする（10-21 ユーザー指示。プレビュー窓とそろえる）。
+        /// 編集していなければ Scene ビューのまま（GameObject のコピー・貼り付け・全選択）
+        /// </summary>
+        PreviewWindow editingSource
+        {
+            get { return source_ != null && source_.sceneTarget != null && source_.stage != null ? source_ : null; }
         }
 
         /// <summary>
@@ -102,6 +113,7 @@ namespace Lilium
         {
             beforeSceneGui -= BeforeSceneGui;
             duringSceneGui -= DuringSceneGui;
+            PreviewWindow.UnregisterEditCommands (this);
             Bind (null);
             RestoreTools ();
             base.OnDisable ();
@@ -130,6 +142,9 @@ namespace Lilium
             // 姿勢を作る窓を決める（閉じられた・画面に出ている窓が現れた、なら切り替えてパネルを作り直す）
             ResolveSource ();
             if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (SceneWindow)));
+            // Scene ビューが Copy / Paste / SelectAll を GameObject の操作として受ける前に取る
+            PreviewWindow editing = editingSource;
+            if (editing != null) editing.HandleEditCommandGUI ();
             if (!Tools.hidden) {
                 Tools.hidden = true;
                 toolsHidden_ = true;

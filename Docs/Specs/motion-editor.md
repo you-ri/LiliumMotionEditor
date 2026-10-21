@@ -648,7 +648,7 @@ UE が編集中は常にコントロール空間に閉じている（逆解決�
 - 選択: 窓が自前で持つ（Unity の `Selection` には入れない。入れると Scene ビューの移動ハンドルがプレビューの骨に出るため）。骨はハンドルのクリック、メッシュは S11 の自前レイキャストで選ぶ。
 - カメラ（`MktOrbitCamera`）: Alt+左 / 右ドラッグで回転、中ボタンでパン、Alt+右ドラッグとホイールでズーム。骨をつかんでいる間か、選んでいる骨の上のホイールは Mkt のねじり（ハンドルが先に使い、残ったホイールでズーム）。
 - Mkt の骨・関節ハンドル（`MktHandles.BoneHandle` / `JointHandle`）は MouseUp で `hotControl` を放していなかった。Scene ビュー版は MouseDown ごとに `hotControl = 0` に戻す細工で隠れていたが、プレビュー窓ではつかみが残り、UI Toolkit のマウスのつかみも外れず、タイムラインが操作できなくなった（09-16 指摘）。MouseUp で放すように直した。ねじりはこの「つかみっぱなし」に頼っていたので、選んでいる骨の上のホイールでも効くようにした。
-- ショートカット（Shortcut Manager、窓にフォーカスがあるとき）: F 注視、F1 横（+Z 向き）、F2 上、F3 正面、Space 再生、C / V ポーズのコピー / ペースト（C は選んでいる物があればその物だけ。10-03 変更）、← → フレーム（Shift で 10）、Home 先頭、W / E / R で Transform パネルのモード（Move / Rot / Scale。10-03 に I / O / P から Unity と同じキーへ変更）。窓の文脈のショートカットなので、窓にフォーカスがある間は Unity の Tools/Move・Rotate・Scale（全体のショートカット）より優先される。
+- ショートカット（Shortcut Manager、窓にフォーカスがあるとき）: F 注視、F1 横（+Z 向き）、F2 上、F3 正面、Space 再生、Ctrl+C / Ctrl+V ポーズのコピー / ペースト（選んでいる物があればその物だけ。10-03 変更。全身 IK の点を選んでいれば点に関する骨も写す。10-21 に C / V から Edit メニューの Copy / Paste のコマンドへ変更）、Ctrl+A 今つかめる物を全部選ぶ（Edit メニューの Select All のコマンド。10-21 追加）。Motion Scene の窓も、キャラを編集している間は同じ（していなければ Scene ビューの GameObject の操作）、← → フレーム（Shift で 10）、Home 先頭、W / E / R で Transform パネルのモード（Move / Rot / Scale。10-03 に I / O / P から Unity と同じキーへ変更）。窓の文脈のショートカットなので、窓にフォーカスがある間は Unity の Tools/Move・Rotate・Scale（全体のショートカット）より優先される。
 - Overlay: `View`（骨・床の表示、ハンドルの大きさ、視点ボタン）。
 - タイムライン（`MktPreviewWindow.Timeline.cs`、09-16 に作り直した）:
   - 上から再生ボタンの段（前のキー・前のフレーム・再生・次のフレーム・次のキー、左に Copy/Paste/Reset、右にフレーム・Tracks・Fit）、黒い目盛り、キーのトラック。

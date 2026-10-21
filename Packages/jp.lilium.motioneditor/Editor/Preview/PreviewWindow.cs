@@ -634,6 +634,16 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 今つかめる物（ハンドルを出している物）を全部選ぶ（Ctrl+A）。全身 IK の点をつかむ間は全部の点になる
+        /// （点に関する骨も選んだことになるので、続けてコピーすると全身の姿勢を写せる。RelatedFkTargets）
+        /// </summary>
+        public void SelectAll ()
+        {
+            SelectObjects (targets_.Where (IsPickable).Select (t => t.gameObject));
+            RepaintView ();
+        }
+
+        /// <summary>
         /// まとめて選ぶ（Picker の All / Right / Left や、一覧の複数選択）。
         /// 先頭が「今の対象」になる（Spinner・Transform・超必のカメラなど 1 つだけ見る所は先頭を使う）
         /// </summary>
@@ -954,6 +964,7 @@ namespace Lilium
 #else
             viewport_ = ToolViewport.Create (rootVisualElement, "MktViewport", OnViewportGUI);
 #endif
+            RegisterEditCommands (this, () => this);
         }
 
 #if !UNITY_6000_6_OR_NEWER
@@ -1406,6 +1417,7 @@ namespace Lilium
             if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (PreviewWindow)));
             // 窓の外へ出たら、メッシュの下の物の強調を外す（外では MouseMove が来ない）
             if (Event.current.type == EventType.MouseLeaveWindow && UpdateMeshHover (false, Vector2.zero, Rect.zero)) RepaintView ();
+            HandleEditCommandGUI ();
             if (Event.current.type != EventType.Repaint || viewport_ == null) return;
 
             Rect rect = viewport_.ChangeCoordinatesTo (rootVisualElement, viewport_.contentRect);

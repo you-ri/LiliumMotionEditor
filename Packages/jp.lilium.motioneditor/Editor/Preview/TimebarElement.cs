@@ -972,7 +972,7 @@ namespace Lilium
 
         /// <summary>
         /// 選んだキーの削除。キーのコピー・貼り付けはメニューに出さない（Ctrl+C / Ctrl+V で足りる。
-        /// 姿勢のコピー・貼り付けは C / V とタイムライン上端の Copy / Paste）
+        /// 姿勢のコピー・貼り付けは、キー欄にフォーカスが無いときの Ctrl+C / Ctrl+V とタイムライン上端の Copy / Paste）
         /// </summary>
         void AddDeleteSelectedItem (GenericMenu menu)
         {
