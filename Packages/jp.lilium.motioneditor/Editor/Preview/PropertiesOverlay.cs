@@ -16,11 +16,10 @@ namespace Lilium
     [Icon (Icons.kFolder + "Properties.png")]
     [Overlay (typeof (PreviewWindow), "mkt-properties", "Properties", defaultDisplay = false,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    class PropertiesOverlay : Overlay
+    class PropertiesOverlay : MotionOverlay
     {
         const int kRowHeight = 18;
 
-        PreviewWindow window_;
         TextField search_;
         Toggle keyedOnly_;
         ListView list_;
@@ -37,7 +36,7 @@ namespace Lilium
             root.style.width = 240;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => 240);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             search_ = new TextField { tooltip = Tr ("PROPERTIES_OVERLAY_SEARCH_TOOLTIP") };
@@ -92,23 +91,19 @@ namespace Lilium
             root.Add (row2);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.keysChanged -= Refresh;
-            window_.keysChanged += Refresh;
-            window_.poseSampled -= RefreshValue;
-            window_.poseSampled += RefreshValue;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.keysChanged -= Refresh;
-                window_.poseSampled -= RefreshValue;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.keysChanged -= Refresh;
+            window_.poseSampled -= RefreshValue;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.keysChanged += Refresh;
+            window_.poseSampled += RefreshValue;
         }
 
         void Refresh ()

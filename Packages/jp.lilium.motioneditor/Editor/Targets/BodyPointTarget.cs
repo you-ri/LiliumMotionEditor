@@ -478,16 +478,30 @@ namespace Lilium
         public void TogglePin ()
         {
             if (pinned) {
-                rotationDirty_ = rotationPinned;
-                lockedDirty_ = body_.GetLocked (human_);
-                body_.SetPositionWeight (human_, 0);
-                body_.SetRotationWeight (human_, 0);
-                body_.SetLocked (human_, false);
                 positionDirty_ = true;
+                Unpin ();
             }
             else {
                 PinPosition (bonePoint);
             }
+        }
+
+        /// <summary>位置も向きも固定を外し、完全固定も外す（外した値は次のキーで強さ 0 を打つ。位置のキーは呼ぶ側が決める）</summary>
+        void Unpin ()
+        {
+            rotationDirty_ = rotationPinned;
+            lockedDirty_ = body_.GetLocked (human_);
+            body_.SetPositionWeight (human_, 0);
+            body_.SetRotationWeight (human_, 0);
+            body_.SetLocked (human_, false);
+        }
+
+        /// <summary>完全固定を付け外しする（変わったら次のキーで打つ）</summary>
+        void SetLockedFlag (bool on)
+        {
+            if (body_.GetLocked (human_) == on) return;
+            body_.SetLocked (human_, on);
+            lockedDirty_ = true;
         }
 
         /// <summary>
@@ -496,8 +510,7 @@ namespace Lilium
         public void ToggleLock ()
         {
             if (!pinned) PinPosition (bonePoint);
-            body_.SetLocked (human_, !body_.GetLocked (human_));
-            lockedDirty_ = true;
+            SetLockedFlag (!body_.GetLocked (human_));
         }
 
         /// <summary>今のフレームでの点の状態</summary>
@@ -522,10 +535,7 @@ namespace Lilium
                     break;
                 default:
                     if (!pinned) PinPosition (bonePoint);
-                    if (body_.GetLocked (human_)) {
-                        body_.SetLocked (human_, false);
-                        lockedDirty_ = true;
-                    }
+                    SetLockedFlag (false);
                     break;
             }
         }
@@ -538,10 +548,7 @@ namespace Lilium
         {
             if (on) {
                 if (!pinned) PinPosition (bonePoint);
-                if (!body_.GetLocked (human_)) {
-                    body_.SetLocked (human_, true);
-                    lockedDirty_ = true;
-                }
+                SetLockedFlag (true);
             }
             else if (pinned) {
                 TogglePin ();
@@ -594,15 +601,10 @@ namespace Lilium
             if (rotation) {
                 SetValues (TransformChannels.Rotation, position, EditingRigSolver.MirrorRotation (delta, normal));
             }
-            else if (rotationPinned) {
-                body_.SetRotationWeight (human_, 0);
-                rotationDirty_ = true;
+            else {
+                ReleaseRotation ();
             }
-            bool locked = from == BodyPointState.Locked;
-            if (body_.GetLocked (human_) != locked) {
-                body_.SetLocked (human_, locked);
-                lockedDirty_ = true;
-            }
+            SetLockedFlag (from == BodyPointState.Locked);
             return true;
         }
 
@@ -805,9 +807,7 @@ namespace Lilium
             if (positionDirty_) WritePosition (writer);
             if (rotationDirty_) WriteRotation (writer);
             if (lockedDirty_) WriteLocked (writer);
-            positionDirty_ = false;
-            rotationDirty_ = false;
-            lockedDirty_ = false;
+            ClearPendingKeys ();
         }
 
         /// <summary>動かした値を打たずに捨てる（姿勢をクリップから当て直したとき）</summary>
@@ -919,12 +919,8 @@ namespace Lilium
             if (!body_.TryGetPointRestValues (human_, out position, out rotation)) return;
             control_.localPosition = position;
             control_.localRotation = rotation;
-            rotationDirty_ = rotationPinned;
             positionDirty_ = positionPinned;
-            lockedDirty_ = body_.GetLocked (human_);
-            body_.SetPositionWeight (human_, 0);
-            body_.SetRotationWeight (human_, 0);
-            body_.SetLocked (human_, false);
+            Unpin ();
         }
     }
 

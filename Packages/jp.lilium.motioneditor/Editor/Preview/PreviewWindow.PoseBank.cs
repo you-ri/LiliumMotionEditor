@@ -14,7 +14,7 @@ namespace Lilium
     {
         Transform editingRoot
         {
-            get { return stage_ != null && stage_.editingRig != null && stage_.editingRig.root != null ? stage_.editingRig.root.transform : null; }
+            get { return stage_ != null ? stage_.editingRoot : null; }
         }
 
         /// <summary>
@@ -24,16 +24,7 @@ namespace Lilium
         public Dictionary<EditorCurveBinding, float> CapturePose ()
         {
             Transform root = editingRoot;
-            if (root == null) return null;
-            Dictionary<EditorCurveBinding, float> result = new Dictionary<EditorCurveBinding, float> ();
-            using (CurveWriter writer = CurveWriter.Begin (null, root, currentFrame, null)) {
-                foreach (PoseTarget target in targets_) {
-                    target.WriteKeys (writer);
-                }
-                if (rigProxies != null) rigProxies.WriteWeightKeys (writer);
-                foreach (KeyValuePair<EditorCurveBinding, float> pair in writer.values) result[pair.Key] = pair.Value;
-            }
-            return result;
+            return root != null ? PoseCommit.CaptureValues (root, targets_, rigProxies, currentFrame) : null;
         }
 
         /// <summary>選んでいる対象の数（PoseBank が「どこへ貼るか」を出す）</summary>
@@ -99,20 +90,7 @@ namespace Lilium
         {
             values = new Dictionary<EditorCurveBinding, float> ();
             if (stage_ == null || !stage_.canPreviewHumanoid) return Tr ("PREVIEW_WINDOW_POSE_BANK_DISPLAY_NOT_HUMANOID");
-            Dictionary<int, float> muscles = PoseBank.ReadMuscles (pose);
-            if (muscles.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_HUMANOID_VALUES");
-
-            HashSet<string> moved = stage_.ApplyMusclesAsControls (muscles);
-            if (moved == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_APPLY_HUMANOID");
-            if (moved.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_MOVED_BONES");
-            Dictionary<EditorCurveBinding, float> captured = CapturePose ();
-            if (captured == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_SELECT_CHARACTER");
-            foreach (KeyValuePair<EditorCurveBinding, float> pair in captured) {
-                if (!moved.Contains (pair.Key.path)) continue;
-                if (selected != null && !selected.Contains (pair.Key.path)) continue;
-                values[pair.Key] = pair.Value;
-            }
-            return null;
+            return PoseCommit.CaptureMuscles (stage_, targets_, PoseBank.ReadMuscles (pose), currentFrame, selected, out values);
         }
     }
 

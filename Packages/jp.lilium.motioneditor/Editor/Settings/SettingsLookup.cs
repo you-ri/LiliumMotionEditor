@@ -173,7 +173,7 @@ namespace Lilium
             ProjectSettings project = ProjectSettings.instance;
             string folder = Expand (project.characterSettingsFolder, prefab, project);
             if (string.IsNullOrEmpty (folder) || !folder.StartsWith ("Assets")) folder = Expand (kPrefabFolderToken, prefab, project);
-            EnsureFolder (folder);
+            AnimBank.EnsureFolder (folder);
 
             CharacterSettings settings = ScriptableObject.CreateInstance<CharacterSettings> ();
             settings.prefab = prefab;
@@ -203,14 +203,6 @@ namespace Lilium
         internal static LayerState Clone (LayerState state)
         {
             return state != null ? JsonUtility.FromJson<LayerState> (JsonUtility.ToJson (state)) : new LayerState ();
-        }
-
-        internal static void EnsureFolder (string folder)
-        {
-            if (string.IsNullOrEmpty (folder) || AssetDatabase.IsValidFolder (folder)) return;
-            string parent = Path.GetDirectoryName (folder).Replace ('\\', '/');
-            EnsureFolder (parent);
-            AssetDatabase.CreateFolder (parent, Path.GetFileName (folder));
         }
     }
 

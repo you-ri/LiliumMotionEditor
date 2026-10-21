@@ -195,7 +195,7 @@ namespace Lilium
             if (useHumanoidBase && bakeOverrides.Count == 0 && !BakesThroughStack (output, out rig)) {
                 return new LayerClipStatus (LayerClipState.None, Tr ("PREVIEW_WINDOW_OUTPUT_SOURCE_AS_IS"));
             }
-            return HumanoidOutput.GetStatus (bakeSource, model, GetOutputBakeProblem (output), bakeOverrides, output.outputName);
+            return HumanoidOutput.GetStatus (baseClip, model, GetOutputBakeProblem (output), bakeOverrides, output.outputName);
         }
 
         public string GetOutputBakeProblem (OutputLayer output)

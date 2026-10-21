@@ -127,6 +127,35 @@ namespace Lilium
             return outRotation;
         }
 
+        /// <summary>
+        /// 物（ゲームの Rig のターゲット・持ち替えの物）を動かすハンドル。target を移動の丸で動かし、選んでいるときだけ向きの棒も出す
+        /// （胸などの骨のハンドルと重なるため）。動かしたら move・rotate に新しい位置・向きを渡し、GUI.changed を立てる。
+        /// owner は選ぶ・Undo に記録する物
+        /// </summary>
+        public static void DoObjectHandles (int moveHash, int rotateHash, Transform owner, Transform target, float length, Color handleColor, bool selected,
+            System.Action<Vector3> move, System.Action<Quaternion> rotate)
+        {
+            color = handleColor;
+            try {
+                Vector3 position = target.position;
+                Quaternion rotation = target.rotation;
+                Vector3 moved = DoJointHandle (moveHash, owner, position, rotation);
+                if (moved != position) {
+                    move (moved);
+                    GUI.changed = true;
+                }
+                if (!selected) return;
+                Quaternion rotated = DoBoneHandle (rotateHash, owner, target.position, rotation, length);
+                if (rotated != rotation) {
+                    rotate (rotated);
+                    GUI.changed = true;
+                }
+            }
+            finally {
+                color = StandardColor;
+            }
+        }
+
     }
 
 }

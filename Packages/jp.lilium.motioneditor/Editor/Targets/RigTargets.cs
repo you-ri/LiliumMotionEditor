@@ -26,19 +26,12 @@ namespace Lilium
             if (rig == null || rig.root == null || solver == null) return targets;
 
             BoneShapes shapes = new BoneShapes (rig);
-            foreach (RigBinding.Fk fk in rig.binding.fk) {
-                if (!fk.enabled) continue;
-                Transform control = rig.FindControl (fk.path);
-                Transform bone = rig.GetEditingBone (fk.bone);
+            foreach (RigBinding.BoneControl source in rig.binding.boneControls) {
+                if (!source.enabled) continue;
+                Transform control = rig.FindControl (source.path);
+                Transform bone = rig.GetEditingBone (source.bone);
                 if (control == null || bone == null) continue;
-                targets.Add (new FkTarget (rig, solver, shapes, control, bone, fk.bone, fk.control.bone.ToString (), fk.control.position, fk.control.fullBodyHandle));
-            }
-            foreach (RigBinding.Extra extra in rig.binding.extras) {
-                if (!extra.enabled) continue;
-                Transform control = rig.FindControl (extra.path);
-                Transform bone = rig.GetEditingBone (extra.bone);
-                if (control == null || bone == null) continue;
-                targets.Add (new FkTarget (rig, solver, shapes, control, bone, extra.bone, extra.control.name, extra.control.position, extra.control.fullBodyHandle));
+                targets.Add (new FkTarget (rig, solver, shapes, control, bone, source));
             }
             if (rig.rigProxies != null) {
                 foreach (RigProxies.Source source in rig.rigProxies.sources) {
@@ -71,12 +64,8 @@ namespace Lilium
         public BoneShapes (EditingRig rig)
         {
             rig_ = rig;
-            foreach (RigBinding.Fk fk in rig.binding.fk) {
-                Transform bone = fk.enabled ? rig.GetEditingBone (fk.bone) : null;
-                if (bone != null) controlled_.Add (bone);
-            }
-            foreach (RigBinding.Extra extra in rig.binding.extras) {
-                Transform bone = extra.enabled ? rig.GetEditingBone (extra.bone) : null;
+            foreach (RigBinding.BoneControl source in rig.binding.boneControls) {
+                Transform bone = source.enabled ? rig.GetEditingBone (source.bone) : null;
                 if (bone != null) controlled_.Add (bone);
             }
         }

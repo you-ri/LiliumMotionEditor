@@ -13,7 +13,8 @@ namespace Lilium
     /// <summary>
     /// 目盛り（ルーラー）とトラック（クリップ全体＋骨ごと）。見た目:
     /// 黒い目盛り・キーのトラック。キーは箱（今のフレームのキーは白、サイクルキーは青緑に Material Icons の loop のアイコン・目盛りに三角、
-    /// 全身 IK の点のトラックはそのフレームの点の状態の色＝丸の色）、キーの間は両矢印の線とフレーム数。
+    /// 全身 IK の点のトラックはそのフレームの点の状態の色＝丸の色）、キーの間は両矢印の線とフレーム数
+    ///（全身 IK の点のトラックは、その間の点の状態＝前のキーの状態の色）。
     /// 今のフレームは白い縦線。目盛りとトラックの上でホイールは横の拡大縮小、中ボタン（Alt+左）ドラッグは横の移動。
     ///
     /// 形は Painter2D（generateVisualContent）で毎回いまの状態から描き直し、数字は使い回す Label を絶対座標で置く
@@ -468,7 +469,7 @@ namespace Lilium
                     Rect next = GetKeyRect (track.keys[k], row);
                     float x0 = Mathf.Max (prev.xMax + 2, keyArea.x);
                     float x1 = Mathf.Min (next.x - 2, keyArea.xMax);
-                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1));
+                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1), IntervalColor (track, k));
                 }
 
                 for (int k = 0; k < track.keys.Length; k++) {
@@ -516,23 +517,32 @@ namespace Lilium
         /// キーの間の線と矢じり（数字は LayoutTracks が置く Label）
         /// </summary>
         /// <param name="textWidth">真ん中に置くフレーム数の幅。線はそこを空けて引く（数字に線が重なって読みにくい）</param>
-        static void DrawInterval (Painter2D painter, float x0, float x1, float y, float textWidth)
+        static void DrawInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color)
         {
             if (x1 - x0 < 8) return;
             y = Mathf.Round (y);
             if (textWidth > 0) {
                 float mid = (x0 + x1) * 0.5f;
                 float gap = textWidth * 0.5f + 4;
-                FillRect (painter, Rect.MinMaxRect (x0, y, mid - gap, y + 1), kIntervalColor);
-                FillRect (painter, Rect.MinMaxRect (mid + gap, y, x1, y + 1), kIntervalColor);
+                FillRect (painter, Rect.MinMaxRect (x0, y, mid - gap, y + 1), color);
+                FillRect (painter, Rect.MinMaxRect (mid + gap, y, x1, y + 1), color);
             }
             else {
-                FillRect (painter, new Rect (x0, y, x1 - x0, 1), kIntervalColor);
+                FillRect (painter, new Rect (x0, y, x1 - x0, 1), color);
             }
             for (int i = 0; i < 3; i++) {
-                FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), kIntervalColor);
-                FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), kIntervalColor);
+                FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), color);
+                FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), color);
             }
+        }
+
+        /// <summary>
+        /// キー k-1 と k の間の線と数字の色。全身 IK の点のトラックは前のキーの状態の色
+        /// （点の状態は次のキーまで引き継ぎ、間で補間しないので、間はずっと前のキーの状態）
+        /// </summary>
+        static Color IntervalColor (PreviewWindow.TimelineTrack track, int k)
+        {
+            return track.keyColors != null ? track.keyColors[k - 1] : kIntervalColor;
         }
 
         static Color WithAlpha (Color color, float alpha)
@@ -609,6 +619,7 @@ namespace Lilium
 
                     Label interval = GetPooled (intervalLabels_, ref usedIntervals, tracksCanvas_, StyleIntervalLabel);
                     interval.text = frames.ToString ();
+                    interval.style.color = IntervalColor (track, k);
                     float mid = (x0 + x1) * 0.5f;
                     interval.style.left = mid - textWidth * 0.5f - 2;
                     interval.style.top = row.y + row.height * 0.5f - 7;

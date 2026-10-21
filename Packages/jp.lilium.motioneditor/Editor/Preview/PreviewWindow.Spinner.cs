@@ -48,8 +48,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 全身 IK の点を動かすとき、床（ワールドの Y = 0）より下へ置かない（Controller の Floor Clamp）。
-        /// 操作のときだけのフラグなので、窓が持って点へ配る（点ごとにもクリップにも保存しない）
+        /// 全身 IK の点を動かすとき、床（ワールドの Y = 0）より下へ置かない。解いた姿勢の接地の点も床より下へ潜らせない（Controller の Floor Clamp）。
+        /// 操作のときだけのフラグなので、窓が持って点と全身 IK へ配る（点ごとにもクリップにも保存しない）
         /// </summary>
         [SerializeField] bool floorClamp_;
 
@@ -70,13 +70,17 @@ namespace Lilium
             get { return targets_.Any (t => t is BodyPointTarget); }
         }
 
-        /// <summary>Floor Clamp を点へ配る（フラグを変えたとき・点の対象を作り直したとき）</summary>
+        /// <summary>
+        /// Floor Clamp を点と全身 IK へ配る（フラグを変えたとき・点の対象を作り直したとき）。
+        /// 点は動かした場所を、全身 IK は解いた姿勢の接地の点（足首を Pin にして腰を下げたときのつま先など）を床に当てる
+        /// </summary>
         void ApplyFloorClamp ()
         {
             foreach (PoseTarget target in targets_) {
                 BodyPointTarget point = target as BodyPointTarget;
                 if (point != null) point.floorClamp = floorClamp_;
             }
+            if (stage_ != null && stage_.fullBody != null) stage_.fullBody.floorClamp = floorClamp_;
         }
 
         /// <summary>
@@ -197,14 +201,7 @@ namespace Lilium
             spinHold_ = false;
             ReleaseClock ();
             if (!CanEditClip ()) return;
-
-            // 全身 IK の点を動かした・固定している点があるフレームで骨を動かした: 解いた姿勢を骨のキーとして打つ
-            if (HasPendingPointKeys () || hasActivePoints) {
-                CommitFullBodyPose ();
-                return;
-            }
-            AddKeyAllCurves (true);
-            RepaintView ();
+            CommitPose (HasPendingPointKeys ());
         }
 
         // ---- 数値欄・Reset・左右反転（S9。Spinner と同じパネル） ----
@@ -240,16 +237,6 @@ namespace Lilium
         {
             PoseTarget target = selectedTarget;
             return target != null && (target.GetSpinChannels () & channel) != 0 && CanEditTarget (target);
-        }
-
-        /// <summary>
-        /// 数値欄から値を入れて、今のフレームにキーを打つ（入力 1 回を 1 回の Undo にする）
-        /// </summary>
-        public void SetSpinValues (TransformChannels channels, Vector3 position, Quaternion rotation)
-        {
-            PoseTarget target = selectedTarget;
-            if (target == null || !CanEditValues (channels)) return;
-            ApplyValueEdit (target, "Set " + target.label, () => target.SetValues (channels, position, rotation));
         }
 
         /// <summary>
@@ -323,27 +310,13 @@ namespace Lilium
         void ApplyValueEdit (IList<PoseTarget> targets, string undoName, System.Action edit)
         {
             if (stage_ == null) return;
-            Undo.IncrementCurrentGroup ();
-            int group = Undo.GetCurrentGroup ();
-            // 全身 IK の点をつかむ間に FK の値を入れた・戻した: 子の Pin の点を一緒に動かす
-            EditCarryingPinnedPoints (targets, edit);
-            SolveAfterManipulate ();
-            if (targets.Any (t => t is BodyPointTarget) || hasActivePoints) {
-                CommitFullBodyPose ();
-                Undo.SetCurrentGroupName (undoName);
-                Undo.CollapseUndoOperations (group);
-                return;
-            }
-            if (CanEditClip ()) {
-                using (CurveWriter writer = BeginCurves (undoName, true)) {
-                    foreach (PoseTarget target in targets) target.WriteKeys (writer);
-                }
-                AddKeyAllCurves (true);
-            }
-            Undo.SetCurrentGroupName (undoName);
-            Undo.CollapseUndoOperations (group);
-            keyFrames_ = null;
-            RepaintView ();
+            PoseCommit.InUndoGroup (undoName, () => {
+                // 全身 IK の点をつかむ間に FK の値を入れた・戻した: 子の Pin の点を一緒に動かす
+                EditCarryingPinnedPoints (targets, edit);
+                SolveAfterManipulate ();
+                // 入れた対象も含めて、姿勢全体のキーを打つ（Spinner を離したときと同じ）
+                CommitPose (targets.Any (t => t is BodyPointTarget));
+            });
         }
 
         void RaiseStateChanged ()

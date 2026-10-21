@@ -53,6 +53,18 @@ namespace Lilium
             pivot += rotation * new Vector3 (-delta.x, delta.y, 0) * unitsPerPixel;
         }
 
+        /// <summary>
+        /// 表示域のドラッグで視点を動かす（窓で同じ割り当て）: 中ボタンで平行移動、Alt + 右で寄る・引く、それ以外で回る
+        /// </summary>
+        /// <param name="button">押したボタン</param>
+        /// <param name="alt">押したときに Alt を押していたか</param>
+        public void Drag (int button, bool alt, Vector2 delta, float viewHeight)
+        {
+            if (button == 2) Pan (delta, viewHeight);
+            else if (alt && button == 1) Zoom (delta.y * 0.5f);
+            else Orbit (delta);
+        }
+
         /// <param name="amount">正で遠ざかる</param>
         public void Zoom (float amount)
         {

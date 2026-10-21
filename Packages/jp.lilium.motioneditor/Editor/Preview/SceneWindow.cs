@@ -129,7 +129,7 @@ namespace Lilium
             if (view != this) return;
             // 姿勢を作る窓を決める（閉じられた・画面に出ている窓が現れた、なら切り替えてパネルを作り直す）
             ResolveSource ();
-            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, kPanelIds);
+            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (SceneWindow)));
             if (!Tools.hidden) {
                 Tools.hidden = true;
                 toolsHidden_ = true;
@@ -204,7 +204,7 @@ namespace Lilium
         void RebuildPanels ()
         {
             if (kRebuildContent == null) return;
-            foreach (string id in kPanelIds) {
+            foreach (string id in OverlayWindows.PanelIds (typeof (SceneWindow))) {
                 UnityEditor.Overlays.Overlay overlay;
                 if (!TryGetOverlay (id, out overlay) || overlay == null) continue;
                 try {
@@ -214,11 +214,6 @@ namespace Lilium
                 }
             }
         }
-
-        static readonly string[] kPanelIds = {
-            "mkt-scene-preview-toolbar", "mkt-scene-layers", "mkt-scene-transform", "mkt-scene-picker", "mkt-scene-timeline",
-            "mkt-scene-animbank", "mkt-scene-posebank", "mkt-scene-curves", "mkt-scene-stacker", "mkt-scene-properties", "mkt-scene-rig-values",
-        };
 
         void RestoreTools ()
         {

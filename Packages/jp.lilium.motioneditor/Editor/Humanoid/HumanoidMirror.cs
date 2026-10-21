@@ -47,13 +47,13 @@ namespace Lilium
         /// <summary>
         /// muscle の i 番目の反転先（左右の相手。中心の骨は自分）
         /// </summary>
-        public static int PartnerOf (int muscle)
+        internal static int PartnerOf (int muscle)
         {
             Build ();
             return partner_[muscle];
         }
 
-        public static bool IsNegated (int muscle)
+        internal static bool IsNegated (int muscle)
         {
             Build ();
             return negate_[muscle];

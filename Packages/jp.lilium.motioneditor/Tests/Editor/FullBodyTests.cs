@@ -868,6 +868,95 @@ namespace Lilium
         }
 
         [Test]
+        public void FloorClamp_KeepsSolvedContactPointsAboveFloor ([Values (false, true)] bool clamp)
+        {
+            // 足首を Pin にして腰を下げると、膝が曲がって脛が前へ倒れ、脛に付いて回る足のつま先が床へ潜る。
+            // Floor Clamp が入っていれば、解いた姿勢の接地の点（足裏の点）を床の上に留める（10-21）。足首と腰は置いた場所のまま
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
+            BodyPointTarget left = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointTarget right = PointTarget (targets, HumanBodyBones.RightFoot);
+            BodyPointId[] contacts = s.body.pointIds.Where (s.body.IsContact).ToArray ();
+            Assert.GreaterOrEqual (contacts.Length, 8, "両足の接地の点");
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = clamp;
+            s.body.floorClamp = clamp;
+            left.SetState (BodyPointState.Pin);
+            right.SetState (BodyPointState.Pin);
+            Vector3 ankle = left.framePosition;
+            Vector3 hipsTarget = hips.framePosition + new Vector3 (0, -0.25f, 0);
+            hips.MoveTo (hipsTarget);
+
+            s.body.CaptureInput ();
+            s.body.Solve ();
+
+            float lowest = float.MaxValue;
+            string lowestName = null;
+            foreach (BodyPointId id in contacts) {
+                Vector3 position;
+                s.body.TryGetBonePointWorld (id, out position);
+                if (position.y < lowest) {
+                    lowest = position.y;
+                    lowestName = id.name;
+                }
+            }
+            if (clamp) Assert.GreaterOrEqual (lowest, -2e-3f, "床より下へ潜らない: " + lowestName);
+            else Assert.Less (lowest, -0.01f, "Floor Clamp が無ければ、つま先が床へ潜る");
+            Assert.LessOrEqual (Vector3.Distance (ankle, Bone (s, HumanBodyBones.LeftFoot).position), 1e-3f, "足首は置いた場所のまま");
+            Assert.LessOrEqual (Vector3.Distance (hipsTarget, Bone (s, HumanBodyBones.Hips).position), 1e-3f, "腰は下げた場所");
+
+            // 前後のキーで Locked の点だけを留めるとき（再生・フレームの移動）は当てない
+            if (clamp) {
+                s.body.RestoreInput ();
+                s.body.SolveOnly (new HashSet<Transform> { s.body.GetControl (HumanBodyBones.Hips), s.body.GetControl (HumanBodyBones.LeftFoot), s.body.GetControl (HumanBodyBones.RightFoot) });
+                float sunk = float.MaxValue;
+                foreach (BodyPointId id in contacts) {
+                    Vector3 position;
+                    s.body.TryGetBonePointWorld (id, out position);
+                    sunk = Mathf.Min (sunk, position.y);
+                }
+                Assert.Less (sunk, -0.01f, "SolveOnly では床に当てない");
+            }
+        }
+
+        [Test]
+        public void FloorClamp_MovesFeetWithoutJitter ([Values (BodyPointState.Free, BodyPointState.Locked)] BodyPointState feet, [Values (0, 1, 2, 3)] int direction)
+        {
+            // 腰の点をつかんで少しずつ動かすと、Floor Clamp は足をひとかたまりのまま床に着ける（Free の足は真上へ持ち上げ、足首を固定した足は足首まわりに回す）。
+            // 一番深い点 1 つだけを床に留めていたときは、どの点が一番深いかが入れ替わるたびに足がその点まわりに回り、1 歩で 180° 跳ねていた（10-21）
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget hips = PointTarget (targets, HumanBodyBones.Hips);
+            BodyPointId[] contacts = s.body.pointIds.Where (s.body.IsContact).ToArray ();
+            s.body.floorClamp = true;
+            PointTarget (targets, HumanBodyBones.LeftFoot).SetState (feet);
+            PointTarget (targets, HumanBodyBones.RightFoot).SetState (feet);
+            Vector3 start = hips.framePosition;
+            Vector3 step = direction == 0 ? new Vector3 (0, -0.004f, 0) : direction == 1 ? new Vector3 (0.004f, -0.002f, 0)
+                : direction == 2 ? new Vector3 (0, -0.003f, 0.003f) : new Vector3 (0, -0.003f, -0.003f);
+            s.body.CaptureInput ();
+            List<KeyValuePair<Vector3, Quaternion>> previous = null;
+            for (int i = 0; i <= 80; i++) {
+                hips.MoveTo (start + step * i);
+                s.body.RestoreInput ();
+                s.body.Solve ();
+                foreach (BodyPointId id in contacts) {
+                    Vector3 position;
+                    s.body.TryGetBonePointWorld (id, out position);
+                    Assert.GreaterOrEqual (position.y, -2e-3f, "床より下へ潜らない: " + id.name + " step " + i);
+                }
+                List<KeyValuePair<Vector3, Quaternion>> pose = Snapshot (s);
+                // 1 歩目はまっすぐな脚が曲がり始めるので大きく回る（足首を Pin にして下げたときも同じ）。2 歩目からは少しずつ
+                if (previous != null && i >= 2) {
+                    for (int b = 0; b < pose.Count; b++) {
+                        Assert.LessOrEqual (Quaternion.Angle (pose[b].Value, previous[b].Value), 8f, "1 歩で跳ねない: " + s.rig.editingBones.ElementAt (b).name + " step " + i);
+                    }
+                }
+                previous = pose;
+            }
+        }
+
+        [Test]
         public void RotatingPoint_CarriesPinnedAndLockedPoints ()
         {
             // 点を 1 つ選んで回すと骨を FK で回し、その骨より先の固定している点（Pin・Locked）も選んだ点を中心に一緒に回る（10-19）。

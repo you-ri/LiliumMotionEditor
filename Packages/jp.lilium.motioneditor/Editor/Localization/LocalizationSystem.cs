@@ -20,7 +20,6 @@ namespace Lilium
 
         // language -> (key -> translated text)
         static Dictionary<string, Dictionary<string, string>> translations_ = new Dictionary<string, Dictionary<string, string>> ();
-        static List<string> availableLanguages_ = new List<string> ();
         static string currentLanguage_;
         static int generation_;
 
@@ -49,17 +48,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 利用可能な言語一覧
-        /// </summary>
-        public static IReadOnlyList<string> availableLanguages
-        {
-            get {
-                if (currentLanguage_ == null) Initialize ();
-                return availableLanguages_;
-            }
-        }
-
-        /// <summary>
         /// 初期化。EditorPrefs またはシステム言語から現在の言語を決める
         /// </summary>
         static void Initialize ()
@@ -69,21 +57,6 @@ namespace Lilium
             currentLanguage_ = EditorPrefs.HasKey (kPrefsKey)
                 ? EditorPrefs.GetString (kPrefsKey)
                 : SystemLanguageToCode (Application.systemLanguage);
-
-            // en は常に利用可能
-            if (!availableLanguages_.Contains (kDefaultLanguage)) availableLanguages_.Add (kDefaultLanguage);
-        }
-
-        /// <summary>
-        /// キーに対応する翻訳テキストを返す。見つからない場合はキーをそのまま返す
-        /// </summary>
-        public static string Translate (string key)
-        {
-            if (string.IsNullOrEmpty (key)) return key;
-            if (currentLanguage_ == null) Initialize ();
-
-            if (translations_.TryGetValue (currentLanguage_, out var dict) && dict.TryGetValue (key, out var translated)) return translated;
-            return key;
         }
 
         /// <summary>
@@ -94,16 +67,6 @@ namespace Lilium
             text = null;
             if (string.IsNullOrEmpty (language) || string.IsNullOrEmpty (key)) return false;
             return translations_.TryGetValue (language, out var dict) && dict.TryGetValue (key, out text);
-        }
-
-        /// <summary>
-        /// 値を含むキーを訳して埋める。語順は翻訳で真っ先に変わるので、訳した断片をつなげず、埋める所を訳文の中に持つ。
-        /// 埋める所の壊れた訳文はここで例外になる（直す所はファイルなので、黙って違う文を出すより良い）
-        /// </summary>
-        public static string Format (string key, params object[] args)
-        {
-            string text = Translate (key);
-            return args == null || args.Length == 0 ? text : string.Format (text, args);
         }
 
         /// <summary>
@@ -125,7 +88,6 @@ namespace Lilium
                 }
                 foreach (var pair in parsed) dict[pair.Key] = pair.Value;
 
-                if (!availableLanguages_.Contains (language)) availableLanguages_.Add (language);
                 generation_++;
             }
             catch (Exception ex) {

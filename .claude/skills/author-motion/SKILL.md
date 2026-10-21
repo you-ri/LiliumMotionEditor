@@ -27,6 +27,7 @@ unity cmd motion_describe --project-path "$P" --json
 - Temporary files (pose JSON, scripts, images) go to the scratchpad. The only assets created are the editing clip and the baked clip
 - Write helper scripts with the Write tool, not shell heredocs (quotes inside heredocs break the shell call).
   On Windows, Python text files default to CRLF: open files with `newline="\n"` when a shell loop reads them (otherwise arguments end in `\r`)
+- Pass JSON as files (`motion_write_pose --pose_file`, `motion_request --file`), not as inline strings
 
 ## Workflow
 
@@ -34,20 +35,41 @@ unity cmd motion_describe --project-path "$P" --json
    ```bash
    unity cmd motion_open --project-path "$P" --prefab "Assets/.../Character.fbx" --clip "Assets/.../Motions/Walk.rig.anim" --create true --json
    ```
-   Returns: key frames, last frame, cycle flag, last writable frame (`writableUntil`, -1 = unlimited), `humanScale`, the points (name and whether it has a rotation), and why writing is impossible now (`writeProblem`, empty = writable).
-   Keys already in the clip stay. To start over, use a new clip path (or delete the asset first); otherwise old keys at frames you do not rewrite remain
-2. **Read the reference** — read frame 0 (the T-pose if the clip is empty) and keep the point positions. Build every pose by offsetting these values
+   Returns: key frames, last frame, cycle flag, last writable frame (`writableUntil`, -1 = unlimited), `humanScale`, why writing is impossible now (`writeProblem`, empty = writable), and the points.
+   Each point has: `name`, `hasRotation`, `bone` (the bone it sits on), `rest` (its T-pose position, body frame, meters — even when the clip already has keys),
+   `link` (the point it hangs from, e.g. `LeftLowerArm` → `LeftUpperArm`) with `length` (T-pose distance to `link` = the bone length), `contact` (checked for floor and sliding) and `ground` (sole points).
+   Keys already in the clip stay. To start over, write with `motion_write_motion --replace true` (step 4)
+2. **Keep the reference** — save the `motion_open` response. Build every pose by offsetting the `rest` positions, and place elbows and knees with the `length`s (two-bone geometry)
    ```bash
-   unity cmd motion_read_pose --project-path "$P" --frame 0 --json > "$S/rest.json"
+   unity cmd motion_open ... --json > "$S/open.json"
    ```
-3. **Write the body keys** — one pose JSON per key frame (see "Pose JSON"). The pose read back at that frame is returned
+3. **Try difficult poses** (optional) — `motion_write_pose --dry_run true` solves one pose (see "Pose JSON") and returns it without keying anything.
+   Pass the pose as a file with `--pose_file` (an inline `--pose` breaks easily on shell quoting)
    ```bash
-   unity cmd motion_write_pose --project-path "$P" --pose "$(cat "$S/key_10.json")" --json
+   unity cmd motion_write_pose --project-path "$P" --pose_file "$S/key_10.json" --dry_run true --json
    ```
-   With many keys, generate all JSON files with a Python script, then write them in a loop (never assemble them by hand)
-4. **Write the hand shapes** — after all body keys, key a hand shape at every key frame (see "Hands").
-   **A body key (`motion_write_pose`) keys the fingers too, at their current value**, so hands written first get frozen by later body keys
-5. **Lint** — `motion_lint`. Fix and go back to 3 (see "Fixing lint issues")
+   Responses of `motion_read_pose` / `motion_write_pose` are compact by default: positions in mm steps, rotations in 0.1° steps,
+   and Free points carry only `name` and `state` (`--compact false` returns every field at full precision). Check:
+   - `unreached`: pinned/locked points farther than 1 cm (× `humanScale`) from their target. Each point's `residual` is that distance in meters. A point is never moved for you: move the pin where the bones reach (elbows and knees: bone lengths; hands: arm length)
+   - `issues`: floor penetration and out-of-range muscles at that frame (same `kind`s as `motion_lint`; foot sliding and pops need `motion_lint`)
+4. **Write the whole motion at once** — generate one keys file with a Python script (never assemble it by hand) and write it with `motion_write_motion`.
+   Each key has the body points (as in "Pose JSON") and the hand shapes for that frame (as in "Hands"):
+   ```json
+   {"keys": [
+     {"frame": 0, "points": [...], "hands": [{"preset": "Hand_Relaxed"}]},
+     {"frame": 13, "points": [...], "hands": [{"preset": "Hand_Fist", "hand": "Right"}, {"hand": "Left", "muscles": [{"name": "Index 1 Stretched", "value": 0.6}]}]}
+   ]}
+   ```
+   ```bash
+   unity cmd motion_write_motion --project-path "$P" --file "$S/keys.json" --replace true --json
+   ```
+   - Keys are written in frame order, body first, then hands, so key order in the file and the "body before hands" rule do not matter
+   - Everything is checked first: a wrong point, state, preset, muscle or frame writes nothing and names the frame of the bad key
+   - `--replace true` deletes every key of the clip first (start over). Without it, keys at other frames stay
+   - The response has, per key, `maxResidual` and `unreached` (as above), then `lint` (the same report as `motion_lint`; `--lint false` skips it)
+   - `motion_read_motion` returns the clip's keys in the same shape (compact poses and the 40 finger muscles per key): read, edit in Python, and write back with `--replace true`
+   - `motion_undo` removes the last `motion_write_motion` / `motion_write_pose` / `motion_write_hand` as a whole (repeat to go further back, up to 32). It is refused if the clip was changed after that write (in the window, by Unity's undo...)
+5. **Fix lint issues** — edit the keys file and write it again with `--replace true` (see "Fixing lint issues")
 6. **Look at images** — capture the key frames and one or two frames between keys with `motion_capture`, open them with Read and look.
    **Images find problems even when lint reports nothing** (a swinging foot kept flat, arms spread into an A-pose, a broken shoulder...)
 7. **Bake and save** — `motion_bake` (writes the Humanoid clip for the game next to the editing clip) → `motion_save`
@@ -71,11 +93,30 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
 - **Rotation**: only for points that have one (Hips, Head, LeftHand / RightHand, LeftFoot / RightFoot). Euler angles in degrees, as the difference from the T-pose,
   in Unity's `Quaternion.Euler` order (Z, then X, then Y). +y turns the point to its right, +x pitches it forward/down.
   **Set both `hasRotation: true` and `pinRotation: true`**; without `hasRotation` the rotation is silently dropped
-- To aim a hand or foot, build its rotation from direction vectors (e.g. fingers and palm normal; toes and sole normal) and convert to Euler in a helper, instead of guessing angles.
-  T-pose: left-hand fingers point -x, right-hand fingers +x, palms face -y; toes point +z, soles face -y
+- **Aim** (preferred over Euler angles): `"aim": {"restForward": ..., "restUp": ..., "forward": ..., "up": ...}` turns the point so that the direction that was
+  `restForward` in the T-pose points along `forward`, and `restUp` along `up` (body frame; `restForward` defaults to +z, `restUp` to +y, `up` to `restUp`).
+  Instead of `forward`, `"target": {...}` turns `restForward` toward a position (a head looking at something). `aim` wins over `rotation`; it needs no `hasRotation`/`pinRotation`.
+  T-pose: left-hand fingers point -x, right-hand fingers +x, palms face -y; toes point +z, soles face -y.
+  Example, right fingers forward and palm down: `"aim": {"restForward": {"x":1,"y":0,"z":0}, "restUp": {"x":0,"y":-1,"z":0}, "forward": {"x":0,"y":0,"z":1}, "up": {"x":0,"y":-1,"z":0}}`
+- **Space**: `"space": "Head"` reads `position`, `aim` and `rotation` in that point's frame: origin at the point, axes turned by the point's rotation from the T-pose
+  (in the T-pose the axes match the body frame). The reference is the same request's value when that point is placed in it, otherwise the current pose at that frame.
+  `"spaceBlendFrom": "Hips", "spaceBlend": 0.6` turns the axes only 60% of the way from the hips rotation to the space point's rotation. A space point cannot have a space itself
+- **Snap**: `"snap": true` on an elbow or knee (`LowerArm` / `LowerLeg`) moves its pin to the closest spot the bones reach, given its parent point (`UpperArm` / `UpperLeg`) and child point
+  (`Hand` / `Foot`) from the same request or the current pose; the bend stays on the side of the written position. The response lists it under `snapped` (`distance`, `position`).
+  Without `snap` a pin is never moved
 - **Only the listed points change**. Unlisted points keep their state at that frame. A wrong name or state writes nothing and returns a reason.
   Listing every point you manage (with `Free` for unused ones) on every key avoids surprises from states carried over
 - To reuse a pose on a character of a different size, scale positions by the ratio of `humanScale` (same as `PoseDocument.Rescale`)
+- **Contacts** (a whole planted foot in one entry, next to `points`; also allowed in each key of `motion_write_motion`):
+  ```json
+  {"frame": 7, "points": [...], "contacts": [
+    {"point": "LeftFoot", "mode": "Flat", "at": {"x": -0.1, "y": 0, "z": 0.25}, "yaw": 10},
+    {"point": "RightFoot", "mode": "Ball", "at": {"x": 0.1, "y": 0, "z": -0.3}, "yaw": 0, "pitch": 35, "lift": 0}
+  ]}
+  ```
+  It places the foot point and every contact point on its bones (heel, ball, toe tip, little-toe side) in their T-pose shape and sets the foot rotation, all `Locked` (`state` to change it).
+  `at` is where the ankle would stand with the foot flat (x and z); `yaw` turns the foot; `mode` `Flat` / `Ball` (heel raised by `pitch` degrees around the toe joint) / `Heel` (toes raised by `pitch` around the heel);
+  `lift` raises everything (lift-off and landing keys). Ball/Heel keep the pivot where it is when flat. Do not list those points in `points` too
 - Points of the default rig definition:
   - Body: `Hips` `HipsDirection` `Stomach` `Chest` `ChestDirection` `Neck` `Head` `HeadDirection` `HeadTop`
     (`Chest` is the upper spine: one point at the middle of the torso (halfway from the hips to the head base); `Stomach` is the lower spine, halfway from the hips to `Chest`.
@@ -116,23 +157,20 @@ These follow from how the editor interpolates. Breaking them trips lint or break
 
 - **One key keys every bone** (fingers included). You cannot key just part of the body (except fingers via `motion_write_hand`). The other parts at that frame freeze at the interpolated value
 - **Point states carry over between keys, Pin positions do not**. To keep a contact over a span, make the point `Locked` on the keys at both ends
-- **A planted foot needs more than the ankle**: lock `Heel`, `ToeTip` and `LittleToeSide` (and `SoleBall` when the foot pivots on the ball).
-  `LittleToeSide` does not pull, so it does not stop the foot from rolling onto its side: also lock `Foot` with its rotation (yaw of the foot, pitch when the heel is up).
-  With only the ankle point, the foot turns around the ankle and the toes sink into the floor
+- **Plant feet with `contacts`**, not with single points. With only the ankle point locked, the foot turns around the ankle and the toes sink into the floor
 - **Keep the knee over the toes** on a planted leg: pin `LowerLeg` (the knee) above and in front of the ankle, in the direction the foot points. Otherwise the thigh can twist out of range when the hips turn
-- **Turn an elbow by pinning `LowerArm`** at a position the bones can reach (keep the shoulder–elbow and elbow–hand lengths). The default rig definition has no knee or elbow poles
+- **Turn an elbow by pinning `LowerArm`** with `"snap": true` (the default rig definition has no knee or elbow poles). Write roughly where the elbow should point; snap puts it where the bones reach
 - **`Locked` also works off the ground**. For spans where a point should travel on a straight line (just before landing, just after lift-off), lock it on both end keys (straight line between keys).
   With Pin, keys interpolate bone angles, the heel path curves as the body moves, and the foot slides at contact
-- **Lift a foot straight up and put it straight down**: before lift-off and before landing, add a key with the sole points `Locked` a few cm above the floor, right above the contact spot.
+- **Lift a foot straight up and put it straight down**: before lift-off and before landing, add a key with the foot in `contacts` with a `lift` of a few cm, at the same `at` as the contact.
   A Pin foot pointed down puts the toes behind the ankle, and the toes drag along the floor between the keys
 - **Locked points move on straight lines**. Build arcs (a swinging foot) with more keys
-- **Place pinned elbows and knees where the bones can reach**: compute them from the shoulder/hip and the wrist/ankle with the bone lengths (two-bone geometry) and a bend direction.
-  An unreachable elbow pin drags the clavicle far out of range (and breaks the shoulder mesh)
+- **Place pinned elbows and knees where the bones can reach** (`snap`). An unreachable elbow pin drags the clavicle far out of range (and breaks the shoulder mesh)
 - **Pin `UpperArm` near its T-pose spot relative to the chest** when the hands are pinned (guards, arm swings). Leaving it free lets the IK shrug the shoulders.
-  When the chest twists or bends relative to the hips, orient that spot about 60% of the way from the hips rotation to the chest rotation (the spine shares the twist);
-  with the full chest rotation the clavicle gets pushed forward/back out of range. Raise it a few cm to shrug (anger, sobbing), lower it to droop
-- **Place hands that touch the head in the head frame** (covering the face, hands on the head): position, fingers and palm relative to the `Head` point and its rotation, then convert to the chest frame.
-  Placed in the chest frame they float 10–20 cm off the face once the head bends
+  Write it with `"space": "Chest", "spaceBlendFrom": "Hips", "spaceBlend": 0.6` and its T-pose offset from the chest (`rest` of `UpperArm` minus `rest` of `Chest` from `motion_open`):
+  the spine shares the twist, and with the full chest rotation the clavicle gets pushed forward/back out of range. Raise it a few cm to shrug (anger, sobbing), lower it to droop
+- **Place hands that touch the head with `"space": "Head"`** (covering the face, hands on the head), with `aim` in the same space for fingers and palm.
+  Placed in the body frame they float 10–20 cm off the face once the head bends
 - **Do not lower an arm straight down**. A Humanoid arm only goes about 60° down; pulling the hand straight down rotates the shoulder far out of range.
   Put the hand about 60° down and pin `UpperArm` at the side of the body
 - **Keep the wrist straight**: orient the hand with the fingers along the forearm (wrist-from-elbow direction)
@@ -141,60 +179,10 @@ These follow from how the editor interpolates. Breaking them trips lint or break
 - **No keys after the cycle key** (`writableUntil`). For a loop, make the last key the same pose as the first
 - The floor is y = 0. Sole points have y >= 0
 
-## Example: walk (2 steps in 60 frames, 13 keys)
+## Examples
 
-Placement that gave zero lint issues on the demo character (`humanScale` about 1). Stride 0.55 m, hips height 0.88–0.93 m. One step (left foot to right foot) is 30 frames.
-
-| Frame | Left foot (3 points) | Right foot (3 points) | Hips / arms |
-|---|---|---|---|
-| 0 | Locked. Heel strike (toes up) | Locked. Toes only (heel up) | hips y 0.90 |
-| 7 | Locked. Whole sole down | Locked. Heel up (push-off) | hips y 0.88 (lowest) |
-| 10 | Locked | Pin. Foot leaves the floor | |
-| 15 | Locked | Pin. Passing. **Bend the knee and drop the toes** (do not swing it flat) | hips y 0.92 |
-| 22 | Locked | Pin. Swing forward | hips y 0.93 (highest) |
-| 26 | Locked | **Locked**. Just before contact (heel 4 cm above the floor) | |
-| 30 | Locked. Heel starts to rise | Locked. Heel strike | frame 0 mirrored |
-| 37–60 | Frames 7–30 mirrored, z advanced by one step (0.55 m) | | |
-
-- Arms on every key: `UpperArm` pinned at the side of the body (x ±0.2, y 1.4), hands pinned about 60° down (x ±0.37, y 0.95–1.0), swinging opposite to the legs
-- Hips pinned on every key. z advances about 0.018 m per frame (the root does not move; the hips and foot points move)
-
-## Example: roundhouse kick for a fighting game (50 frames, 16 keys)
-
-Right-leg roundhouse from an orthodox stance (left foot forward, body turned 35° to the right), returning to the same stance so it chains into the idle.
-z is toward the opponent. Startup 15 frames, active 15–18, recovery to 50.
-
-| Frame | Support foot (left) | Kicking foot (right) | Hips (yaw, roll) / arms |
-|---|---|---|---|
-| 0 | Locked flat, yaw 20 | Locked flat, yaw 45 | (35, 0), guard, both fists |
-| 4–5 | Weight forward, heel 4 cm up, starts turning | Heel up 9 → 11 cm (on the toes) | (22 → 15) |
-| 7 | Yaw -20 | **Locked 10 cm above the floor** (lift straight up) | (5, 8) |
-| 9–11 | Yaw -35 → -50 | Pin. Knee up front, then chamber: shin folded flat to the outside | (-10 → -25, 14 → 20) |
-| 13 | Yaw -70 | Pin. Extending; the instep leads the swing | (-50, 40), right arm half way back |
-| 15 | Yaw -82 | Pin. Leg straight, foot at about chest height, instep facing the swing (-x), knee facing -x | (-75, 45), torso leans away, right arm swung back, right hand relaxed |
-| 18 | Yaw -88 | Pin. Follow-through to the left | (-88, 42) |
-| 21–24 | Yaw -80 → -65 | Pin. Re-chamber: keep the knee up, fold the shin | (-70 → -45) |
-| 29 | Yaw -30 | **Locked 12 cm above the landing spot** (put it straight down) | (5, 8), guard |
-| 33 | Yaw 12 | Locked 3 cm above, on the toes | (20, 3) |
-| 36 | Yaw 15, heel down | Locked, heel 5 cm up (absorbing) | (30, 0), hips lowest |
-| 42–50 | Back to stance (50 = frame 0) | | |
-
-- The support foot pivots on the ball (heel 5 cm up, `SoleBall` locked). The toe tip and little-toe side slide 1–2 cm per frame while pivoting: that `FootSlide` is the pivot, not a defect
-- Put the hip roll (kicking hip up) into the pelvis rotation; it reduces the leg abduction needed. Without it, `Upper Leg In-Out` goes out of range
-- Torso yaw stays 12–20° behind the hips; more twists the upper chest out of range
-
-## Example: exaggerated emotions (anger 100 F, joy 100 F, sadness 120 F)
-
-Keys are built from parameter sets (hips, hips/chest/head rotation, arms, feet, shrug); keys in between are blended from two neighbors and then adjusted (arm arcs).
-
-- Anger: chest out with fists (shrug +3 cm) → lift a foot 32 cm and stomp (hips down to 0.79, chest pitched 28°, fists slammed by the hips) →
-  fists trembling in front of the chest (±3 cm every 3 frames) → `Hand_Point` jabbing at the target → fist overhead, then slammed forward → second stomp → arms crossed, chin up, head turned 40°
-- Joy: deep crouch with arms back → arms swing through an arc (2 extra keys) to front-up on tiptoes → jump (hips +0.36 m, legs tucked, arms in a V, `Hand_Open` with spread fingers) →
-  landing crouch → two fist pumps → arms up, swaying left/right with the opposite heel up
-- Sadness: head hanging 45°, shoulders dropped (UpperArm -2 cm), arms limp → sigh (shoulders up, then lower) → knees buckle forward →
-  kneel on tucked toes (knee one shin length in front of the ankle, hips above the knees) → hands cover the face (head frame) → sobbing (chest ±3°, shoulders ±2.5 cm every 4 frames) → fold forward with the hips down on the heels
-- Rapid trembling/sobbing keys 3–4 frames apart show up as small `Pop` issues just over the limit; they are the intended shake
-- A deep slump bent only at the chest exceeds `UpperChest Front-Back`; tilt the pelvis too (hips pitch 5–55°) and keep the chest pitch at 20–60°
+Worked placements (walk, roundhouse kick, exaggerated emotions) are in `references/examples.md`. Read it before authoring a similar motion.
+They were written before `contacts`, `aim`, `space` and `snap` existed: the numbers still apply, but write planted feet with `contacts` and elbows with `snap`.
 
 ## Fixing lint issues
 
@@ -237,10 +225,14 @@ unity cmd motion_import_override --project-path "$P" --source "Assets/.../Genera
 
 ## Opening with Overrides and masks
 
-`motion_open` cannot take Overrides. To open with layers, pass the request JSON to `motion_request`.
+`motion_open` cannot take Overrides. To open with layers, write the request JSON to a file and pass it to `motion_request --file`.
+
+```json
+{"command":"open","prefab":"Assets/.../Character.fbx","clip":"Assets/.../Walk.rig.anim","overrides":[{"clip":"Assets/.../Walk.rig.override.anim","mode":"Additive","mask":"Packages/jp.lilium.motioneditor/Editor/Masks/Upper Body.asset"}],"overrideWriteIndex":0}
+```
 
 ```bash
-unity cmd motion_request --project-path "$P" --json '{"command":"open","prefab":"Assets/.../Character.fbx","clip":"Assets/.../Walk.rig.anim","overrides":[{"clip":"Assets/.../Walk.rig.override.anim","mode":"Additive","mask":"Packages/jp.lilium.motioneditor/Editor/Masks/Upper Body.asset"}],"overrideWriteIndex":0}'
+unity cmd motion_request --project-path "$P" --file "$S/open_layers.json"
 ```
 
 - `overrideWriteIndex` is the Override to write to (0 = lowest; -1 = the base clip). Curves outside the mask are not layered and keys there are not written

@@ -30,15 +30,57 @@ namespace Lilium
         }
 
         [CliCommand ("motion_read_pose", "Read the pose at a frame as full-body IK points (body frame: x right, y up, z forward, meters from the feet; rotation in degrees from the T-pose)", Tags = new[] { kTag })]
-        public static JToken ReadPose ([CliArg ("frame", "Frame to read")] int frame = 0)
+        public static JToken ReadPose (
+            [CliArg ("frame", "Frame to read")] int frame = 0,
+            [CliArg ("compact", "Round positions to 1 mm and rotations to 0.1 degrees, and omit the position/rotation of Free points and unused rotation fields")] bool compact = true)
         {
-            return Run (new MotionEditorRequest { command = "readPose", frame = frame });
+            return Run (new MotionEditorRequest { command = "readPose", frame = frame, compact = compact });
         }
 
-        [CliCommand ("motion_write_pose", "Write a pose (the result of motion_read_pose, edited) as keys at pose.frame. Only the listed points are changed. Returns the pose read back", Tags = new[] { kTag })]
-        public static JToken WritePose ([CliArg ("pose", "Pose JSON: {\"frame\":0,\"points\":[{\"name\":\"LeftHand\",\"state\":\"Pin\",\"position\":{\"x\":0,\"y\":1,\"z\":0.3}}]}", Required = true)] string pose)
+        [CliCommand ("motion_write_pose", "Write a pose (the result of motion_read_pose, edited) as keys at pose.frame. Only the listed points are changed. Returns the pose read back, with residual per point (meters from its target), unreached (points farther than 1 cm) and issues (floor and muscle range at that frame)", Tags = new[] { kTag })]
+        public static JToken WritePose (
+            [CliArg ("pose", "Pose JSON: {\"frame\":0,\"points\":[{\"name\":\"LeftHand\",\"state\":\"Pin\",\"position\":{\"x\":0,\"y\":1,\"z\":0.3}}]}. Use pose_file instead when shell quoting gets in the way")] string pose = null,
+            [CliArg ("pose_file", "Path of a file with the pose JSON (absolute, or relative to the project folder)")] string poseFile = null,
+            [CliArg ("dry_run", "Solve and return the pose without keying it")] bool dryRun = false,
+            [CliArg ("compact", "Return the pose rounded and without unused fields (same as motion_read_pose)")] bool compact = true)
         {
-            return Run ("{\"command\":\"writePose\",\"pose\":" + pose + "}");
+            if (!string.IsNullOrEmpty (pose) && !string.IsNullOrEmpty (poseFile)) throw new System.ArgumentException ("Pass either pose or pose_file, not both");
+            if (string.IsNullOrEmpty (pose)) return Run (new MotionEditorRequest { command = "writePose", poseFile = poseFile, dryRun = dryRun, compact = compact });
+            return Run ("{\"command\":\"writePose\",\"dryRun\":" + (dryRun ? "true" : "false") + ",\"compact\":" + (compact ? "true" : "false") + ",\"pose\":" + pose + "}");
+        }
+
+        [CliCommand ("motion_write_motion", "Write every key of a motion in one call: {\"keys\":[{\"frame\":0,\"points\":[...],\"hands\":[{\"preset\":\"Hand_Fist\",\"hand\":\"Both\",\"muscles\":[...]}]}]} (the shape motion_read_motion returns). Keys are written in frame order, body then hands. Everything is checked first; nothing is written if any key is wrong. One motion_undo reverts it all. Returns per key the max residual and unreached points, then the lint report", Tags = new[] { kTag })]
+        public static JToken WriteMotion (
+            [CliArg ("file", "Path of a file with the keys JSON (absolute, or relative to the project folder)", Required = true)] string file,
+            [CliArg ("replace", "Delete every key of the clip before writing (start over)")] bool replace = false,
+            [CliArg ("lint", "Check the whole motion after writing")] bool lint = true)
+        {
+            string error;
+            string json = MotionEditorCommands.ReadJsonFile (file, out error);
+            if (error != null) throw new System.InvalidOperationException (error);
+            MotionEditorRequest request;
+            try {
+                request = UnityEngine.JsonUtility.FromJson<MotionEditorRequest> (json);
+            }
+            catch (System.Exception e) {
+                throw new System.InvalidOperationException (file + ": " + e.Message);
+            }
+            request.command = "writeMotion";
+            request.replace = replace;
+            request.lint = lint;
+            return Run (request);
+        }
+
+        [CliCommand ("motion_read_motion", "Read every key frame of the clip as {\"keys\":[{\"frame\":...,\"points\":[...],\"hands\":[...]}]} (compact poses and finger muscles), the same shape motion_write_motion takes", Tags = new[] { kTag })]
+        public static JToken ReadMotion ()
+        {
+            return Run (new MotionEditorRequest { command = "readMotion" });
+        }
+
+        [CliCommand ("motion_undo", "Undo the last motion_write_pose / motion_write_hand. Refused if the clip changed after that write (edited in the window, undone...). Returns the same as motion_describe", Tags = new[] { kTag })]
+        public static JToken Undo ()
+        {
+            return Run (new MotionEditorRequest { command = "undo" });
         }
 
         [CliCommand ("motion_lint", "Check the motion for foot sliding, floor penetration, out-of-range muscles, pops and large rotations between keys", Tags = new[] { kTag })]
@@ -105,9 +147,17 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "close" });
         }
 
-        [CliCommand ("motion_request", "Run a raw motion editor request JSON ({\"command\":...}) or a batch ({\"requests\":[...]})", Tags = new[] { kTag })]
-        public static JToken Request ([CliArg ("json", "Request JSON", Required = true)] string json)
+        [CliCommand ("motion_request", "Run a raw motion editor request JSON ({\"command\":...}) or a batch ({\"requests\":[...]}, closed at the end unless \"keepOpen\":true)", Tags = new[] { kTag })]
+        public static JToken Request (
+            [CliArg ("json", "Request JSON")] string json = null,
+            [CliArg ("file", "Path of a file with the request JSON (absolute, or relative to the project folder), instead of json")] string file = null)
         {
+            if (!string.IsNullOrEmpty (json) && !string.IsNullOrEmpty (file)) throw new System.ArgumentException ("Pass either json or file, not both");
+            if (!string.IsNullOrEmpty (file)) {
+                string error;
+                json = MotionEditorCommands.ReadJsonFile (file, out error);
+                if (error != null) throw new System.InvalidOperationException (error);
+            }
             if (json != null && json.Contains ("\"requests\"")) return JToken.Parse (MotionEditorCommands.RunBatch (json));
             return Run (json);
         }

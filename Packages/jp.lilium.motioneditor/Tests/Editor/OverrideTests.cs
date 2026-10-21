@@ -199,6 +199,27 @@ namespace Lilium
             OverrideFiles.Unlink (created.clip);
             Assert.AreEqual (1, OverrideFiles.FindFor (baseClip).Count, "印を消した層は探さない");
         }
+
+        [Test]
+        public void OverrideMarkAndCycleMarkShareTheMeta ()
+        {
+            AssetDatabase.CreateFolder ("Assets", "__MktOverrideTests");
+            AnimationClip baseClip = new AnimationClip ();
+            AssetDatabase.CreateAsset (baseClip, kFolder + "/Walk.rig.anim");
+            OverrideClip created = OverrideFiles.Create (baseClip);
+
+            // どちらを後に保存しても、もう片方は消えない（前は .meta の userData を丸ごと書き換えていた）
+            Assert.IsTrue (ClipCycle.Save (created.clip, true));
+            Assert.IsTrue (OverrideFiles.IsOverride (created.clip), "サイクルキーの印を付けても Override の印は残る");
+            created.mode = OverrideMode.Override;
+            OverrideFiles.Save (created, baseClip);
+            Assert.IsTrue (ClipCycle.Load (created.clip), "Override の印を保存してもサイクルキーの印は残る");
+            Assert.AreEqual (OverrideMode.Override, OverrideFiles.FindFor (baseClip)[0].mode);
+
+            OverrideFiles.Unlink (created.clip);
+            Assert.IsFalse (OverrideFiles.IsOverride (created.clip));
+            Assert.IsTrue (ClipCycle.Load (created.clip), "Override の印を消してもサイクルキーの印は残る");
+        }
     }
 
 }

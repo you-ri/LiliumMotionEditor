@@ -3,8 +3,6 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -21,7 +19,7 @@ namespace Lilium
     [Overlay (typeof (PreviewWindow), "mkt-timeline", "Timeline", defaultDisplay = true,
         defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom,
         defaultLayout = Layout.HorizontalToolbar)]
-    class TimelineOverlay : Overlay, ICreateHorizontalToolbar
+    class TimelineOverlay : MotionOverlay, ICreateHorizontalToolbar
     {
         const float kWidth = 640;
         const float kMinWidth = 320;
@@ -32,7 +30,6 @@ namespace Lilium
         const string kTopToolbarAreaName = "overlay-toolbar__top";
         static readonly Color kPanelColor = new Color (0.17f, 0.17f, 0.18f);
 
-        PreviewWindow window_;
         TransportBar transport_;
         TimebarElement timebar_;
 
@@ -92,7 +89,7 @@ namespace Lilium
             root.style.backgroundColor = kPanelColor;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return;
 
             timebar_ = new TimebarElement (window_);
@@ -106,37 +103,35 @@ namespace Lilium
             topHandle.style.display = DisplayStyle.None;
             if (docked) AttachToDockArea (root, topHandle, bottomHandle);
 
-            window_.stackChanged += timebar_.RebuildTracks;
-            window_.stateChanged += timebar_.RebuildTracks;
-            window_.keysChanged += timebar_.RebuildTracks;
-            window_.poseSampled += timebar_.RefreshPlayhead;
-            window_.poseSampled += transport_.Refresh;
-            window_.stateChanged += transport_.Refresh;
-            window_.keysChanged += transport_.Refresh;
-
+            Resubscribe ();
             timebar_.RebuildTracks ();
         }
 
-        void Unsubscribe ()
+        /// <summary>今の中身（時間の帯と再生の帯）への知らせ。作り直す前に外すので、中身がまだ無いときもある</summary>
+        protected override void Subscribe (bool on)
         {
-            if (window_ == null) return;
             if (timebar_ != null) {
                 window_.stackChanged -= timebar_.RebuildTracks;
                 window_.stateChanged -= timebar_.RebuildTracks;
                 window_.keysChanged -= timebar_.RebuildTracks;
                 window_.poseSampled -= timebar_.RefreshPlayhead;
+                if (on) {
+                    window_.stackChanged += timebar_.RebuildTracks;
+                    window_.stateChanged += timebar_.RebuildTracks;
+                    window_.keysChanged += timebar_.RebuildTracks;
+                    window_.poseSampled += timebar_.RefreshPlayhead;
+                }
             }
             if (transport_ != null) {
                 window_.poseSampled -= transport_.Refresh;
                 window_.stateChanged -= transport_.Refresh;
                 window_.keysChanged -= transport_.Refresh;
+                if (on) {
+                    window_.poseSampled += transport_.Refresh;
+                    window_.stateChanged += transport_.Refresh;
+                    window_.keysChanged += transport_.Refresh;
+                }
             }
-        }
-
-        public override void OnWillBeDestroyed ()
-        {
-            Unsubscribe ();
-            base.OnWillBeDestroyed ();
         }
     }
 

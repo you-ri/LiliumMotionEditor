@@ -225,14 +225,14 @@ namespace Lilium
         /// </summary>
         public static void KeepComponent (System.Func<Component, bool> predicate)
         {
-            if (predicate != null && !keepPredicates_.Contains (predicate)) keepPredicates_.Add (predicate);
+            keepPredicates_.Register (predicate);
         }
 
-        static readonly List<System.Func<Component, bool>> keepPredicates_ = new List<System.Func<Component, bool>> ();
+        static readonly HookList<System.Func<Component, bool>> keepPredicates_ = new HookList<System.Func<Component, bool>> ();
 
         static bool IsKeptByHook (Component component)
         {
-            foreach (System.Func<Component, bool> predicate in keepPredicates_) {
+            foreach (System.Func<Component, bool> predicate in keepPredicates_.items) {
                 try {
                     if (predicate (component)) return true;
                 } catch (System.Exception exception) {

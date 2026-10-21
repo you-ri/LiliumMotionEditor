@@ -24,13 +24,6 @@ namespace Lilium
         /// </summary>
         public static System.Func<GameObject, string> defaultFolder;
 
-        /// <summary>このキャラの姿勢を作る場所（フォルダの並びの先頭）。prefab が無ければ null</summary>
-        public static string GetFolder (GameObject prefab)
-        {
-            List<string> folders = GetFolders (prefab);
-            return folders.Count > 0 ? folders[0] : null;
-        }
-
         /// <summary>このキャラの一覧に並べるフォルダ（先頭が作る場所。共通の姿勢のフォルダも並ぶ）</summary>
         public static List<string> GetFolders (GameObject prefab)
         {
@@ -58,11 +51,6 @@ namespace Lilium
         internal static string GetSavedFolder (GameObject prefab)
         {
             return AnimBank.GetSavedFolder (prefab, kPrefsKey);
-        }
-
-        public static bool IsPosePath (string path)
-        {
-            return !string.IsNullOrEmpty (path) && path.EndsWith (kSuffix + EditingClip.kExtension, System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -235,15 +223,8 @@ namespace Lilium
         {
             string path = AssetDatabase.GetAssetPath (pose);
             if (string.IsNullOrEmpty (path)) return Tr ("POSE_BANK_NOT_AN_ASSET_POSE");
-            newBaseName = newBaseName != null ? newBaseName.Trim () : "";
-            if (newBaseName.EndsWith (kSuffix, System.StringComparison.OrdinalIgnoreCase)) {
-                newBaseName = newBaseName.Substring (0, newBaseName.Length - kSuffix.Length);
-            }
-            if (newBaseName.Length == 0) return Tr ("ANIM_BANK_NAME_EMPTY");
-            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return Tr ("ANIM_BANK_INVALID_FILE_NAME_CHARS");
-            if (newBaseName == BaseName (path)) return null;
-            string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
-            if (Exists (folder, newBaseName)) return Tr ("POSE_BANK_DUPLICATE_NAME");
+            string problem = AnimBank.CheckRename (path, kSuffix, Tr ("POSE_BANK_DUPLICATE_NAME"), ref newBaseName);
+            if (problem != null || newBaseName == null) return problem;
             string error = AssetDatabase.RenameAsset (path, newBaseName + kSuffix);
             return string.IsNullOrEmpty (error) ? null : error;
         }

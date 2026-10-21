@@ -16,12 +16,11 @@ namespace Lilium
     /// </summary>
     [Overlay (typeof (PreviewWindow), "mkt-lint", "Lint", defaultDisplay = false,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    class LintOverlay : Overlay
+    class LintOverlay : MotionOverlay
     {
         const int kRowHeight = 18;
         const float kWidth = 230;
 
-        PreviewWindow window_;
         Label summary_;
         ListView list_;
         MotionLintReport report_;
@@ -33,7 +32,7 @@ namespace Lilium
             VisualElement root = new VisualElement ();
             root.style.width = kWidth;
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             VisualElement buttons = new VisualElement ();
@@ -78,15 +77,15 @@ namespace Lilium
             root.Add (list_);
 
             Refresh ();
-            window_.keysChanged -= OnKeysChanged;
-            window_.keysChanged += OnKeysChanged;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) window_.keysChanged -= OnKeysChanged;
-            base.OnWillBeDestroyed ();
+            window_.keysChanged -= OnKeysChanged;
+            if (!on) return;
+            window_.keysChanged += OnKeysChanged;
         }
 
         void OnKeysChanged ()

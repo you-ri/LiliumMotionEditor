@@ -18,7 +18,7 @@ namespace Lilium
     [Icon (Icons.kFolder + "Layers.png")]
     [Overlay (typeof (PreviewWindow), "mkt-layers", "Layers", defaultDisplay = true,
         defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
-    class LayersOverlay : Overlay
+    class LayersOverlay : MotionOverlay
     {
         const float kHandleHeight = 5;
 
@@ -40,7 +40,6 @@ namespace Lilium
         /// <summary>クリップの状態（未保存の変更など）は窓の出来事で拾いきれないので、この間隔で見直す</summary>
         const int kClipRefreshMilliseconds = 500;
 
-        PreviewWindow window_;
         VisualElement root_;
         ScrollView content_;
         // 重みを動かしている間は行を作り直さない（入力が切れる）。矢印と経路の注意だけを差し替える
@@ -55,7 +54,7 @@ namespace Lilium
         {
             root_ = new VisualElement ();
             AccentStyle.Attach (root_);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root_;
 
             // 浮いているときは、幅と高さを下端の帯のドラッグで変える（値は窓が覚える）。
@@ -69,24 +68,20 @@ namespace Lilium
             root_.Add (ResizeHandle ());
 
             Rebuild ();
-            window_.stackChanged -= OnStackChanged;
-            window_.stackChanged += OnStackChanged;
-            window_.displayResidualChanged -= Refresh;
-            window_.displayResidualChanged += Refresh;
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
+            Resubscribe ();
             root_.schedule.Execute (RefreshClips).Every (kClipRefreshMilliseconds);
             return root_;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stackChanged -= OnStackChanged;
-                window_.displayResidualChanged -= Refresh;
-                window_.stateChanged -= Refresh;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stackChanged -= OnStackChanged;
+            window_.displayResidualChanged -= Refresh;
+            window_.stateChanged -= Refresh;
+            if (!on) return;
+            window_.stackChanged += OnStackChanged;
+            window_.displayResidualChanged += Refresh;
+            window_.stateChanged += Refresh;
         }
 
         Button editStructure_;
@@ -117,15 +112,7 @@ namespace Lilium
 
         static Button MakeAddButton (string text, string tooltip, System.Action clicked)
         {
-            Button button = new Button (clicked) { text = text, tooltip = tooltip };
-            button.style.flexGrow = 1;
-            button.style.flexBasis = 0;
-            button.style.height = 18;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 1;
-            button.style.paddingLeft = 0;
-            button.style.paddingRight = 0;
-            return button;
+            return PanelUI.CompactButton (text, tooltip, clicked, 18);
         }
 
         void RefreshAddButtons ()

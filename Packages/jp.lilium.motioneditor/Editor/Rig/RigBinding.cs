@@ -26,16 +26,40 @@ namespace Lilium
             }
         }
 
-        public sealed class Fk : Control
+        /// <summary>
+        /// 骨を 1 本 FK で動かすコントロール（FK と追加コントロール）。扱いは同じで、骨の引き方（人型の骨か、名前のパターンか）だけが違う
+        /// </summary>
+        public abstract class BoneControl : Control
         {
-            public EditRigDefinition.FkControl control;
             public Transform bone;
+            /// <summary>表示の名前</summary>
+            public abstract string label { get; }
+            /// <summary>位置も動かすか</summary>
+            public abstract bool position { get; }
+            /// <summary>全身 IK の点をつかむ間もハンドルを出すか</summary>
+            public abstract bool fullBodyHandle { get; }
+            /// <summary>人型の骨（追加コントロールは null）</summary>
+            public abstract HumanBodyBones? human { get; }
         }
 
-        public sealed class Extra : Control
+        public sealed class Fk : BoneControl
+        {
+            public EditRigDefinition.FkControl control;
+
+            public override string label => control.bone.ToString ();
+            public override bool position => control.position;
+            public override bool fullBodyHandle => control.fullBodyHandle;
+            public override HumanBodyBones? human => control.bone;
+        }
+
+        public sealed class Extra : BoneControl
         {
             public EditRigDefinition.ExtraControl control;
-            public Transform bone;
+
+            public override string label => control.name;
+            public override bool position => control.position;
+            public override bool fullBodyHandle => control.fullBodyHandle;
+            public override HumanBodyBones? human => null;
         }
 
         /// <summary>全身 IK の点（リグ定義の点の一覧の 1 つを、このキャラの骨に割り当てたもの）</summary>
@@ -72,7 +96,13 @@ namespace Lilium
 
         public Animator animator { get; private set; }
 
-        public IEnumerable<Control> controls
+        /// <summary>FK と追加コントロール（FK が先）</summary>
+        public IEnumerable<BoneControl> boneControls
+        {
+            get { return fk.Cast<BoneControl> ().Concat (extras); }
+        }
+
+        internal IEnumerable<Control> controls
         {
             get { return fk.Cast<Control> ().Concat (extras.Cast<Control> ()).Concat (points.Cast<Control> ()); }
         }
@@ -83,12 +113,12 @@ namespace Lilium
         }
 
         /// <summary>骨の付け根の点（既定の一覧での名前は骨の名前）</summary>
-        public Point FindPoint (HumanBodyBones bone)
+        internal Point FindPoint (HumanBodyBones bone)
         {
             return FindPoint (bone.ToString ());
         }
 
-        public Point FindPoint (string name)
+        internal Point FindPoint (string name)
         {
             return points.FirstOrDefault (c => c.name == name);
         }

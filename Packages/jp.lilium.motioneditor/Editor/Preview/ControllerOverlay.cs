@@ -17,7 +17,7 @@ namespace Lilium
     [Icon (Icons.kFolder + "Controller.png")]
     [Overlay (typeof (PreviewWindow), "mkt-transform", "Controller", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
-    class ControllerOverlay : Overlay
+    class ControllerOverlay : MotionOverlay
     {
         static readonly Color[] kAxisColors = {
             new Color (0.93f, 0.4f, 0.36f),
@@ -27,7 +27,6 @@ namespace Lilium
         static readonly string[] kAxisNames = { "X", "Y", "Z" };
         const float kWidth = 208;
 
-        PreviewWindow window_;
         SpinnerElement spinner_;
         Button[] modes_;
         Toggle floorClamp_;
@@ -57,7 +56,7 @@ namespace Lilium
             root.style.width = kWidth;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             VisualElement modes = new VisualElement ();
@@ -114,24 +113,20 @@ namespace Lilium
             root.Add (warning_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            // 段の 👁 を切り替えたとき（上書きの注意を出し直す）
-            window_.stackChanged -= Refresh;
-            window_.stackChanged += Refresh;
-            window_.poseSampled -= RefreshValues;
-            window_.poseSampled += RefreshValues;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.stackChanged -= Refresh;
-                window_.poseSampled -= RefreshValues;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.stackChanged -= Refresh;
+            window_.poseSampled -= RefreshValues;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            // 段の 👁 を切り替えたとき（上書きの注意を出し直す）
+            window_.stackChanged += Refresh;
+            window_.poseSampled += RefreshValues;
         }
 
         VisualElement pointStates_;
@@ -144,10 +139,7 @@ namespace Lilium
 
         Button AddPointStateButton (BodyPointState state, string text, string tooltip)
         {
-            Button button = new Button (() => window_.SetSelectedPointsState (state)) { text = text, tooltip = tooltip };
-            button.style.flexGrow = 1;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 0;
+            Button button = PanelUI.FlexButton (text, tooltip, () => window_.SetSelectedPointsState (state));
             pointStates_.Add (button);
             return button;
         }
@@ -172,11 +164,8 @@ namespace Lilium
         /// <param name="shortcut">切り替えるショートカットの名前（説明の後ろに今のキーを付ける）</param>
         Button AddModeButton (VisualElement parent, PreviewWindow.SpinnerMode mode, string text, string tooltip, string shortcut)
         {
-            Button button = new Button (() => window_.spinnerMode = mode) { text = text };
+            Button button = PanelUI.FlexButton (text, null, () => window_.spinnerMode = mode);
             ShortcutTooltip.Set (button, containerWindow, tooltip, shortcut);
-            button.style.flexGrow = 1;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 0;
             parent.Add (button);
             return button;
         }
@@ -185,10 +174,7 @@ namespace Lilium
 
         Button AddSpaceButton (VisualElement parent, bool world, string text, string tooltip)
         {
-            Button button = new Button (() => window_.gizmoWorld = world) { text = text, tooltip = tooltip };
-            button.style.flexGrow = 1;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 0;
+            Button button = PanelUI.FlexButton (text, tooltip, () => window_.gizmoWorld = world);
             parent.Add (button);
             return button;
         }

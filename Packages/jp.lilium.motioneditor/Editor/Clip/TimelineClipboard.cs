@@ -92,7 +92,7 @@ namespace Lilium
         }
 
         /// <summary>覚えたキーを捨てる（テスト用）</summary>
-        public static void Clear ()
+        internal static void Clear ()
         {
             entries_.Clear ();
         }

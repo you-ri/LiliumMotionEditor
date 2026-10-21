@@ -42,7 +42,7 @@ namespace Lilium
 
             List<string> notes = new List<string> ();
             List<Transform> bones = CheckBindings (source, rig, notes);
-            float rate = destination != null && destination.frameRate > 0 ? destination.frameRate : 60;
+            float rate = CurveEdit.FrameRateOf (destination);
             if (!Mathf.Approximately (source.frameRate, rate)) {
                 notes.Add (Tr ("GENERIC_IMPORT_RESAMPLED", source.frameRate, rate));
             }
@@ -65,11 +65,8 @@ namespace Lilium
         {
             Transform root = rig.root.transform;
             HashSet<Transform> controlled = new HashSet<Transform> ();
-            foreach (RigBinding.Fk fk in rig.binding.fk) {
-                if (fk.enabled) controlled.Add (rig.GetEditingBone (fk.bone));
-            }
-            foreach (RigBinding.Extra extra in rig.binding.extras) {
-                if (extra.enabled) controlled.Add (rig.GetEditingBone (extra.bone));
+            foreach (RigBinding.BoneControl control in rig.binding.boneControls) {
+                if (control.enabled) controlled.Add (rig.GetEditingBone (control.bone));
             }
 
             HashSet<Transform> bones = new HashSet<Transform> ();

@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEditor;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace Lilium
@@ -63,7 +62,6 @@ namespace Lilium
             if (locked) return position;
             float handleSize = HandleUtility.GetHandleSize (position);
             Color color = Handles.color;
-            //float snap = -1;
             Handles.color = xAxisColor;
             position = AxisSlider.Do (xAxisSliderHash, position, rotation * Vector3.right, handleSize);
             Handles.color = yAxisColor;
@@ -94,14 +92,12 @@ namespace Lilium
                             GUIUtility.hotControl = controlID;
 
                             _hangLocalPosition = hitInfo.point - position;
-                            //hangPoint_.z = 0;
                             // ボーンの向きが表側、裏側どちらに向いているか判断する。		
                             _isBackSphere = Vector3.Dot (mouseRay.direction, hitInfo.point - position) >= 0 ? true : false;
                             _radius = (hitInfo.point - position).magnitude;
                             _isBoneSelected = true;
                             ev.Use ();
 
-                            //Undo.RegisterUndo (t.target, "Move Joint");
                             return true;
                         }
                     }

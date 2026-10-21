@@ -39,11 +39,11 @@ namespace Lilium
 
     public static class HumanoidBakeHooks
     {
-        static readonly List<IHumanoidBakeHook> hooks_ = new List<IHumanoidBakeHook> ();
+        static readonly HookList<IHumanoidBakeHook> hooks_ = new HookList<IHumanoidBakeHook> ();
 
         public static IReadOnlyList<IHumanoidBakeHook> hooks
         {
-            get { return hooks_; }
+            get { return hooks_.items; }
         }
 
         /// <summary>
@@ -51,12 +51,12 @@ namespace Lilium
         /// </summary>
         public static void Register (IHumanoidBakeHook hook)
         {
-            if (hook != null && !hooks_.Contains (hook)) hooks_.Add (hook);
+            hooks_.Register (hook);
         }
 
         public static void Unregister (IHumanoidBakeHook hook)
         {
-            hooks_.Remove (hook);
+            hooks_.Unregister (hook);
         }
 
         internal static bool ShouldBake (IList<IHumanoidBakeHook> hooks, HumanoidBakeContext context, EditorCurveBinding binding)

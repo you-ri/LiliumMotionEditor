@@ -242,30 +242,24 @@ namespace Lilium
 
     public static class ContextHooks
     {
-        static readonly List<IContextHook> hooks_ = new List<IContextHook> ();
+        static readonly HookList<IContextHook> hooks_ = new HookList<IContextHook> ();
 
         /// <summary>
         /// 受け口を足す（[InitializeOnLoad] の静的コンストラクタなどから呼ぶ）。同じものは 1 回だけ
         /// </summary>
         public static void Register (IContextHook hook)
         {
-            if (hook != null && !hooks_.Contains (hook)) hooks_.Add (hook);
+            hooks_.Register (hook);
         }
 
         public static void Unregister (IContextHook hook)
         {
-            hooks_.Remove (hook);
+            hooks_.Unregister (hook);
         }
 
         internal static void Prepare (ContextInfo context)
         {
-            foreach (IContextHook hook in hooks_) {
-                try {
-                    hook.Prepare (context, context.tracks);
-                } catch (System.Exception exception) {
-                    Debug.LogException (exception);
-                }
-            }
+            hooks_.ForEach (hook => hook.Prepare (context, context.tracks));
         }
     }
 

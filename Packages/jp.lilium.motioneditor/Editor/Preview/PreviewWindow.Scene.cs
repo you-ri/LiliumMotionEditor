@@ -72,6 +72,13 @@ namespace Lilium
         public void ClearSceneTarget ()
         {
             if (sceneTarget_ == null && string.IsNullOrEmpty (sceneTargetId_)) return;
+            ForgetSceneTarget ();
+            RebuildStage ();
+        }
+
+        /// <summary>シーンのキャラを忘れる（写した姿勢は戻る。見失っているキャラも追わない）。世界は呼ぶ側が作り直す</summary>
+        void ForgetSceneTarget ()
+        {
             sceneMirror_.Unbind ();
             sceneTarget_ = null;
             sceneTargetId_ = null;
@@ -79,7 +86,6 @@ namespace Lilium
             sceneTargetLost_ = false;
             sceneContext_ = null;
             lastFollowedTime_ = double.NaN;
-            RebuildStage ();
         }
 
         /// <summary>

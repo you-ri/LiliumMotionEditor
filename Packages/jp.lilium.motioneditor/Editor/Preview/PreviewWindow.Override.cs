@@ -327,12 +327,6 @@ namespace Lilium
             PoseCommit.AttachOverrideStore (writer, stage_, layer.mode, layer.mask);
         }
 
-        /// <summary>焼く元のクリップ（土台）</summary>
-        public AnimationClip bakeSource
-        {
-            get { return baseClip; }
-        }
-
         /// <summary>
         /// 焼くときに重ねる Override のクリップ（効いている段だけ。下から順。S14）。
         /// ✏ の位置は見ない（焼くのは「元＋効いている Override」の見た目どおりの姿勢）
@@ -340,15 +334,7 @@ namespace Lilium
         public List<AnimationClip> bakeOverrides
         {
             get {
-                List<AnimationClip> result = new List<AnimationClip> ();
-                if (poseStack_ == null) return result;
-                foreach (PoseLayer layer in poseStack_.layers) {
-                    OverrideLayer overrideLayer = layer as OverrideLayer;
-                    if (overrideLayer == null || overrideLayer.overrideClip == null) continue;
-                    if (!overrideLayer.enabled || overrideLayer.weight <= 0) continue;
-                    result.Add (overrideLayer.overrideClip);
-                }
-                return result;
+                return ActiveOverrideLayers ().Select (l => l.overrideClip).ToList ();
             }
         }
 
@@ -358,15 +344,9 @@ namespace Lilium
         List<OverrideProperties.Layer> bakePropertyLayers
         {
             get {
-                List<OverrideProperties.Layer> result = new List<OverrideProperties.Layer> ();
-                if (poseStack_ == null) return result;
-                foreach (PoseLayer layer in poseStack_.layers) {
-                    OverrideLayer overrideLayer = layer as OverrideLayer;
-                    if (overrideLayer == null || overrideLayer.overrideClip == null) continue;
-                    if (!overrideLayer.enabled || overrideLayer.weight <= 0) continue;
-                    result.Add (new OverrideProperties.Layer { clip = overrideLayer.overrideClip, mode = overrideLayer.mode, weight = overrideLayer.weight, mask = overrideLayer.mask });
-                }
-                return result;
+                return ActiveOverrideLayers ()
+                    .Select (l => new OverrideProperties.Layer { clip = l.overrideClip, mode = l.mode, weight = l.weight, mask = l.mask })
+                    .ToList ();
             }
         }
 
@@ -376,18 +356,18 @@ namespace Lilium
         /// </summary>
         void ApplyBakePose (float time)
         {
-            if (stage_ == null) return;
-            stage_.ResetControlsToRest ();
-            if (useHumanoidBase) stage_.SampleHumanoidAsControls (editingClip_, time);
-            else if (editingClip_ != null) stage_.SampleClip (editingClip_, time);
-            // 全身 IK の点の状態（キーの間で Locked の点を解くか）は元のクリップで決める
-            stage_.MaskBodyPointsForBake (useHumanoidBase ? null : editingClip_, time);
-            if (poseStack_ == null) return;
+            if (stage_ != null) stage_.ApplyBakePose (editingClip_, useHumanoidBase, bakePropertyLayers, time);
+        }
+
+        /// <summary>効いている Override の段（クリップがあり、入っていて重みのある段。下から順）</summary>
+        IEnumerable<OverrideLayer> ActiveOverrideLayers ()
+        {
+            if (poseStack_ == null) yield break;
             foreach (PoseLayer layer in poseStack_.layers) {
                 OverrideLayer overrideLayer = layer as OverrideLayer;
                 if (overrideLayer == null || overrideLayer.overrideClip == null) continue;
                 if (!overrideLayer.enabled || overrideLayer.weight <= 0) continue;
-                stage_.ApplyOverride (overrideLayer.overrideClip, overrideLayer.mode, overrideLayer.weight, time, overrideLayer.mask);
+                yield return overrideLayer;
             }
         }
 
@@ -437,30 +417,17 @@ namespace Lilium
             try {
                 Undo.IncrementCurrentGroup ();
                 Undo.RecordObject (editingClip_, "Merge Override");
-                Transform root = stage_ != null && stage_.editingRig != null && stage_.editingRig.root != null ? stage_.editingRig.root.transform : null;
+                Transform root = editingRoot;
                 int frameCount = last + 1;
                 // 書きながら同じクリップを読むと差分が二重に乗るので、全フレームぶん集めてから一度に書く（取り込みと同じ手順）
-                Dictionary<EditorCurveBinding, float[]> values = new Dictionary<EditorCurveBinding, float[]> ();
-                HashSet<string> rotationPaths = new HashSet<string> ();
+                PoseImport.FrameValues values = new PoseImport.FrameValues (frameCount);
                 for (int frame = 0; frame < frameCount; frame++) {
                     // 画面と同じ作り方（土台＋効いている Override）で姿勢を作る
                     ApplyBakePose (frame / clock_.rate);
                     if (stage_ != null) stage_.Solve ();
-                    using (CurveWriter writer = CurveWriter.Begin (null, root, frame, null)) {
-                        foreach (PoseTarget target in targets_) target.WriteKeys (writer);
-                        if (rigProxies != null) rigProxies.WriteWeightKeys (writer);
-                        foreach (string path in writer.rotationPaths) rotationPaths.Add (path);
-                        foreach (KeyValuePair<EditorCurveBinding, float> pair in writer.values) {
-                            float[] curve;
-                            if (!values.TryGetValue (pair.Key, out curve)) {
-                                curve = new float[frameCount];
-                                values.Add (pair.Key, curve);
-                            }
-                            curve[frame] = pair.Value;
-                        }
-                    }
+                    values.Capture (frame, root, targets_, rigProxies);
                 }
-                PoseImport.WriteCollected (editingClip_, values, rotationPaths, frameCount, clock_.rate);
+                values.Write (editingClip_, clock_.rate);
                 // 任意のプロパティは姿勢から作り直せないので、段を重ねたカーブを作って書く（S17）
                 foreach (KeyValuePair<EditorCurveBinding, AnimationCurve> pair in OverrideProperties.Compose (editingClip_, bakePropertyLayers, stage_, frameCount, clock_.rate)) {
                     AnimationUtility.SetEditorCurve (editingClip_, pair.Key, pair.Value);

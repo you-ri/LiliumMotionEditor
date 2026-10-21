@@ -82,7 +82,7 @@ namespace Lilium
 
         float rate
         {
-            get { return clip != null && clip.frameRate > 0 ? clip.frameRate : 60; }
+            get { return CurveEdit.FrameRateOf (clip); }
         }
 
         public bool SameCurves (List<PreviewWindow.CurveOwner> owners)

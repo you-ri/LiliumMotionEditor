@@ -1,0 +1,967 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
+  m_Name: Superhero_Male_FullBody Rig Definition
+  m_EditorClassIdentifier: 
+  fullBody:
+    iterations: 48
+    pull: 1
+    hipsPin: 0.6
+  fkControls:
+  - bone: 0
+    position: 1
+    fullBodySolve: 1
+    stiffness: 0.95
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 1
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 2
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 3
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: 1}
+  - bone: 4
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: 1}
+  - bone: 5
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 6
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 7
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.8
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 8
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.6
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 9
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.5
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 10
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 11
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.5
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 12
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.5
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 13
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 14
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 15
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: -1}
+  - bone: 16
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    fullBodyHandle: 0
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: -1}
+  - bone: 17
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 18
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 19
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 20
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 21
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 22
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 23
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 24
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 25
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 26
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 27
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 28
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 29
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 30
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 31
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 32
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 33
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 34
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 35
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 36
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 37
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 38
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 39
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 40
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 41
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 42
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 43
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 44
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 45
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 46
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 47
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 48
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 49
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 50
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 51
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 52
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 53
+    position: 0
+    fullBodySolve: 0
+    stiffness: 0.2
+    fullBodyHandle: 1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  - bone: 54
+    position: 0
+    fullBodySolve: 1
+    stiffness: 0.6
+    fullBodyHandle: 0
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+  extraControls: []
+  bodyPoints:
+  - enabled: 1
+    name: Hips
+    bone: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftUpperLeg
+    bone: 1
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightUpperLeg
+    bone: 2
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftLowerLeg
+    bone: 3
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightLowerLeg
+    bone: 4
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftFoot
+    bone: 5
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: RightFoot
+    bone: 6
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: Neck
+    bone: 9
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: Head
+    bone: 10
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftUpperArm
+    bone: 13
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightUpperArm
+    bone: 14
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftLowerArm
+    bone: 15
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightLowerArm
+    bone: 16
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftHand
+    bone: 17
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightHand
+    bone: 18
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: Chest
+    bone: 54
+    origin: 0
+    toward: 10
+    along: 0.5
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: Stomach
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: Stomach
+    bone: 7
+    origin: 0
+    toward: 10
+    along: 0.25
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: Hips
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: HipsDirection
+    bone: 0
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+    pullStrength: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: ChestDirection
+    bone: 54
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+    pullStrength: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: HeadDirection
+    bone: 10
+    origin: 55
+    toward: 21
+    along: 1
+    across: 0
+    axes: {x: 0, y: 1, z: 0}
+    ground: 0
+    fallback: {x: 0, y: 0.095, z: 0}
+    offset: {x: 0, y: 0, z: 0.25}
+    rotation: 0
+    pullStrength: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: HeadTop
+    bone: 10
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0.25, z: 0}
+    rotation: 0
+    pullStrength: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftHeel
+    bone: 5
+    origin: 5
+    toward: 19
+    along: -0.15
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: LeftSoleBall
+    bone: 5
+    origin: 5
+    toward: 19
+    along: 1
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: LeftLittleToeSide
+    bone: 5
+    origin: 5
+    toward: 19
+    along: 1
+    across: -0.35
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: LeftSoleBall
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: LeftToeTip
+    bone: 19
+    origin: 5
+    toward: 19
+    along: 1.45
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: LeftSoleBall
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: LeftPalmIndex
+    bone: 17
+    origin: 27
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: LeftPalmLittle
+    bone: 17
+    origin: 36
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightHeel
+    bone: 6
+    origin: 6
+    toward: 20
+    along: -0.15
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: RightSoleBall
+    bone: 6
+    origin: 6
+    toward: 20
+    along: 1
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: RightLittleToeSide
+    bone: 6
+    origin: 6
+    toward: 20
+    along: 1
+    across: 0.35
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: RightSoleBall
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: RightToeTip
+    bone: 20
+    origin: 6
+    toward: 20
+    along: 1.45
+    across: 0
+    axes: {x: 1, y: 0, z: 1}
+    ground: 1
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: RightSoleBall
+    blendBone: 0
+    blend: 0
+    contact: 1
+  - enabled: 1
+    name: RightPalmIndex
+    bone: 18
+    origin: 42
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+  - enabled: 1
+    name: RightPalmLittle
+    bone: 18
+    origin: 51
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    pullStrength: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0

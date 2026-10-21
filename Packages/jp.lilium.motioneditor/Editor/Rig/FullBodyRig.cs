@@ -21,49 +21,49 @@ namespace Lilium
         }
 
         /// <summary>頭のてっぺんの点（既定の一覧での名前）</summary>
-        public static BodyPointId Top (HumanBodyBones bone)
+        internal static BodyPointId Top (HumanBodyBones bone)
         {
             return new BodyPointId (bone + "Top");
         }
 
         /// <summary>骨の前に出した点（既定の一覧での名前）</summary>
-        public static BodyPointId Direction (HumanBodyBones bone)
+        internal static BodyPointId Direction (HumanBodyBones bone)
         {
             return new BodyPointId (bone + "Direction");
         }
 
         /// <summary>かかと（foot は足首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId Heel (HumanBodyBones foot)
+        internal static BodyPointId Heel (HumanBodyBones foot)
         {
             return new BodyPointId (RigPaths.SideOf (foot) + "Heel");
         }
 
         /// <summary>つま先の先（foot は足首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId ToeTip (HumanBodyBones foot)
+        internal static BodyPointId ToeTip (HumanBodyBones foot)
         {
             return new BodyPointId (RigPaths.SideOf (foot) + "ToeTip");
         }
 
         /// <summary>母趾球の列の足裏の中心（foot は足首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId SoleBall (HumanBodyBones foot)
+        internal static BodyPointId SoleBall (HumanBodyBones foot)
         {
             return new BodyPointId (RigPaths.SideOf (foot) + "SoleBall");
         }
 
         /// <summary>小指側の、足を回す点（foot は足首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId LittleToeSide (HumanBodyBones foot)
+        internal static BodyPointId LittleToeSide (HumanBodyBones foot)
         {
             return new BodyPointId (RigPaths.SideOf (foot) + "LittleToeSide");
         }
 
         /// <summary>人差し指の付け根の点（hand は手首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId PalmIndex (HumanBodyBones hand)
+        internal static BodyPointId PalmIndex (HumanBodyBones hand)
         {
             return new BodyPointId (RigPaths.SideOf (hand) + "PalmIndex");
         }
 
         /// <summary>小指の付け根の点（hand は手首の骨。既定の一覧での名前）</summary>
-        public static BodyPointId PalmLittle (HumanBodyBones hand)
+        internal static BodyPointId PalmLittle (HumanBodyBones hand)
         {
             return new BodyPointId (RigPaths.SideOf (hand) + "PalmLittle");
         }
@@ -150,6 +150,8 @@ namespace Lilium
             public int depth;
             /// <summary>解く骨の並びでの番号（解く骨でなければ -1）</summary>
             public int body = -1;
+            /// <summary>接地の点のまとまり（足）の根の骨の番号。接地の点の乗る骨を、接地の点の乗る親の骨へたどった先（つま先の点は足首の骨）。接地の点でなければ -1</summary>
+            public int floorGroup = -1;
         }
 
         readonly EditingRig rig_;
@@ -241,7 +243,8 @@ namespace Lilium
             foreach (int index in order) bodies_.Add (solvedBones[index]);
             if (bodies_.Count == 0) return;
 
-            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, Allocator.Persistent);
+            // 目標は点の数の 2 倍まで（Floor Clamp で、床に当てる目標を点の目標とは別に足す）
+            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count * 2, Allocator.Persistent);
             solveRotations_ = new Quaternion[bodies_.Count];
             solvePositions_ = new Vector3[bodies_.Count];
             for (int i = 0; i < bodies_.Count; i++) {
@@ -268,6 +271,16 @@ namespace Lilium
                 point.body = bodies_.IndexOf (point.bone);
                 point.blendBody = point.blendBone != null ? bodies_.IndexOf (point.blendBone) : -1;
             }
+            HashSet<int> contactBodies = new HashSet<int> ();
+            foreach (Point point in points_) {
+                if (point.contact && point.body >= 0) contactBodies.Add (point.body);
+            }
+            foreach (Point point in points_) {
+                if (!point.contact || point.body < 0) continue;
+                int group = point.body;
+                while (bodyParents_[group] >= 0 && contactBodies.Contains (bodyParents_[group])) group = bodyParents_[group];
+                point.floorGroup = group;
+            }
         }
 
         public void Dispose ()
@@ -280,7 +293,7 @@ namespace Lilium
         internal bool useBurst = true;
 
         /// <summary>解く骨（剛体）の数</summary>
-        public int bodyCount
+        internal int bodyCount
         {
             get { return bodies_.Count; }
         }
@@ -289,7 +302,7 @@ namespace Lilium
         public bool lastSolveUsedBurst { get; private set; }
 
         /// <summary>直前に解いたとき、曲がる向きを既定から決めた蝶番（まっすぐな肘・膝）の数</summary>
-        public int lastDefaultBendCount { get; private set; }
+        internal int lastDefaultBendCount { get; private set; }
 
         static int Depth (Transform bone, Transform root)
         {
@@ -331,7 +344,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > kEpsilon ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         Point Find (BodyPointId id)
@@ -526,18 +539,30 @@ namespace Lilium
                 localRotation = Quaternion.identity;
                 return false;
             }
-            localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
+            localPosition = BoneLocalPosition (point);
             localRotation = point.hasRotation
-                ? EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation))
+                ? BoneLocalRotation (point)
                 : point.control.localRotation;
             return true;
         }
 
+        /// <summary>点を今の骨の上の点に置いたときの、コントロールのローカルの位置</summary>
+        Vector3 BoneLocalPosition (Point point)
+        {
+            return rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
+        }
+
+        /// <summary>点を今の骨の向きにしたときの、コントロールのローカルの向き（基準姿勢からの差）</summary>
+        Quaternion BoneLocalRotation (Point point)
+        {
+            return EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+        }
+
         void CapturePoint (Point point)
         {
-            point.control.localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
+            point.control.localPosition = BoneLocalPosition (point);
             if (point.hasRotation) {
-                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = BoneLocalRotation (point);
             }
         }
 
@@ -590,11 +615,11 @@ namespace Lilium
             Point point = Find (bone);
             if (point == null || point.values.locked > 0.5f) return;
             if (point.values.positionWeight >= 1 && Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) > kSyncDistance) {
-                point.control.localPosition = rootTransform.InverseTransformPoint (BonePointWorld (point)) / humanScale;
+                point.control.localPosition = BoneLocalPosition (point);
                 position = true;
             }
             if (point.hasRotation && point.values.rotationWeight >= 1 && Quaternion.Angle (point.bone.rotation, PointWorldRotation (point)) > kSyncAngle) {
-                point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * point.bone.rotation * Quaternion.Inverse (point.restRootRotation));
+                point.control.localRotation = BoneLocalRotation (point);
                 rotation = true;
             }
         }
@@ -666,8 +691,18 @@ namespace Lilium
             return new Pose (parentPose.position + parentPose.rotation * Vector3.Scale (parent.lossyScale, localPosition), parentPose.rotation * localRotation);
         }
 
+        /// <summary>
+        /// 点が乗る骨の、基準姿勢からの今の向きの差（ルートから見た値）。向きを持たない点（胸など）でも出す（S60。点を座標の基準にするとき）
+        /// </summary>
+        internal bool TryGetBoneRotation (BodyPointId bone, out Quaternion rotation)
+        {
+            Point point = Find (bone);
+            rotation = point != null ? BoneLocalRotation (point) : Quaternion.identity;
+            return point != null;
+        }
+
         /// <summary>届かなかった差（メートル）。固定の強さが 1 の点が、解いた後にどれだけ離れているか</summary>
-        public float GetResidual (BodyPointId bone)
+        internal float GetResidual (BodyPointId bone)
         {
             Point point = Find (bone);
             return point != null ? Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) : 0;
@@ -801,20 +836,26 @@ namespace Lilium
                 };
             }
             if (count == 0) return false;
-            data_.effectorCount = count;
             MarkFixedBones ();
             data_.iterations = Mathf.Max (1, settings_.iterations);
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
-
-            if (useBurst) {
-                new FullBodyIkJob { data = data_ }.Run ();
+            RunSolver (count);
+            // 前後のキーで Locked の点だけを留めるとき（SolveOnly。再生・フレームの移動）は当てない。姿勢を作るときだけ
+            if (floorClamp && solveOnly_ == null) ClampToFloor (count, pull, rootPosition.y, rootInverse * Vector3.up);
+            // DEBUG（実際のドラッグで何が起きているかを見る。あとで消す）
+            if (DebugLog != null && DebugLog.Count < 4000) {
+                System.Text.StringBuilder line = new System.Text.StringBuilder ();
+                line.Append (Time.realtimeSinceStartup.ToString ("F3")).Append (" clamp=").Append (floorClamp ? 1 : 0).Append (" only=").Append (solveOnly_ != null ? 1 : 0)
+                    .Append (" n=").Append (count).Append (" in0=").Append (((Vector3)solvePositions_[0]).ToString ("F4"));
+                for (int i = 0; i < bodies_.Count; i++) {
+                    if (!bodies_[i].name.StartsWith ("foot") && !bodies_[i].name.StartsWith ("ball") && !bodies_[i].name.StartsWith ("calf")) continue;
+                    line.Append (' ').Append (bodies_[i].name).Append ("=").Append (Quaternion.Angle (solveRotations_[i], (Quaternion)data_.rotations[i]).ToString ("F1"))
+                        .Append ('/').Append (Quaternion.Angle (Quaternion.identity, solveRotations_[i]).ToString ("F1"));
+                }
+                System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace (2);
+                for (int f = 0; f < System.Math.Min (6, trace.FrameCount); f++) line.Append (" <").Append (trace.GetFrame (f).GetMethod ().Name);
+                DebugLog.Add (line.ToString ());
             }
-            else {
-                data_.status[FullBodyIkData.kStatusBurst] = 0;
-                FullBodyIk.Solve (ref data_);
-            }
-            lastSolveUsedBurst = data_.status[FullBodyIkData.kStatusBurst] != 0;
-            lastDefaultBendCount = data_.status[FullBodyIkData.kStatusDefaultBend];
 
             // 変わらなかった骨は元の値がそのまま返る。全部そうなら触らない（固定した点が今の姿勢の上にあるとき、姿勢をまったく変えない）
             bool changed = false;
@@ -831,6 +872,188 @@ namespace Lilium
                 bodies_[i].rotation = rootRotation * Quaternion.Normalize ((Quaternion)data_.rotations[i]);
             }
             return true;
+        }
+
+        public static List<string> DebugLog;
+
+        /// <summary>先頭から count 個の目標で、元の姿勢（solvePositions_ / solveRotations_）から解く</summary>
+        void RunSolver (int count)
+        {
+            for (int i = 0; i < bodies_.Count; i++) {
+                data_.positions[i] = solvePositions_[i];
+                data_.rotations[i] = solveRotations_[i];
+            }
+            data_.effectorCount = count;
+            if (useBurst) {
+                new FullBodyIkJob { data = data_ }.Run ();
+            }
+            else {
+                data_.status[FullBodyIkData.kStatusBurst] = 0;
+                FullBodyIk.Solve (ref data_);
+            }
+            lastSolveUsedBurst = data_.status[FullBodyIkData.kStatusBurst] != 0;
+            lastDefaultBendCount = data_.status[FullBodyIkData.kStatusDefaultBend];
+        }
+
+        /// <summary>
+        /// 解いた姿勢で、接地の点（定義の contact）を床（ワールドの Y = 0）より下へ置かない（Controller の Floor Clamp）。
+        /// 操作のときだけのフラグで、窓が配る（クリップには保存しない）
+        /// </summary>
+        public bool floorClamp { get; set; }
+
+        /// <summary>床より下とみなす深さ（メートル）。足裏の点は基準姿勢で床の高さにあるので、丸めの差では当てない</summary>
+        const float kFloorTolerance = 1e-4f;
+
+        /// <summary>足ごとの、強さ 1 で位置を固定した接地の点（2 つ以上なら null。足の向きがもう決まっている）</summary>
+        readonly Dictionary<int, Point> floorPivots_ = new Dictionary<int, Point> ();
+        readonly HashSet<int> floorGroups_ = new HashSet<int> ();
+
+        /// <summary>
+        /// 解いた姿勢で床より下へ潜った接地の点を床に着ける（10-21 ユーザー指示）。足（接地の点の乗る骨のまとまり。floorGroup）ごとに、
+        /// 足をひとかたまりのまま動かした姿勢を求め、足の根の骨（足首）の付け根と向きを留める目標（強さ 1）として足し、元の姿勢から 1 回解き直す。
+        /// 動かした点を床に当てるだけ（BodyPointTarget.ClampToFloor）では、足首を Pin にして腰を下げたとき、脛と一緒に倒れた足のつま先が床へ潜っていた。
+        /// 目標は点の値（コントロール）に書かないので、点のキーにはならない（打つのは、床に当てて解いた骨の姿勢）。
+        /// - 位置を固定した接地の点が無い足（Free の足のまま腰を動かした）: 向きを変えずに、一番深い点が床に着くまで真上へ持ち上げる
+        /// - 1 つある足（足首を Pin・Locked にした）: その点を中心に、足の前後の向きの軸まわりに、潜った点が床に着く最小の角度だけ回す（FloorTurn）
+        /// - 2 つ以上ある足: 向きがもう決まっているので動かさない
+        /// 足をかたまりのまま動かすので、動かす量は姿勢に連れて連続に変わり、腰をつかんで動かしても足が跳ねない。
+        /// 初めは潜った点のうち一番深い点 1 つを床に留めていて、どの点が一番深いかが少し動かすたびに入れ替わり、足がその点まわりに回って速くぶれた
+        /// （10-21 ユーザー報告。開いている窓のキャラで、足首を Locked にして腰を 3mm ずつ下げると 1 歩で 159°）
+        /// </summary>
+        /// <param name="floorHeight">ルートの付け根の、ワールドの床からの高さ</param>
+        /// <param name="up">ワールドの上向き（ルート空間で）</param>
+        void ClampToFloor (int count, float pull, float floorHeight, Vector3 up)
+        {
+            float3 upward = up;
+            floorPivots_.Clear ();
+            floorGroups_.Clear ();
+            foreach (Point point in points_) {
+                if (point.floorGroup < 0) continue;
+                floorGroups_.Add (point.floorGroup);
+                if (Mathf.Clamp01 (point.values.positionWeight) * pull < 1) continue;
+                floorPivots_[point.floorGroup] = floorPivots_.ContainsKey (point.floorGroup) ? null : point;
+            }
+            bool added = false;
+            foreach (int group in floorGroups_) {
+                if (count >= data_.effectors.Length) break;
+                Point pivot;
+                quaternion turn = quaternion.identity;
+                float3 lift = float3.zero;
+                if (!floorPivots_.TryGetValue (group, out pivot)) {
+                    float lowest = 0;
+                    foreach (Point point in points_) {
+                        if (point.floorGroup == group) lowest = math.min (lowest, FloorHeight (point, floorHeight, upward));
+                    }
+                    if (lowest >= -kFloorTolerance) continue;
+                    lift = -upward * lowest;
+                }
+                else {
+                    if (pivot == null || !FloorTurn (group, pivot, floorHeight, upward, out turn)) continue;
+                    float3 center = SolvedPoint (pivot);
+                    lift = center + math.rotate (turn, data_.positions[group] - center) - data_.positions[group];
+                }
+                data_.effectors[count++] = new FullBodyIkEffector {
+                    bone = group,
+                    position = data_.positions[group] + lift,
+                    rotation = math.normalizesafe (math.mul (turn, data_.rotations[group])),
+                    positionWeight = 1,
+                    rotationWeight = 1,
+                    blendBone = -1,
+                };
+                added = true;
+            }
+            if (added) RunSolver (count);
+        }
+
+        /// <summary>
+        /// 位置を固定した点 pivot を中心に足 group を回して、潜った接地の点を床に着ける回転（ルート空間）。回さなくてよければ false。
+        /// 軸は水平で、足の前後の向き（解く前の姿勢で、pivot から足の接地の点の真ん中への向きの水平の成分）に直交する（つま先を上げる・踵を上げる向きに回る）。
+        /// 前を上げる向き・下げる向きのそれぞれで、潜った点がすべて床に着く角度を出し、解く前の足の向きへ戻る側を使う。
+        /// 角度は点の高さに連れて連続に変わり、床に着いた所で 0 になる
+        /// </summary>
+        bool FloorTurn (int group, Point pivot, float floorHeight, float3 up, out quaternion turn)
+        {
+            turn = quaternion.identity;
+            float3 center = SolvedPoint (pivot);
+            // 前後の向きは、解く前の姿勢の足から決める（解いた足が真下を向くと、点の並びの水平の向きが裏返り、回す向きが入れ替わって 140° 跳ねた。10-21）
+            float3 middle = float3.zero;
+            int count = 0;
+            foreach (Point point in points_) {
+                if (point.floorGroup != group || point == pivot) continue;
+                middle += InputPoint (point);
+                count++;
+            }
+            if (count == 0) return false;
+            float3 forward = middle / count - InputPoint (pivot);
+            forward -= up * math.dot (forward, up);
+            if (math.lengthsq (forward) < 1e-8f) return false;
+            forward = math.normalize (forward);
+            // 前が上がる向き（軸 = 前 × 上）
+            float3 axis = math.normalize (math.cross (forward, up));
+            float centerHeight = floorHeight + math.dot (center, up);
+            float raise = 0, lower = 0;
+            foreach (Point point in points_) {
+                if (point.floorGroup != group || point == pivot || FloorHeight (point, floorHeight, up) >= -kFloorTolerance) continue;
+                // 足の前後の向きと上向きの面での、点の場所（回しても軸の向きの成分は高さに効かない）
+                float3 arm = SolvedPoint (point) - center;
+                float x = math.dot (arm, forward);
+                float y = math.dot (arm, up);
+                float radius = math.sqrt (x * x + y * y);
+                if (radius < kEpsilon) continue;
+                // 回した後の高さ = centerHeight + radius × sin (角度 + 今の角度)。床の上になる角度は [edge, π − edge]
+                float wanted = -centerHeight / radius;
+                if (wanted <= -1 || wanted >= 1) continue;
+                float now = math.atan2 (y, x);
+                float edge = math.asin (wanted);
+                // 前を上げる向き・下げる向きのそれぞれで、床に着くまでの角度
+                raise = math.max (raise, PositiveAngle (edge - now));
+                lower = math.min (lower, -PositiveAngle (now - (math.PI - edge)));
+            }
+            if (raise == 0 && lower == 0) return false;
+            // 回す向きは、解く前の姿勢の足の向きへ戻る側（足首の真下に来た点は、どちらへ回しても同じ角度で床に着くので、
+            // 角度の小さい方を選ぶと少し動かすたびに向きが入れ替わり、足が 130° 跳ねた。10-21）。
+            // 解く前と向きが同じ・戻る側では直角より多く回さないと着かない（踵だけ潜ったのに前を上げる、など）なら、角度の小さい方
+            float back = math.dot (RotationVector (math.mul (solveRotations_[group], math.inverse (data_.rotations[group]))), axis);
+            bool raiseFront = raise <= -lower;
+            if (math.abs (back) > 1e-4f && (back > 0 ? raise : -lower) <= math.PI / 2) raiseFront = back > 0;
+            float total = raiseFront ? raise : lower;
+            if (total == 0) return false;
+            turn = quaternion.AxisAngle (axis, total);
+            return true;
+        }
+
+        /// <summary>角度を [0, 2π) にする</summary>
+        static float PositiveAngle (float angle)
+        {
+            return angle - 2 * math.PI * math.floor (angle / (2 * math.PI));
+        }
+
+        /// <summary>回転を「軸 × 角度」にする（近い側の回り方で）</summary>
+        static float3 RotationVector (quaternion rotation)
+        {
+            float4 v = rotation.value;
+            if (v.w < 0) v = -v;
+            float sine = math.length (v.xyz);
+            if (sine <= kEpsilon) return float3.zero;
+            return v.xyz / sine * (2 * math.atan2 (sine, v.w));
+        }
+
+        /// <summary>解いた姿勢での点の、ワールドの床からの高さ</summary>
+        float FloorHeight (Point point, float floorHeight, float3 up)
+        {
+            return floorHeight + math.dot (SolvedPoint (point), up);
+        }
+
+        /// <summary>解く前の姿勢での骨の上の点（ルート空間）</summary>
+        float3 InputPoint (Point point)
+        {
+            return (float3)solvePositions_[point.body] + math.rotate ((quaternion)solveRotations_[point.body], (float3)point.offset);
+        }
+
+        /// <summary>解いた姿勢での骨の上の点（ルート空間）</summary>
+        float3 SolvedPoint (Point point)
+        {
+            return data_.positions[point.body] + math.rotate (data_.rotations[point.body], (float3)point.offset);
         }
     }
 

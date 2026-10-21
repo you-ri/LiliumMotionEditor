@@ -21,8 +21,6 @@ namespace Lilium
     /// </summary>
     public sealed class EditingRigSolver
     {
-        const float kEpsilon = 1e-6f;
-
         sealed class FkEntry
         {
             public Transform control;
@@ -41,6 +39,8 @@ namespace Lilium
         readonly EditingRig rig_;
         // 親が子より先に来る順（FK は上から当てる）
         readonly List<FkEntry> fk_ = new List<FkEntry> ();
+        // 骨から引く（数値欄・左右反転・骨を直接回したあと）
+        readonly Dictionary<Transform, FkEntry> byBone_ = new Dictionary<Transform, FkEntry> ();
 
         public EditingRigSolver (EditingRig rig)
         {
@@ -48,15 +48,14 @@ namespace Lilium
             if (rig == null || rig.root == null) return;
 
             Dictionary<Transform, FkEntry> byBone = new Dictionary<Transform, FkEntry> ();
-            foreach (RigBinding.Fk fk in rig.binding.fk) {
-                if (fk.enabled) AddFk (byBone, rig.FindControl (fk.path), rig.GetEditingBone (fk.bone), fk.control.position, fk.control.bone);
-            }
-            foreach (RigBinding.Extra extra in rig.binding.extras) {
-                if (extra.enabled) AddFk (byBone, rig.FindControl (extra.path), rig.GetEditingBone (extra.bone), extra.control.position, null);
+            foreach (RigBinding.BoneControl control in rig.binding.boneControls) {
+                if (control.enabled) AddFk (byBone, rig.FindControl (control.path), rig.GetEditingBone (control.bone), control.position, control.human);
             }
             foreach (Transform bone in rig.editingBones) {
                 FkEntry entry;
-                if (byBone.TryGetValue (bone, out entry)) fk_.Add (entry);
+                if (!byBone.TryGetValue (bone, out entry)) continue;
+                fk_.Add (entry);
+                byBone_.Add (bone, entry);
             }
             ResolveParents (byBone);
         }
@@ -115,12 +114,10 @@ namespace Lilium
         /// <summary>
         /// 値の基準にする親の骨（テスト・表示用）。ルート基準なら null
         /// </summary>
-        public Transform GetFkParent (Transform editingBone)
+        internal Transform GetFkParent (Transform editingBone)
         {
-            foreach (FkEntry entry in fk_) {
-                if (entry.bone == editingBone) return entry.parent != null ? entry.parent.bone : null;
-            }
-            return null;
+            FkEntry entry = FindFk (editingBone);
+            return entry != null && entry.parent != null ? entry.parent.bone : null;
         }
 
         public int fkCount
@@ -135,7 +132,7 @@ namespace Lilium
 
         float humanScale
         {
-            get { return rig_.humanScale > kEpsilon ? rig_.humanScale : 1; }
+            get { return rig_.humanScale; }
         }
 
         // ---- 前進（コントロール → 骨） ----
@@ -181,12 +178,10 @@ namespace Lilium
         /// </summary>
         public bool CaptureFk (Transform editingBone)
         {
-            foreach (FkEntry entry in fk_) {
-                if (entry.bone != editingBone) continue;
-                CaptureFk (entry);
-                return true;
-            }
-            return false;
+            FkEntry entry = FindFk (editingBone);
+            if (entry == null) return false;
+            CaptureFk (entry);
+            return true;
         }
 
         /// <summary>
@@ -223,10 +218,8 @@ namespace Lilium
 
         FkEntry FindFk (Transform editingBone)
         {
-            foreach (FkEntry entry in fk_) {
-                if (entry.bone == editingBone) return entry;
-            }
-            return null;
+            FkEntry entry;
+            return editingBone != null && byBone_.TryGetValue (editingBone, out entry) ? entry : null;
         }
 
         /// <summary>
@@ -246,14 +239,6 @@ namespace Lilium
             return true;
         }
 
-        /// <summary>
-        /// 左右反転の面の法線（ルートから見た体の右）と、面の位置（その向きで測った体の中心）
-        /// </summary>
-        void GetMirrorPlane (out Vector3 normal, out float center)
-        {
-            rig_.GetMirrorPlane (out normal, out center);
-        }
-
         /// <summary>向き（差分）を左右反転する（面の法線 n で鏡に映した回転）</summary>
         public static Quaternion MirrorRotation (Quaternion q, Vector3 n)
         {
@@ -263,7 +248,7 @@ namespace Lilium
         }
 
         /// <summary>向きのベクトル・差分の位置を左右反転する</summary>
-        public static Vector3 MirrorVector (Vector3 v, Vector3 n)
+        static Vector3 MirrorVector (Vector3 v, Vector3 n)
         {
             return v - 2 * Vector3.Dot (v, n) * n;
         }
@@ -285,7 +270,7 @@ namespace Lilium
 
             Vector3 normal;
             float center;
-            GetMirrorPlane (out normal, out center);
+            rig_.GetMirrorPlane (out normal, out center);
             target.control.localRotation = MirrorRotation (rotation, normal);
             if (target.position && source.position) target.control.localPosition = MirrorVector (position, normal);
             return true;

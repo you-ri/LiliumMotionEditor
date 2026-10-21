@@ -22,6 +22,24 @@ namespace Lilium
             return Resources.FindObjectsOfTypeAll<PreviewWindow> ().FirstOrDefault ();
         }
 
+        static readonly Dictionary<System.Type, string[]> panelIds_ = new Dictionary<System.Type, string[]> ();
+
+        /// <summary>
+        /// 窓に載るパネルの ID（[Overlay] で窓の型を指したもの）。手で並べると、足したパネルが漏れる（Lint が漏れて押し戻されなかった）
+        /// </summary>
+        public static string[] PanelIds (System.Type windowType)
+        {
+            string[] ids;
+            if (panelIds_.TryGetValue (windowType, out ids)) return ids;
+            ids = TypeCache.GetTypesWithAttribute<OverlayAttribute> ()
+                .SelectMany (t => t.GetCustomAttributes (typeof (OverlayAttribute), false).Cast<OverlayAttribute> ())
+                .Where (a => a.editorWindowType == windowType && !string.IsNullOrEmpty (a.id))
+                .Select (a => a.id)
+                .ToArray ();
+            panelIds_[windowType] = ids;
+            return ids;
+        }
+
         /// <summary>画面内に残す幅（見出しの左端からこの幅は見えるようにする）</summary>
         const float kVisibleWidth = 80f;
         /// <summary>画面内に残す高さ（見出しの帯）</summary>

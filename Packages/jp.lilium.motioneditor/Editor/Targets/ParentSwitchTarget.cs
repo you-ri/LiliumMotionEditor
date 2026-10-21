@@ -112,24 +112,11 @@ namespace Lilium
         {
             if (bound_.obj == null || blocked) return;
 
-            PoseHandleUtility.color = kColor;
-            Vector3 position = bound_.obj.position;
-            Quaternion rotation = bound_.obj.rotation;
-            Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, bound_.obj, position, rotation);
-            if (moved != position) {
-                SetWorld (moved, rotation);
-                GUI.changed = true;
-            }
-            if (!selected) {
-                PoseHandleUtility.color = PoseHandleUtility.StandardColor;
-                return;
-            }
-            Quaternion rotated = PoseHandleUtility.DoBoneHandle (rotateHash_, bound_.obj, bound_.obj.position, rotation, handleLength);
-            if (rotated != rotation) {
-                SetWorld (bound_.obj.position, rotated);
-                GUI.changed = true;
-            }
-            PoseHandleUtility.color = PoseHandleUtility.StandardColor;
+            Transform obj = bound_.obj;
+            Quaternion rotation = obj.rotation;
+            PoseHandleUtility.DoObjectHandles (moveHash_, rotateHash_, obj, obj, handleLength, kColor, selected,
+                position => SetWorld (position, rotation),
+                rotated => SetWorld (obj.position, rotated));
         }
 
         public override void WriteKeys (CurveWriter writer)

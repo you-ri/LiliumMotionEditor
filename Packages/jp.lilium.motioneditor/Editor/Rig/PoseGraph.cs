@@ -133,21 +133,21 @@ namespace Lilium
 
     public static class PoseGraphHooks
     {
-        static readonly List<IPoseGraphHook> hooks_ = new List<IPoseGraphHook> ();
+        static readonly HookList<IPoseGraphHook> hooks_ = new HookList<IPoseGraphHook> ();
 
         public static void Register (IPoseGraphHook hook)
         {
-            if (hook != null && !hooks_.Contains (hook)) hooks_.Add (hook);
+            hooks_.Register (hook);
         }
 
         public static void Unregister (IPoseGraphHook hook)
         {
-            hooks_.Remove (hook);
+            hooks_.Unregister (hook);
         }
 
         public static IReadOnlyList<IPoseGraphHook> hooks
         {
-            get { return hooks_; }
+            get { return hooks_.items; }
         }
 
         internal static PoseGraphHookStage StageOf (IPoseGraphHook hook)
@@ -158,7 +158,7 @@ namespace Lilium
 
         internal static Playable Append (PoseGraphContext context, List<KeyValuePair<IPoseGraphHook, Playable>> appended, PoseGraphHookStage stage = PoseGraphHookStage.AfterRig)
         {
-            foreach (IPoseGraphHook hook in hooks_) {
+            foreach (IPoseGraphHook hook in hooks_.items) {
                 if (StageOf (hook) != stage) continue;
                 try {
                     Playable next = hook.Append (context);

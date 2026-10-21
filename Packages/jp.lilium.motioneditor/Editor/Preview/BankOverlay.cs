@@ -13,12 +13,11 @@ namespace Lilium
     /// AnimBank・PoseBank のパネルの共通部分。キャラのフォルダの一覧（フォルダが 2 つ以上・サブフォルダは見出しで分ける）、
     /// フォルダの選び直し（「…」）、名前を変える欄、知らせの行。行を押したときの意味（開く・打つ）とボタンは派生が決める
     /// </summary>
-    abstract class BankOverlay : Overlay
+    abstract class BankOverlay : MotionOverlay
     {
         const int kRowHeight = 18;
         const float kWidth = 170;
 
-        protected PreviewWindow window_;
         protected ListView list_;
         protected readonly List<Row> rows_ = new List<Row> ();
         Label folder_;
@@ -58,9 +57,14 @@ namespace Lilium
         {
         }
 
-        /// <summary>窓の通知を受け始める（on）・やめる。stateChanged とプロジェクトの変更は、ここで受けなくても一覧を作り直す</summary>
-        protected virtual void Subscribe (bool on)
+        /// <summary>窓の通知を受け始める（on）・やめる。派生で足すときは base を呼ぶ（stateChanged とプロジェクトの変更で一覧を作り直す）</summary>
+        protected override void Subscribe (bool on)
         {
+            window_.stateChanged -= Refresh;
+            EditorApplication.projectChanged -= Refresh;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            EditorApplication.projectChanged += Refresh;
         }
 
         public override VisualElement CreatePanelContent ()
@@ -69,7 +73,7 @@ namespace Lilium
             root.style.width = kWidth;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             VisualElement header = new VisualElement ();
@@ -117,31 +121,13 @@ namespace Lilium
             root.Add (message_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            EditorApplication.projectChanged -= Refresh;
-            EditorApplication.projectChanged += Refresh;
-            Subscribe (false);
-            Subscribe (true);
+            Resubscribe ();
             return root;
-        }
-
-        public override void OnWillBeDestroyed ()
-        {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                Subscribe (false);
-            }
-            EditorApplication.projectChanged -= Refresh;
-            base.OnWillBeDestroyed ();
         }
 
         protected static void AddButton (VisualElement parent, string text, string tooltip, System.Action action)
         {
-            Button button = new Button (action) { text = text, tooltip = tooltip };
-            button.style.flexGrow = 1;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 0;
+            Button button = PanelUI.FlexButton (text, tooltip, action);
             button.style.paddingLeft = 1;
             button.style.paddingRight = 1;
             parent.Add (button);

@@ -58,8 +58,9 @@ namespace Lilium
         {
             settings = settings ?? new Settings ();
             MotionLintReport report = new MotionLintReport { startFrame = start, endFrame = end };
-            if (session == null || session.stage == null || session.stage.editingRig == null) {
-                report.error = session != null && session.error != null ? session.error : Tr ("POSE_SESSION_NO_CHARACTER");
+            string character = PoseSession.CharacterProblem (session);
+            if (character != null) {
+                report.error = character;
                 return report;
             }
             if (end < start) {
@@ -69,7 +70,7 @@ namespace Lilium
 
             PreviewStage stage = session.stage;
             EditingRig rig = stage.editingRig;
-            float scale = rig.humanScale > 0 ? rig.humanScale : 1;
+            float scale = rig.humanScale;
             List<Transform> bones = rig.editingBones.Where (b => b != null).ToList ();
             List<(string name, System.Func<Vector3> position, bool foot)> points = CollectPoints (stage);
             Runs runs = new Runs (report);
@@ -78,19 +79,10 @@ namespace Lilium
             Vector3[] previousFeet = new Vector3[points.Count];
             bool[] previousContact = new bool[points.Count];
 
-            HumanoidBaker reader = rig.displayAnimator != null && rig.displayAnimator.isHuman ? stage.CreateHumanoidBaker () : null;
-            if (reader != null && reader.error != null) {
-                reader.Dispose ();
-                reader = null;
-            }
+            HumanoidBaker reader = CreateMuscleReader (stage);
             HumanPose pose = new HumanPose ();
             List<(int left, int right)> pairs = MusclePairs ();
-            // 基準姿勢（T ポーズ）で、もう範囲の外にある muscle（キャラの作りによる。親指など）は、基準姿勢より外へ出たときだけ出す
-            float[] restMuscles = null;
-            if (reader != null) {
-                rig.ResetBonesToRest ();
-                if (reader.ReadPose (ref pose)) restMuscles = (float[])pose.muscles.Clone ();
-            }
+            float[] restMuscles = reader != null ? ReadRestMuscles (rig, reader) : null;
             try {
                 for (int f = start; f <= end; f++) {
                     session.Evaluate (f);
@@ -112,12 +104,7 @@ namespace Lilium
                     }
 
                     if (reader != null && reader.ReadPose (ref pose)) {
-                        for (int m = 0; m < pose.muscles.Length && m < HumanTrait.MuscleCount; m++) {
-                            float value = Mathf.Abs (pose.muscles[m]);
-                            float limit = settings.muscleLimit;
-                            if (restMuscles != null && m < restMuscles.Length) limit = Mathf.Max (limit, Mathf.Abs (restMuscles[m]) + settings.muscleLimit - 1);
-                            runs.Add (kMuscleRange, HumanTrait.MuscleName[m], f, value, limit, value > limit);
-                        }
+                        CheckMuscles (runs, pose.muscles, restMuscles, f, settings);
                         if (pairs.Count > 0) {
                             float asymmetry = pairs.Average (p => Mathf.Abs (pose.muscles[p.left] - pose.muscles[p.right]));
                             if (asymmetry > report.maxAsymmetry) {
@@ -138,6 +125,73 @@ namespace Lilium
             runs.Close ();
             report.issues.Sort ((a, b) => a.frame != b.frame ? a.frame.CompareTo (b.frame) : string.CompareOrdinal (a.kind + a.target, b.kind + b.target));
             return report;
+        }
+
+        /// <summary>
+        /// 今の姿勢（解いた後のまま。クリップから作り直さない）の床と muscle の範囲だけを見る（S57。書いた直後や、試しに解いた姿勢の確かめ）。
+        /// 足の滑り・跳ね・キーの間の回転は前後のフレームが要るので見ない（全体は Run）。
+        /// 基準姿勢と比べるために骨を基準姿勢へ崩すので、呼んだ後は session.Evaluate で姿勢を作り直す
+        /// </summary>
+        public static List<MotionLintIssue> CheckPose (PoseSession session, Settings settings = null)
+        {
+            settings = settings ?? new Settings ();
+            MotionLintReport report = new MotionLintReport { startFrame = session.frame, endFrame = session.frame };
+            if (PoseSession.CharacterProblem (session) != null) return report.issues;
+            PreviewStage stage = session.stage;
+            Runs runs = new Runs (report);
+            foreach ((string name, System.Func<Vector3> position, bool foot) point in CollectPoints (stage)) {
+                Vector3 p = point.position ();
+                runs.Add (kFloorPenetration, point.name, session.frame, -p.y, settings.floorTolerance, p.y < -settings.floorTolerance);
+            }
+            HumanoidBaker reader = CreateMuscleReader (stage);
+            if (reader != null) {
+                try {
+                    HumanPose pose = new HumanPose ();
+                    // 基準姿勢を読むと骨が崩れるので、今の姿勢を先に読む
+                    if (reader.ReadPose (ref pose)) {
+                        float[] muscles = (float[])pose.muscles.Clone ();
+                        CheckMuscles (runs, muscles, ReadRestMuscles (stage.editingRig, reader), session.frame, settings);
+                    }
+                }
+                finally {
+                    reader.Dispose ();
+                }
+            }
+            runs.Close ();
+            return report.issues;
+        }
+
+        /// <summary>Humanoid の姿勢を読む物（Humanoid でないキャラ・作れないときは null）</summary>
+        static HumanoidBaker CreateMuscleReader (PreviewStage stage)
+        {
+            EditingRig rig = stage.editingRig;
+            HumanoidBaker reader = rig.displayAnimator != null && rig.displayAnimator.isHuman ? stage.CreateHumanoidBaker () : null;
+            if (reader != null && reader.error != null) {
+                reader.Dispose ();
+                reader = null;
+            }
+            return reader;
+        }
+
+        /// <summary>
+        /// 基準姿勢（T ポーズ）の muscle（読めなければ null）。基準姿勢で、もう範囲の外にある muscle（キャラの作りによる。親指など）は、
+        /// 基準姿勢より外へ出たときだけ出すのに使う。骨を基準姿勢へ崩す
+        /// </summary>
+        static float[] ReadRestMuscles (EditingRig rig, HumanoidBaker reader)
+        {
+            HumanPose pose = new HumanPose ();
+            rig.ResetBonesToRest ();
+            return reader.ReadPose (ref pose) ? (float[])pose.muscles.Clone () : null;
+        }
+
+        static void CheckMuscles (Runs runs, float[] muscles, float[] restMuscles, int frame, Settings settings)
+        {
+            for (int m = 0; m < muscles.Length && m < HumanTrait.MuscleCount; m++) {
+                float value = Mathf.Abs (muscles[m]);
+                float limit = settings.muscleLimit;
+                if (restMuscles != null && m < restMuscles.Length) limit = Mathf.Max (limit, Mathf.Abs (restMuscles[m]) + settings.muscleLimit - 1);
+                runs.Add (kMuscleRange, HumanTrait.MuscleName[m], frame, value, limit, value > limit);
+            }
         }
 
         /// <summary>

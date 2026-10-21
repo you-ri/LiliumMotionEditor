@@ -23,17 +23,18 @@ namespace Lilium
         readonly int jointHash_;
         readonly int boneHash_;
 
-        public FkTarget (EditingRig rig, EditingRigSolver solver, BoneShapes shapes, Transform control, Transform bone, Transform display, string label, bool position, bool fullBodyHandle)
+        /// <param name="source">動かすコントロール（表示の骨・名前・位置も動かすか・全身 IK の間も出すかを引く）</param>
+        public FkTarget (EditingRig rig, EditingRigSolver solver, BoneShapes shapes, Transform control, Transform bone, RigBinding.BoneControl source)
         {
             rig_ = rig;
             solver_ = solver;
             shapes_ = shapes;
             control_ = control;
             bone_ = bone;
-            display_ = display;
-            label_ = label;
-            position_ = position;
-            fullBodyHandle_ = fullBodyHandle;
+            display_ = source.bone;
+            label_ = source.label;
+            position_ = source.position;
+            fullBodyHandle_ = source.fullBodyHandle;
             jointHash_ = ("MktFkJoint" + control.GetEntityId ()).GetHashCode ();
             boneHash_ = ("MktFkBone" + control.GetEntityId ()).GetHashCode ();
         }

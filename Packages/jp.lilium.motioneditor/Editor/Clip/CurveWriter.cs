@@ -139,7 +139,7 @@ namespace Lilium
         {
             values_[binding] = value;
             raw_.Add (binding);
-            if (binding.type == typeof (Transform) && binding.propertyName.StartsWith (CurveEdit.kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
+            if (CurveEdit.IsRotation (binding) && !rotationPaths_.Contains (binding.path)) {
                 rotationPaths_.Add (binding.path);
             }
         }
@@ -155,7 +155,7 @@ namespace Lilium
                 return;
             }
             SetTransform (binding.path, binding.propertyName, value);
-            if (binding.propertyName.StartsWith (CurveEdit.kRotation + ".") && !rotationPaths_.Contains (binding.path)) {
+            if (CurveEdit.IsRotation (binding) && !rotationPaths_.Contains (binding.path)) {
                 rotationPaths_.Add (binding.path);
             }
         }
@@ -230,7 +230,7 @@ namespace Lilium
                 if (binding.type == typeof (Transform) && !raw_.Contains (binding)) paths.Add (binding.path);
             }
             foreach (string path in paths) {
-                Transform t = root_ == null ? null : path.Length == 0 ? root_ : root_.Find (path);
+                Transform t = CurveEdit.FindPath (root_, path);
                 if (storePosition != null) {
                     Vector3 current = t != null ? t.localPosition : Vector3.zero;
                     ConvertVector (path, CurveEdit.kPosition, current, storePosition);

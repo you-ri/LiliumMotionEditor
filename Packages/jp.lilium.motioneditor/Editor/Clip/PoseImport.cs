@@ -53,11 +53,10 @@ namespace Lilium
             Transform root = rig.root.transform;
             IList<Transform> bones = options.checkBones ?? new List<Transform> ();
 
-            float rate = destination.frameRate > 0 ? destination.frameRate : 60;
-            int frameCount = Mathf.Max (1, Mathf.RoundToInt (options.length * rate) + 1);
+            float rate = CurveEdit.FrameRateOf (destination);
+            int frameCount = CurveEdit.FrameCount (options.length, rate);
 
-            Dictionary<EditorCurveBinding, float[]> values = new Dictionary<EditorCurveBinding, float[]> ();
-            HashSet<string> rotationPaths = new HashSet<string> ();
+            FrameValues values = new FrameValues (frameCount);
             Vector3[] expected = new Vector3[bones.Count];
 
             root.GetLocalPositionAndRotation (out Vector3 rootPosition, out Quaternion rootRotation);
@@ -72,19 +71,7 @@ namespace Lilium
 
                     solver.Capture ();
 
-                    using (CurveWriter writer = CurveWriter.Begin (null, root, f, null)) {
-                        foreach (PoseTarget target in options.targets) target.WriteKeys (writer);
-                        if (rig.rigProxies != null) rig.rigProxies.WriteWeightKeys (writer);
-                        foreach (string path in writer.rotationPaths) rotationPaths.Add (path);
-                        foreach (KeyValuePair<EditorCurveBinding, float> pair in writer.values) {
-                            float[] curve;
-                            if (!values.TryGetValue (pair.Key, out curve)) {
-                                curve = new float[frameCount];
-                                values.Add (pair.Key, curve);
-                            }
-                            curve[f] = pair.Value;
-                        }
-                    }
+                    values.Capture (f, root, options.targets, rig.rigProxies);
 
                     // 捉えた値で解き直して、元の姿勢に戻るか
                     rig.ResetBonesToRest ();
@@ -99,11 +86,55 @@ namespace Lilium
                 root.localScale = rootScale;
             }
 
-            WriteCollected (destination, values, rotationPaths, frameCount, rate);
+            values.Write (destination, rate);
             result.frameCount = frameCount;
-            result.curveCount = values.Count;
+            result.curveCount = values.curveCount;
             result.milliseconds = watch.Elapsed.TotalMilliseconds;
             return result;
+        }
+
+        /// <summary>
+        /// フレームごとの今の値を集めて、後で一度にクリップへ書く（取り込み・Override の統合）。
+        /// 書きながら同じクリップを読むと差分が二重に乗るので、全フレームぶん集めてから書く
+        /// </summary>
+        public sealed class FrameValues
+        {
+            readonly int frameCount_;
+            readonly Dictionary<EditorCurveBinding, float[]> values_ = new Dictionary<EditorCurveBinding, float[]> ();
+            readonly HashSet<string> rotationPaths_ = new HashSet<string> ();
+
+            public FrameValues (int frameCount)
+            {
+                frameCount_ = frameCount;
+            }
+
+            public int curveCount
+            {
+                get { return values_.Count; }
+            }
+
+            /// <summary>frame の今の値（全部の対象と Rig の重み。キーを打つときと同じ組）を控える</summary>
+            public void Capture (int frame, Transform root, IEnumerable<PoseTarget> targets, RigProxies proxies)
+            {
+                using (CurveWriter writer = CurveWriter.Begin (null, root, frame, null)) {
+                    PoseCommit.WriteAllKeys (writer, targets, proxies);
+                    foreach (string path in writer.rotationPaths) rotationPaths_.Add (path);
+                    foreach (KeyValuePair<EditorCurveBinding, float> pair in writer.values) {
+                        float[] curve;
+                        if (!values_.TryGetValue (pair.Key, out curve)) {
+                            curve = new float[frameCount_];
+                            values_.Add (pair.Key, curve);
+                        }
+                        curve[frame] = pair.Value;
+                    }
+                }
+            }
+
+            /// <summary>集めた値を destination へ書く（WriteCollected）</summary>
+            public void Write (AnimationClip destination, float rate)
+            {
+                WriteCollected (destination, values_, rotationPaths_, frameCount_, rate);
+            }
         }
 
         /// <summary>

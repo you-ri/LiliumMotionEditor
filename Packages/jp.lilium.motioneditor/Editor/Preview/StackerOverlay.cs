@@ -16,11 +16,10 @@ namespace Lilium
     [Icon (Icons.kFolder + "Stacker.png")]
     [Overlay (typeof (PreviewWindow), "mkt-stacker", "Stacker", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    class StackerOverlay : Overlay
+    class StackerOverlay : MotionOverlay
     {
         const int kRowHeight = 20;
 
-        PreviewWindow window_;
         DropdownField group_;
         Button deleteGroup_;
         TextField groupName_;
@@ -39,7 +38,7 @@ namespace Lilium
             root.style.width = 190;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => 190);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             VisualElement groupRow = new VisualElement ();
@@ -122,26 +121,21 @@ namespace Lilium
             root.Add (message_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.stackerChanged -= Refresh;
-            window_.stackerChanged += Refresh;
-            window_.keysChanged -= Refresh;
-            window_.keysChanged += Refresh;
-            window_.poseSampled -= RefreshCurrent;
-            window_.poseSampled += RefreshCurrent;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.stackerChanged -= Refresh;
-                window_.keysChanged -= Refresh;
-                window_.poseSampled -= RefreshCurrent;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.stackerChanged -= Refresh;
+            window_.keysChanged -= Refresh;
+            window_.poseSampled -= RefreshCurrent;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.stackerChanged += Refresh;
+            window_.keysChanged += Refresh;
+            window_.poseSampled += RefreshCurrent;
         }
 
         VisualElement MakeRow ()

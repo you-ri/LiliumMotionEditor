@@ -366,6 +366,31 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// 動かした後に姿勢のキーを打つ（ハンドル・Spinner を離したとき・数値欄に入れたとき）。
+        /// 全身 IK の点を動かした・固定している点があるフレームなら、解いた姿勢を骨のキーとして打つ（CommitFullBodyPose）。
+        /// そうでなければ全部の対象の今の値を打つ
+        /// </summary>
+        void CommitPose (bool pointsMoved)
+        {
+            if (pointsMoved || hasActivePoints) {
+                CommitFullBodyPose ();
+                return;
+            }
+            AddKeyAllCurves (true);
+            keyFrames_ = null;
+            RepaintView ();
+        }
+
+        /// <summary>動かした点の、まだ打っていないキーを捨てる</summary>
+        void ClearPendingPointKeys ()
+        {
+            foreach (PoseTarget target in targets_) {
+                BodyPointTarget point = target as BodyPointTarget;
+                if (point != null) point.ClearPendingKeys ();
+            }
+        }
+
         bool HasPendingPointKeys ()
         {
             foreach (PoseTarget target in targets_) {
@@ -388,18 +413,11 @@ namespace Lilium
         {
             if (stage_ == null || stage_.fullBody == null) return;
             if (!CanEditClip ()) {
-                foreach (PoseTarget target in targets_) {
-                    BodyPointTarget point = target as BodyPointTarget;
-                    if (point != null) point.ClearPendingKeys ();
-                }
+                ClearPendingPointKeys ();
                 SamplePose ();
                 return;
             }
-            Undo.IncrementCurrentGroup ();
-            int group = Undo.GetCurrentGroup ();
-            PoseCommit.WriteFullBodyPose (stage_, targets_, () => BeginCurves ("Key Pose"));
-            Undo.SetCurrentGroupName ("Key Pose");
-            Undo.CollapseUndoOperations (group);
+            PoseCommit.InUndoGroup ("Key Pose", () => PoseCommit.WriteFullBodyPose (stage_, targets_, () => BeginCurves ("Key Pose")));
             keyFrames_ = null;
             // 打ったキーから姿勢を作り直す（保存した値で見えている姿勢と同じになる）
             SamplePose ();

@@ -38,14 +38,14 @@ namespace Lilium
 
             List<string> notes = new List<string> ();
             List<Transform> bones = ControlledBones (rig, notes);
-            float rate = destination != null && destination.frameRate > 0 ? destination.frameRate : 60;
+            float rate = CurveEdit.FrameRateOf (destination);
             if (!Mathf.Approximately (source.frameRate, rate)) {
                 notes.Add (Tr ("GENERIC_IMPORT_RESAMPLED", source.frameRate, rate));
             }
             notes.Add (Tr ("HUMANOID_IMPORT_HUMANOID_DEVIATION"));
 
             float length = Mathf.Max (source.empty ? 0 : source.length, destination == null || destination.empty ? 0 : destination.length);
-            int frameCount = Mathf.Max (1, Mathf.RoundToInt (length * rate) + 1);
+            int frameCount = CurveEdit.FrameCount (length, rate);
             // 元のクリップの範囲だけ測る（後ろは最後の置き場所のまま）
             int sourceFrames = Mathf.Clamp (Mathf.RoundToInt ((source.empty ? 0 : source.length) * rate) + 1, 1, frameCount);
             RootMotion.Sample (rig.displayAnimator, source, rate, sourceFrames, out Vector3[] rootPositions, out Quaternion[] rootRotations);
@@ -91,11 +91,8 @@ namespace Lilium
             HashSet<string> controlled = new HashSet<string> ();
             Transform root = rig != null && rig.displayAnimator != null ? rig.displayAnimator.transform : null;
             if (root != null) {
-                foreach (RigBinding.Fk fk in rig.binding.fk) {
-                    if (fk.enabled && fk.bone != null) controlled.Add (AnimationUtility.CalculateTransformPath (fk.bone, root));
-                }
-                foreach (RigBinding.Extra extra in rig.binding.extras) {
-                    if (extra.enabled && extra.bone != null) controlled.Add (AnimationUtility.CalculateTransformPath (extra.bone, root));
+                foreach (RigBinding.BoneControl control in rig.binding.boneControls) {
+                    if (control.enabled && control.bone != null) controlled.Add (AnimationUtility.CalculateTransformPath (control.bone, root));
                 }
             }
 
@@ -128,16 +125,10 @@ namespace Lilium
         {
             List<Transform> bones = new List<Transform> ();
             SortedSet<string> skipped = new SortedSet<string> ();
-            foreach (RigBinding.Fk fk in rig.binding.fk) {
-                Transform bone = rig.GetEditingBone (fk.bone);
+            foreach (RigBinding.BoneControl control in rig.binding.boneControls) {
+                Transform bone = rig.GetEditingBone (control.bone);
                 if (bone == null) continue;
-                if (fk.enabled) bones.Add (bone);
-                else skipped.Add (bone.name);
-            }
-            foreach (RigBinding.Extra extra in rig.binding.extras) {
-                Transform bone = rig.GetEditingBone (extra.bone);
-                if (bone == null) continue;
-                if (extra.enabled) bones.Add (bone);
+                if (control.enabled) bones.Add (bone);
                 else skipped.Add (bone.name);
             }
             if (skipped.Count > 0) notes.Add (Tr ("HUMANOID_IMPORT_UNCONTROLLED_BONES_SKIPPED", skipped.Count));

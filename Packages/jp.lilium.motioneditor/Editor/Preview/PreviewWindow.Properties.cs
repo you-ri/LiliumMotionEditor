@@ -99,10 +99,10 @@ namespace Lilium
                     return;
                 }
             }
-            Undo.IncrementCurrentGroup ();
-            RecordClipUndo ("Set Property");
-            CurveEdit.SetKey (clip, binding, currentFrame, StorePropertyValue (display, value));
-            AfterClipEdit ();
+            EditClip (clip, "Set Property", () => {
+                CurveEdit.SetKey (clip, binding, currentFrame, StorePropertyValue (display, value));
+                return true;
+            });
         }
 
         /// <summary>
@@ -143,10 +143,10 @@ namespace Lilium
         {
             AnimationClip clip = targetClip;
             if (clip == null || !CanEditClip ()) return;
-            Undo.IncrementCurrentGroup ();
-            RecordClipUndo ("Remove Property");
-            AnimationUtility.SetEditorCurve (clip, PropertyPlayer.ToClip (display), null);
-            AfterClipEdit ();
+            EditClip (clip, "Remove Property", () => {
+                AnimationUtility.SetEditorCurve (clip, PropertyPlayer.ToClip (display), null);
+                return true;
+            });
         }
     }
 

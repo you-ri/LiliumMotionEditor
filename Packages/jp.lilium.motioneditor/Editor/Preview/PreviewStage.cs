@@ -79,10 +79,9 @@ namespace Lilium
         /// <summary>全身 IK の点（S25）と、その固定の強さの基準（点ごとに BodyPoint.kValueCount 個ずつ並べる）</summary>
         Lilium.BodyPoint[] bodyPoints_ = new Lilium.BodyPoint[0];
         float[] bodyPointRest_ = new float[0];
-        Lilium.RigLayerProxy[] layerProxies_ = new Lilium.RigLayerProxy[0];
-        float[] layerProxyRest_ = new float[0];
-        Lilium.RigConstraintProxy[] constraintProxies_ = new Lilium.RigConstraintProxy[0];
-        float[] constraintProxyRest_ = new float[0];
+        /// <summary>ゲームの Rig の重みの代理（層と拘束）と、その基準の重み</summary>
+        Lilium.RigWeightProxy[] weightProxies_ = new Lilium.RigWeightProxy[0];
+        float[] weightProxyRest_ = new float[0];
         /// <summary>SaveControls の控え（毎フレーム使うので使い回す。点の値は持たない）</summary>
         readonly ControlState savedControls_ = new ControlState ();
         // 焼いた後の姿勢を表示モデルへ当てる道具（Humanoid の段）。初めて使うときに作る
@@ -122,6 +121,12 @@ namespace Lilium
         /// </summary>
         public EditingRig editingRig { get; private set; }
         public EditingRigSolver editingRigSolver { get; private set; }
+
+        /// <summary>編集用リグのルート（カーブのパスの基準）。キャラが無ければ null</summary>
+        public Transform editingRoot
+        {
+            get { return editingRig != null && editingRig.root != null ? editingRig.root.transform : null; }
+        }
         /// <summary>
         /// 全身 IK（S25）。点が 1 つも置けなかったキャラでは null
         /// </summary>
@@ -282,18 +287,6 @@ namespace Lilium
         public IReadOnlyList<ContextInfo> contextInfos
         {
             get { return contextInfos_; }
-        }
-
-        /// <summary>
-        /// 一番長い文脈の長さ（秒）。0 なら時計を持つ文脈が無い
-        /// </summary>
-        public double contextDuration
-        {
-            get {
-                double result = 0;
-                foreach (ContextInfo info in contextInfos_) result = System.Math.Max (result, info.duration);
-                return result;
-            }
         }
 
         /// <summary>
@@ -547,10 +540,8 @@ namespace Lilium
             controlRestScales_ = controlTransforms_.Select (t => t.localScale).ToArray ();
             bodyPoints_ = controls.GetComponentsInChildren<Lilium.BodyPoint> (true);
             bodyPointRest_ = ReadPointValues ();
-            layerProxies_ = controls.GetComponentsInChildren<Lilium.RigLayerProxy> (true);
-            layerProxyRest_ = layerProxies_.Select (c => c.weight).ToArray ();
-            constraintProxies_ = controls.GetComponentsInChildren<Lilium.RigConstraintProxy> (true);
-            constraintProxyRest_ = constraintProxies_.Select (c => c.weight).ToArray ();
+            weightProxies_ = controls.GetComponentsInChildren<Lilium.RigWeightProxy> (true);
+            weightProxyRest_ = ReadProxyWeights ();
         }
 
         /// <summary>
@@ -585,11 +576,20 @@ namespace Lilium
                     bodyPoints_[i].SetValue (v, Mathf.Lerp (bodyPointRest_[i * Lilium.BodyPoint.kValueCount + v], bodyPoints_[i].GetValue (v), weight));
                 }
             }
-            for (int i = 0; i < layerProxies_.Length; i++) {
-                if (layerProxies_[i] != null) layerProxies_[i].weight = Mathf.Lerp (layerProxyRest_[i], layerProxies_[i].weight, weight);
+            for (int i = 0; i < weightProxies_.Length; i++) {
+                if (weightProxies_[i] != null) weightProxies_[i].weight = Mathf.Lerp (weightProxyRest_[i], weightProxies_[i].weight, weight);
             }
-            for (int i = 0; i < constraintProxies_.Length; i++) {
-                if (constraintProxies_[i] != null) constraintProxies_[i].weight = Mathf.Lerp (constraintProxyRest_[i], constraintProxies_[i].weight, weight);
+        }
+
+        float[] ReadProxyWeights ()
+        {
+            return weightProxies_.Select (c => c != null ? c.weight : 0).ToArray ();
+        }
+
+        void WriteProxyWeights (float[] weights)
+        {
+            for (int i = 0; i < weightProxies_.Length; i++) {
+                if (weightProxies_[i] != null) weightProxies_[i].weight = weights[i];
             }
         }
 
@@ -676,7 +676,7 @@ namespace Lilium
             scale = Vector3.one;
             if (overrideSource_ == null || editingRig == null || editingRig.root == null) return false;
             Transform root = editingRig.root.transform;
-            Transform t = path.Length == 0 ? root : root.Find (path);
+            Transform t = CurveEdit.FindPath (root, path);
             int index;
             if (t == null || !controlIndex_.TryGetValue (t, out index)) return false;
             position = overrideSource_.positions[index];
@@ -872,8 +872,7 @@ namespace Lilium
             KeyPoseGaps gaps = new KeyPoseGaps { clip = clip, version = version };
             // 今のコントロールの値（クリップを当てた後、点の状態を入れた後）を控えて、測った後に戻す
             ControlState saved = CaptureControlState ();
-            float[] savedLayerWeights = layerProxies_.Select (c => c != null ? c.weight : 0).ToArray ();
-            float[] savedConstraintWeights = constraintProxies_.Select (c => c != null ? c.weight : 0).ToArray ();
+            float[] savedWeights = ReadProxyWeights ();
             HashSet<Transform> savedSpan = new HashSet<Transform> (lockedSpanPoints_);
             HashSet<Transform> savedCarried = new HashSet<Transform> (carriedPoints_);
             buildingKeyPoseGaps_ = true;
@@ -906,12 +905,7 @@ namespace Lilium
                 editingRig.ResetBonesToRest ();
                 fullBody.ClearInput ();
                 RestoreControlState (saved);
-                for (int i = 0; i < layerProxies_.Length; i++) {
-                    if (layerProxies_[i] != null) layerProxies_[i].weight = savedLayerWeights[i];
-                }
-                for (int i = 0; i < constraintProxies_.Length; i++) {
-                    if (constraintProxies_[i] != null) constraintProxies_[i].weight = savedConstraintWeights[i];
-                }
+                WriteProxyWeights (savedWeights);
                 lockedSpanPoints_.Clear ();
                 lockedSpanPoints_.UnionWith (savedSpan);
                 carriedPoints_.Clear ();
@@ -970,12 +964,7 @@ namespace Lilium
                 t.localScale = controlRestScales_[i];
             }
             WritePointValues (bodyPointRest_);
-            for (int i = 0; i < layerProxies_.Length; i++) {
-                if (layerProxies_[i] != null) layerProxies_[i].weight = layerProxyRest_[i];
-            }
-            for (int i = 0; i < constraintProxies_.Length; i++) {
-                if (constraintProxies_[i] != null) constraintProxies_[i].weight = constraintProxyRest_[i];
-            }
+            WriteProxyWeights (weightProxyRest_);
         }
 
         /// <summary>
@@ -998,6 +987,27 @@ namespace Lilium
             root.SetLocalPositionAndRotation (position, rotation);
             root.localScale = scale;
             if (weight < 1) Mix (bones, weight);
+        }
+
+        /// <summary>
+        /// 操作値を基準へ戻し、土台のクリップを当てる。土台は編集用クリップか、Humanoid のクリップをフレームごとに操作値へ直したもの（S14）
+        /// </summary>
+        public void SampleBaseAsControls (AnimationClip clip, bool humanoid, float time)
+        {
+            ResetControlsToRest ();
+            if (humanoid) SampleHumanoidAsControls (clip, time);
+            else if (clip != null) SampleClip (clip, time);
+        }
+
+        /// <summary>
+        /// 焼くときの、そのフレームの操作値（窓と PoseSession が同じ物を通る）: 土台を当て、overrides を下から重ねる。解くのは焼く側（HumanoidBaker）。
+        /// 全身 IK の点の状態（キーの間で Locked の点を解くか）は元のクリップで決める
+        /// </summary>
+        public void ApplyBakePose (AnimationClip baseClip, bool humanoidBase, IEnumerable<OverrideProperties.Layer> overrides, float time)
+        {
+            SampleBaseAsControls (baseClip, humanoidBase, time);
+            MaskBodyPointsForBake (humanoidBase ? null : baseClip, time);
+            foreach (OverrideProperties.Layer layer in overrides) ApplyOverride (layer.clip, layer.mode, layer.weight, time, layer.mask);
         }
 
         /// <summary>

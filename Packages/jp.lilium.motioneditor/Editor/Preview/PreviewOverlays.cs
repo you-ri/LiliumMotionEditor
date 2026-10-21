@@ -16,9 +16,8 @@ namespace Lilium
     [Icon (Icons.kFolder + "Motion.png")]
     [Overlay (typeof (PreviewWindow), "mkt-preview-toolbar", "Context", defaultDisplay = true,
         defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
-    class PreviewToolbarOverlay : Overlay, ICreateHorizontalToolbar
+    class PreviewToolbarOverlay : MotionOverlay, ICreateHorizontalToolbar
     {
-        PreviewWindow window_;
         ObjectField model_;
         ObjectField settings_;
         EditorToolbarButton createSettings_;
@@ -37,7 +36,7 @@ namespace Lilium
         public OverlayToolbar CreateHorizontalToolbarContent ()
         {
             OverlayToolbar toolbar = new OverlayToolbar ();
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return toolbar;
 
             model_ = new ObjectField { objectType = typeof (GameObject), allowSceneObjects = false, tooltip = Tr ("PREVIEW_OVERLAYS_MODEL_TOOLTIP") };
@@ -98,20 +97,17 @@ namespace Lilium
             toolbar.Add (followTimeline_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.poseSampled -= RefreshTime;
-            window_.poseSampled += RefreshTime;
+            Resubscribe ();
             return toolbar;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.poseSampled -= RefreshTime;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.poseSampled -= RefreshTime;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.poseSampled += RefreshTime;
         }
 
         void ShowTimelineClipMenu ()

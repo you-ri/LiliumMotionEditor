@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
+using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
 {
@@ -82,10 +84,61 @@ namespace Lilium
                     BodyPointTarget point = target as BodyPointTarget;
                     if (point != null && point.hasPendingKeys) point.WritePendingKeys (writer);
                 }
-                foreach (PoseTarget target in targets) target.WriteKeys (writer);
-                RigProxies proxies = stage.editingRig != null ? stage.editingRig.rigProxies : null;
-                if (proxies != null) proxies.WriteWeightKeys (writer);
+                WriteAllKeys (writer, targets, stage.editingRig != null ? stage.editingRig.rigProxies : null);
             }
+        }
+
+        /// <summary>
+        /// 全部の対象と、ゲームの Rig の重みのキーを打つ（姿勢全体のキーのカーブの組。どこで打っても同じ組にする）
+        /// </summary>
+        public static void WriteAllKeys (CurveWriter writer, IEnumerable<PoseTarget> targets, RigProxies proxies)
+        {
+            foreach (PoseTarget target in targets) target.WriteKeys (writer);
+            if (proxies != null) proxies.WriteWeightKeys (writer);
+        }
+
+        /// <summary>今の値（WriteAllKeys で打つ値）を、クリップに書かずに取り出す</summary>
+        public static Dictionary<EditorCurveBinding, float> CaptureValues (Transform root, IEnumerable<PoseTarget> targets, RigProxies proxies, int frame)
+        {
+            Dictionary<EditorCurveBinding, float> result = new Dictionary<EditorCurveBinding, float> ();
+            using (CurveWriter writer = CurveWriter.Begin (null, root, frame, null)) {
+                WriteAllKeys (writer, targets, proxies);
+                foreach (KeyValuePair<EditorCurveBinding, float> pair in writer.values) result[pair.Key] = pair.Value;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// muscle の値（Humanoid の姿勢の一部。手の形など）を今の姿勢に重ね、動いた骨の今の操作値を取り出す（窓の PoseBank と PoseSession.WriteMuscles）。
+        /// only があれば、そのパスの値だけ。取り出せなければ理由を返す（取り出せたら null）
+        /// </summary>
+        public static string CaptureMuscles (PreviewStage stage, IEnumerable<PoseTarget> targets, IReadOnlyDictionary<int, float> muscles, int frame,
+            ICollection<string> only, out Dictionary<EditorCurveBinding, float> values)
+        {
+            values = new Dictionary<EditorCurveBinding, float> ();
+            if (muscles == null || muscles.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_HUMANOID_VALUES");
+            Transform root = stage != null ? stage.editingRoot : null;
+            if (root == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_SELECT_CHARACTER");
+            HashSet<string> moved = stage.ApplyMusclesAsControls (muscles);
+            if (moved == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_APPLY_HUMANOID");
+            if (moved.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_MOVED_BONES");
+            // 全部の対象に書かせて、動いた骨の分だけ取る
+            foreach (KeyValuePair<EditorCurveBinding, float> pair in CaptureValues (root, targets, null, frame)) {
+                if (!moved.Contains (pair.Key.path)) continue;
+                if (only != null && !only.Contains (pair.Key.path)) continue;
+                values[pair.Key] = pair.Value;
+            }
+            return null;
+        }
+
+        /// <summary>body の中の Undo を 1 回にまとめ、name で戻せるようにする</summary>
+        public static void InUndoGroup (string name, System.Action body)
+        {
+            Undo.IncrementCurrentGroup ();
+            int group = Undo.GetCurrentGroup ();
+            body ();
+            Undo.SetCurrentGroupName (name);
+            Undo.CollapseUndoOperations (group);
         }
     }
 

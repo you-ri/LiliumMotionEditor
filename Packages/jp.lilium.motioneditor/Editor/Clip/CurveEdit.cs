@@ -22,6 +22,37 @@ namespace Lilium
             return binding.type == typeof (Transform) && binding.propertyName.StartsWith (kRotation + ".");
         }
 
+        /// <summary>成分の番号（プロパティ名の末尾の x・y・z・w。成分でなければ -1）</summary>
+        public static int AxisOf (string propertyName)
+        {
+            return string.IsNullOrEmpty (propertyName) ? -1 : "xyzw".IndexOf (propertyName[propertyName.Length - 1]);
+        }
+
+        /// <summary>カーブのパスの Transform（空のパスは root 自身）。root が無い・見つからなければ null</summary>
+        public static Transform FindPath (Transform root, string path)
+        {
+            return root == null ? null : path.Length == 0 ? root : root.Find (path);
+        }
+
+        /// <summary>4 本のカーブの値を回転にする（長さ 1 にする。ほぼ 0 なら単位回転）</summary>
+        public static Quaternion ToRotation (float x, float y, float z, float w)
+        {
+            float length = Mathf.Sqrt (x * x + y * y + z * z + w * w);
+            return length > 1e-6f ? new Quaternion (x / length, y / length, z / length, w / length) : Quaternion.identity;
+        }
+
+        /// <summary>クリップのフレームレート（クリップが無い・0 なら 60）</summary>
+        public static float FrameRateOf (AnimationClip clip)
+        {
+            return clip != null && clip.frameRate > 0 ? clip.frameRate : 60;
+        }
+
+        /// <summary>length 秒を rate で刻んだフレームの数（両端を含む。少なくとも 1）</summary>
+        public static int FrameCount (float length, float rate)
+        {
+            return Mathf.Max (1, Mathf.RoundToInt (length * rate) + 1);
+        }
+
         /// <summary>Transform の局所値（kPosition・kRotation・kScale）の 1 成分のカーブ</summary>
         public static EditorCurveBinding TransformBinding (string path, string property, int component)
         {
@@ -43,9 +74,7 @@ namespace Lilium
                 AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, RotationBinding (path, i));
                 if (curve != null && curve.length > 0) q[i] = curve.Evaluate (time);
             }
-            Quaternion rotation = new Quaternion (q[0], q[1], q[2], q[3]);
-            float length = Mathf.Sqrt (Quaternion.Dot (rotation, rotation));
-            return length > 1e-6f ? new Quaternion (q[0] / length, q[1] / length, q[2] / length, q[3] / length) : Quaternion.identity;
+            return ToRotation (q[0], q[1], q[2], q[3]);
         }
 
         /// <summary>
@@ -89,7 +118,7 @@ namespace Lilium
         /// 回転のキーの 1 軸だけを角度で変える（ほかの 2 軸は今の見え方のまま）
         /// </summary>
         /// <param name="hint">今見せている角度（同じ回転の表し方のうち、これに近いものを直す）</param>
-        public static void SetRotationAngle (AnimationClip clip, string path, int frame, int axis, float degrees, Vector3 hint)
+        internal static void SetRotationAngle (AnimationClip clip, string path, int frame, int axis, float degrees, Vector3 hint)
         {
             Vector3 euler = EulerAngles.Closest (EvaluateRotation (clip, path, frame / clip.frameRate), hint);
             euler[axis] = degrees;

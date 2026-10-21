@@ -27,17 +27,6 @@ namespace Lilium
         static bool missingReported_;
 
         /// <summary>
-        /// 窓の文字が変わり得るときに進む数（LocalizationSystem.generation）
-        /// </summary>
-        public static int generation
-        {
-            get {
-                EnsureLoaded ();
-                return LocalizationSystem.generation;
-            }
-        }
-
-        /// <summary>
         /// キーの文字を、今の言語・無ければ英語・それも無ければキーのまま返す。
         /// 英語へ落とすのは、訳していない窓がキーだらけになるより読めるため
         /// </summary>

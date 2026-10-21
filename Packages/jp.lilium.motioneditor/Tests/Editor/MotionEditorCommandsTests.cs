@@ -225,10 +225,9 @@ namespace Lilium
             return muscle.value;
         }
 
-        [Test]
-        public void WriteHand_AppliesPresetAndMuscles_ToTheChosenHandOnly ()
+        /// <summary>指のあるキャラの prefab（足の点で立たせるので、つま先も付ける）のパス</summary>
+        string CreateHandsPrefab ()
         {
-            // 指のあるキャラと、左手だけの握りのプリセット（右手には反対の手の値を写す）。足の点で立たせるので、つま先も付ける
             GameObject temp = new GameObject ("Hands");
             created_.Add (temp);
             Animator display = TestSkeleton.CreateHumanoidWithFingers (created_, toes: true);
@@ -237,12 +236,26 @@ namespace Lilium
             created_.Remove (display.avatar);
             string prefab = kFolder + "/Hands.prefab";
             PrefabUtility.SaveAsPrefabAsset (temp, prefab);
+            return prefab;
+        }
+
+        /// <summary>左手の人差し指だけを握るプリセット（右手には反対の手の値を写す）のパス</summary>
+        static string CreateFistPreset ()
+        {
             AnimationClip fist = new AnimationClip { frameRate = 60 };
             foreach (string attribute in new[] { "LeftHand.Index.1 Stretched", "LeftHand.Index.2 Stretched", "LeftHand.Index.3 Stretched" }) {
                 AnimationUtility.SetEditorCurve (fist, EditorCurveBinding.FloatCurve ("", typeof (Animator), attribute), AnimationCurve.Constant (0, 0, -1));
             }
             string presetPath = kFolder + "/Fist.pose.anim";
             AssetDatabase.CreateAsset (fist, presetPath);
+            return presetPath;
+        }
+
+        [Test]
+        public void WriteHand_AppliesPresetAndMuscles_ToTheChosenHandOnly ()
+        {
+            string prefab = CreateHandsPrefab ();
+            string presetPath = CreateFistPreset ();
 
             Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/Hands.rig.anim", create = true }).success);
             PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
@@ -281,6 +294,667 @@ namespace Lilium
             AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15,\"muscles\":[{\"name\":\"Left Arm Down-Up\",\"value\":0}]}"), "指でない muscle");
             AssertFailed (MotionEditorCommands.Run ("{\"command\":\"writeHand\",\"frame\":15}"), "手の形が無い");
             Assert.AreEqual (keys, AnimationUtility.GetCurveBindings (clip).Sum (b => AnimationUtility.GetEditorCurve (clip, b).length), "誤った要求では打たない");
+        }
+
+        [System.Serializable]
+        sealed class WriteResponse
+        {
+            public bool success;
+            public string error;
+            public WriteResult result;
+        }
+
+        [System.Serializable]
+        sealed class WriteResult
+        {
+            public int frame;
+            public List<PosePoint> points;
+            public List<string> unreached;
+            public List<MotionLintIssue> issues;
+            public List<PoseSnap> snapped;
+
+            public PosePoint Find (string name)
+            {
+                return points.FirstOrDefault (p => p.name == name);
+            }
+        }
+
+        static Dictionary<EditorCurveBinding, Keyframe[]> Curves (AnimationClip clip)
+        {
+            return AnimationUtility.GetCurveBindings (clip).ToDictionary (b => b, b => AnimationUtility.GetEditorCurve (clip, b).keys);
+        }
+
+        static void AssertSameCurves (Dictionary<EditorCurveBinding, Keyframe[]> expected, AnimationClip clip, string message)
+        {
+            Dictionary<EditorCurveBinding, Keyframe[]> actual = Curves (clip);
+            CollectionAssert.AreEquivalent (expected.Keys, actual.Keys, message + ": カーブの組");
+            foreach (KeyValuePair<EditorCurveBinding, Keyframe[]> pair in expected) {
+                Keyframe[] keys = actual[pair.Key];
+                Assert.AreEqual (pair.Value.Length, keys.Length, message + ": " + pair.Key.path + " " + pair.Key.propertyName);
+                for (int i = 0; i < keys.Length; i++) {
+                    Assert.AreEqual (pair.Value[i].time, keys[i].time, 1e-6f, message);
+                    Assert.AreEqual (pair.Value[i].value, keys[i].value, 1e-6f, message + ": " + pair.Key.path + " " + pair.Key.propertyName);
+                }
+            }
+        }
+
+        [Test]
+        public void WritePose_ReturnsResidualAndUnreachedPoints ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Reach.rig.anim", create = true }).success);
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+            float scale = rest.result.humanScale;
+
+            WriteResponse reached = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 0, 0) });
+            Assert.IsTrue (reached.success, reached.error);
+            foreach (PosePoint point in reached.result.points) {
+                if (point.state == "Free") Assert.AreEqual (0, point.residual, point.name + ": Free の点は 0");
+                else Assert.LessOrEqual (point.residual, 0.001f * scale, point.name + ": 届く所に置いた点");
+            }
+            Assert.IsEmpty (reached.result.unreached);
+
+            // 伸ばした左手を、さらに 30cm 外へ引く（腰を Pin、足を Locked にしているので届かない）
+            PoseDocument far = Squat (rest.result, 30, 0);
+            far.Find ("LeftHand").position = rest.result.Find ("LeftHand").position + new Vector3 (-0.3f, 0, 0);
+            // 試しに解いてから打つ（同じ姿勢から解くので同じ差になる。打った後に解き直すと、解き始めの姿勢が違うので差も変わる）
+            WriteResponse dry = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = far, dryRun = true });
+            WriteResponse unreached = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = far });
+            Assert.IsTrue (unreached.success, unreached.error);
+            float residual = unreached.result.Find ("LeftHand").residual;
+            Assert.Greater (residual, 0.01f * scale, "届かなかった差");
+            Assert.LessOrEqual (residual, 0.3f + 0.001f, "引いた分より離れない");
+            CollectionAssert.Contains (unreached.result.unreached, "LeftHand");
+            Assert.AreEqual (residual, dry.result.Find ("LeftHand").residual, 1e-4f, "試しに解いても同じ差");
+            CollectionAssert.Contains (dry.result.unreached, "LeftHand");
+        }
+
+        [Test]
+        public void WritePose_ReturnsFloorAndMuscleIssuesAtThatFrame ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Issues.rig.anim", create = true }).success);
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+
+            // 腰だけ 10cm 下げる。足は Free なので体ごと下がり、床に沈む
+            PoseDocument sunk = new PoseDocument { frame = 0 };
+            sunk.points.Add (new PosePoint { name = "Hips", state = "Pin", position = rest.result.Find ("Hips").position + new Vector3 (0, -0.1f, 0) });
+            WriteResponse floor = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = sunk });
+            Assert.IsTrue (floor.success, floor.error);
+            Assert.IsTrue (floor.result.issues.Any (i => i.kind == MotionLint.kFloorPenetration && i.target.Contains ("Heel")), "沈んだ足の点");
+            Assert.IsTrue (floor.result.issues.All (i => i.frame == 0 && i.endFrame == 0), "そのフレームだけ");
+
+            // 左腕を FK で回しきってキーにし、腰だけを置き直す（Free の腕は FK のまま）
+            PoseSession session = MotionEditorCommands.session;
+            session.Evaluate (10);
+            Transform arm = session.stage.editingRig.FindControl (RigPaths.Fk (HumanBodyBones.LeftUpperArm));
+            arm.localRotation *= Quaternion.Euler (0, 0, 170);
+            session.SolveAfterEdit ();
+            Assert.IsNull (session.CommitPose ());
+            PoseResponse bent = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 10 });
+            PoseDocument hips = new PoseDocument { frame = 10 };
+            hips.points.Add (new PosePoint { name = "Hips", state = "Pin", position = bent.result.Find ("Hips").position });
+            WriteResponse muscle = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = hips });
+            Assert.IsTrue (muscle.success, muscle.error);
+            List<string> expected = MotionLint.Run (session, 10, 10).issues.Where (i => i.kind == MotionLint.kMuscleRange).Select (i => i.target).ToList ();
+            Assert.IsNotEmpty (expected);
+            CollectionAssert.AreEquivalent (expected, muscle.result.issues.Where (i => i.kind == MotionLint.kMuscleRange).Select (i => i.target), "検査と同じ muscle");
+        }
+
+        [Test]
+        public void DryRun_ReturnsTheSolvedPose_WithoutKeying ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Dry.rig.anim", create = true }).success);
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+            foreach ((int frame, float down) in new[] { (0, 0f), (30, 0.12f) }) {
+                Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, frame, down) }).success);
+            }
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            Dictionary<EditorCurveBinding, Keyframe[]> before = Curves (clip);
+            PoseResponse between = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 15 });
+
+            WriteResponse dry = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 15, 0.06f), dryRun = true });
+            Assert.IsTrue (dry.success, dry.error);
+            Assert.AreEqual (15, dry.result.frame);
+            AssertSameCurves (before, clip, "試しに解いてもキーを打たない");
+            PoseResponse after = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 15 });
+            foreach (PosePoint point in between.result.points) {
+                Assert.AreEqual (point.state, after.result.Find (point.name).state, point.name + ": 置いた点を残さない");
+                Assert.LessOrEqual (Vector3.Distance (point.position, after.result.Find (point.name).position), 1e-4f, point.name);
+            }
+
+            WriteResponse written = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 15, 0.06f) });
+            Assert.IsTrue (written.success, written.error);
+            foreach (PosePoint point in written.result.points) {
+                PosePoint solved = dry.result.Find (point.name);
+                Assert.AreEqual (point.state, solved.state, point.name);
+                Assert.LessOrEqual (Vector3.Distance (point.position, solved.position), 1e-4f, point.name + ": 試しに解いた姿勢と、打った姿勢が同じ");
+                if (point.hasRotation) Assert.LessOrEqual (Quaternion.Angle (Quaternion.Euler (point.rotation), Quaternion.Euler (solved.rotation)), 0.01f, point.name);
+            }
+        }
+
+        [Test]
+        public void Undo_RestoresTheClip_BeforeTheLastWrite ()
+        {
+            string prefab = CreateHandsPrefab ();
+            string presetPath = CreateFistPreset ();
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/Undo.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 0, 0) }).success);
+            Dictionary<EditorCurveBinding, Keyframe[]> first = Curves (clip);
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 30, 0.12f) }).success);
+            Dictionary<EditorCurveBinding, Keyframe[]> second = Curves (clip);
+            Assert.IsTrue (Run<HandResponse> (new MotionEditorRequest { command = "writeHand", frame = 30, preset = presetPath }).success);
+
+            DescribeResponse undone = Run<DescribeResponse> (new MotionEditorRequest { command = "undo" });
+            Assert.IsTrue (undone.success, undone.error);
+            AssertSameCurves (second, clip, "手の形を戻す");
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "undo" }).success);
+            AssertSameCurves (first, clip, "続けて姿勢を戻す");
+            undone = Run<DescribeResponse> (new MotionEditorRequest { command = "undo" });
+            Assert.IsTrue (undone.success, undone.error);
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (clip), "開いたときの空のクリップへ戻る");
+            Assert.IsEmpty (undone.result.keyFrames);
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"undo\"}"), "戻す書き込みが無い");
+        }
+
+        [Test]
+        public void Undo_Refuses_WhenTheClipChangedAfterTheWrite ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Changed.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseResponse rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 });
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest.result, 0, 0) }).success);
+
+            // 窓で直したのと同じく、操作口を通さずにカーブを書き換える
+            EditorCurveBinding binding = AnimationUtility.GetCurveBindings (clip).First ();
+            AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, binding);
+            curve.AddKey (0.5f, 1);
+            AnimationUtility.SetEditorCurve (clip, binding, curve);
+            Dictionary<EditorCurveBinding, Keyframe[]> edited = Curves (clip);
+
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"undo\"}"), "書いた後に変わったクリップ");
+            AssertSameCurves (edited, clip, "ユーザーの直しを消さない");
+        }
+
+        [Test]
+        public void Describe_ReturnsRestPositionsAndBoneLengths_EvenAfterKeys ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Rest.rig.anim", create = true }).success);
+            // 空のクリップの 0 フレームは T ポーズ
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest, 0, 0.12f) }).success);
+
+            DescribeResponse described = Run<DescribeResponse> (new MotionEditorRequest { command = "describe" });
+            Assert.IsTrue (described.success, described.error);
+            Dictionary<string, MotionEditorPointInfo> points = described.result.points.ToDictionary (p => p.name);
+            foreach (PosePoint point in rest.points) {
+                Assert.LessOrEqual (Vector3.Distance (point.position, points[point.name].rest), 1e-4f, point.name + ": キーを打った後も T ポーズの場所");
+            }
+
+            MotionEditorPointInfo elbow = points["LeftLowerArm"];
+            Assert.AreEqual ("LeftUpperArm", elbow.link);
+            Assert.AreEqual (Vector3.Distance (rest.Find ("LeftUpperArm").position, rest.Find ("LeftLowerArm").position), elbow.length, 1e-4f, "上腕の長さ");
+            Assert.AreEqual ("LeftLowerArm", points["LeftHand"].link);
+            Assert.AreEqual ("LeftLowerArm", elbow.bone);
+            Assert.IsTrue (points["LeftHeel"].contact && points["LeftHeel"].ground, "足裏の点");
+            Assert.IsFalse (points["Hips"].contact || points["Hips"].ground);
+            Assert.AreEqual ("", points["Hips"].link, "根の点はつなぐ相手が無い");
+            Assert.AreEqual (0, points["Hips"].length);
+        }
+
+        [Test]
+        public void Compact_RoundsAndOmits_AndRoundTrips ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Compact.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            PoseDocument squat = Squat (rest, 30, 0.12f);
+            squat.points.Add (new PosePoint { name = "Head", state = "Pin", position = rest.Find ("Head").position + new Vector3 (0, -0.1f, 0.05f), hasRotation = true, pinRotation = true, rotation = new Vector3 (20, 10, 0) });
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = squat }).success);
+
+            string full = MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "readPose", frame = 30 }));
+            string compact = MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "readPose", frame = 30, compact = true }));
+            Assert.LessOrEqual (compact.Length * 2, full.Length, "半分以下: " + compact.Length + " / " + full.Length);
+            PoseDocument exact = JsonUtility.FromJson<PoseResponse> (full).result;
+            PoseDocument rounded = JsonUtility.FromJson<PoseResponse> (compact).result;
+            Assert.AreEqual (exact.points.Count, rounded.points.Count);
+            foreach (PosePoint point in exact.points) {
+                PosePoint read = rounded.Find (point.name);
+                Assert.AreEqual (point.state, read.state, point.name);
+                if (point.state == "Free") {
+                    Assert.AreEqual (Vector3.zero, read.position, point.name + ": Free の点の場所は省く");
+                    continue;
+                }
+                Assert.LessOrEqual (Vector3.Distance (point.position, read.position), 0.001f, point.name);
+                Assert.AreEqual (point.hasRotation, read.hasRotation, point.name);
+                if (point.hasRotation) {
+                    Assert.AreEqual (point.pinRotation, read.pinRotation, point.name);
+                    Assert.LessOrEqual (Quaternion.Angle (Quaternion.Euler (point.rotation), Quaternion.Euler (read.rotation)), 0.1f, point.name);
+                }
+            }
+            StringAssert.DoesNotContain ("-0,", compact, "-0 は 0 にする");
+
+            // 丸めた姿勢をそのまま書き戻せる（解き直すので S36 の書き直しの許し 2mm に、丸めの分を足す）
+            rounded.frame = 30;
+            WriteResponse written = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = rounded, compact = true });
+            Assert.IsTrue (written.success, written.error);
+            Assert.IsNotNull (written.result.unreached, "compact でも unreached と issues を返す");
+            Assert.IsNotNull (written.result.issues);
+            PoseDocument again = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 30 }).result;
+            foreach (PosePoint point in exact.points) {
+                Assert.LessOrEqual (Vector3.Distance (point.position, again.Find (point.name).position), 0.003f, point.name + ": 書き戻した姿勢");
+            }
+        }
+
+        [Test]
+        public void PoseFile_WritesTheSamePoseAsInlineJson ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/File.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            PoseDocument squat = Squat (rest, 10, 0.12f);
+            string path = System.IO.Path.Combine (System.IO.Path.GetTempPath (), "MktPoseFileTest.json");
+            string badPath = System.IO.Path.Combine (System.IO.Path.GetTempPath (), "MktPoseFileTestBad.json");
+            System.IO.File.WriteAllText (path, squat.ToJson ());
+            System.IO.File.WriteAllText (badPath, "{not json");
+            try {
+                WriteResponse inline = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = squat, dryRun = true });
+                WriteResponse file = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", poseFile = path, dryRun = true });
+                Assert.IsTrue (file.success, file.error);
+                foreach (PosePoint point in inline.result.points) {
+                    Assert.LessOrEqual (Vector3.Distance (point.position, file.result.Find (point.name).position), 1e-5f, point.name);
+                }
+
+                AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "writePose", poseFile = path + ".missing" })), "無いファイル");
+                AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "writePose", poseFile = badPath })), "読めない JSON");
+                Assert.IsEmpty (AnimationUtility.GetCurveBindings (MotionEditorCommands.session.clip), "誤った要求では書かない");
+
+                Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", poseFile = path }).success);
+                CollectionAssert.AreEqual (new[] { 10 }, Run<DescribeResponse> (new MotionEditorRequest { command = "describe" }).result.keyFrames);
+            }
+            finally {
+                System.IO.File.Delete (path);
+                System.IO.File.Delete (badPath);
+            }
+        }
+
+        [System.Serializable]
+        sealed class MotionResponse
+        {
+            public bool success;
+            public string error;
+            public MotionResult result;
+        }
+
+        [System.Serializable]
+        sealed class MotionResult
+        {
+            public List<KeyResult> keys;
+            public MotionLintReport lint;
+        }
+
+        [System.Serializable]
+        sealed class KeyResult
+        {
+            public int frame;
+            public float maxResidual;
+            public List<string> unreached;
+        }
+
+        [System.Serializable]
+        sealed class ReadMotionResponse
+        {
+            public bool success;
+            public string error;
+            public MotionEditorRequest result;
+        }
+
+        static MotionEditorKey Key (PoseDocument pose, params MotionEditorHandShape[] hands)
+        {
+            return new MotionEditorKey { frame = pose.frame, points = pose.points, hands = hands.ToList () };
+        }
+
+        /// <summary>体と手のある 4 キー（しゃがんで立つ。10・20 フレームで右手を握り、30 フレームで人差し指を少し開く）</summary>
+        static List<MotionEditorKey> SquatKeys (PoseDocument rest, string fist)
+        {
+            MotionEditorHandShape open = new MotionEditorHandShape { hand = "Right" };
+            open.muscles.Add (new MotionEditorMuscle { name = "Index 1 Stretched", value = 0.4f });
+            return new List<MotionEditorKey> {
+                // 並びはフレームの順でなくてよい
+                Key (Squat (rest, 20, 0.12f), new MotionEditorHandShape { preset = fist, hand = "Right" }),
+                Key (Squat (rest, 0, 0)),
+                Key (Squat (rest, 10, 0.06f), new MotionEditorHandShape { preset = fist, hand = "Right" }),
+                Key (Squat (rest, 30, 0), open),
+            };
+        }
+
+        [Test]
+        public void WriteMotion_WritesTheSameCurvesAsOneByOne ()
+        {
+            string prefab = CreateHandsPrefab ();
+            string fist = CreateFistPreset ();
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/OneByOne.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            foreach (MotionEditorKey key in SquatKeys (rest, fist).OrderBy (k => k.frame)) {
+                Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = new PoseDocument { frame = key.frame, points = key.points } }).success);
+                foreach (MotionEditorHandShape hand in key.hands) {
+                    HandResponse written = Run<HandResponse> (new MotionEditorRequest { command = "writeHand", frame = key.frame, preset = hand.preset, hand = hand.hand, muscles = hand.muscles });
+                    Assert.IsTrue (written.success, written.error);
+                }
+            }
+            Dictionary<EditorCurveBinding, Keyframe[]> expected = Curves (MotionEditorCommands.session.clip);
+
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/AtOnce.rig.anim", create = true }).success);
+            MotionResponse motion = Run<MotionResponse> (new MotionEditorRequest { command = "writeMotion", keys = SquatKeys (rest, fist) });
+            Assert.IsTrue (motion.success, motion.error);
+            CollectionAssert.AreEqual (new[] { 0, 10, 20, 30 }, motion.result.keys.Select (k => k.frame), "フレームの順に書く");
+            Assert.IsTrue (motion.result.keys.All (k => k.unreached.Count == 0 && k.maxResidual <= 0.001f));
+            Assert.AreEqual (30, motion.result.lint.endFrame, "最後に全体を検査する");
+            AssertSameCurves (expected, MotionEditorCommands.session.clip, "1 つずつ書いたのと同じ");
+        }
+
+        [Test]
+        public void WriteMotion_RejectsBadKeys_WithoutWritingAnything ()
+        {
+            string prefab = CreateHandsPrefab ();
+            string fist = CreateFistPreset ();
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/Bad.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest, 0, 0) }).success);
+            Dictionary<EditorCurveBinding, Keyframe[]> before = Curves (clip);
+
+            PoseDocument tail = Squat (rest, 20, 0);
+            tail.points.Add (new PosePoint { name = "Tail", state = "Pin" });
+            PoseDocument jump = Squat (rest, 20, 0);
+            jump.points[0].state = "Jump";
+            foreach ((MotionEditorKey bad, string message) in new[] {
+                (Key (tail), "無い点"),
+                (Key (jump), "無い状態"),
+                (Key (Squat (rest, 20, 0), new MotionEditorHandShape { preset = "NoSuchPreset" }), "無いプリセット"),
+                (new MotionEditorKey { frame = 20 }, "点も手も無いキー"),
+                (Key (Squat (rest, 10, 0)), "同じフレーム"),
+                (Key (Squat (rest, -5, 0)), "マイナスのフレーム"),
+            }) {
+                MotionEditorRequest request = new MotionEditorRequest { command = "writeMotion", replace = true };
+                request.keys.Add (Key (Squat (rest, 10, 0.06f), new MotionEditorHandShape { preset = fist }));
+                request.keys.Add (bad);
+                string response = MotionEditorCommands.Run (JsonUtility.ToJson (request));
+                AssertFailed (response, message);
+                StringAssert.Contains (bad.frame.ToString (), JsonUtility.FromJson<Head> (response).error, message + ": どのキーか分かる");
+                AssertSameCurves (before, clip, message + ": 何も書かない（replace でも消さない）");
+            }
+        }
+
+        [Test]
+        public void WriteMotion_Replace_StartsOver_AndUndoesAtOnce ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Replace.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            MotionEditorRequest first = new MotionEditorRequest { command = "writeMotion", lint = false };
+            first.keys.Add (Key (Squat (rest, 0, 0)));
+            first.keys.Add (Key (Squat (rest, 30, 0.12f)));
+            string written = MotionEditorCommands.Run (JsonUtility.ToJson (first));
+            Assert.IsTrue (JsonUtility.FromJson<Head> (written).success, written);
+            StringAssert.DoesNotContain ("\"lint\"", written, "lint を切ると検査しない");
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "undo" }).success);
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (clip), "1 回の undo で全部のキーが戻る");
+
+            Assert.IsTrue (Run<MotionResponse> (first).success);
+            Dictionary<EditorCurveBinding, Keyframe[]> two = Curves (clip);
+            MotionEditorRequest again = new MotionEditorRequest { command = "writeMotion", replace = true };
+            again.keys.Add (Key (Squat (rest, 15, 0.06f)));
+            Assert.IsTrue (Run<MotionResponse> (again).success);
+            CollectionAssert.AreEqual (new[] { 15 }, Run<DescribeResponse> (new MotionEditorRequest { command = "describe" }).result.keyFrames, "前のキーが残らない");
+
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "undo" }).success);
+            AssertSameCurves (two, clip, "消したキーも戻る");
+        }
+
+        [Test]
+        public void ReadMotion_RoundTripsThroughWriteMotion ()
+        {
+            string prefab = CreateHandsPrefab ();
+            string fist = CreateFistPreset ();
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/Read.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Assert.IsTrue (Run<MotionResponse> (new MotionEditorRequest { command = "writeMotion", keys = SquatKeys (rest, fist) }).success);
+            Dictionary<int, PoseDocument> poses = new[] { 0, 10, 20, 30 }.ToDictionary (f => f, f => Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = f }).result);
+            Dictionary<int, MotionEditorHand> hands = new[] { 0, 10, 20, 30 }.ToDictionary (f => f, f => Run<HandResponse> (new MotionEditorRequest { command = "readHand", frame = f }).result);
+
+            ReadMotionResponse read = Run<ReadMotionResponse> (new MotionEditorRequest { command = "readMotion" });
+            Assert.IsTrue (read.success, read.error);
+            CollectionAssert.AreEqual (new[] { 0, 10, 20, 30 }, read.result.keys.Select (k => k.frame));
+            Assert.AreEqual (40, read.result.keys[0].hands[0].muscles.Count, "両手の指の muscle");
+
+            MotionEditorRequest rewrite = new MotionEditorRequest { command = "writeMotion", keys = read.result.keys, replace = true };
+            MotionResponse rewritten = Run<MotionResponse> (rewrite);
+            Assert.IsTrue (rewritten.success, rewritten.error);
+            foreach (int frame in poses.Keys) {
+                PoseDocument again = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = frame }).result;
+                foreach (PosePoint point in poses[frame].points) {
+                    Assert.LessOrEqual (Vector3.Distance (point.position, again.Find (point.name).position), 0.003f, frame + "F " + point.name);
+                }
+                MotionEditorHand hand = Run<HandResponse> (new MotionEditorRequest { command = "readHand", frame = frame }).result;
+                foreach (MotionEditorMuscle muscle in hands[frame].muscles) {
+                    Assert.AreEqual (muscle.value, MuscleValue (hand, muscle.name), 2e-3f, frame + "F " + muscle.name);
+                }
+            }
+        }
+
+        /// <summary>試しに解いた姿勢（キーは打たない）</summary>
+        static WriteResult DryRun (PoseDocument pose)
+        {
+            WriteResponse response = Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = pose, dryRun = true });
+            Assert.IsTrue (response.success, response.error);
+            return response.result;
+        }
+
+        static Quaternion RotationOf (WriteResult result, string name)
+        {
+            return Quaternion.Euler (result.Find (name).rotation);
+        }
+
+        /// <summary>足を Locked・腰を Pin にした立ち姿に、点を足す</summary>
+        static PoseDocument Stand (PoseDocument rest, params PosePoint[] points)
+        {
+            PoseDocument pose = Squat (rest, 0, 0);
+            pose.points.RemoveAll (p => p.name == "LeftHand");
+            pose.points.RemoveAll (p => points.Any (q => q.name == p.name));
+            pose.points.AddRange (points);
+            return pose;
+        }
+
+        [Test]
+        public void Aim_TurnsPointsLikeEulerAngles_FromDirections ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Aim.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Vector3 hips = rest.Find ("Hips").position;
+
+            Quaternion turn = Quaternion.Euler (10, 30, 0);
+            WriteResult euler = DryRun (Stand (rest, new PosePoint { name = "Hips", state = "Pin", position = hips, hasRotation = true, pinRotation = true, rotation = new Vector3 (10, 30, 0) }));
+            WriteResult aimed = DryRun (Stand (rest, new PosePoint { name = "Hips", state = "Pin", position = hips, aim = new PoseAim { forward = turn * Vector3.forward, up = turn * Vector3.up } }));
+            Assert.LessOrEqual (Quaternion.Angle (RotationOf (euler, "Hips"), RotationOf (aimed, "Hips")), 0.1f, "オイラー角で書いたのと同じ向き");
+
+            // 右手の指を前・手のひらを下へ（T ポーズでは指が +x・手のひらが -y）
+            Vector3 shoulder = rest.Find ("RightUpperArm").position;
+            float arm = Vector3.Distance (shoulder, rest.Find ("RightHand").position);
+            PosePoint hand = new PosePoint {
+                name = "RightHand", state = "Pin", position = shoulder + new Vector3 (0.05f, -0.1f, 0.6f * arm),
+                aim = new PoseAim { restForward = Vector3.right, restUp = Vector3.down, forward = Vector3.forward, up = Vector3.down },
+            };
+            WriteResult turned = DryRun (Stand (rest, hand));
+            Quaternion q = RotationOf (turned, "RightHand");
+            Assert.LessOrEqual (Vector3.Angle (q * Vector3.right, Vector3.forward), 0.5f, "指が前");
+            Assert.LessOrEqual (Vector3.Angle (q * Vector3.down, Vector3.down), 0.5f, "手のひらが下");
+
+            // 頭を場所へ向ける
+            Vector3 head = rest.Find ("Head").position;
+            Vector3 target = head + new Vector3 (0.3f, -0.2f, 1);
+            WriteResult looked = DryRun (Stand (rest, new PosePoint { name = "Head", state = "Pin", position = head, aim = new PoseAim { target = target } }));
+            Assert.LessOrEqual (Vector3.Angle (RotationOf (looked, "Head") * Vector3.forward, target - head), 0.5f, "頭が場所を向く");
+
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest {
+                command = "writePose", pose = Stand (rest, new PosePoint { name = "LeftLowerArm", state = "Pin", position = rest.Find ("LeftLowerArm").position, aim = new PoseAim { forward = Vector3.forward } }),
+            })), "向きを持たない点の aim");
+        }
+
+        [Test]
+        public void Space_PlacesPointsInAnotherPointsFrame ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Space.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Vector3 head = rest.Find ("Head").position;
+            Vector3 hips = rest.Find ("Hips").position;
+
+            // 頭を下へ向け、左手を頭の前（頭の座標）に置く
+            Vector3 face = new Vector3 (-0.1f, -0.05f, 0.12f);
+            WriteResult result = DryRun (Stand (rest,
+                new PosePoint { name = "Head", state = "Pin", position = head, hasRotation = true, pinRotation = true, rotation = new Vector3 (30, 0, 0) },
+                new PosePoint { name = "LeftHand", state = "Pin", position = face, space = "Head" }));
+            Assert.LessOrEqual (Vector3.Distance (result.Find ("LeftHand").position, head + Quaternion.Euler (30, 0, 0) * face), 0.001f, "頭から見て同じ所");
+
+            // 軸を腰の回転から頭の回転へ 0.6 寄せる
+            Vector3 offset = new Vector3 (-0.25f, -0.3f, 0.2f);
+            Quaternion from = Quaternion.Euler (0, 40, 0), to = Quaternion.Euler (0, -20, 0);
+            WriteResult blended = DryRun (Stand (rest,
+                new PosePoint { name = "Hips", state = "Pin", position = hips, hasRotation = true, pinRotation = true, rotation = from.eulerAngles },
+                new PosePoint { name = "Head", state = "Pin", position = head, hasRotation = true, pinRotation = true, rotation = to.eulerAngles },
+                new PosePoint { name = "LeftHand", state = "Pin", position = offset, space = "Head", spaceBlendFrom = "Hips", spaceBlend = 0.6f }));
+            Assert.LessOrEqual (Vector3.Distance (blended.Find ("LeftHand").position, head + Quaternion.Slerp (from, to, 0.6f) * offset), 0.001f, "混ぜた軸");
+
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest {
+                command = "writePose",
+                pose = Stand (rest,
+                    new PosePoint { name = "Head", state = "Pin", position = Vector3.zero, space = "LeftHand" },
+                    new PosePoint { name = "LeftHand", state = "Pin", position = face, space = "Head" }),
+            })), "基準が連なる");
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest {
+                command = "writePose", pose = Stand (rest, new PosePoint { name = "LeftHand", state = "Pin", position = face, space = "Tail" }),
+            })), "無い基準");
+        }
+
+        static PoseContact Contact (string point, string mode, Vector3 at, float yaw = 0, float pitch = 0, float lift = 0)
+        {
+            return new PoseContact { point = point, mode = mode, at = at, yaw = yaw, pitch = pitch, lift = lift };
+        }
+
+        /// <summary>腰を Pin にして、足を接地で置いた姿勢（T ポーズの高さでは脚が伸びきって足を前へ出せないので、腰を少し下げる）</summary>
+        static PoseDocument Feet (PoseDocument rest, params PoseContact[] contacts)
+        {
+            PoseDocument pose = new PoseDocument { frame = 0 };
+            pose.points.Add (new PosePoint { name = "Hips", state = "Pin", position = rest.Find ("Hips").position + new Vector3 (0, -0.08f, 0) });
+            pose.contacts.AddRange (contacts);
+            return pose;
+        }
+
+        [Test]
+        public void Contacts_PlaceTheWholeFoot ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Contacts.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Vector3 left = rest.Find ("LeftFoot").position;
+            Vector3 right = rest.Find ("RightFoot").position;
+            PoseContact stay = Contact ("RightFoot", "Flat", right);
+            string[] soles = { "LeftHeel", "LeftToeTip", "LeftLittleToeSide" };
+
+            Vector3 at = new Vector3 (left.x - 0.03f, 0, left.z + 0.1f);
+            WriteResult flat = DryRun (Feet (rest, Contact ("LeftFoot", "Flat", at, 20), stay));
+            PosePoint ankle = flat.Find ("LeftFoot");
+            Assert.AreEqual ("Locked", ankle.state);
+            Assert.AreEqual (at.x, ankle.position.x, 0.001f);
+            Assert.AreEqual (at.z, ankle.position.z, 0.001f);
+            Assert.AreEqual (left.y, ankle.position.y, 0.001f, "足首は基準姿勢の高さ");
+            Assert.LessOrEqual (Quaternion.Angle (RotationOf (flat, "LeftFoot"), Quaternion.AngleAxis (20, Vector3.up)), 0.5f, "足の向き");
+            foreach (string sole in soles) {
+                Assert.AreEqual (0, flat.Find (sole).position.y, 0.001f, sole + ": 床");
+                Assert.AreEqual ("Locked", flat.Find (sole).state, sole);
+            }
+
+            WriteResult ball = DryRun (Feet (rest, Contact ("LeftFoot", "Ball", at, 0, 30), stay));
+            Assert.Greater (ball.Find ("LeftHeel").position.y, 0.01f, "かかとが上がる");
+            Assert.AreEqual (0, ball.Find ("LeftToeTip").position.y, 0.001f, "つま先は床のまま");
+            Assert.LessOrEqual (Quaternion.Angle (RotationOf (ball, "LeftFoot"), Quaternion.AngleAxis (30, Vector3.right)), 0.5f);
+
+            WriteResult heel = DryRun (Feet (rest, Contact ("LeftFoot", "Heel", at, 0, 20), stay));
+            Assert.Greater (heel.Find ("LeftToeTip").position.y, 0.01f, "つま先が上がる");
+            Assert.AreEqual (0, heel.Find ("LeftHeel").position.y, 0.001f, "かかとは床のまま");
+            Assert.LessOrEqual (Quaternion.Angle (RotationOf (heel, "LeftFoot"), Quaternion.AngleAxis (-20, Vector3.right)), 0.5f);
+
+            WriteResult lifted = DryRun (Feet (rest, Contact ("LeftFoot", "Flat", at, 0, 0, 0.05f), stay));
+            foreach (string sole in soles) Assert.AreEqual (0.05f, lifted.Find (sole).position.y, 0.001f, sole + ": 浮かせた高さ");
+
+            PoseDocument conflict = Feet (rest, Contact ("LeftFoot", "Flat", at), stay);
+            conflict.points.Add (new PosePoint { name = "LeftHeel", state = "Locked", position = Vector3.zero });
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "writePose", pose = conflict })), "points と contacts の両方");
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest { command = "writePose", pose = Feet (rest, Contact ("LeftFoot", "Tiptoe", at)) })), "無い mode");
+        }
+
+        [Test]
+        public void Contacts_WorkWithoutToeBones ()
+        {
+            GameObject temp = new GameObject ("NoToes");
+            created_.Add (temp);
+            Animator display = TestSkeleton.CreateHumanoid (created_, true);
+            display.transform.SetParent (temp.transform, false);
+            AssetDatabase.CreateAsset (display.avatar, kFolder + "/NoToes.asset");
+            created_.Remove (display.avatar);
+            string prefab = kFolder + "/NoToes.prefab";
+            PrefabUtility.SaveAsPrefabAsset (temp, prefab);
+
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefab, clip = kFolder + "/NoToes.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Vector3 left = rest.Find ("LeftFoot").position;
+            Vector3 at = new Vector3 (left.x, 0, left.z + 0.05f);
+            WriteResult result = DryRun (Feet (rest, Contact ("LeftFoot", "Ball", at, 10, 20), Contact ("RightFoot", "Flat", rest.Find ("RightFoot").position)));
+            Assert.AreEqual (at.x, result.Find ("LeftFoot").position.x, 0.02f, "ある点だけで置く");
+            Assert.AreEqual ("Locked", result.Find ("LeftFoot").state);
+        }
+
+        [Test]
+        public void Snap_MovesAnElbowWhereTheBonesReach ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Snap.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Vector3 shoulder = rest.Find ("LeftUpperArm").position;
+            Vector3 elbow = rest.Find ("LeftLowerArm").position;
+            Vector3 wrist = rest.Find ("LeftHand").position;
+            float upper = Vector3.Distance (shoulder, elbow), lower = Vector3.Distance (elbow, wrist);
+
+            // 手を肩の前へ寄せ、肘を届かない所（下の遠く）に置く
+            Vector3 hand = shoulder + new Vector3 (0.05f, -0.05f, 0.7f * (upper + lower));
+            Vector3 requested = shoulder + new Vector3 (-0.3f, -0.5f, 0);
+            WriteResult result = DryRun (Stand (rest,
+                new PosePoint { name = "LeftUpperArm", state = "Pin", position = shoulder },
+                new PosePoint { name = "LeftHand", state = "Pin", position = hand },
+                new PosePoint { name = "LeftLowerArm", state = "Pin", position = requested, snap = true }));
+            Assert.IsNotNull (result.snapped);
+            Assert.AreEqual (1, result.snapped.Count);
+            PoseSnap snap = result.snapped[0];
+            Assert.AreEqual ("LeftLowerArm", snap.name);
+            Assert.AreEqual (upper, Vector3.Distance (snap.position, shoulder), 0.001f, "上腕の長さ");
+            Assert.AreEqual (lower, Vector3.Distance (snap.position, hand), 0.001f, "前腕の長さ");
+            Assert.AreEqual (Vector3.Distance (snap.position, requested), snap.distance, 0.001f);
+            Vector3 axis = (hand - shoulder).normalized;
+            Vector3 center = shoulder + axis * Vector3.Dot (snap.position - shoulder, axis);
+            Assert.Greater (Vector3.Dot (snap.position - center, requested - center), 0, "曲がる向きは書いた場所の側");
+            CollectionAssert.DoesNotContain (result.unreached, "LeftLowerArm", "寄せた所には届く");
+
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest {
+                command = "writePose", pose = Stand (rest, new PosePoint { name = "Hips", state = "Pin", position = rest.Find ("Hips").position, snap = true }),
+            })), "線の親の無い点");
+        }
+
+        [Test]
+        public void RunBatch_KeepOpen_LeavesTheCharacterOpen ()
+        {
+            MotionEditorBatch batch = new MotionEditorBatch { keepOpen = true };
+            batch.requests.Add (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Open.rig.anim", create = true });
+            batch.requests.Add (new MotionEditorRequest { command = "readPose", frame = 0 });
+            BatchResponse response = JsonUtility.FromJson<BatchResponse> (MotionEditorCommands.RunBatch (JsonUtility.ToJson (batch)));
+            Assert.IsTrue (response.responses.All (r => r.success));
+            Assert.IsNotNull (MotionEditorCommands.session, "keepOpen なら閉じない");
+            Assert.IsTrue (JsonUtility.FromJson<Head> (MotionEditorCommands.Run ("{\"command\":\"describe\"}")).success, "続けて使える");
         }
 
         [Test]

@@ -3,7 +3,6 @@ using UnityEngine.UIElements;
 using UnityEditor;
 using UnityEditor.Overlays;
 using System.Collections.Generic;
-using System.Linq;
 using static Lilium.MotionEditorLocalization;
 
 namespace Lilium
@@ -18,14 +17,13 @@ namespace Lilium
     [Icon (Icons.kFolder + "Curves.png")]
     [Overlay (typeof (PreviewWindow), "mkt-curves", "Curves", defaultDisplay = true,
         defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom)]
-    class CurveEditorOverlay : Overlay, ICreateHorizontalToolbar
+    class CurveEditorOverlay : MotionOverlay, ICreateHorizontalToolbar
     {
         const float kWidth = 640;
         const float kHeight = 220;
         const float kListWidth = 160;
         static readonly Color kPanelColor = new Color (0.17f, 0.17f, 0.18f);
 
-        PreviewWindow window_;
         ScrollView list_;
         CurveView view_;
 
@@ -52,7 +50,7 @@ namespace Lilium
             root.style.height = kHeight;
             root.style.flexDirection = FlexDirection.Row;
             root.style.backgroundColor = kPanelColor;
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return;
 
             list_ = new ScrollView ();
@@ -69,25 +67,20 @@ namespace Lilium
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
             Rebuild ();
-            window_.stateChanged += Rebuild;
-            window_.keysChanged += OnKeysChanged;
-            window_.poseSampled += Repaint;
-            window_.propertySelectionChanged += Rebuild;
+            Resubscribe ();
         }
 
-        void Unsubscribe ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ == null) return;
             window_.stateChanged -= Rebuild;
             window_.keysChanged -= OnKeysChanged;
             window_.poseSampled -= Repaint;
             window_.propertySelectionChanged -= Rebuild;
-        }
-
-        public override void OnWillBeDestroyed ()
-        {
-            Unsubscribe ();
-            base.OnWillBeDestroyed ();
+            if (!on) return;
+            window_.stateChanged += Rebuild;
+            window_.keysChanged += OnKeysChanged;
+            window_.poseSampled += Repaint;
+            window_.propertySelectionChanged += Rebuild;
         }
 
         void OnKeysChanged ()

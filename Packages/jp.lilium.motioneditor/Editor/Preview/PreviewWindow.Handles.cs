@@ -159,10 +159,7 @@ namespace Lilium
                 if (pointTurned || HasPendingPointKeys ()) {
                     // キーの自動追加が切で、今のフレームに姿勢のキーが無い: 動かさない（つかむ前の操作値へ戻し、動かした印も捨てる）
                     if (!CanEditPoints ()) {
-                        foreach (PoseTarget target in targets_) {
-                            BodyPointTarget point = target as BodyPointTarget;
-                            if (point != null) point.ClearPendingKeys ();
-                        }
+                        ClearPendingPointKeys ();
                         RevertManipulation (before);
                         return;
                     }
@@ -220,13 +217,7 @@ namespace Lilium
             pointKeysPending_ = false;
             handleKeysPending_ = false;
             if (stage_ == null || (!points && !handles)) return;
-            // 全身 IK の点を動かした・固定している点があるフレームで骨を動かした: 解いた姿勢を骨のキーとして打つ
-            if (points || hasActivePoints) {
-                CommitFullBodyPose ();
-                return;
-            }
-            AddKeyAllCurves (true);
-            RepaintView ();
+            CommitPose (points);
         }
 
         const float kDisplayResidualAngle = 1;

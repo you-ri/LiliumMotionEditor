@@ -16,11 +16,10 @@ namespace Lilium
     [Icon (Icons.kFolder + "Picker.png")]
     [Overlay (typeof (PreviewWindow), "mkt-picker", "Picker", defaultDisplay = true,
         defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
-    class PickerOverlay : Overlay
+    class PickerOverlay : MotionOverlay
     {
         const int kRowHeight = 18;
 
-        PreviewWindow window_;
         ListView list_;
         IList<PreviewWindow.PickerEntry> entries_;
 
@@ -32,7 +31,7 @@ namespace Lilium
             OverlayLayout.FollowDockWidth (this, root, () => 170);
             // ボタンが 3 段あるぶん、一覧の高さが今までと同じくらいになるようにしておく
             root.style.height = 360;
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             root.Add (MakeSelectButtons ());
@@ -53,15 +52,15 @@ namespace Lilium
             window_.SetPickerList (list_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) window_.stateChanged -= Refresh;
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            if (!on) return;
+            window_.stateChanged += Refresh;
         }
 
         /// <summary>
@@ -101,15 +100,7 @@ namespace Lilium
 
         static Button MakeSelectButton (string text, string tooltip, System.Action clicked)
         {
-            Button button = new Button (clicked) { text = text, tooltip = tooltip };
-            button.style.flexGrow = 1;
-            button.style.flexBasis = 0;
-            button.style.height = kRowHeight;
-            button.style.marginLeft = 0;
-            button.style.marginRight = 1;
-            button.style.paddingLeft = 0;
-            button.style.paddingRight = 0;
-            return button;
+            return PanelUI.CompactButton (text, tooltip, clicked, kRowHeight);
         }
 
         static VisualElement MakeRow ()

@@ -62,10 +62,11 @@ namespace Lilium
 
             // 表示モデルを今のフレームの姿勢にしてから読む
             SamplePose ();
-            Undo.IncrementCurrentGroup ();
-            RecordClipUndo ("Switch Parent");
-            string note = ParentSwitch.Switch (editingClip_, propertyRoot, bound, frame, source);
-            AfterClipEdit ();
+            string note = null;
+            EditClip (editingClip_, "Switch Parent", () => {
+                note = ParentSwitch.Switch (editingClip_, propertyRoot, bound, frame, source);
+                return true;
+            });
             if (note != null) ShowNotification (new GUIContent (note), 2.5);
         }
     }

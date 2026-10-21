@@ -102,9 +102,7 @@ namespace Lilium
 
         static Quaternion Normalize (Quaternion q)
         {
-            float length = Mathf.Sqrt (q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-            if (length < 1e-6f) return Quaternion.identity;
-            return new Quaternion (q.x / length, q.y / length, q.z / length, q.w / length);
+            return CurveEdit.ToRotation (q.x, q.y, q.z, q.w);
         }
     }
 
@@ -175,7 +173,7 @@ namespace Lilium
         /// <summary>
         /// 層を重ねる。root は編集用の体のルート（カーブのパスの基準）
         /// </summary>
-        public static void Apply (AnimationClip clip, OverrideMode mode, float weight, float time, Transform root)
+        internal static void Apply (AnimationClip clip, OverrideMode mode, float weight, float time, Transform root)
         {
             Apply (clip, mode, weight, time, root, null, null);
         }
@@ -191,7 +189,7 @@ namespace Lilium
             foreach (TransformCurves channel in curves.transforms) {
                 // Transform の 3 つの値は同じ物の値なので、位置・回転・大きさをまとめて絞る（決まりはパスと部位で決まる）
                 if (mask != null && !mask.Contains (EditorCurveBinding.FloatCurve (channel.path, typeof (Transform), kRotation + "x"), PartOf (parts, channel.path))) continue;
-                Transform t = channel.path.Length == 0 ? root : root.Find (channel.path);
+                Transform t = CurveEdit.FindPath (root, channel.path);
                 if (t == null) continue;
                 if (channel.position != null) {
                     t.localPosition = OverrideMath.ComposePosition (mode, t.localPosition, Evaluate (channel.position, time, mode == OverrideMode.Override ? t.localPosition : Vector3.zero), weight);
@@ -206,7 +204,7 @@ namespace Lilium
             }
             foreach (FloatCurve channel in curves.floats) {
                 if (mask != null && !mask.Contains (EditorCurveBinding.FloatCurve (channel.path, channel.type, channel.property), PartOf (parts, channel.path))) continue;
-                Transform t = channel.path.Length == 0 ? root : root.Find (channel.path);
+                Transform t = CurveEdit.FindPath (root, channel.path);
                 Component component = t != null ? t.GetComponent (channel.type) : null;
                 if (component == null) continue;
                 float current;
@@ -224,8 +222,7 @@ namespace Lilium
         public static bool IsSupportedFloat (EditorCurveBinding binding)
         {
             return (binding.type == typeof (BodyPoint) && BodyPoint.IndexOf (binding.propertyName) >= 0)
-                || (binding.type == typeof (RigLayerProxy) && binding.propertyName == RigLayerProxy.kWeightProperty)
-                || (binding.type == typeof (RigConstraintProxy) && binding.propertyName == RigConstraintProxy.kWeightProperty);
+                || (typeof (RigWeightProxy).IsAssignableFrom (binding.type) && binding.propertyName == RigWeightProxy.kWeightProperty);
         }
 
         static bool TryGetFloat (Component component, string property, out float value)
@@ -238,11 +235,10 @@ namespace Lilium
                 value = point.GetValue (index);
                 return true;
             }
-            RigLayerProxy layer = component as RigLayerProxy;
-            if (layer != null) { value = layer.weight; return true; }
-            RigConstraintProxy constraint = component as RigConstraintProxy;
-            if (constraint != null) { value = constraint.weight; return true; }
-            return false;
+            RigWeightProxy proxy = component as RigWeightProxy;
+            if (proxy == null) return false;
+            value = proxy.weight;
+            return true;
         }
 
         static void SetFloat (Component component, string property, float value)
@@ -252,10 +248,8 @@ namespace Lilium
                 point.SetValue (BodyPoint.IndexOf (property), value);
                 return;
             }
-            RigLayerProxy layer = component as RigLayerProxy;
-            if (layer != null) { layer.weight = value; return; }
-            RigConstraintProxy constraint = component as RigConstraintProxy;
-            if (constraint != null) constraint.weight = value;
+            RigWeightProxy proxy = component as RigWeightProxy;
+            if (proxy != null) proxy.weight = value;
         }
 
         /// <summary>欠けた成分は fallback（Additive なら 0 / 1、Override なら元の値）</summary>
@@ -292,7 +286,7 @@ namespace Lilium
                     else if (binding.propertyName.StartsWith (kRotation)) slot = channel.rotation ?? (channel.rotation = new AnimationCurve[4]);
                     else if (binding.propertyName.StartsWith (kScale)) slot = channel.scale ?? (channel.scale = new AnimationCurve[3]);
                     if (slot == null) continue;
-                    axis = "xyzw".IndexOf (binding.propertyName[binding.propertyName.Length - 1]);
+                    axis = CurveEdit.AxisOf (binding.propertyName);
                     if (axis < 0 || axis >= slot.Length) continue;
                     slot[axis] = AnimationUtility.GetEditorCurve (clip, binding);
                     continue;
@@ -318,8 +312,9 @@ namespace Lilium
     {
         public const string kSuffix = ".override";
 
+        /// <summary>.meta に書く段の印（ClipUserData.overrideLayer）</summary>
         [System.Serializable]
-        sealed class Settings
+        internal sealed class Settings
         {
             public string baseClip;
             /// <summary>元が FBX の中のクリップ（サブアセット）なら、そのクリップの名前（同じ FBX の別のテイクと分ける。S20）。空なら元はファイルそのもの</summary>
@@ -337,12 +332,6 @@ namespace Lilium
         static string BaseName (AnimationClip baseClip, string path)
         {
             return AssetDatabase.IsSubAsset (baseClip) ? baseClip.name : Path.GetFileNameWithoutExtension (path);
-        }
-
-        [System.Serializable]
-        sealed class Envelope
-        {
-            public Settings overrideLayer;
         }
 
         /// <summary>新しく作るときのパス（重ならない名前）</summary>
@@ -413,9 +402,8 @@ namespace Lilium
         public static bool Save (OverrideClip entry, AnimationClip baseClip)
         {
             string path = entry != null && entry.clip != null ? AssetDatabase.GetAssetPath (entry.clip) : null;
-            AssetImporter importer = string.IsNullOrEmpty (path) ? null : AssetImporter.GetAtPath (path);
             string basePath = baseClip != null ? AssetDatabase.GetAssetPath (baseClip) : null;
-            if (importer == null || string.IsNullOrEmpty (basePath)) return false;
+            if (string.IsNullOrEmpty (path) || string.IsNullOrEmpty (basePath)) return false;
             Settings settings = new Settings {
                 baseClip = AssetDatabase.AssetPathToGUID (basePath),
                 baseName = AssetDatabase.IsSubAsset (baseClip) ? baseClip.name : null,
@@ -423,21 +411,16 @@ namespace Lilium
                 order = entry.order,
                 mask = ChannelMaskFiles.ToGuid (entry.mask),
             };
-            string json = JsonUtility.ToJson (new Envelope { overrideLayer = settings });
-            if (importer.userData == json) return true;
-            importer.userData = json;
-            AssetDatabase.WriteImportSettingsIfDirty (path);
-            return true;
+            return ClipUserData.Save (path, data => data.overrideLayer = settings);
         }
 
         /// <summary>元から外す（ファイルは消さない。印だけ消す）</summary>
         public static void Unlink (AnimationClip clip)
         {
             string path = clip != null ? AssetDatabase.GetAssetPath (clip) : null;
-            AssetImporter importer = string.IsNullOrEmpty (path) ? null : AssetImporter.GetAtPath (path);
-            if (importer == null || Read (path) == null) return;
-            importer.userData = "";
-            AssetDatabase.WriteImportSettingsIfDirty (path);
+            if (string.IsNullOrEmpty (path) || Read (path) == null) return;
+            // 印だけ消す（Stacker の設定・サイクルキーの印は残す）
+            ClipUserData.Save (path, data => data.overrideLayer = null);
         }
 
         static OverrideClip ToEntry (AnimationClip clip, Settings settings)
@@ -449,15 +432,8 @@ namespace Lilium
 
         static Settings Read (string path)
         {
-            AssetImporter importer = AssetImporter.GetAtPath (path);
-            if (importer == null || string.IsNullOrEmpty (importer.userData) || !importer.userData.Contains ("overrideLayer")) return null;
-            try {
-                Envelope envelope = JsonUtility.FromJson<Envelope> (importer.userData);
-                return envelope != null && envelope.overrideLayer != null && !string.IsNullOrEmpty (envelope.overrideLayer.baseClip) ? envelope.overrideLayer : null;
-            }
-            catch (System.ArgumentException) {
-                return null;
-            }
+            Settings settings = ClipUserData.Load (path).overrideLayer;
+            return settings != null && !string.IsNullOrEmpty (settings.baseClip) ? settings : null;
         }
     }
 
@@ -537,9 +513,9 @@ namespace Lilium
         public static AnimationClip CreateBakeSource (AnimationClip baseClip, IList<Layer> layers, PreviewStage stage)
         {
             if (baseClip == null || !Any (layers)) return null;
-            float rate = baseClip.frameRate > 0 ? baseClip.frameRate : 60;
+            float rate = CurveEdit.FrameRateOf (baseClip);
             // 焼く長さ（HumanoidBaker と同じ決め方）
-            int frameCount = baseClip.empty ? 1 : Mathf.Max (1, Mathf.RoundToInt (baseClip.length * rate) + 1);
+            int frameCount = baseClip.empty ? 1 : CurveEdit.FrameCount (baseClip.length, rate);
             AnimationClip result = new AnimationClip { frameRate = rate, name = baseClip.name, hideFlags = HideFlags.HideAndDontSave };
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (baseClip)) {
                 if (RigPaths.FromProps (binding.path) != null) AnimationUtility.SetEditorCurve (result, binding, AnimationUtility.GetEditorCurve (baseClip, binding));

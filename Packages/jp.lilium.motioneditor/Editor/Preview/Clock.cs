@@ -192,7 +192,7 @@ namespace Lilium
         /// <summary>
         /// 再生中なら時刻を進める。進めたら true（姿勢を当て直す）。長さ（秒）で頭へ戻る
         /// </summary>
-        public bool Tick (double now, double length)
+        internal bool Tick (double now, double length)
         {
             return Tick (now, 0, length);
         }

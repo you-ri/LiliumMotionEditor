@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEditor;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace Lilium
@@ -8,7 +7,6 @@ namespace Lilium
 
     public sealed class AxisSlider
     {
-        public static Color edgeColor = Color.yellow;
         private static Vector3 hangPoint_ = Vector3.zero;
         private static float kDistanceMouseOver = 3.0f;
 

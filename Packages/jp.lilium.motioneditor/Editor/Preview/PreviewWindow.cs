@@ -69,10 +69,6 @@ namespace Lilium
         const float kMinLayersWidth = 200;
         /// <summary>タイムラインのトラック一覧の最小の高さ</summary>
         const float kMinTimelineTracksHeight = 60;
-        /// <summary>
-        /// ISupportsEditorTools の窓に Unity が入れる、ツールのハンドルを描く IMGUIContainer の名前
-        /// </summary>
-        const string kEditorToolsContainerName = "EditorToolsIMGUIContainer";
         static readonly int kViewportHash = "MktPreviewViewport".GetHashCode ();
 
         [SerializeField] GameObject prefab_;
@@ -374,7 +370,8 @@ namespace Lilium
             if (!CanEditClip () || strayCurveCount == 0) return;
             if (!EditorUtility.DisplayDialog ("Motion Editor", Tr ("PREVIEW_WINDOW_REMOVE_STRAY_CURVES_CONFIRM", editingClip_.name, strayCurveCount), Tr ("PREVIEW_WINDOW_DELETE"), Tr ("PREVIEW_WINDOW_CANCEL"))) return;
 
-            RecordClipUndo ("Remove Stray Curves");
+            // 書き込み先が Override でも、消すのは編集用クリップのカーブ（そちらを記録しないと Undo で戻らない）
+            RecordClipUndo ("Remove Stray Curves", editingClip_);
             EditingClip.RemoveStrayCurves (editingClip_);
             keyFrames_ = null;
             RefreshClipState ();
@@ -416,11 +413,6 @@ namespace Lilium
             if (handleHold_ || spinHold_ || !clock_.isHeld) return;
             clock_.Release (EditorApplication.timeSinceStartup);
             RepaintView ();
-        }
-
-        public IReadOnlyList<GameObject> selection
-        {
-            get { return selection_; }
         }
 
         /// <summary>
@@ -699,7 +691,7 @@ namespace Lilium
         /// <param name="edit">ハンドル・Spinner・数値欄などの操作から打つとき。キーの自動追加が切なら、キーのあるカーブだけ書き換える</param>
         CurveWriter BeginCurves (string undoName, bool edit = false)
         {
-            Transform root = stage_ != null && stage_.editingRig != null && stage_.editingRig.root != null ? stage_.editingRig.root.transform : null;
+            Transform root = editingRoot;
             // 書き込み先が Override なら、そのクリップへ元からの差分として書く（S14）。サイクルキーのフレームなら先頭のキーへ打つ（S32）
             CurveWriter writer = CurveWriter.Begin (targetClip, root, KeyFrameToWrite (), undoName);
             writer.onlyExistingKeys = edit && !autoKey;
@@ -835,9 +827,10 @@ namespace Lilium
         /// クリップを書き換える前の Undo の記録。アセットでないクリップ（メモリ上だけの物）は記録しない。
         /// 記録すると、どのシーンにも属さない物として開いているシーンが変更扱いになる
         /// </summary>
-        void RecordClipUndo (string name)
+        /// <param name="clip">書き換えるクリップ（null なら書き込み先 targetClip）</param>
+        void RecordClipUndo (string name, AnimationClip clip = null)
         {
-            AnimationClip clip = targetClip;
+            if (clip == null) clip = targetClip;
             if (EditorUtility.IsPersistent (clip)) {
                 Undo.RecordObject (clip, name);
             }
@@ -846,6 +839,18 @@ namespace Lilium
         /// <summary>
         /// クリップのカーブを書き換えた後。キーの一覧と残像を捨て、段が控えているカーブを読み直させて、姿勢を当て直す
         /// </summary>
+        /// <summary>
+        /// クリップを直に書き換える操作の共通の流れ: 前の操作と Undo を分けて clip を記録し、edit で書き換え、書き換えたら姿勢を当て直す。
+        /// 記録するのは書き換えるクリップそのもの（書き込み先が Override でも編集用クリップを書き換える操作があり、
+        /// 書き込み先を記録すると Undo で戻らなかった）
+        /// </summary>
+        void EditClip (AnimationClip clip, string undoName, System.Func<bool> edit)
+        {
+            Undo.IncrementCurrentGroup ();
+            RecordClipUndo (undoName, clip);
+            if (edit ()) AfterClipEdit ();
+        }
+
         public void AfterClipEdit ()
         {
             keyFrames_ = null;
@@ -944,46 +949,18 @@ namespace Lilium
         /// </summary>
         void CreateGUI ()
         {
-            VisualElement root = rootVisualElement;
-
 #if UNITY_6000_6_OR_NEWER
-            viewport_ = root.Q<IMGUIContainer> (kEditorToolsContainerName);
-            if (viewport_ == null) {
-                Debug.LogWarning (Tr ("PREVIEW_WINDOW_TOOL_CONTAINER_MISSING"));
-                viewport_ = new VisualElement { name = "MktViewport" };
-                viewport_.style.flexGrow = 1;
-                root.Add (viewport_);
-            }
+            viewport_ = ToolViewport.Create (rootVisualElement, "MktViewport", null);
 #else
-            // ツールの仕組みが無い版: Unity が入れる IMGUIContainer の代わりを置き、ハンドル用のカメラを当てて同じ操作を回す
-            viewport_ = new IMGUIContainer (OnViewportGUI) { name = kEditorToolsContainerName };
-            viewport_.style.flexGrow = 1;
-            root.Add (viewport_);
+            viewport_ = ToolViewport.Create (rootVisualElement, "MktViewport", OnViewportGUI);
 #endif
         }
 
 #if !UNITY_6000_6_OR_NEWER
-        /// <summary>
-        /// 表示域の操作（ツールの仕組みが無い版）。6.6 以降で Unity がツールコンテキストを呼ぶ前にすることを、ここで代わりにする
-        /// </summary>
+        /// <summary>表示域の操作（ツールの仕組みが無い版。ToolViewport.BeginHandles）</summary>
         void OnViewportGUI ()
         {
-            Camera camera = handlesCamera;
-            if (camera == null) return;
-            // Handles.SetCamera (rect, camera) は、出力先を持つカメラだと pixelRect を出力先の全面のままにする。
-            // それだと骨が出力先（256 単位で切り上げた大きさ）へ引き伸ばされて描かれ、キャラの絵からずれるので、自分で入れる。
-            // マウスの光線（GUIPointToWorldRay）や WorldToGUIPoint は、この IMGUIContainer の中では表示域の左上を原点にし、
-            // 上下を pixelRect の高さで返す（pixelRect.y を引かない）。pixelRect は原点に置いた表示域の大きさにして、
-            // 描く先（GL のビューポート）だけ窓の中の本当の位置にする
-            float ppp = EditorGUIUtility.pixelsPerPoint;
-            Rect local = ViewportRect ();
-            camera.pixelRect = new Rect (0, 0, local.width * ppp, local.height * ppp);
-            Handles.SetCamera (camera);
-            if (Event.current.type == EventType.Repaint) {
-                Rect view = viewport_.worldBound;
-                GL.Viewport (new Rect (view.x * ppp, Screen.height - view.yMax * ppp, view.width * ppp, view.height * ppp));
-            }
-            DoViewportToolGUI ();
+            if (ToolViewport.BeginHandles (handlesCamera, viewport_)) DoViewportToolGUI ();
         }
 #endif
 
@@ -992,10 +969,7 @@ namespace Lilium
         /// </summary>
         Rect ViewportRect ()
         {
-            if (viewport_ == null) return Rect.zero;
-
-            Rect content = viewport_.contentRect;
-            return float.IsNaN (content.width) || float.IsNaN (content.height) ? Rect.zero : new Rect (0, 0, content.width, content.height);
+            return ToolViewport.LocalRect (viewport_);
         }
 
         /// <summary>
@@ -1064,12 +1038,8 @@ namespace Lilium
             CommitHandleKeys ();
             if (prefab == prefab_ && sceneTarget_ == null && string.IsNullOrEmpty (sceneTargetId_)) return;
             prefab_ = prefab;
-            // prefab を選び直したら、開いているシーンのキャラの編集はやめる（写した姿勢は戻る。見失っているキャラも追わない）
-            sceneMirror_.Unbind ();
-            sceneTarget_ = null;
-            sceneTargetId_ = null;
-            sceneTargetName_ = null;
-            sceneTargetLost_ = false;
+            // prefab を選び直したら、開いているシーンのキャラの編集はやめる
+            ForgetSceneTarget ();
             selectedNames_.Clear ();
             ResetWindowSettingsFromProject ();
             // Override の並びはキャラの設定にあるので、キャラが替わったら読み直す（S21）
@@ -1426,12 +1396,6 @@ namespace Lilium
             RepaintView ();
         }
 
-        /// <summary>この窓のパネル（画面の外へ出たら押し戻す）</summary>
-        static readonly string[] kPanelIds = {
-            "mkt-preview-toolbar", "mkt-preview-view", "mkt-layers", "mkt-transform", "mkt-picker", "mkt-timeline",
-            "mkt-animbank", "mkt-posebank", "mkt-curves", "mkt-stacker", "mkt-properties", "mkt-rig-values",
-        };
-
         /// <summary>
         /// キャラの絵を表示域に描く。UI Toolkit の要素（ハンドル・タイムライン・オーバーレイ）はこの上に重なる。
         /// 上端のツールバー帯の分は、OnGUI の原点も rootVisualElement と一緒にずれている
@@ -1439,7 +1403,7 @@ namespace Lilium
         void OnGUI ()
         {
             if (stage_ == null) RebuildStage ();
-            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, kPanelIds);
+            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (PreviewWindow)));
             // 窓の外へ出たら、メッシュの下の物の強調を外す（外では MouseMove が来ない）
             if (Event.current.type == EventType.MouseLeaveWindow && UpdateMeshHover (false, Vector2.zero, Rect.zero)) RepaintView ();
             if (Event.current.type != EventType.Repaint || viewport_ == null) return;

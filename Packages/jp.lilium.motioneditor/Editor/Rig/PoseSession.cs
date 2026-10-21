@@ -73,6 +73,18 @@ namespace Lilium
             get { return stage != null ? stage.error : null; }
         }
 
+        /// <summary>キャラが無くて姿勢を作れない理由（キャラを置けていれば null）</summary>
+        public string characterProblem
+        {
+            get { return stage == null || stage.editingRig == null ? error ?? Tr ("POSE_SESSION_NO_CHARACTER") : null; }
+        }
+
+        /// <summary>session が無いときも引ける characterProblem（窓を開かずに使う口が、最初に見る）</summary>
+        internal static string CharacterProblem (PoseSession session)
+        {
+            return session != null ? session.characterProblem : Tr ("POSE_SESSION_NO_CHARACTER");
+        }
+
         /// <summary>今のフレーム（最後に Evaluate したフレーム）</summary>
         public int frame { get; private set; }
 
@@ -141,7 +153,7 @@ namespace Lilium
 
         float frameRate
         {
-            get { return clip_ != null && clip_.frameRate > 0 ? clip_.frameRate : 60; }
+            get { return CurveEdit.FrameRateOf (clip_); }
         }
 
         float time
@@ -186,7 +198,8 @@ namespace Lilium
         /// <summary>今のフレームにキーを打てない理由（打てるなら null）。窓の CanEditClip と同じ条件</summary>
         public string GetWriteProblem ()
         {
-            if (stage == null || stage.editingRig == null) return error ?? Tr ("POSE_SESSION_NO_CHARACTER");
+            string character = characterProblem;
+            if (character != null) return character;
             AnimationClip target = targetClip;
             if (target == null) return Tr ("POSE_SESSION_NO_CLIP");
             // 元のクリップへ書くときだけ、そのクリップが編集できる形かを見る（Override へ書くときの土台は Humanoid でもよい）
@@ -227,29 +240,34 @@ namespace Lilium
             string problem = GetWriteProblem ();
             if (problem != null) return problem;
 
-            Undo.IncrementCurrentGroup ();
-            int group = Undo.GetCurrentGroup ();
-            if (stage.fullBody != null) {
-                PoseCommit.WriteFullBodyPose (stage, targets_, () => BeginCurves (undoName));
-            }
-            else {
-                using (CurveWriter writer = BeginCurves (undoName)) {
-                    foreach (PoseTarget target in targets_) target.WriteKeys (writer);
-                    RigProxies proxies = stage.editingRig.rigProxies;
-                    if (proxies != null) proxies.WriteWeightKeys (writer);
+            WriteWithUndo (undoName, () => {
+                if (stage.fullBody != null) {
+                    PoseCommit.WriteFullBodyPose (stage, targets_, () => BeginCurves (undoName));
+                    return;
                 }
-            }
-            // サイクルキーの印があれば、最後のキーを先頭のキーに合わせ直す（窓はキーが変わった知らせで合わせる）
-            AnimationClip written = targetClip;
-            if (ClipCycle.Load (written)) {
-                Undo.RecordObject (written, undoName);
-                ClipCycle.Sync (written);
-            }
-            Undo.SetCurrentGroupName (undoName);
-            Undo.CollapseUndoOperations (group);
+                using (CurveWriter writer = BeginCurves (undoName)) {
+                    PoseCommit.WriteAllKeys (writer, targets_, stage.editingRig.rigProxies);
+                }
+            });
+            return null;
+        }
+
+        /// <summary>
+        /// キーを打つ流れの共通の後ろ半分: write で打ち、サイクルキーの印があれば最後のキーを先頭のキーに合わせ直す
+        /// （窓はキーが変わった知らせで合わせる）。1 回の Undo にまとめ、そのフレームの姿勢をクリップから作り直す
+        /// </summary>
+        void WriteWithUndo (string undoName, System.Action write)
+        {
+            PoseCommit.InUndoGroup (undoName, () => {
+                write ();
+                AnimationClip written = targetClip;
+                if (ClipCycle.Load (written)) {
+                    Undo.RecordObject (written, undoName);
+                    ClipCycle.Sync (written);
+                }
+            });
             stage.InvalidateClipCurves ();
             Evaluate (frame);
-            return null;
         }
 
         /// <summary>
@@ -262,34 +280,15 @@ namespace Lilium
         {
             string problem = GetWriteProblem ();
             if (problem != null) return problem;
-            if (muscles == null || muscles.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_HUMANOID_VALUES");
-            HashSet<string> moved = stage.ApplyMusclesAsControls (muscles);
-            if (moved == null) return Tr ("PREVIEW_WINDOW_POSE_BANK_CANNOT_APPLY_HUMANOID");
-            if (moved.Count == 0) return Tr ("PREVIEW_WINDOW_POSE_BANK_NO_MOVED_BONES");
+            Dictionary<EditorCurveBinding, float> values;
+            problem = PoseCommit.CaptureMuscles (stage, targets_, muscles, frame, null, out values);
+            if (problem != null) return problem;
 
-            // 動いた骨の今の操作値（窓の CapturePose と同じく、全部の対象に書かせて動いた骨の分だけ取る）
-            Dictionary<EditorCurveBinding, float> values = new Dictionary<EditorCurveBinding, float> ();
-            using (CurveWriter capture = CurveWriter.Begin (null, stage.editingRig.root.transform, frame, null)) {
-                foreach (PoseTarget target in targets_) target.WriteKeys (capture);
-                foreach (KeyValuePair<EditorCurveBinding, float> pair in capture.values) {
-                    if (moved.Contains (pair.Key.path)) values[pair.Key] = pair.Value;
+            WriteWithUndo (undoName, () => {
+                using (CurveWriter writer = BeginCurves (undoName)) {
+                    foreach (KeyValuePair<EditorCurveBinding, float> pair in values) writer.SetTarget (pair.Key, pair.Value);
                 }
-            }
-
-            Undo.IncrementCurrentGroup ();
-            int group = Undo.GetCurrentGroup ();
-            using (CurveWriter writer = BeginCurves (undoName)) {
-                foreach (KeyValuePair<EditorCurveBinding, float> pair in values) writer.SetTarget (pair.Key, pair.Value);
-            }
-            AnimationClip written = targetClip;
-            if (ClipCycle.Load (written)) {
-                Undo.RecordObject (written, undoName);
-                ClipCycle.Sync (written);
-            }
-            Undo.SetCurrentGroupName (undoName);
-            Undo.CollapseUndoOperations (group);
-            stage.InvalidateClipCurves ();
-            Evaluate (frame);
+            });
             return null;
         }
 
@@ -304,7 +303,8 @@ namespace Lilium
         {
             outputPath = null;
             result = default (HumanoidBaker.Result);
-            if (stage == null || stage.editingRig == null) return error ?? Tr ("POSE_SESSION_NO_CHARACTER");
+            string character = characterProblem;
+            if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
             if (!useHumanoidBase) {
                 string problem = EditingClip.GetProblem (clip_);
@@ -347,13 +347,7 @@ namespace Lilium
         /// <summary>焼くときの、そのフレームの操作値（元＋全部の Override。窓の ApplyBakePose と同じ）</summary>
         void ApplyBakePose (float time)
         {
-            stage.ResetControlsToRest ();
-            if (useHumanoidBase) stage.SampleHumanoidAsControls (clip_, time);
-            else stage.SampleClip (clip_, time);
-            stage.MaskBodyPointsForBake (useHumanoidBase ? null : clip_, time);
-            foreach (OverrideClip entry in overrides_) {
-                if (entry.clip != null) stage.ApplyOverride (entry.clip, entry.mode, 1, time, entry.mask);
-            }
+            stage.ApplyBakePose (clip_, useHumanoidBase, propertyLayers, time);
         }
 
         /// <summary>取り込み（ImportOverride）の結果</summary>
@@ -390,7 +384,8 @@ namespace Lilium
         public string ImportOverride (AnimationClip source, AnimationClip destination, OverrideMode mode, bool lockFeet, out OverrideImportResult result)
         {
             result = new OverrideImportResult ();
-            if (stage == null || stage.editingRig == null) return error ?? Tr ("POSE_SESSION_NO_CHARACTER");
+            string character = characterProblem;
+            if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
             string problem = HumanoidImport.GetProblem (source);
             if (problem != null) return problem;
@@ -399,7 +394,7 @@ namespace Lilium
 
             EditingRig rig = stage.editingRig;
             Transform root = rig.root.transform;
-            float rate = clip_.frameRate > 0 ? clip_.frameRate : 60;
+            float rate = CurveEdit.FrameRateOf (clip_);
             AnimationClip imported = new AnimationClip { frameRate = rate };
             List<PoseTarget> importTargets = RigTargets.Create (rig, stage.editingRigSolver);
             try {
@@ -425,9 +420,7 @@ namespace Lilium
                 foreach (EditorCurveBinding binding in target.Keys) stored[binding] = new float[result.frameCount];
                 List<IGrouping<string, EditorCurveBinding>> transforms = target.Keys.Where (b => b.type == typeof (Transform)).GroupBy (b => b.path + "|" + b.propertyName.Substring (0, b.propertyName.LastIndexOf ('.'))).ToList ();
                 for (int f = 0; f < result.frameCount; f++) {
-                    stage.ResetControlsToRest ();
-                    if (useHumanoidBase) stage.SampleHumanoidAsControls (clip_, f / rate);
-                    else stage.SampleClip (clip_, f / rate);
+                    stage.SampleBaseAsControls (clip_, useHumanoidBase, f / rate);
                     foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode);
                     // 数値（点の固定の強さ・Rig の代理の重み）は足し合わせず、Additive でも置き換える
                     foreach (EditorCurveBinding binding in target.Keys) {
@@ -513,7 +506,7 @@ namespace Lilium
         {
             EditingRig rig = stage.editingRig;
             FullBodyRig body = stage.fullBody;
-            float scale = rig.humanScale > 0 ? rig.humanScale : 1;
+            float scale = rig.humanScale;
             List<BodyPointId> points = body.pointIds.Where (body.IsContact).ToList ();
 
             // 足の点の場所（フレームごと）

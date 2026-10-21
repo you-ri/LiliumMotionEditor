@@ -17,9 +17,8 @@ namespace Lilium
     [Icon (Icons.kFolder + "RigValues.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-toolbar", "Rig Editor", defaultDisplay = true,
         defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
-    class RigEditorToolbarOverlay : Overlay, ICreateHorizontalToolbar
+    class RigEditorToolbarOverlay : HostOverlay<RigEditorWindow>, ICreateHorizontalToolbar
     {
-        RigEditorWindow window_;
         ObjectField model_;
         ObjectField definition_;
         EditorToolbarButton duplicate_;
@@ -32,7 +31,7 @@ namespace Lilium
         public OverlayToolbar CreateHorizontalToolbarContent ()
         {
             OverlayToolbar toolbar = new OverlayToolbar ();
-            window_ = containerWindow as RigEditorWindow;
+            window_ = ResolveWindow ();
             if (window_ == null) return toolbar;
 
             model_ = new ObjectField { objectType = typeof (GameObject), allowSceneObjects = false, tooltip = Tr ("RIG_EDITOR_MODEL_TOOLTIP") };
@@ -58,15 +57,15 @@ namespace Lilium
             toolbar.Add (new EditorToolbarButton ("Reload", window_.Rebuild) { tooltip = Tr ("RIG_EDITOR_RELOAD_TOOLTIP") });
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
+            Resubscribe ();
             return toolbar;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) window_.stateChanged -= Refresh;
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            if (!on) return;
+            window_.stateChanged += Refresh;
         }
 
         void Refresh ()
@@ -101,7 +100,7 @@ namespace Lilium
     [Icon (Icons.kFolder + "Picker.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-controls", "Controls", defaultDisplay = true,
         defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
-    class RigEditorControlsOverlay : Overlay
+    class RigEditorControlsOverlay : HostOverlay<RigEditorWindow>
     {
         const int kRowHeight = 18;
         const float kWidth = 220;
@@ -114,7 +113,6 @@ namespace Lilium
             public int count;
         }
 
-        RigEditorWindow window_;
         VisualElement problems_;
         TreeView tree_;
         Label detail_;
@@ -127,7 +125,7 @@ namespace Lilium
             root.style.width = kWidth;
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
             root.style.height = 420;
-            window_ = containerWindow as RigEditorWindow;
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             problems_ = new VisualElement ();
@@ -147,20 +145,17 @@ namespace Lilium
             root.Add (detail_);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.selectionChanged -= SyncSelection;
-            window_.selectionChanged += SyncSelection;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.selectionChanged -= SyncSelection;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.selectionChanged -= SyncSelection;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.selectionChanged += SyncSelection;
         }
 
         void Refresh ()
@@ -251,11 +246,10 @@ namespace Lilium
     [Icon (Icons.kFolder + "Properties.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-inspector", "Inspector", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
-    class RigEditorInspectorOverlay : Overlay
+    class RigEditorInspectorOverlay : HostOverlay<RigEditorWindow>
     {
         const float kWidth = 300;
 
-        RigEditorWindow window_;
         HelpBox readOnly_;
         Label title_;
         VisualElement fields_;
@@ -271,7 +265,7 @@ namespace Lilium
             root.style.width = kWidth;
             OverlayLayout.FollowDockWidth (this, root, () => kWidth);
             root.style.maxHeight = 520;
-            window_ = containerWindow as RigEditorWindow;
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             readOnly_ = new HelpBox ("", HelpBoxMessageType.Info);
@@ -289,20 +283,17 @@ namespace Lilium
             root.Add (scroll);
 
             Refresh ();
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.selectionChanged -= Refresh;
-            window_.selectionChanged += Refresh;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.selectionChanged -= Refresh;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.selectionChanged -= Refresh;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.selectionChanged += Refresh;
         }
 
         void Refresh ()

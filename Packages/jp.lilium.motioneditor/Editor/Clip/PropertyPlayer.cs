@@ -191,21 +191,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 入れた値を全部元へ戻す（キャラを作り直す前など）
-        /// </summary>
-        public void Restore (GameObject root)
-        {
-            if (root != null) {
-                RotationBatch rotations = new RotationBatch ();
-                foreach (KeyValuePair<EditorCurveBinding, float> pair in originals_) {
-                    if (!rotations.Add (root, pair.Key, pair.Value)) SetValue (root, pair.Key, pair.Value);
-                }
-                rotations.Flush ();
-            }
-            originals_.Clear ();
-        }
-
-        /// <summary>
         /// Transform の回転（m_LocalRotation.x/y/z/w の 4 本）は、成分ごとに入れると 1 本入れるたびに正規化されて別の回転になる
         /// （武器の握りが 10° 以上ずれて見えた。2026-09-30 実測）。成分を集めて、最後に 1 回で入れる
         /// </summary>
@@ -216,10 +201,10 @@ namespace Lilium
             /// <summary>回転の成分なら貯めて true。回転でなければ false（呼び手が SetValue で入れる）</summary>
             public bool Add (GameObject root, EditorCurveBinding display, float value)
             {
-                if (display.type != typeof (Transform) || !display.propertyName.StartsWith (CurveEdit.kRotation + ".")) return false;
-                int axis = "xyzw".IndexOf (display.propertyName[display.propertyName.Length - 1]);
+                if (!CurveEdit.IsRotation (display)) return false;
+                int axis = CurveEdit.AxisOf (display.propertyName);
                 if (axis < 0) return false;
-                Transform target = display.path.Length == 0 ? root.transform : root.transform.Find (display.path);
+                Transform target = CurveEdit.FindPath (root.transform, display.path);
                 if (target == null) return true;
                 Vector4 q;
                 if (!pending_.TryGetValue (target, out q)) {
@@ -236,8 +221,7 @@ namespace Lilium
                 foreach (KeyValuePair<Transform, Vector4> pair in pending_) {
                     if (pair.Key == null) continue;
                     Vector4 q = pair.Value;
-                    float length = q.magnitude;
-                    pair.Key.localRotation = length > 1e-6f ? new Quaternion (q.x / length, q.y / length, q.z / length, q.w / length) : Quaternion.identity;
+                    pair.Key.localRotation = CurveEdit.ToRotation (q.x, q.y, q.z, q.w);
                 }
                 pending_.Clear ();
             }
@@ -248,7 +232,7 @@ namespace Lilium
         /// </summary>
         public static bool SetValue (GameObject root, EditorCurveBinding display, float value)
         {
-            Transform target = display.path.Length == 0 ? root.transform : root.transform.Find (display.path);
+            Transform target = CurveEdit.FindPath (root.transform, display.path);
             if (target == null) return false;
 
             if (display.type == typeof (GameObject)) {

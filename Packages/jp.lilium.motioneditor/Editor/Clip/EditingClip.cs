@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using static Lilium.MotionEditorLocalization;
@@ -22,7 +23,7 @@ namespace Lilium
         /// <summary>
         /// 規約どおりの名前か（Attack.rig.anim）
         /// </summary>
-        public static bool HasEditingName (AnimationClip clip)
+        internal static bool HasEditingName (AnimationClip clip)
         {
             return IsEditingClipPath (clip != null ? AssetDatabase.GetAssetPath (clip) : null);
         }
@@ -30,7 +31,7 @@ namespace Lilium
         /// <summary>
         /// 規約どおりのパスか（〜.rig.anim）
         /// </summary>
-        public static bool IsEditingClipPath (string path)
+        internal static bool IsEditingClipPath (string path)
         {
             return !string.IsNullOrEmpty (path) && path.EndsWith (kSuffix + kExtension, System.StringComparison.OrdinalIgnoreCase);
         }
@@ -46,23 +47,19 @@ namespace Lilium
         /// <summary>全身 IK の点 1 つの、状態のキー（フレームの昇順）。値の並びは BodyPoint.kProperties</summary>
         sealed class PointKeys
         {
-            public readonly System.Collections.Generic.List<int>[] frames = new System.Collections.Generic.List<int>[Lilium.BodyPoint.kValueCount];
-            public readonly System.Collections.Generic.List<float>[] values = new System.Collections.Generic.List<float>[Lilium.BodyPoint.kValueCount];
+            public readonly List<int>[] frames = new List<int>[Lilium.BodyPoint.kValueCount];
+            public readonly List<float>[] values = new List<float>[Lilium.BodyPoint.kValueCount];
         }
 
-        static readonly System.Collections.Generic.Dictionary<AnimationClip, System.Collections.Generic.Dictionary<string, PointKeys>> pointKeys_ = new System.Collections.Generic.Dictionary<AnimationClip, System.Collections.Generic.Dictionary<string, PointKeys>> ();
-        static bool pointKeysHooked_;
+        /// <summary>クリップごとの点のキー（作ったときのカーブの版。版が変わったら作り直す）</summary>
+        static readonly Dictionary<AnimationClip, (int version, Dictionary<string, PointKeys> points)> pointKeys_ = new Dictionary<AnimationClip, (int, Dictionary<string, PointKeys>)> ();
 
-        static System.Collections.Generic.Dictionary<string, PointKeys> GetPointKeys (AnimationClip clip)
+        static Dictionary<string, PointKeys> GetPointKeys (AnimationClip clip)
         {
-            if (!pointKeysHooked_) {
-                pointKeysHooked_ = true;
-                AnimationUtility.onCurveWasModified += (modified, binding, type) => pointKeys_.Remove (modified);
-                Undo.undoRedoPerformed += () => pointKeys_.Clear ();
-            }
-            System.Collections.Generic.Dictionary<string, PointKeys> points;
-            if (pointKeys_.TryGetValue (clip, out points)) return points;
-            points = new System.Collections.Generic.Dictionary<string, PointKeys> ();
+            int version = GetCurveVersion (clip);
+            (int version, Dictionary<string, PointKeys> points) cached;
+            if (pointKeys_.TryGetValue (clip, out cached) && cached.version == version) return cached.points;
+            Dictionary<string, PointKeys> points = new Dictionary<string, PointKeys> ();
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
                 if (binding.type != typeof (Lilium.BodyPoint)) continue;
                 int index = Lilium.BodyPoint.IndexOf (binding.propertyName);
@@ -70,14 +67,14 @@ namespace Lilium
                 if (curve == null) continue;
                 PointKeys keys;
                 if (!points.TryGetValue (binding.path, out keys)) points.Add (binding.path, keys = new PointKeys ());
-                keys.frames[index] = new System.Collections.Generic.List<int> ();
-                keys.values[index] = new System.Collections.Generic.List<float> ();
+                keys.frames[index] = new List<int> ();
+                keys.values[index] = new List<float> ();
                 foreach (Keyframe key in curve.keys) {
                     keys.frames[index].Add (Mathf.RoundToInt (key.time * clip.frameRate));
                     keys.values[index].Add (key.value);
                 }
             }
-            pointKeys_[clip] = points;
+            pointKeys_[clip] = (version, points);
             return points;
         }
 
@@ -100,7 +97,7 @@ namespace Lilium
             int frame = Mathf.FloorToInt (position + 0.01f);
             bool exact = Mathf.Abs (position - Mathf.RoundToInt (position)) <= 0.01f;
             for (int v = 0; v < values.Length && v < keys.frames.Length; v++) {
-                System.Collections.Generic.List<int> frames = keys.frames[v];
+                List<int> frames = keys.frames[v];
                 if (frames == null) continue;
                 for (int k = frames.Count - 1; k >= 0; k--) {
                     if (frames[k] > frame) continue;
@@ -126,7 +123,7 @@ namespace Lilium
             if (Mathf.Abs (position - Mathf.RoundToInt (position)) <= 0.01f) {
                 // ちょうどキーのあるフレームは、キーの姿勢そのもの（解いた姿勢が骨のキーに入っている）
                 int at = Mathf.RoundToInt (position);
-                foreach (System.Collections.Generic.List<int> frames in keys.frames) {
+                foreach (List<int> frames in keys.frames) {
                     if (frames != null && frames.Contains (at)) return false;
                 }
             }
@@ -136,7 +133,7 @@ namespace Lilium
             if (StepValue (keys, locked, frame) < 0.5f || StepValue (keys, weight, frame) <= 0) return false;
             // 次の状態のキー
             int next = int.MaxValue;
-            foreach (System.Collections.Generic.List<int> frames in keys.frames) {
+            foreach (List<int> frames in keys.frames) {
                 if (frames == null) continue;
                 foreach (int f in frames) {
                     if (f > frame && f < next) next = f;
@@ -158,7 +155,7 @@ namespace Lilium
             PointKeys keys;
             if (!GetPointKeys (clip).TryGetValue (path, out keys)) return;
             int frame = Mathf.FloorToInt (time * clip.frameRate + 0.01f);
-            foreach (System.Collections.Generic.List<int> frames in keys.frames) {
+            foreach (List<int> frames in keys.frames) {
                 if (frames == null) continue;
                 foreach (int f in frames) {
                     if (f <= frame) previous = Mathf.Max (previous, f);
@@ -171,22 +168,22 @@ namespace Lilium
         /// Locked のキーを 1 つでも持つ点の、状態のキーのあるフレーム（昇順・重なりなし。どの点のキーかは問わない）。
         /// キーの間で Locked の点を解くときの、前後のキーはこの中にある
         /// </summary>
-        public static System.Collections.Generic.List<int> GetLockedPointKeyFrames (AnimationClip clip)
+        public static List<int> GetLockedPointKeyFrames (AnimationClip clip)
         {
-            System.Collections.Generic.SortedSet<int> result = new System.Collections.Generic.SortedSet<int> ();
-            if (clip == null) return new System.Collections.Generic.List<int> ();
+            SortedSet<int> result = new SortedSet<int> ();
+            if (clip == null) return new List<int> ();
             int locked = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kLockedProperty);
             foreach (PointKeys keys in GetPointKeys (clip).Values) {
-                System.Collections.Generic.List<float> values = locked >= 0 && locked < keys.values.Length ? keys.values[locked] : null;
+                List<float> values = locked >= 0 && locked < keys.values.Length ? keys.values[locked] : null;
                 if (values == null || !values.Exists (value => value >= 0.5f)) continue;
-                foreach (System.Collections.Generic.List<int> frames in keys.frames) {
+                foreach (List<int> frames in keys.frames) {
                     if (frames != null) result.UnionWith (frames);
                 }
             }
-            return new System.Collections.Generic.List<int> (result);
+            return new List<int> (result);
         }
 
-        static readonly System.Collections.Generic.Dictionary<AnimationClip, int> curveVersions_ = new System.Collections.Generic.Dictionary<AnimationClip, int> ();
+        static readonly Dictionary<AnimationClip, int> curveVersions_ = new Dictionary<AnimationClip, int> ();
         static int undoVersion_;
         static bool curveVersionsHooked_;
 
@@ -212,7 +209,7 @@ namespace Lilium
         /// <summary>状態の値 v の、frame 以前でいちばん近いキーの値（無ければ 0）</summary>
         static float StepValue (PointKeys keys, int v, int frame)
         {
-            System.Collections.Generic.List<int> frames = v >= 0 && v < keys.frames.Length ? keys.frames[v] : null;
+            List<int> frames = v >= 0 && v < keys.frames.Length ? keys.frames[v] : null;
             if (frames == null) return 0;
             for (int k = frames.Count - 1; k >= 0; k--) {
                 if (frames[k] <= frame) return keys.values[v][k];
@@ -221,7 +218,7 @@ namespace Lilium
         }
 
         /// <summary>その時刻ちょうどに、点の状態のキーがあるか</summary>
-        public static bool HasPointKey (AnimationClip clip, string path, float time)
+        internal static bool HasPointKey (AnimationClip clip, string path, float time)
         {
             float[] values = new float[Lilium.BodyPoint.kValueCount];
             bool keyed;

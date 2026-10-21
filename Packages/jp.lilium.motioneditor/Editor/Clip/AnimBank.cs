@@ -112,8 +112,8 @@ namespace Lilium
         {
             string prefabPath = prefab != null ? AssetDatabase.GetAssetPath (prefab) : null;
             if (string.IsNullOrEmpty (prefabPath)) return null;
-            string saved = EditorPrefs.GetString (prefsKey + AssetDatabase.AssetPathToGUID (prefabPath), "");
-            if (!string.IsNullOrEmpty (saved)) return saved;
+            string saved = GetSavedFolder (prefab, prefsKey);
+            if (saved != null) return saved;
             string resolved = resolve != null ? resolve (prefab) : null;
             if (!string.IsNullOrEmpty (resolved)) return resolved.TrimEnd ('/');
             return Path.GetDirectoryName (prefabPath).Replace ('\\', '/') + "/" + defaultName;
@@ -243,15 +243,9 @@ namespace Lilium
         {
             string path = AssetDatabase.GetAssetPath (clip);
             if (string.IsNullOrEmpty (path)) return Tr ("ANIM_BANK_NOT_AN_ASSET_CLIP");
-            newBaseName = newBaseName != null ? newBaseName.Trim () : "";
-            if (newBaseName.EndsWith (EditingClip.kSuffix, System.StringComparison.OrdinalIgnoreCase)) {
-                newBaseName = newBaseName.Substring (0, newBaseName.Length - EditingClip.kSuffix.Length);
-            }
-            if (newBaseName.Length == 0) return Tr ("ANIM_BANK_NAME_EMPTY");
-            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return Tr ("ANIM_BANK_INVALID_FILE_NAME_CHARS");
-            if (newBaseName == BaseName (path)) return null;
+            string problem = CheckRename (path, EditingClip.kSuffix, Tr ("ANIM_BANK_DUPLICATE_NAME"), ref newBaseName);
+            if (problem != null || newBaseName == null) return problem;
             string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
-            if (Exists (folder, newBaseName)) return Tr ("ANIM_BANK_DUPLICATE_NAME");
 
             // 焼いた版の置き場所は名前から決まるので、先に対応を調べておく
             string oldOutput = HumanoidOutput.GetOutputPath (path);
@@ -267,6 +261,26 @@ namespace Lilium
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// 名前を変える前の確かめ（AnimBank と PoseBank で共通）。名前を整え（拡張子の前の印 suffix は外す）、使えなければ理由を返す。
+        /// 今と同じ名前なら newBaseName を null にする（変えなくてよい）
+        /// </summary>
+        internal static string CheckRename (string path, string suffix, string duplicateMessage, ref string newBaseName)
+        {
+            newBaseName = newBaseName != null ? newBaseName.Trim () : "";
+            if (newBaseName.EndsWith (suffix, System.StringComparison.OrdinalIgnoreCase)) {
+                newBaseName = newBaseName.Substring (0, newBaseName.Length - suffix.Length);
+            }
+            if (newBaseName.Length == 0) return Tr ("ANIM_BANK_NAME_EMPTY");
+            if (newBaseName.IndexOfAny (Path.GetInvalidFileNameChars ()) >= 0) return Tr ("ANIM_BANK_INVALID_FILE_NAME_CHARS");
+            if (newBaseName == BaseName (path, suffix)) {
+                newBaseName = null;
+                return null;
+            }
+            string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
+            return Exists (folder, newBaseName, suffix) ? duplicateMessage : null;
         }
 
         /// <summary>

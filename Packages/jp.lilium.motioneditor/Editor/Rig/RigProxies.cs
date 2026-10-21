@@ -57,29 +57,20 @@ namespace Lilium
             public Transform owner;
             public System.Type proxyType;
             public float defaultValue;
-            internal MonoBehaviour component;
+            internal RigWeightProxy component;
             internal System.Action<float> apply;
 
             public float value
             {
-                get {
-                    RigLayerProxy layer = component as RigLayerProxy;
-                    if (layer != null) return layer.weight;
-                    RigConstraintProxy constraint = component as RigConstraintProxy;
-                    return constraint != null ? constraint.weight : 0;
-                }
+                get { return component != null ? component.weight : 0; }
                 set {
-                    value = Mathf.Clamp01 (value);
-                    RigLayerProxy layer = component as RigLayerProxy;
-                    if (layer != null) layer.weight = value;
-                    RigConstraintProxy constraint = component as RigConstraintProxy;
-                    if (constraint != null) constraint.weight = value;
+                    if (component != null) component.weight = Mathf.Clamp01 (value);
                 }
             }
 
             public void WriteKeys (CurveWriter writer)
             {
-                writer.Float (owner, proxyType, RigLayerProxy.kWeightProperty, value);
+                writer.Float (owner, proxyType, RigWeightProxy.kWeightProperty, value);
             }
         }
 
@@ -194,7 +185,7 @@ namespace Lilium
             rigs_.Add (entry);
         }
 
-        Weight AddWeight (RigEntry entry, string label, Transform owner, MonoBehaviour component, float value, System.Action<float> apply)
+        Weight AddWeight (RigEntry entry, string label, Transform owner, RigWeightProxy component, float value, System.Action<float> apply)
         {
             Weight weight = new Weight {
                 label = label,
@@ -215,7 +206,7 @@ namespace Lilium
                 kind = ChannelKind.Weight,
                 proxyPath = proxyPath,
                 proxyType = weight.proxyType,
-                proxyProperty = RigLayerProxy.kWeightProperty,
+                proxyProperty = RigWeightProxy.kWeightProperty,
                 gamePath = gamePath,
                 gameType = gameType,
                 gameProperty = gameProperty,

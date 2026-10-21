@@ -249,9 +249,9 @@ namespace Lilium
             };
             if (rig_.rigProxies != null) context.notes.AddRange (rig_.rigProxies.notes);
 
-            float rate = source.frameRate > 0 ? source.frameRate : 60;
+            float rate = CurveEdit.FrameRateOf (source);
             // カーブの無いクリップの長さは 1 秒と返るので、その場合は基準姿勢の 1 フレームだけ
-            int frameCount = source.empty ? 1 : Mathf.Max (1, Mathf.RoundToInt (source.length * rate) + 1);
+            int frameCount = source.empty ? 1 : CurveEdit.FrameCount (source.length, rate);
             int muscleCount = HumanTrait.MuscleCount;
             // 体の並び: RootT xyz, RootQ xyzw, muscle...
             int bodyCount = 7 + muscleCount;

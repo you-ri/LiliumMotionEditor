@@ -48,13 +48,13 @@ namespace Lilium
         /// <summary>
         /// 表示モデルの体の大きさ。全身 IK の点を保存するときに割る（割れるよう、人型でない・0 のときは 1）
         /// </summary>
-        public float humanScale { get; private set; }
+        public float humanScale { get; private set; } = 1;
         /// <summary>
         /// 作れたが気にしておくこと（割り当ての誤りも含む）
         /// </summary>
         public readonly List<string> errors = new List<string> ();
 
-        public int boneCount
+        internal int boneCount
         {
             get { return bones_.Count; }
         }
@@ -154,11 +154,8 @@ namespace Lilium
             controlsRoot = createGameObject (RigPaths.kRoot).transform;
             controlsRoot.SetParent (root.transform, false);
 
-            foreach (RigBinding.Fk fk in binding.fk) {
-                if (fk.enabled) CreateControl (fk.path, createGameObject);
-            }
-            foreach (RigBinding.Extra extra in binding.extras) {
-                if (extra.enabled) CreateControl (extra.path, createGameObject);
+            foreach (RigBinding.BoneControl control in binding.boneControls) {
+                if (control.enabled) CreateControl (control.path, createGameObject);
             }
             // 全身 IK の点（S25）。初期値は基準姿勢の骨の位置（ルートから見た位置 / humanScale）と、向きの差なし。固定の強さは 0
             foreach (RigBinding.Point point in binding.points) {
@@ -200,7 +197,7 @@ namespace Lilium
         /// </summary>
         public Vector3 GetPointBlendRestOffset (RigBinding.Point point)
         {
-            float scale = humanScale > 1e-6f ? humanScale : 1;
+            float scale = humanScale;
             EditRigDefinition.BodyPoint definition = point.definition;
             if (definition == null || point.blendBone == null || !definition.blends) return Vector3.zero;
             return BodyToRoot (definition.offset) * scale;

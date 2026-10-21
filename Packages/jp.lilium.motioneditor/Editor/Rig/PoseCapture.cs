@@ -32,9 +32,8 @@ namespace Lilium
         public static string GetProblem (PoseSession session)
         {
             if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) return Tr ("POSE_CAPTURE_NO_GRAPHICS");
-            if (session == null || session.stage == null || session.stage.editingRig == null) {
-                return session != null && session.error != null ? session.error : Tr ("POSE_SESSION_NO_CHARACTER");
-            }
+            string character = PoseSession.CharacterProblem (session);
+            if (character != null) return character;
             if (session.stage.headless) return Tr ("POSE_CAPTURE_HEADLESS");
             return null;
         }

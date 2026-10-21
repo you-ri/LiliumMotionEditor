@@ -46,19 +46,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 最後に焼いた結果（焼いていなければ null）
-        /// </summary>
-        public string bakeStatus
-        {
-            get { return bakeStatus_; }
-        }
-
-        public bool bakeFailed
-        {
-            get { return bakeFailed_; }
-        }
-
-        /// <summary>
         /// 焼いたクリップの置き場所（いちばん上の Output の段。Output が無ければ名前の無い置き場所。クリップがアセットでなければ null）
         /// </summary>
         public string humanoidOutputPath

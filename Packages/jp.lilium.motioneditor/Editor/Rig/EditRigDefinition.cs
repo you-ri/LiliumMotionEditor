@@ -385,7 +385,7 @@ namespace Lilium
         public const float kStomachHeight = 0.25f;
 
         /// <summary>背骨（胸の点 1 つにまとめる骨）か</summary>
-        public static bool IsSpineBone (HumanBodyBones bone)
+        static bool IsSpineBone (HumanBodyBones bone)
         {
             return bone == HumanBodyBones.Spine || bone == HumanBodyBones.Chest || bone == HumanBodyBones.UpperChest;
         }
@@ -531,7 +531,7 @@ namespace Lilium
         }
 
         /// <summary>全身 IK の向きの点（骨の前に出した点）</summary>
-        public static string BodyDirection (HumanBodyBones bone)
+        internal static string BodyDirection (HumanBodyBones bone)
         {
             return kBody + "/" + bone + "Direction";
         }

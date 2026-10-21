@@ -130,15 +130,7 @@ namespace Lilium
                         ev.Use ();
                         break;
                     }
-                    if (cameraDragButton_ == 2) {
-                        camera_.Pan (ev.delta, rect.height);
-                    }
-                    else if (cameraDragAlt_ && cameraDragButton_ == 1) {
-                        camera_.Zoom (ev.delta.y * 0.5f);
-                    }
-                    else {
-                        camera_.Orbit (ev.delta);
-                    }
+                    camera_.Drag (cameraDragButton_, cameraDragAlt_, ev.delta, rect.height);
                     ev.Use ();
                     RepaintView ();
                     break;
@@ -235,10 +227,8 @@ namespace Lilium
         /// </summary>
         static bool IsInBox (Camera camera, Rect rect, Rect box, Vector3 world)
         {
-            // ビューポート座標は左下が原点
-            Vector3 view = camera.WorldToViewportPoint (world);
-            if (view.z <= 0) return false;
-            return box.Contains (new Vector2 (view.x * rect.width, (1 - view.y) * rect.height));
+            Vector2 point;
+            return ToolViewport.WorldToView (camera, world, rect, out point) && box.Contains (point);
         }
 
         void BeginCameraDrag (int viewId, Event ev)

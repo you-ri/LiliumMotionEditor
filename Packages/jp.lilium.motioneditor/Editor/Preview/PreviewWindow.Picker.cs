@@ -37,15 +37,6 @@ namespace Lilium
             get { return pickerEntries_; }
         }
 
-        public int pickerSelectedIndex
-        {
-            get {
-                PoseTarget target = selectedTarget;
-                if (target == null) return -1;
-                return pickerEntries_.FindIndex (e => e.target == target);
-            }
-        }
-
         /// <summary>
         /// 骨のつながりの順（親から子へ）に一覧を作る。各対象は anchor の骨の位置に並ぶ。キャラを読み込んだ後に呼ぶ
         /// </summary>

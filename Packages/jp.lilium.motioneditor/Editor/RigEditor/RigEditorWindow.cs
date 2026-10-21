@@ -24,10 +24,6 @@ namespace Lilium
     public sealed class RigEditorWindow : EditorWindow, IEditorHost, ISupportsOverlays
 #endif
     {
-        /// <summary>
-        /// ISupportsEditorTools の窓に Unity が入れる、ツールのハンドルを描く IMGUIContainer の名前
-        /// </summary>
-        const string kEditorToolsContainerName = "EditorToolsIMGUIContainer";
         static readonly int kViewportHash = "LiliumRigEditorViewport".GetHashCode ();
         /// <summary>クリックでコントロールを拾う距離（表示域のピクセル）</summary>
         const float kPickRadius = 12;
@@ -284,40 +280,18 @@ namespace Lilium
         /// </summary>
         void CreateGUI ()
         {
-            VisualElement root = rootVisualElement;
 #if UNITY_6000_6_OR_NEWER
-            viewport_ = root.Q<IMGUIContainer> (kEditorToolsContainerName);
-            if (viewport_ == null) {
-                Debug.LogWarning (Tr ("PREVIEW_WINDOW_TOOL_CONTAINER_MISSING"));
-                viewport_ = new VisualElement { name = "LiliumRigEditorViewport" };
-                viewport_.style.flexGrow = 1;
-                root.Add (viewport_);
-            }
+            viewport_ = ToolViewport.Create (rootVisualElement, "LiliumRigEditorViewport", null);
 #else
-            viewport_ = new IMGUIContainer (OnViewportGUI) { name = kEditorToolsContainerName };
-            viewport_.style.flexGrow = 1;
-            root.Add (viewport_);
+            viewport_ = ToolViewport.Create (rootVisualElement, "LiliumRigEditorViewport", OnViewportGUI);
 #endif
         }
 
 #if !UNITY_6000_6_OR_NEWER
-        /// <summary>
-        /// 表示域の操作（ツールの仕組みが無い版）。6.6 以降で Unity がツールコンテキストを呼ぶ前にすることを、ここで代わりにする
-        /// （ハンドルのカメラの合わせ方は PreviewWindow.OnViewportGUI と同じ）
-        /// </summary>
+        /// <summary>表示域の操作（ツールの仕組みが無い版。ToolViewport.BeginHandles）</summary>
         void OnViewportGUI ()
         {
-            Camera camera = handlesCamera;
-            if (camera == null) return;
-            float ppp = EditorGUIUtility.pixelsPerPoint;
-            Rect local = ViewportRect ();
-            camera.pixelRect = new Rect (0, 0, local.width * ppp, local.height * ppp);
-            Handles.SetCamera (camera);
-            if (Event.current.type == EventType.Repaint) {
-                Rect view = viewport_.worldBound;
-                GL.Viewport (new Rect (view.x * ppp, Screen.height - view.yMax * ppp, view.width * ppp, view.height * ppp));
-            }
-            DoViewportToolGUI ();
+            if (ToolViewport.BeginHandles (handlesCamera, viewport_)) DoViewportToolGUI ();
         }
 #endif
 
@@ -358,9 +332,7 @@ namespace Lilium
         /// <summary>表示域の大きさ（左上が原点）</summary>
         Rect ViewportRect ()
         {
-            if (viewport_ == null) return Rect.zero;
-            Rect content = viewport_.contentRect;
-            return float.IsNaN (content.width) || float.IsNaN (content.height) ? Rect.zero : new Rect (0, 0, content.width, content.height);
+            return ToolViewport.LocalRect (viewport_);
         }
 
         float ViewportAspect ()
@@ -436,9 +408,7 @@ namespace Lilium
                     break;
                 case EventType.MouseDrag:
                     if (GUIUtility.hotControl != viewId) break;
-                    if (cameraDragButton_ == 2) camera_.Pan (ev.delta, rect.height);
-                    else if (cameraDragAlt_ && cameraDragButton_ == 1) camera_.Zoom (ev.delta.y * 0.5f);
-                    else camera_.Orbit (ev.delta);
+                    camera_.Drag (cameraDragButton_, cameraDragAlt_, ev.delta, rect.height);
                     ev.Use ();
                     RepaintView ();
                     break;
@@ -487,12 +457,12 @@ namespace Lilium
                     // 骨の線は根元から先それぞれへ。どれかの線に近ければその骨
                     distance = float.MaxValue;
                     for (int i = 1; i < entry.line.Length; i++) {
-                        if (!TryGetLine (entry, i, out start, out end) || !ToView (camera, start, rect, out startPoint) || !ToView (camera, end, rect, out endPoint)) continue;
-                        distance = Mathf.Min (distance, DistanceToSegment (mousePosition, startPoint, endPoint) + BodyPointTarget.kLinkPickBias);
+                        if (!TryGetLine (entry, i, out start, out end) || !ToolViewport.WorldToView (camera, start, rect, out startPoint) || !ToolViewport.WorldToView (camera, end, rect, out endPoint)) continue;
+                        distance = Mathf.Min (distance, ToolViewport.DistanceToSegment (mousePosition, startPoint, endPoint) + BodyPointTarget.kLinkPickBias);
                     }
                 }
                 else {
-                    if (!entry.position.HasValue || !ToView (camera, entry.position.Value, rect, out point)) continue;
+                    if (!entry.position.HasValue || !ToolViewport.WorldToView (camera, entry.position.Value, rect, out point)) continue;
                     distance = Vector2.Distance (point, mousePosition);
                 }
                 if (distance < bestDistance) {
@@ -504,20 +474,6 @@ namespace Lilium
         }
 
         /// <summary>ワールドの位置を表示域の位置へ（左上が原点）。カメラの後ろなら false</summary>
-        static bool ToView (Camera camera, Vector3 world, Rect rect, out Vector2 point)
-        {
-            Vector3 viewport = camera.WorldToViewportPoint (world);
-            point = new Vector2 (viewport.x * rect.width, (1 - viewport.y) * rect.height);
-            return viewport.z > 0;
-        }
-
-        static float DistanceToSegment (Vector2 point, Vector2 start, Vector2 end)
-        {
-            Vector2 delta = end - start;
-            float t = delta.sqrMagnitude > 1e-6f ? Mathf.Clamp01 (Vector2.Dot (point - start, delta) / delta.sqrMagnitude) : 0;
-            return Vector2.Distance (point, start + delta * t);
-        }
-
         /// <summary>
         /// 骨の線（根元から index 番目の先まで）の両端。点の丸がある端は、丸に重ならないよう隙間を空ける（モーションエディタの点の線と同じ）。
         /// 指のような短い骨で線が消えないよう、隙間は骨の長さの一部までに抑える

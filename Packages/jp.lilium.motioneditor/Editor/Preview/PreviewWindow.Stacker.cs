@@ -234,9 +234,11 @@ namespace Lilium
             System.Predicate<EditorCurveBinding> filter = GroupFilter (stackerGroup);
             int frame = currentFrame;
             if (System.Array.IndexOf (Stacker.GetPoseKeys (targetClip, filter), frame) >= 0) {
-                RecordClipUndo ("Stacker Insert");
-                int inserted = Stacker.InsertAfter (targetClip, frame, filter);
-                AfterClipEdit ();
+                int inserted = -1;
+                EditClip (targetClip, "Stacker Insert", () => {
+                    inserted = Stacker.InsertAfter (targetClip, frame, filter);
+                    return true;
+                });
                 if (inserted >= 0) SetFrame (inserted);
                 return;
             }
@@ -291,8 +293,7 @@ namespace Lilium
         public void StackerDelete ()
         {
             if (!CanEditClip ()) return;
-            RecordClipUndo ("Stacker Delete");
-            if (Stacker.Delete (targetClip, currentFrame, GroupFilter (stackerGroup))) AfterClipEdit ();
+            EditClip (targetClip, "Stacker Delete", () => Stacker.Delete (targetClip, currentFrame, GroupFilter (stackerGroup)));
         }
 
         /// <summary>
@@ -301,8 +302,7 @@ namespace Lilium
         public void StackerSetInterval (int frame, int interval)
         {
             if (!CanEditClip ()) return;
-            RecordClipUndo ("Stacker Interval");
-            if (Stacker.SetInterval (targetClip, frame, interval, GroupFilter (stackerGroup))) AfterClipEdit ();
+            EditClip (targetClip, "Stacker Interval", () => Stacker.SetInterval (targetClip, frame, interval, GroupFilter (stackerGroup)));
         }
 
         /// <summary>

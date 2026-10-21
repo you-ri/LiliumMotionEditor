@@ -16,9 +16,8 @@ namespace Lilium
     [Icon (Icons.kFolder + "RigValues.png")]
     [Overlay (typeof (PreviewWindow), "mkt-rig-values", "Rig Values", defaultDisplay = false,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    class RigValuesOverlay : Overlay
+    class RigValuesOverlay : MotionOverlay
     {
-        PreviewWindow window_;
         IMGUIContainer container_;
         Vector2 scroll_;
 
@@ -28,27 +27,24 @@ namespace Lilium
             root.style.width = 240;
             // ドックしたら枠の幅に合わせる（浮いているときはこの幅）
             OverlayLayout.FollowDockWidth (this, root, () => 240);
-            window_ = OverlayWindows.Resolve (containerWindow);
+            window_ = ResolveWindow ();
             if (window_ == null) return root;
 
             container_ = new IMGUIContainer (OnPanelGUI);
             container_.style.maxHeight = 320;
             root.Add (container_);
 
-            window_.stateChanged -= Refresh;
-            window_.stateChanged += Refresh;
-            window_.poseSampled -= Refresh;
-            window_.poseSampled += Refresh;
+            Resubscribe ();
             return root;
         }
 
-        public override void OnWillBeDestroyed ()
+        protected override void Subscribe (bool on)
         {
-            if (window_ != null) {
-                window_.stateChanged -= Refresh;
-                window_.poseSampled -= Refresh;
-            }
-            base.OnWillBeDestroyed ();
+            window_.stateChanged -= Refresh;
+            window_.poseSampled -= Refresh;
+            if (!on) return;
+            window_.stateChanged += Refresh;
+            window_.poseSampled += Refresh;
         }
 
         void Refresh ()

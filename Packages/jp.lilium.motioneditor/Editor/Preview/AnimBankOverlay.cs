@@ -67,6 +67,7 @@ namespace Lilium
 
         protected override void Subscribe (bool on)
         {
+            base.Subscribe (on);
             window_.keysChanged -= RefreshMarks;
             if (on) window_.keysChanged += RefreshMarks;
         }

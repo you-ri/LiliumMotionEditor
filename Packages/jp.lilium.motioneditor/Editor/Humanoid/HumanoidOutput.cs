@@ -257,7 +257,7 @@ namespace Lilium
         /// <summary>
         /// 焼いたクリップから、元の編集用クリップを引く（無ければ null）
         /// </summary>
-        public static AnimationClip FindSource (AnimationClip output)
+        internal static AnimationClip FindSource (AnimationClip output)
         {
             string path = output != null ? AssetDatabase.GetAssetPath (output) : null;
             Link link = string.IsNullOrEmpty (path) ? null : ReadLink (path);
@@ -290,7 +290,7 @@ namespace Lilium
         /// 焼いて出力先へ書く。出力先のクリップが既にあればそのまま中身を置き換える（GUID と、ループ・ルートの扱いなどの設定は残る）。
         /// 新しく作るときは、編集用クリップの設定（読み込んだときに元のクリップから写したもの）を引き継ぐ
         /// </summary>
-        public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, out string outputPath)
+        internal static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, out string outputPath)
         {
             return BakeToAsset (baker, source, model, null, null, out outputPath);
         }

@@ -79,28 +79,15 @@ namespace Lilium
             Transform editing = source_.editing;
             if (editing == null) return;
 
-            PoseHandleUtility.color = kColor;
-            Vector3 position = editing.position;
-            Quaternion rotation = editing.rotation;
-            Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, source_.proxy, position, rotation);
-            if (moved != position) {
-                editing.position = moved;
-                rig_.rigProxies.Capture (source_);
-                GUI.changed = true;
-            }
-
-            // 向きの棒は選んでいるときだけ出す（胸などの骨のハンドルと重なるため）
-            if (!selected) {
-                PoseHandleUtility.color = PoseHandleUtility.StandardColor;
-                return;
-            }
-            Quaternion rotated = PoseHandleUtility.DoBoneHandle (rotateHash_, source_.proxy, editing.position, rotation, handleLength);
-            if (rotated != rotation) {
-                editing.rotation = rotated;
-                rig_.rigProxies.Capture (source_);
-                GUI.changed = true;
-            }
-            PoseHandleUtility.color = PoseHandleUtility.StandardColor;
+            PoseHandleUtility.DoObjectHandles (moveHash_, rotateHash_, source_.proxy, editing, handleLength, kColor, selected,
+                position => {
+                    editing.position = position;
+                    rig_.rigProxies.Capture (source_);
+                },
+                rotation => {
+                    editing.rotation = rotation;
+                    rig_.rigProxies.Capture (source_);
+                });
         }
 
         public override void WriteKeys (CurveWriter writer)
