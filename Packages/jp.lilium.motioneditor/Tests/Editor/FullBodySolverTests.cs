@@ -981,9 +981,9 @@ namespace Lilium
                 Assert.AreEqual (0, Vector3.Dot (ball - ankle, outside), 1e-3f, "足裏の中心は足首の真正面（左右にずれない）");
                 Assert.Greater (Vector3.Dot (side - ball, outside), 0.02f, "小指側は体の外");
                 Assert.AreEqual (0, Vector3.Dot (side - ball, s.forward), 1e-3f, "小指側は足裏の中心の真横");
-                // 4 点（踵・足裏の中心・小指側・つま先の先）は地面（基準姿勢のルートの高さ）
-                float ground = s.rig.root.transform.position.y;
-                foreach (Vector3 p in new[] { heel, ball, side, toe }) Assert.AreEqual (ground, p.y, 1e-4f, "地面からの高さは 0");
+                // 4 点（踵・足裏の中心・小指側・つま先の先）は、床との当たりの球の下の端が地面（基準姿勢のルートの高さ）に着く高さ（10-22）
+                float ground = s.rig.root.transform.position.y + EditRigDefinition.kSoleRadius * s.rig.humanScale;
+                foreach (Vector3 p in new[] { heel, ball, side, toe }) Assert.AreEqual (ground, p.y, 1e-4f, "地面からの高さは半径");
             }
             Assert.IsFalse (s.body.HasPoint (HumanBodyBones.LeftToes), "つま先の骨の付け根には点を置かない（球とつま先の先で足りる）");
             foreach (HumanBodyBones hand in new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand }) {

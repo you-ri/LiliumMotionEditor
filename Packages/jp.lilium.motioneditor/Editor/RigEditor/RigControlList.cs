@@ -33,6 +33,8 @@ namespace Lilium
         public Vector3[] line = System.Array.Empty<Vector3> ();
         /// <summary>定義のどの項目か（SerializedObject のパス）。定義を渡さずに作ったときは null</summary>
         public string propertyPath;
+        /// <summary>全身 IK の点の、床との当たりの球の半径（メートル。定義の radius × humanScale。無ければ 0）</summary>
+        public float radius;
         /// <summary>使えない理由。null なら使える</summary>
         public string disabledReason;
 
@@ -92,6 +94,7 @@ namespace Lilium
                     position = host != null ? rig.root.transform.TransformPoint (rig.GetRestRootPosition (host) + rig.GetPointRestOffset (point)) : (Vector3?)null,
                     propertyPath = ElementPath (definition, "bodyPoints", definition != null ? definition.bodyPoints.IndexOf (point.definition) : -1),
                     disabledReason = point.disabledReason,
+                    radius = point.definition != null ? Mathf.Max (0, point.definition.radius) * rig.humanScale : 0,
                 });
             }
             return entries;

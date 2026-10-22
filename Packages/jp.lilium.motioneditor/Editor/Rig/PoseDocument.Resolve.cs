@@ -303,15 +303,16 @@ namespace Lilium
             Vector3 flatAnkle = new Vector3 (ankleRest.x, 0, ankleRest.z);
             List<BodyPointId> grounds = members.Where (id => IsGround (session, id)).ToList ();
             // 支点（基準姿勢）。Ball: 子の骨（つま先）の付け根の関節。無ければいちばん前の床の点。Heel: いちばん後ろの床の点。
+            // 床の点の支点は、床との当たりの球の中心（点そのもの。10-22）。真下の床にすると、球の半径の分だけ支点の点が回って下がる
             // Ball の支点を関節の真下の床にすると、回したときに関節そのものが動いてつま先の骨の長さが合わず、つま先が浮く
             Vector3 pivot = flatAnkle;
             if (pivotSide > 0) {
                 Transform toes = members.Select (id => body.GetBone (id)).FirstOrDefault (b => b != null && b.parent == foot);
                 if (toes != null) pivot = Quaternion.Inverse (BodyBasis (session.stage.editingRig)) * session.stage.editingRig.GetRestRootPosition (toes);
-                else if (grounds.Count > 0) pivot = Ground (grounds.Select (id => RestPosition (session, id)).OrderByDescending (p => p.z).First ());
+                else if (grounds.Count > 0) pivot = grounds.Select (id => RestPosition (session, id)).OrderByDescending (p => p.z).First ();
             }
             else if (pivotSide < 0 && grounds.Count > 0) {
-                pivot = Ground (grounds.Select (id => RestPosition (session, id)).OrderBy (p => p.z).First ());
+                pivot = grounds.Select (id => RestPosition (session, id)).OrderBy (p => p.z).First ();
             }
 
             Quaternion yaw = Quaternion.AngleAxis (contact.yaw, Vector3.up);
@@ -337,11 +338,6 @@ namespace Lilium
                 });
             }
             return null;
-        }
-
-        static Vector3 Ground (Vector3 position)
-        {
-            return new Vector3 (position.x, 0, position.z);
         }
 
         /// <summary>基準の場所を地面に落とす点か（定義の ground。足裏の点）</summary>

@@ -68,12 +68,18 @@ unity cmd motion_describe --project-path "$P" --json
    - `--replace true` deletes every key of the clip first (start over). Without it, keys at other frames stay
    - The response has, per key, `maxResidual` and `unreached` (as above), then `lint` (the same report as `motion_lint`; `--lint false` skips it)
    - `motion_read_motion` returns the clip's keys in the same shape (compact poses and the 40 finger muscles per key): read, edit in Python, and write back with `--replace true`
-   - `motion_undo` removes the last `motion_write_motion` / `motion_write_pose` / `motion_write_hand` as a whole (repeat to go further back, up to 32). It is refused if the clip was changed after that write (in the window, by Unity's undo...)
-5. **Fix lint issues** — edit the keys file and write it again with `--replace true` (see "Fixing lint issues")
-6. **Look at images** — capture the key frames and one or two frames between keys with `motion_capture`, open them with Read and look.
+   - `motion_undo` removes the last `motion_write_motion` / `motion_write_pose` / `motion_write_hand` / `motion_delete_keys` as a whole (repeat to go further back, up to 32). It is refused if the clip was changed after that write (in the window, by Unity's undo...)
+   - `motion_delete_keys --frames 10,20` deletes keys (`--all true` for every key). On a cycle clip, deleting the last (cycle) key removes the cycle mark (`cycleRemoved`)
+5. **Check between keys with numbers** — `motion_sample` returns, per point, positions (`x` `y` `z`), `speed` (m/s) and `contact` (1 when a contact point is on the floor) for every frame,
+   plus muscle values. Narrow it with `--points LeftHeel,RightHeel,Hips`, `--muscles "Spine Front-Back"`, `--start` / `--end` / `--step`. Use it to see timing (stops, acceleration) and contacts without images
+   ```bash
+   unity cmd motion_sample --project-path "$P" --points LeftHeel,RightHeel,Hips --start 0 --end 60 --json
+   ```
+6. **Fix lint issues** — edit the keys file and write it again with `--replace true` (see "Fixing lint issues")
+7. **Look at images** — capture the key frames and one or two frames between keys with `motion_capture`, open them with Read and look.
    **Images find problems even when lint reports nothing** (a swinging foot kept flat, arms spread into an A-pose, a broken shoulder...)
-7. **Bake and save** — `motion_bake` (writes the Humanoid clip for the game next to the editing clip) → `motion_save`
-8. **Close** — `motion_close`. Otherwise the hidden preview scene stays alive
+8. **Bake and save** — `motion_bake` (writes the Humanoid clip for the game next to the editing clip) → `motion_save`
+9. **Close** — `motion_close`. Otherwise the hidden preview scene stays alive
 
 If the same clip is open in the Motion Editor window, ask the user to reopen the clip there after writing through the CLI.
 
@@ -100,7 +106,9 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
   Example, right fingers forward and palm down: `"aim": {"restForward": {"x":1,"y":0,"z":0}, "restUp": {"x":0,"y":-1,"z":0}, "forward": {"x":0,"y":0,"z":1}, "up": {"x":0,"y":-1,"z":0}}`
 - **Space**: `"space": "Head"` reads `position`, `aim` and `rotation` in that point's frame: origin at the point, axes turned by the point's rotation from the T-pose
   (in the T-pose the axes match the body frame). The reference is the same request's value when that point is placed in it, otherwise the current pose at that frame.
-  `"spaceBlendFrom": "Hips", "spaceBlend": 0.6` turns the axes only 60% of the way from the hips rotation to the space point's rotation. A space point cannot have a space itself
+  `"spaceBlendFrom": "Hips", "spaceBlend": 0.6` turns the axes only 60% of the way from the hips rotation to the space point's rotation. A space point cannot have a space itself.
+  **Place the space point in the same request whenever the body moves** (e.g. pin `Chest` when the hips go down): otherwise its position before solving is used,
+  and points written in its frame end up where the old chest was (shoulders 3–4 cm out of reach on the demo character)
 - **Snap**: `"snap": true` on an elbow or knee (`LowerArm` / `LowerLeg`) moves its pin to the closest spot the bones reach, given its parent point (`UpperArm` / `UpperLeg`) and child point
   (`Hand` / `Foot`) from the same request or the current pose; the bend stays on the side of the written position. The response lists it under `snapped` (`distance`, `position`).
   Without `snap` a pin is never moved
@@ -195,6 +203,8 @@ They were written before `contacts`, `aim`, `space` and `snap` existed: the numb
 | `MuscleRange` | A joint turns far enough to be clamped when baked for the game (muscle > 1.05) | Shoulder: elbow pin unreachable, `UpperArm` not pinned. Arm: lowered too far. Wrist: hand not along the forearm. Leg: smaller stride/abduction, add hip roll, knee pole over the toes |
 | `Pop` | One frame jumps | Check the keys around it (state switches, forgotten points). Add a key in between |
 | `LargeKeyRotation` | Rotation between adjacent keys exceeds 90° | Add a key in between |
+| `LoopVelocity` | On a cycle clip, a bone stops, starts suddenly or bounces back at the loop seam (the pose matches, the speed does not) | Make the motion just before the last key continue into the motion just after the first key (same direction and speed); add keys near both ends |
+| `HipSpeed` | The hips move faster than 8 m/s (× scale) in one frame | A forgotten or wrong hips position on a key; add keys in between |
 
 `maxAsymmetry` (left/right difference) is not a problem by itself. Only look at it when the motion should be symmetric (like a walk) and it is large.
 

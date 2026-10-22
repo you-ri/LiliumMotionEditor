@@ -283,19 +283,32 @@ namespace Lilium
                 return;
             }
             string undoName = targets.Count == 1 ? "Reset " + targets[0].label : "Reset Selection";
-            // 全身 IK の点は、選んだ点の骨をまとめて戻す（子の点は、戻した親の骨に付いて動いた所へ）。
-            // 値を入れても骨は解き直すまで動かないので、どの点も戻す前の骨の姿勢から求まる
-            HashSet<Transform> pointBones = new HashSet<Transform> (targets.OfType<BodyPointTarget> ().Select (p => p.editingBone).Where (b => b != null));
-            ApplyValueEdit (targets, undoName, () => {
-                foreach (PoseTarget target in targets) {
-                    BodyPointTarget point = target as BodyPointTarget;
-                    if (point != null) {
-                        point.ResetValues (TransformChannels.All, pointBones);
-                        continue;
-                    }
-                    target.ResetValues (TransformChannels.All);
+            ApplyValueEdit (targets, undoName, () => ResetValues (targets_, targets));
+        }
+
+        /// <summary>
+        /// selected の値を基準姿勢へ戻す（Controller パネルの Reset の中身）。
+        /// 全身 IK の点は、選んだ点の骨をまとめて戻す（子の点は、戻した親の骨に付いて動いた所へ）。
+        /// 値を入れても骨は解き直すまで動かないので、どの点も戻す前の骨の姿勢から求まる。
+        /// 点の骨の FK も基準へ戻す（10-22 ユーザー指示）: Free の点（向きを固定していない足首の点・踵・つま先など）は値を入れても解くときに効かず、
+        /// 骨は FK の値のまま曲がって残っていた。足首の点は脛から見た基準へ戻しても場所が変わらないので、足を選んで Reset しても何も起きなかった
+        /// </summary>
+        internal static void ResetValues (IList<PoseTarget> targets, IList<PoseTarget> selected)
+        {
+            HashSet<Transform> pointBones = new HashSet<Transform> (selected.OfType<BodyPointTarget> ().Select (p => p.editingBone).Where (b => b != null));
+            foreach (PoseTarget target in selected) {
+                BodyPointTarget point = target as BodyPointTarget;
+                if (point != null) {
+                    point.ResetValues (TransformChannels.All, pointBones);
+                    continue;
                 }
-            });
+                target.ResetValues (TransformChannels.All);
+            }
+            // 点の値を先に求める（FK は骨をすぐ動かすので、後の点が戻した後の骨から求まってしまう）。選んでいる FK は上で戻してある
+            foreach (Transform bone in pointBones) {
+                FkTarget fk = FindFkTarget (targets, bone);
+                if (fk != null && !selected.Contains (fk)) fk.ResetValues (TransformChannels.All);
+            }
         }
 
         /// <summary>

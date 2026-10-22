@@ -24,7 +24,9 @@ namespace Lilium
     /// - writeMotion: keys（キーごとに frame・points・hands）を 1 回で書く。先に全部確かめ、誤りがあれば何も書かない。replace なら先にキーを全部消す。
     ///   応答はキーごとの届かなかった点と、lint（既定 true）なら全体の検査
     /// - readMotion: キーのあるフレームごとの姿勢（compact）と指の muscle を、writeMotion の要求と同じ形で返す
-    /// - undo: 操作口で書いた最後の 1 回（writePose・writeHand・writeMotion）を戻す。書いた後にクリップが変わっていたら戻さない。応答は describe と同じ
+    /// - deleteKeys: frames（all なら全部）のキーを消す。無いフレームがあれば何も消さない。応答は describe と cycleRemoved
+    /// - sample: start〜end を step ごとに、点（pointNames。省くと全部）の場所・速さ・接地と、muscleNames の値を、点ごとに並べて返す
+    /// - undo: 操作口で書いた最後の 1 回（writePose・writeHand・writeMotion・deleteKeys）を戻す。書いた後にクリップが変わっていたら戻さない。応答は describe と同じ
     /// - lint: start〜end（end を省くとクリップの最後）を検査する（MotionLintReport）
     /// - bake: ゲーム用の Humanoid のクリップを焼いて保存する（outputName を省くと元の名前）
     /// - save: 書き換えたクリップを保存する
@@ -221,6 +223,12 @@ namespace Lilium
                 case "readMotion":
                     return ReadMotion (out error);
 
+                case "deleteKeys":
+                    return DeleteKeys (request, out error);
+
+                case "sample":
+                    return Sample (request, out error);
+
                 case "lint": {
                     int end = request.end >= 0 ? request.end : LastFrame (session_.clip);
                     MotionLintReport report = MotionLint.Run (session_, request.start, end);
@@ -259,7 +267,7 @@ namespace Lilium
                     return ReadHand (request.frame, out error);
 
                 default:
-                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, undo, lint, bake, save, capture, importOverride, writeHand, readHand, close");
+                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, deleteKeys, sample, undo, lint, bake, save, capture, importOverride, writeHand, readHand, close");
                     return null;
             }
         }
@@ -368,7 +376,7 @@ namespace Lilium
                 string problem = null;
                 PoseCommit.InUndoGroup ("Write Motion", () => {
                     if (request.replace) {
-                        ClearCurves (session_.targetClip);
+                        RemoveKeys (session_.targetClip, null, true, "Write Motion");
                         session_.stage.InvalidateClipCurves ();
                     }
                     for (int i = 0; i < keys.Count && problem == null; i++) {
@@ -417,13 +425,170 @@ namespace Lilium
             return new PoseDocument { frame = key.frame, points = key.points ?? new List<PosePoint> (), contacts = key.contacts ?? new List<PoseContact> () };
         }
 
-        /// <summary>クリップのカーブを全部消す（writeMotion の replace。やり直し）</summary>
-        static void ClearCurves (AnimationClip clip)
+        /// <summary>
+        /// キーを消す（S61。S38 の「キーを消すコマンドは入れない」を改めた）。frames のフレームの、書き先のクリップの全部のカーブのキー（点の状態・指も）を消す。
+        /// all なら全部（writeMotion の replace と同じ）。キーの無いフレームがあれば何も消さずに理由を返す。1 回の undo で戻る。応答は describe と cycleRemoved
+        /// </summary>
+        static string DeleteKeys (MotionEditorRequest request, out string error)
         {
-            Undo.RecordObject (clip, "Write Motion");
-            EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (clip);
-            if (bindings.Length > 0) AnimationUtility.SetEditorCurves (clip, bindings, new AnimationCurve[bindings.Length]);
-            foreach (EditorCurveBinding binding in AnimationUtility.GetObjectReferenceCurveBindings (clip)) AnimationUtility.SetObjectReferenceCurve (clip, binding, null);
+            // 書けるかはフレームでも決まる（サイクルキーより後ろ）。キーを消すのはフレームによらないので、0 で見る
+            int frame = session_.frame;
+            session_.Evaluate (0);
+            error = session_.GetWriteProblem ();
+            session_.Evaluate (frame);
+            if (error != null) return null;
+            AnimationClip clip = session_.targetClip;
+            int[] existing = ClipCycle.GetFrames (clip);
+            List<int> frames = request.all ? existing.ToList () : (request.frames ?? new List<int> ()).Distinct ().OrderBy (f => f).ToList ();
+            if (frames.Count == 0) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_FRAMES_TO_DELETE");
+                return null;
+            }
+            List<int> missing = frames.Where (f => System.Array.IndexOf (existing, f) < 0).ToList ();
+            if (missing.Count > 0) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_KEY_AT", string.Join (", ", missing), string.Join (", ", existing));
+                return null;
+            }
+            bool cycleRemoved = false;
+            error = RecordWrite (() => {
+                PoseCommit.InUndoGroup ("Delete Keys", () => cycleRemoved = RemoveKeys (clip, frames, request.all, "Delete Keys"));
+                return null;
+            });
+            session_.stage.InvalidateClipCurves ();
+            session_.Evaluate (frame);
+            if (error != null) return null;
+            return Merge (JsonUtility.ToJson (Describe (session_)), "{\"cycleRemoved\":" + (cycleRemoved ? "true" : "false") + "}");
+        }
+
+        /// <summary>
+        /// キーを消す（all ならカーブごと全部）。サイクルのクリップでは窓と同じく、最後のキー（サイクルキー）を消したら印を外し（true を返す）、
+        /// それ以外は最後のキーを先頭のキーに合わせ直す（先頭のキーを消したら、新しい先頭が最後へ写る）
+        /// </summary>
+        static bool RemoveKeys (AnimationClip clip, List<int> frames, bool all, string undoName)
+        {
+            bool cycle = ClipCycle.Load (clip);
+            int[] before = ClipCycle.GetFrames (clip);
+            Undo.RecordObject (clip, undoName);
+            if (all) {
+                EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (clip);
+                if (bindings.Length > 0) AnimationUtility.SetEditorCurves (clip, bindings, new AnimationCurve[bindings.Length]);
+                foreach (EditorCurveBinding binding in AnimationUtility.GetObjectReferenceCurveBindings (clip)) AnimationUtility.SetObjectReferenceCurve (clip, binding, null);
+            }
+            else {
+                foreach (int frame in frames) ClipKeyUtility.RemoveKeysAtFrame (clip, frame);
+            }
+            if (!cycle) return false;
+            int first, last;
+            if (ClipCycle.TryGetRange (ClipCycle.GetFrames (clip), out first, out last) && !ClipCycle.CanFollow (before, last)) {
+                ClipCycle.Save (clip, false);
+                return true;
+            }
+            ClipCycle.Sync (clip);
+            return false;
+        }
+
+        /// <summary>
+        /// キーの間の点の動きを、フレームごとの数で返す（S61）。start〜end を step ごとに、点の場所（体の向き基準・1mm に丸める）・
+        /// 速さ（m/s。前に見たフレームからの距離 ÷ 時間。最初のフレームは 0）・接地の点なら接地しているか（床から検査の contactHeight × 体の大きさ以内）と、
+        /// muscleNames の muscle の値を返す。点（pointNames）を省くと全部。項目名を繰り返さないよう点ごとに値を並べる（列）。JsonUtility では書けないので手で組み立てる
+        /// </summary>
+        static string Sample (MotionEditorRequest request, out string error)
+        {
+            error = PoseDocument.GetProblem (session_);
+            if (error != null) return null;
+            int start = request.start;
+            int end = request.end >= 0 ? request.end : LastFrame (session_.clip);
+            int step = Mathf.Max (1, request.step);
+            if (end < start) {
+                error = Tr ("MOTION_LINT_BAD_RANGE", start, end);
+                return null;
+            }
+            FullBodyRig body = session_.stage.fullBody;
+            List<BodyPointId> points = new List<BodyPointId> ();
+            foreach (string name in request.pointNames ?? new List<string> ()) {
+                BodyPointId id = new BodyPointId (name);
+                if (!body.HasPoint (id)) {
+                    error = Tr ("POSE_DOCUMENT_UNKNOWN_POINT", name, string.Join (", ", body.pointIds.Select (p => p.name)));
+                    return null;
+                }
+                points.Add (id);
+            }
+            if (points.Count == 0) points.AddRange (body.pointIds);
+            List<int> muscles = new List<int> ();
+            foreach (string name in request.muscleNames ?? new List<string> ()) {
+                int index;
+                if (!PoseBank.TryGetMuscle (name, out index)) {
+                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_MUSCLE", name);
+                    return null;
+                }
+                muscles.Add (index);
+            }
+
+            float rate = CurveEdit.FrameRateOf (session_.clip);
+            float contactHeight = new MotionLint.Settings ().contactHeight * session_.stage.editingRig.humanScale;
+            List<int> frames = new List<int> ();
+            for (int f = start; f <= end; f += step) frames.Add (f);
+            Vector3[,] positions = new Vector3[points.Count, frames.Count];
+            float[,] values = new float[muscles.Count, frames.Count];
+            int keep = session_.frame;
+            try {
+                for (int k = 0; k < frames.Count; k++) {
+                    PoseDocument pose = PoseDocument.Read (session_, frames[k], out error);
+                    if (pose == null) return null;
+                    for (int i = 0; i < points.Count; i++) {
+                        PosePoint point = pose.Find (points[i].name);
+                        positions[i, k] = point != null ? point.position : Vector3.zero;
+                    }
+                    if (muscles.Count == 0) continue;
+                    float[] read = session_.stage.ReadMuscles ();
+                    // 表示モデルへ当てた分を戻す（ReadHand と同じ）
+                    session_.Evaluate (frames[k]);
+                    if (read == null) {
+                        error = Tr ("PREVIEW_WINDOW_POSE_BANK_DISPLAY_NOT_HUMANOID");
+                        return null;
+                    }
+                    for (int m = 0; m < muscles.Count; m++) values[m, k] = muscles[m] < read.Length ? read[muscles[m]] : 0;
+                }
+            }
+            finally {
+                session_.Evaluate (keep);
+            }
+
+            StringBuilder json = new StringBuilder ();
+            json.Append ("{\"start\":").Append (start).Append (",\"end\":").Append (end).Append (",\"step\":").Append (step)
+                .Append (",\"frameRate\":").Append (PoseDocument.Number (rate, 3))
+                .Append (",\"frames\":[").Append (string.Join (",", frames)).Append ("],\"points\":[");
+            for (int i = 0; i < points.Count; i++) {
+                if (i > 0) json.Append (',');
+                json.Append ("{\"name\":\"").Append (points[i].name).Append ('"');
+                for (int axis = 0; axis < 3; axis++) {
+                    json.Append (",\"").Append ("xyz"[axis]).Append ("\":[");
+                    for (int k = 0; k < frames.Count; k++) json.Append (k > 0 ? "," : "").Append (PoseDocument.Number (positions[i, k][axis], 3));
+                    json.Append (']');
+                }
+                json.Append (",\"speed\":[");
+                for (int k = 0; k < frames.Count; k++) {
+                    float speed = k > 0 ? Vector3.Distance (positions[i, k], positions[i, k - 1]) * rate / step : 0;
+                    json.Append (k > 0 ? "," : "").Append (PoseDocument.Number (speed, 3));
+                }
+                json.Append (']');
+                if (body.IsContact (points[i])) {
+                    json.Append (",\"contact\":[");
+                    // 床との当たりの球（定義の radius）の下の端の高さで見る
+                    float radius = body.GetRadius (points[i]);
+                    for (int k = 0; k < frames.Count; k++) json.Append (k > 0 ? "," : "").Append (positions[i, k].y - radius <= contactHeight ? 1 : 0);
+                    json.Append (']');
+                }
+                json.Append ('}');
+            }
+            json.Append ("],\"muscles\":[");
+            for (int m = 0; m < muscles.Count; m++) {
+                if (m > 0) json.Append (',');
+                json.Append ("{\"name\":\"").Append (HumanTrait.MuscleName[muscles[m]]).Append ("\",\"value\":[");
+                for (int k = 0; k < frames.Count; k++) json.Append (k > 0 ? "," : "").Append (PoseDocument.Number (values[m, k], 3));
+                json.Append ("]}");
+            }
+            return json.Append ("]}").ToString ();
         }
 
         /// <summary>
@@ -507,17 +672,20 @@ namespace Lilium
             AnimationClip copy = clip != null ? Object.Instantiate (clip) : null;
             if (copy != null) copy.hideFlags = HideFlags.HideAndDontSave;
             int before = clip != null ? EditingClip.GetCurveVersion (clip) : 0;
+            // サイクルキーの印は .meta にあり、カーブの写しでは戻らないので別に覚える（キーを消すと外れることがある）
+            bool cycle = clip != null && ClipCycle.Load (clip);
             string problem = write ();
             if (problem != null || copy == null) {
                 // 途中まで書いてから止まったら（writeMotion）、半分だけ書いた形を残さない
                 if (problem != null && copy != null && EditingClip.GetCurveVersion (clip) != before) {
                     RestoreCurves (clip, copy);
+                    if (ClipCycle.Load (clip) != cycle) ClipCycle.Save (clip, cycle);
                     session_.stage.InvalidateClipCurves ();
                 }
                 if (copy != null) Object.DestroyImmediate (copy);
                 return problem;
             }
-            undo_.Add (new WriteRecord { clip = clip, copy = copy, version = EditingClip.GetCurveVersion (clip) });
+            undo_.Add (new WriteRecord { clip = clip, copy = copy, version = EditingClip.GetCurveVersion (clip), cycle = cycle });
             if (undo_.Count > kUndoLimit) {
                 Object.DestroyImmediate (undo_[0].copy);
                 undo_.RemoveAt (0);
@@ -543,6 +711,7 @@ namespace Lilium
             }
             undo_.RemoveAt (undo_.Count - 1);
             PoseCommit.InUndoGroup ("Undo Write", () => RestoreCurves (record.clip, record.copy));
+            if (ClipCycle.Load (record.clip) != record.cycle) ClipCycle.Save (record.clip, record.cycle);
             Object.DestroyImmediate (record.copy);
             // 1 つ前の書き込みの後の形に戻ったので、その記録の目印を今の数にそろえる（続けて戻せるように）
             if (undo_.Count > 0 && undo_[undo_.Count - 1].clip == record.clip) undo_[undo_.Count - 1].version = EditingClip.GetCurveVersion (record.clip);
@@ -952,6 +1121,8 @@ namespace Lilium
             public AnimationClip copy;
             /// <summary>書いた直後のクリップのカーブの版（EditingClip.GetCurveVersion）。変わっていたら戻さない</summary>
             public int version;
+            /// <summary>書く前のサイクルキーの印</summary>
+            public bool cycle;
         }
     }
 
@@ -979,6 +1150,16 @@ namespace Lilium
         public bool replace;
         /// <summary>writeMotion の後に全体を検査して返す</summary>
         public bool lint = true;
+        /// <summary>deleteKeys で消すキーのフレーム（S61）</summary>
+        public List<int> frames = new List<int> ();
+        /// <summary>deleteKeys で全部のキーを消す</summary>
+        public bool all;
+        /// <summary>sample のフレームの間隔（省くと 1）</summary>
+        public int step = 1;
+        /// <summary>sample で返す点の名前（省くと全部）</summary>
+        public List<string> pointNames = new List<string> ();
+        /// <summary>sample で返す muscle の名前（HumanTrait.MuscleName。省くと返さない）</summary>
+        public List<string> muscleNames = new List<string> ();
         public int start;
         public int end = -1;
         public string outputName;

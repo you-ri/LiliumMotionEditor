@@ -181,7 +181,7 @@ namespace Lilium
 
         /// <summary>
         /// 全身 IK の点が、乗る骨の付け根からどれだけ離れているか（基準姿勢で。ルートから見た向き・メートル）。
-        /// 定義の基準の場所（origin・toward・along・across・axes・ground）に、定義のずれ（体の向き・humanScale に対する割合）を足した所
+        /// 定義の基準の場所（origin・toward・along・across・axes・ground・radius）に、定義のずれ（体の向き・humanScale に対する割合）を足した所
         /// </summary>
         public Vector3 GetPointRestOffset (RigBinding.Point point)
         {
@@ -217,7 +217,8 @@ namespace Lilium
                 d = toward != null ? KeepAxes (GetRestRootPosition (toward) - start, definition.axes) : BodyToRoot (definition.fallback) * humanScale;
             }
             Vector3 place = start + d * definition.along + Vector3.Cross (bodyUp, d) * definition.across;
-            if (definition.ground) place -= bodyUp * Vector3.Dot (place, bodyUp);
+            // 地面へ落とす点は、床との当たりの球の下の端が地面に着く高さ（半径の分だけ上）に置く
+            if (definition.ground) place += bodyUp * (Mathf.Max (0, definition.radius) * humanScale - Vector3.Dot (place, bodyUp));
             return place - GetRestRootPosition (host);
         }
 

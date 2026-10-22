@@ -77,6 +77,25 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "readMotion" });
         }
 
+        [CliCommand ("motion_delete_keys", "Delete the keys at the given frames (every curve of the write target, fingers included), or all keys. Nothing is deleted if a frame has no key. On a cycle clip, deleting the cycle (last) key removes the cycle mark; otherwise the last key is synced to the first again. One motion_undo restores them", Tags = new[] { kTag })]
+        public static JToken DeleteKeys (
+            [CliArg ("frames", "Frames to delete, comma separated (e.g. 10,20)")] string frames = null,
+            [CliArg ("all", "Delete every key")] bool all = false)
+        {
+            return Run (new MotionEditorRequest { command = "deleteKeys", frames = SplitInts (frames), all = all });
+        }
+
+        [CliCommand ("motion_sample", "Sample point positions (body frame, mm steps), speeds (m/s), ground contact and muscle values per frame, as columns per point: {\"frames\":[...],\"points\":[{\"name\":...,\"x\":[...],\"y\":[...],\"z\":[...],\"speed\":[...],\"contact\":[...]}],\"muscles\":[...]}", Tags = new[] { kTag })]
+        public static JToken Sample (
+            [CliArg ("start", "First frame")] int start = 0,
+            [CliArg ("end", "Last frame (-1 is the end of the clip)")] int end = -1,
+            [CliArg ("step", "Frame step")] int step = 1,
+            [CliArg ("points", "Point names, comma separated (empty for every point)")] string points = null,
+            [CliArg ("muscles", "Muscle names, comma separated (e.g. Spine Front-Back,Left Upper Leg In-Out). Empty for none")] string muscles = null)
+        {
+            return Run (new MotionEditorRequest { command = "sample", start = start, end = end, step = step, pointNames = SplitNames (points), muscleNames = SplitNames (muscles) });
+        }
+
         [CliCommand ("motion_undo", "Undo the last motion_write_pose / motion_write_hand. Refused if the clip changed after that write (edited in the window, undone...). Returns the same as motion_describe", Tags = new[] { kTag })]
         public static JToken Undo ()
         {
@@ -160,6 +179,27 @@ namespace Lilium
             }
             if (json != null && json.Contains ("\"requests\"")) return JToken.Parse (MotionEditorCommands.RunBatch (json));
             return Run (json);
+        }
+
+        static System.Collections.Generic.List<string> SplitNames (string text)
+        {
+            System.Collections.Generic.List<string> names = new System.Collections.Generic.List<string> ();
+            if (string.IsNullOrEmpty (text)) return names;
+            foreach (string name in text.Split (',')) {
+                if (name.Trim ().Length > 0) names.Add (name.Trim ());
+            }
+            return names;
+        }
+
+        static System.Collections.Generic.List<int> SplitInts (string text)
+        {
+            System.Collections.Generic.List<int> values = new System.Collections.Generic.List<int> ();
+            foreach (string item in SplitNames (text)) {
+                int value;
+                if (!int.TryParse (item, out value)) throw new System.ArgumentException ("Not a frame: " + item);
+                values.Add (value);
+            }
+            return values;
         }
 
         static JToken Run (MotionEditorRequest request)

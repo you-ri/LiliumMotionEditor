@@ -146,6 +146,14 @@ namespace Lilium
             /// </summary>
             public bool contact;
 
+            /// <summary>
+            /// 床との当たりに使う球の半径（体の大きさ humanScale に対する割合。0 なら点そのもの）。Floor Clamp と検査（MotionLint）は、
+            /// 点の高さから半径を引いた所（球の下の端）を床の高さと比べる。地面へ落とす点（ground）は、基準姿勢で球の下の端が地面に着くよう、半径だけ上に置く
+            /// </summary>
+            [Min (0)]
+            [Tooltip ("Radius of the sphere used for contact with the floor, as a fraction of the character's human scale (0: the point itself). Floor Clamp and Motion Lint compare the bottom of the sphere with the floor. Ground points are raised by the radius so the sphere rests on the ground in the reference pose.")]
+            public float radius;
+
             /// <summary>乗る骨の付け根そのものの点か（基準の骨も d も無く、ずれも 0）</summary>
             public bool onBoneOrigin
             {
@@ -261,6 +269,8 @@ namespace Lilium
                     if (point.pullStrength <= 0) text.Append ('a');
                     // 向きを混ぜる点（S34）だけ足す（混ぜない定義は、項目を足す前と同じハッシュのまま）
                     if (point.blends) text.Append ('b').Append ((int)point.blendBone).Append (',').Append (point.blend.ToString ("R", culture));
+                    // 半径のある点だけ足す（地面へ落とす点の場所が変わる。半径の無い定義は、項目を足す前と同じハッシュのまま）
+                    if (point.radius > 0) text.Append ('c').Append (point.radius.ToString ("R", culture));
                 }
             }
             return Hash128.Compute (text.ToString ()).ToString ();
@@ -359,14 +369,22 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 足裏の点。足首から、つま先の骨の付け根への向き（水平だけ）の along 倍の所（across だけ外へ）を地面に置く
+        /// 足裏の点。足首から、つま先の骨の付け根への向き（水平だけ）の along 倍の所（across だけ外へ）を地面に置く。
+        /// 床との当たりの球（kSoleRadius）を持ち、基準姿勢で球の下の端が地面に着く高さに置く
         /// </summary>
         static BodyPoint SolePoint (string name, HumanBodyBones bone, HumanBodyBones foot, HumanBodyBones toes, float along, float across, string link)
         {
             return new BodyPoint {
                 name = name, bone = bone, origin = foot, toward = toes, along = along, across = across, axes = new Vector3 (1, 0, 1), ground = true, link = link, contact = true,
+                radius = kSoleRadius,
             };
         }
+
+        /// <summary>
+        /// 足裏の点の、床との当たりの球の半径（humanScale に対する割合。10-22 ユーザー指示）。
+        /// 足裏の点は靴底の中にあるとみなし、底からの厚みを球にする（体の大きさ 1 で 2cm）
+        /// </summary>
+        public const float kSoleRadius = 0.02f;
 
         /// <summary>背骨をまとめた胸の点の名前</summary>
         public const string kChestPoint = "Chest";

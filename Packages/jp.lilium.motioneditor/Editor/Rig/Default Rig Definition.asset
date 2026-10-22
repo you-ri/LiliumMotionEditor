@@ -421,6 +421,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
@@ -438,6 +439,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightUpperLeg
     bone: 2
@@ -455,6 +457,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
@@ -472,6 +475,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightLowerLeg
     bone: 4
@@ -489,6 +493,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftFoot
     bone: 5
@@ -506,6 +511,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -523,6 +529,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0
   - enabled: 1
     name: Neck
     bone: 9
@@ -540,6 +547,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: Head
     bone: 10
@@ -557,6 +565,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftUpperArm
     bone: 13
@@ -574,6 +583,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightUpperArm
     bone: 14
@@ -591,6 +601,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftLowerArm
     bone: 15
@@ -608,6 +619,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -625,6 +637,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftHand
     bone: 17
@@ -642,6 +655,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightHand
     bone: 18
@@ -659,6 +673,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: Chest
     bone: 54
@@ -676,6 +691,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: Stomach
     bone: 7
@@ -693,6 +709,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: HipsDirection
     bone: 0
@@ -710,6 +727,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: ChestDirection
     bone: 54
@@ -727,6 +745,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
@@ -744,6 +763,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: HeadTop
     bone: 10
@@ -761,6 +781,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftHeel
     bone: 5
@@ -778,6 +799,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: LeftSoleBall
     bone: 5
@@ -795,6 +817,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
@@ -812,6 +835,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: LeftToeTip
     bone: 19
@@ -829,6 +853,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
@@ -846,6 +871,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
@@ -863,6 +889,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightHeel
     bone: 6
@@ -880,6 +907,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: RightSoleBall
     bone: 6
@@ -897,6 +925,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
@@ -914,6 +943,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: RightToeTip
     bone: 20
@@ -931,6 +961,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 1
+    radius: 0.02
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -948,6 +979,7 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -965,3 +997,4 @@ MonoBehaviour:
     blendBone: 0
     blend: 0
     contact: 0
+    radius: 0

@@ -144,6 +144,23 @@ namespace Lilium
         }
 
         [Test]
+        public void HipsMovingTooFast_IsFound ()
+        {
+            // 1 フレームで腰を 30cm 動かす（60fps で 18m/s）
+            PoseSession session = Open ();
+            PoseDocument rest = Rest (session);
+            Write (session, 0, rest, ("Hips", "Pin", Vector3.zero));
+            Write (session, 1, rest, ("Hips", "Pin", new Vector3 (0, 0, 0.3f)));
+            Write (session, 20, rest, ("Hips", "Pin", new Vector3 (0, 0, 0.3f)));
+
+            MotionLintReport report = MotionLint.Run (session, 0, 20);
+            MotionLintIssue[] fast = report.issues.Where (i => i.kind == MotionLint.kHipSpeed).ToArray ();
+            Assert.AreEqual (1, fast.Length, Describe (report));
+            Assert.AreEqual (1, fast[0].frame, "動いた 1 フレームだけ");
+            Assert.Greater (fast[0].value, 15, "m/s");
+        }
+
+        [Test]
         public void ArmBeyondItsRange_IsFound ()
         {
             PoseSession session = Open ();

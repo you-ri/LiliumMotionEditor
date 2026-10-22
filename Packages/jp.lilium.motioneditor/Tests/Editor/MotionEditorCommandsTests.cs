@@ -857,6 +857,9 @@ namespace Lilium
             Vector3 right = rest.Find ("RightFoot").position;
             PoseContact stay = Contact ("RightFoot", "Flat", right);
             string[] soles = { "LeftHeel", "LeftToeTip", "LeftLittleToeSide" };
+            // 足裏の点は床との当たりの球の半径だけ上にある（10-22）。床に着いた足裏の点の高さは、基準姿勢の高さ
+            float ground = rest.Find ("LeftHeel").position.y;
+            Assert.Greater (ground, 0.01f, "足裏の点は半径だけ浮いている");
 
             Vector3 at = new Vector3 (left.x - 0.03f, 0, left.z + 0.1f);
             WriteResult flat = DryRun (Feet (rest, Contact ("LeftFoot", "Flat", at, 20), stay));
@@ -867,22 +870,22 @@ namespace Lilium
             Assert.AreEqual (left.y, ankle.position.y, 0.001f, "足首は基準姿勢の高さ");
             Assert.LessOrEqual (Quaternion.Angle (RotationOf (flat, "LeftFoot"), Quaternion.AngleAxis (20, Vector3.up)), 0.5f, "足の向き");
             foreach (string sole in soles) {
-                Assert.AreEqual (0, flat.Find (sole).position.y, 0.001f, sole + ": 床");
+                Assert.AreEqual (ground, flat.Find (sole).position.y, 0.001f, sole + ": 床");
                 Assert.AreEqual ("Locked", flat.Find (sole).state, sole);
             }
 
             WriteResult ball = DryRun (Feet (rest, Contact ("LeftFoot", "Ball", at, 0, 30), stay));
-            Assert.Greater (ball.Find ("LeftHeel").position.y, 0.01f, "かかとが上がる");
-            Assert.AreEqual (0, ball.Find ("LeftToeTip").position.y, 0.001f, "つま先は床のまま");
+            Assert.Greater (ball.Find ("LeftHeel").position.y, ground + 0.01f, "かかとが上がる");
+            Assert.AreEqual (ground, ball.Find ("LeftToeTip").position.y, 0.001f, "つま先は床のまま");
             Assert.LessOrEqual (Quaternion.Angle (RotationOf (ball, "LeftFoot"), Quaternion.AngleAxis (30, Vector3.right)), 0.5f);
 
             WriteResult heel = DryRun (Feet (rest, Contact ("LeftFoot", "Heel", at, 0, 20), stay));
-            Assert.Greater (heel.Find ("LeftToeTip").position.y, 0.01f, "つま先が上がる");
-            Assert.AreEqual (0, heel.Find ("LeftHeel").position.y, 0.001f, "かかとは床のまま");
+            Assert.Greater (heel.Find ("LeftToeTip").position.y, ground + 0.01f, "つま先が上がる");
+            Assert.AreEqual (ground, heel.Find ("LeftHeel").position.y, 0.001f, "かかとは床のまま");
             Assert.LessOrEqual (Quaternion.Angle (RotationOf (heel, "LeftFoot"), Quaternion.AngleAxis (-20, Vector3.right)), 0.5f);
 
             WriteResult lifted = DryRun (Feet (rest, Contact ("LeftFoot", "Flat", at, 0, 0, 0.05f), stay));
-            foreach (string sole in soles) Assert.AreEqual (0.05f, lifted.Find (sole).position.y, 0.001f, sole + ": 浮かせた高さ");
+            foreach (string sole in soles) Assert.AreEqual (ground + 0.05f, lifted.Find (sole).position.y, 0.001f, sole + ": 浮かせた高さ");
 
             PoseDocument conflict = Feet (rest, Contact ("LeftFoot", "Flat", at), stay);
             conflict.points.Add (new PosePoint { name = "LeftHeel", state = "Locked", position = Vector3.zero });
@@ -943,6 +946,228 @@ namespace Lilium
             AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (new MotionEditorRequest {
                 command = "writePose", pose = Stand (rest, new PosePoint { name = "Hips", state = "Pin", position = rest.Find ("Hips").position, snap = true }),
             })), "線の親の無い点");
+        }
+
+        [System.Serializable]
+        sealed class SampleResponse
+        {
+            public bool success;
+            public string error;
+            public SampleResult result;
+        }
+
+        [System.Serializable]
+        sealed class SampleResult
+        {
+            public float frameRate;
+            public int[] frames;
+            public List<SamplePoint> points;
+            public List<SampleMuscle> muscles;
+        }
+
+        [System.Serializable]
+        sealed class SamplePoint
+        {
+            public string name;
+            public float[] x, y, z, speed;
+            public int[] contact;
+
+            public Vector3 At (int k)
+            {
+                return new Vector3 (x[k], y[k], z[k]);
+            }
+        }
+
+        [System.Serializable]
+        sealed class SampleMuscle
+        {
+            public string name;
+            public float[] value;
+        }
+
+        [System.Serializable]
+        sealed class DeleteResponse
+        {
+            public bool success;
+            public string error;
+            public DeleteResult result;
+        }
+
+        [System.Serializable]
+        sealed class DeleteResult
+        {
+            public List<int> keyFrames;
+            public bool cycleRemoved;
+        }
+
+        /// <summary>しゃがんで立つ 3 キー（0・30・60 フレーム）</summary>
+        PoseDocument OpenSquat (string clip)
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/" + clip, create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            foreach ((int frame, float down) in new[] { (0, 0f), (30, 0.12f), (60, 0f) }) {
+                Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest, frame, down) }).success);
+            }
+            return rest;
+        }
+
+        [Test]
+        public void Sample_ReturnsPositionsSpeedsAndContacts_PerFrame ()
+        {
+            OpenSquat ("Sample.rig.anim");
+            SampleResponse all = Run<SampleResponse> (new MotionEditorRequest { command = "sample" });
+            Assert.IsTrue (all.success, all.error);
+            Assert.AreEqual (61, all.result.frames.Length, "省くとクリップの最後まで");
+            Assert.AreEqual (60, all.result.frameRate, 1e-3f);
+            PoseDocument at14 = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 14 }).result;
+            PoseDocument at15 = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 15 }).result;
+            foreach (PosePoint point in at15.points) {
+                SamplePoint sampled = all.result.points.First (p => p.name == point.name);
+                Assert.LessOrEqual (Vector3.Distance (sampled.At (15), point.position), 0.001f, point.name + ": readPose と同じ場所");
+                float speed = Vector3.Distance (point.position, at14.Find (point.name).position) * 60;
+                Assert.AreEqual (speed, sampled.speed[15], 1e-3f, point.name + ": 速さ");
+            }
+            SamplePoint heel = all.result.points.First (p => p.name == "LeftHeel");
+            Assert.IsTrue (heel.contact.All (c => c == 1), "Locked の足は接地したまま");
+            Assert.AreEqual (0, heel.speed.Max (), 0.01f);
+
+            MotionEditorRequest some = new MotionEditorRequest { command = "sample", start = 0, end = 60, step = 2 };
+            some.pointNames.AddRange (new[] { "LeftHeel", "Hips" });
+            some.muscleNames.Add ("Spine Front-Back");
+            SampleResponse picked = Run<SampleResponse> (some);
+            Assert.IsTrue (picked.success, picked.error);
+            Assert.AreEqual (31, picked.result.frames.Length, "2 フレームごと");
+            CollectionAssert.AreEqual (new[] { "LeftHeel", "Hips" }, picked.result.points.Select (p => p.name));
+            Assert.IsEmpty (picked.result.points[1].contact ?? new int[0], "接地の点でなければ接地を出さない");
+            Assert.AreEqual (31, picked.result.muscles[0].value.Length);
+            Assert.AreEqual (all.result.points.First (p => p.name == "Hips").speed[16], picked.result.points[1].speed[8], 0.05f, "間を空けても 1 秒あたりの速さ");
+
+            MotionEditorRequest badPoint = new MotionEditorRequest { command = "sample" };
+            badPoint.pointNames.Add ("Tail");
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (badPoint)), "無い点");
+            MotionEditorRequest badMuscle = new MotionEditorRequest { command = "sample" };
+            badMuscle.muscleNames.Add ("Tail Wag");
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (badMuscle)), "無い muscle");
+        }
+
+        static Dictionary<EditorCurveBinding, float> ValuesAt (AnimationClip clip, float time)
+        {
+            return AnimationUtility.GetCurveBindings (clip).ToDictionary (b => b, b => AnimationUtility.GetEditorCurve (clip, b).Evaluate (time));
+        }
+
+        [Test]
+        public void DeleteKeys_RemovesOnlyThoseFrames_AndUndoes ()
+        {
+            OpenSquat ("Delete.rig.anim");
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            Dictionary<EditorCurveBinding, Keyframe[]> before = Curves (clip);
+            Dictionary<EditorCurveBinding, float> first = ValuesAt (clip, 0), last = ValuesAt (clip, 1);
+
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"deleteKeys\",\"frames\":[30,15]}"), "キーの無いフレーム");
+            AssertSameCurves (before, clip, "何も消さない");
+            AssertFailed (MotionEditorCommands.Run ("{\"command\":\"deleteKeys\"}"), "フレームが無い");
+
+            DeleteResponse deleted = Run<DeleteResponse> (new MotionEditorRequest { command = "deleteKeys", frames = new List<int> { 30 } });
+            Assert.IsTrue (deleted.success, deleted.error);
+            CollectionAssert.AreEqual (new[] { 0, 60 }, deleted.result.keyFrames);
+            Assert.IsFalse (deleted.result.cycleRemoved);
+            foreach (KeyValuePair<EditorCurveBinding, float> pair in ValuesAt (clip, 0)) Assert.AreEqual (first[pair.Key], pair.Value, 1e-6f, "ほかのキーは変えない: " + pair.Key.propertyName);
+            foreach (KeyValuePair<EditorCurveBinding, float> pair in ValuesAt (clip, 1)) Assert.AreEqual (last[pair.Key], pair.Value, 1e-6f, "ほかのキーは変えない: " + pair.Key.propertyName);
+
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "undo" }).success);
+            AssertSameCurves (before, clip, "undo で戻る");
+
+            Assert.IsTrue (Run<DeleteResponse> (new MotionEditorRequest { command = "deleteKeys", all = true }).success);
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (clip), "all で全部消す");
+        }
+
+        [Test]
+        public void DeleteKeys_KeepsTheCycleKey_InStep ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Cycle.rig.anim", create = true }).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            foreach ((int frame, float down) in new[] { (0, 0f), (20, 0.06f), (40, 0.12f), (60, 0f) }) {
+                Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest, frame, down) }).success);
+            }
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            Assert.IsTrue (ClipCycle.Save (clip, true));
+            ClipCycle.Sync (clip);
+
+            DeleteResponse head = Run<DeleteResponse> (new MotionEditorRequest { command = "deleteKeys", frames = new List<int> { 0 } });
+            Assert.IsTrue (head.success, head.error);
+            Assert.IsFalse (head.result.cycleRemoved);
+            Dictionary<EditorCurveBinding, float> newFirst = ValuesAt (clip, 20 / 60f);
+            foreach (KeyValuePair<EditorCurveBinding, float> pair in ValuesAt (clip, 1)) {
+                Assert.AreEqual (newFirst[pair.Key], pair.Value, 1e-4f, "最後のキーが新しい先頭のキーにそろう: " + pair.Key.path + " " + pair.Key.propertyName);
+            }
+
+            DeleteResponse tail = Run<DeleteResponse> (new MotionEditorRequest { command = "deleteKeys", frames = new List<int> { 60 } });
+            Assert.IsTrue (tail.success, tail.error);
+            Assert.IsTrue (tail.result.cycleRemoved, "サイクルキーを消すと印を外す");
+            Assert.IsFalse (ClipCycle.Load (clip));
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "undo" }).success);
+            Assert.IsTrue (ClipCycle.Load (clip), "undo で印も戻る");
+        }
+
+        [Test]
+        public void DeleteKeys_OnAnOverride_LeavesTheBaseClip ()
+        {
+            OpenSquat ("Base.rig.anim");
+            AnimationClip baseClip = MotionEditorCommands.session.clip;
+            Dictionary<EditorCurveBinding, Keyframe[]> baseCurves = Curves (baseClip);
+            MotionEditorRequest open = new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Base.rig.anim", create = true, overrideWriteIndex = 0 };
+            open.overrides.Add (new MotionEditorOverride { clip = kFolder + "/Base.rig.override.anim", mode = "Additive" });
+            Assert.IsTrue (Run<DescribeResponse> (open).success);
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            Assert.IsTrue (Run<WriteResponse> (new MotionEditorRequest { command = "writePose", pose = Squat (rest, 45, 0.05f) }).success);
+            AnimationClip layer = MotionEditorCommands.session.targetClip;
+            Assert.AreNotEqual (baseClip, layer);
+            CollectionAssert.Contains (ClipCycle.GetFrames (layer), 45);
+
+            Assert.IsTrue (Run<DeleteResponse> (new MotionEditorRequest { command = "deleteKeys", frames = new List<int> { 45 } }).success);
+            CollectionAssert.DoesNotContain (ClipCycle.GetFrames (layer), 45, "Override から消す");
+            AssertSameCurves (baseCurves, baseClip, "元のクリップは変えない");
+        }
+
+        /// <summary>背骨を毎フレームのキーで回す（角度は frame → 度）</summary>
+        static void SpineCurve (PoseSession session, System.Func<int, float> angle)
+        {
+            session.Evaluate (0);
+            string path = RigPaths.Fk (HumanBodyBones.Spine);
+            Quaternion rest = session.stage.editingRig.FindControl (path).localRotation;
+            AnimationCurve[] curves = { new AnimationCurve (), new AnimationCurve (), new AnimationCurve (), new AnimationCurve () };
+            for (int f = 0; f <= 60; f++) {
+                Quaternion q = rest * Quaternion.Euler (angle (f), 0, 0);
+                for (int i = 0; i < 4; i++) curves[i].AddKey (new Keyframe (f / 60f, q[i]));
+            }
+            string[] axes = { "x", "y", "z", "w" };
+            for (int i = 0; i < 4; i++) {
+                for (int k = 0; k < curves[i].length; k++) {
+                    AnimationUtility.SetKeyLeftTangentMode (curves[i], k, AnimationUtility.TangentMode.Linear);
+                    AnimationUtility.SetKeyRightTangentMode (curves[i], k, AnimationUtility.TangentMode.Linear);
+                }
+                AnimationUtility.SetEditorCurve (session.clip, EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalRotation." + axes[i]), curves[i]);
+            }
+            session.stage.InvalidateClipCurves ();
+        }
+
+        [Test]
+        public void LoopVelocity_FindsSeamsThatStopOrBounce ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Loop.rig.anim", create = true }).success);
+            PoseSession session = MotionEditorCommands.session;
+            Assert.IsTrue (ClipCycle.Save (session.clip, true));
+            System.Func<string> seams = () => string.Join (", ", MotionLint.Run (session, 0, 60).issues.Where (i => i.kind == MotionLint.kLoopVelocity).Select (i => i.target));
+
+            SpineCurve (session, f => 20 * Mathf.Sin (2 * Mathf.PI * f / 60));
+            Assert.AreEqual ("", seams (), "1 周する動きはつなぎ目も同じ速さ");
+            // 跳ねと同じ余裕（0.5°）があるので、1 フレームに 1° ほどの跳ね返りは出ない。3° ほどにする
+            SpineCurve (session, f => 60 * Mathf.Sin (Mathf.PI * f / 60));
+            StringAssert.Contains ("Spine", seams (), "行って戻る動きはつなぎ目で跳ね返る");
+            SpineCurve (session, f => f <= 40 ? 20 * Mathf.Sin (Mathf.PI * f / 40) : 0);
+            StringAssert.Contains ("Spine", seams (), "最後は止まっていて、先頭で急に動き出す");
+            Assert.IsTrue (ClipCycle.Save (session.clip, false));
+            Assert.AreEqual ("", seams (), "サイクルでないクリップは見ない");
         }
 
         [Test]

@@ -60,6 +60,8 @@ namespace Lilium
         const float kRingWidth = 2.5f;
         internal static readonly Color kRingHoverColor = new Color (1f, 1f, 1f, 0.7f);
         internal static readonly Color kRingSelectedColor = new Color (0.3f, 1f, 0.45f, 1f);
+        /// <summary>床との当たりの球（定義の radius）の輪の色。リグエディタも同じ色で描く</summary>
+        internal static readonly Color kCollisionColor = new Color (0.55f, 0.9f, 1f, 0.45f);
 
         readonly EditingRig rig_;
         readonly FullBodyRig body_;
@@ -114,13 +116,24 @@ namespace Lilium
         /// <summary>点を delta（ワールド）だけ動かす。Free の点は、今の骨の位置から動かして Pin にする</summary>
         public void MoveBy (Vector3 delta)
         {
+            CarryFoot ();
             PinPosition (framePosition + delta);
         }
 
         /// <summary>点を position（ワールド）へ置いて Pin にする</summary>
         public void MoveTo (Vector3 position)
         {
+            CarryFoot ();
             PinPosition (position);
+        }
+
+        /// <summary>
+        /// Floor Clamp で足の点を動かすとき、同じ足のほかの Pin の点を足と一緒に動かす（FullBodyRig.CarryFootPins）。
+        /// 動かすとき（つかむ・ギズモ・Spinner・まとめて動かす）だけ呼ぶ。固定の付け外しでは呼ばない（ほかの Pin の点が外れて足が動く）
+        /// </summary>
+        void CarryFoot ()
+        {
+            if (floorClamp) body_.CarryFootPins (human_);
         }
 
         /// <summary>丸・ギズモで動かした量をためる。ためはじめなら、動かす前の位置を控える</summary>
@@ -202,12 +215,28 @@ namespace Lilium
         public bool floorClamp { get; set; }
 
         /// <summary>
-        /// 床より下へ動かすとき、Y だけ 0 にする（横の動きはそのまま効き、点は床の上を滑る。10-08 ユーザー指示で、床に当たった所で止めるのをやめた）
+        /// 床より下へ動かすとき、Y だけ床の高さにする（横の動きはそのまま効き、点は床の上を滑る。10-08 ユーザー指示で、床に当たった所で止めるのをやめた）。
+        /// 床との当たりの球（定義の radius）を持つ点は、球の下の端が床に着く高さ（半径）で止める（10-22）。
+        /// 足の点は、足をかたまりのまま下げて、どれかの足裏の点の球が床に着く高さで止める（FullBodyRig.GetFloorLimit）
         /// </summary>
         Vector3 ClampToFloor (Vector3 position)
         {
-            if (floorClamp && position.y < 0) position.y = 0;
+            if (!floorClamp) return position;
+            float limit = body_.GetFloorLimit (human_);
+            if (position.y < limit) position.y = limit;
             return position;
+        }
+
+        /// <summary>床との当たりの球の半径（メートル。定義の radius。無ければ 0）</summary>
+        public float floorRadius
+        {
+            get { return body_.GetRadius (human_); }
+        }
+
+        /// <summary>Floor Clamp で止める、点の高さの下限（足の点は、足をかたまりのまま下げて足裏の球が床に着く高さ。FullBodyRig.GetFloorLimit）</summary>
+        public float floorLimit
+        {
+            get { return body_.GetFloorLimit (human_); }
         }
 
         /// <summary>
@@ -436,8 +465,10 @@ namespace Lilium
             Vector3 pointPosition;
             Quaternion pointRotation;
             body_.TryGetPointWorld (human_, out pointPosition, out pointRotation);
-            position = positionPinned ? pointPosition : bonePoint;
-            rotation = rotationPinned ? pointRotation : bone_.rotation;
+            // 足と一緒に動かしている Pin の点は、骨の今の場所に出す（置いた場所は離したときに付け直す）
+            bool carried = body_.IsFootCarried (human_);
+            position = positionPinned && !carried ? pointPosition : bonePoint;
+            rotation = rotationPinned && !carried ? pointRotation : bone_.rotation;
         }
 
         /// <summary>
@@ -448,6 +479,18 @@ namespace Lilium
             // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る
             position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
+            // 向きを固定した足の点は、同じ骨の上の Locked の点を中心に向きの値を回す（足首を上げると踵が付いてくる。FullBodyRig.TryGetPivotTurn）。
+            // そのうえで、足裏が床に潜らないよう向きの値ごと回す（解くときには回せない。FullBodyRig.TryGetFloorRoll）
+            Quaternion turned;
+            if (floorClamp && body_.TryGetPivotTurn (human_, position, out turned)) {
+                body_.SetPointRotationWorld (human_, turned);
+                rotationDirty_ = true;
+            }
+            Quaternion rolled;
+            if (floorClamp && body_.TryGetFloorRoll (human_, position, out rolled)) {
+                body_.SetPointRotationWorld (human_, rolled);
+                rotationDirty_ = true;
+            }
             body_.SetPointPositionWorld (human_, position);
             body_.SetPositionWeight (human_, 1);
             positionDirty_ = true;
@@ -656,10 +699,12 @@ namespace Lilium
 
             DoLink (position);
             DrawRing (position, selected);
+            DrawCollision (position);
 
             // 関節の丸（つかんで動かすと位置を固定する）
             Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
             if (moved != position) {
+                CarryFoot ();
                 AddDragDelta (position, moved);
                 PinPosition (moved);
                 position = moved;
@@ -679,6 +724,7 @@ namespace Lilium
             else if (selected && showGizmo) {
                 Vector3 gizmoPosition = PoseHandles.PositionHandle (position, PoseHandleUtility.GizmoAxes (shape));
                 if (gizmoPosition != position) {
+                    CarryFoot ();
                     AddDragDelta (position, gizmoPosition);
                     PinPosition (gizmoPosition);
                     GUI.changed = true;
@@ -697,6 +743,18 @@ namespace Lilium
                 }
             }
             PoseHandleUtility.color = PoseHandleUtility.StandardColor;
+        }
+
+        /// <summary>床との当たりの球（定義の radius）を、見る向きの輪で描く（半径の無い点は描かない）</summary>
+        void DrawCollision (Vector3 position)
+        {
+            float radius = floorRadius;
+            if (Event.current.type != EventType.Repaint || radius <= 0) return;
+            Color saved = Handles.color;
+            Handles.color = PoseHandles.Fade (kCollisionColor);
+            Vector3 normal = Camera.current != null ? Camera.current.transform.forward : Vector3.forward;
+            Handles.DrawWireDisc (position, normal, radius);
+            Handles.color = saved;
         }
 
         /// <summary>

@@ -513,7 +513,11 @@ namespace Lilium
             Vector3[,] positions = new Vector3[frameCount, points.Count];
             for (int f = 0; f < frameCount; f++) {
                 ApplyImported (imported, f / rate);
-                for (int p = 0; p < points.Count; p++) body.TryGetBonePointWorld (points[p], out positions[f, p]);
+                for (int p = 0; p < points.Count; p++) {
+                    body.TryGetBonePointWorld (points[p], out positions[f, p]);
+                    // 接地は、床との当たりの球（定義の radius）の下の端の高さで見る
+                    positions[f, p].y -= body.GetRadius (points[p]);
+                }
             }
             // 接地の区間と、留める場所
             Vector3?[,] anchors = new Vector3?[frameCount, points.Count];
@@ -558,7 +562,8 @@ namespace Lilium
                     HashSet<Transform> controls = new HashSet<Transform> ();
                     for (int p = 0; p < points.Count; p++) {
                         if (!anchors[f, p].HasValue) continue;
-                        body.SetPointPositionWorld (points[p], anchors[f, p].Value);
+                        // 留める場所は球の下の端なので、点（球の中心）は半径だけ上
+                        body.SetPointPositionWorld (points[p], anchors[f, p].Value + Vector3.up * body.GetRadius (points[p]));
                         body.SetPositionWeight (points[p], 1);
                         controls.Add (body.GetControl (points[p]));
                     }

@@ -11,10 +11,13 @@ namespace Lilium
     /// モーションの検査（S37）。フレームごとに姿勢を作って（PoseSession。窓と同じ段を通す）、問題のあるフレームと場所を出す。
     /// AI が自分の作ったモーションを確かめるのに使うが、人が使っても役に立つ。
     /// - FootSlide: 接地している足の点が、1 フレームで水平に動いた（メートル）
-    /// - FloorPenetration: 点（全身 IK でなければ骨）が床（Y=0）より下にある（メートル。負の高さ）
+    /// - FloorPenetration: 点（全身 IK でなければ骨）が床（Y=0）より下にある（メートル。負の高さ）。床との当たりの球（定義の radius）を持つ点は、球の下の端で見る
     /// - MuscleRange: Humanoid の muscle が範囲を超えた。ゲーム用に焼くと丸められる所（muscle の値）
     /// - Pop: 骨の 1 フレームの回転が、前後のフレームの回転の 3 倍 + 0.5° を越えた、または 1 フレームだけ前後から外れた（跳ね。度）
     /// - LargeKeyRotation: 隣り合うキーの間の回転が 90° を超えた。回転のカーブは 4 成分ごとの補間なので、速さが歪み、180° を超えると逆に回る（度）
+    /// - LoopVelocity: サイクルのクリップのつなぎ目で、骨の 1 フレームの回転（最後のキーの手前と先頭のキーの直後）が跳ねと同じ比べ方で食い違う。
+    ///   姿勢はそろっていても、つなぎ目で止まる・急に動き出して見える（度。S61）
+    /// - HipSpeed: 腰の 1 フレームの動きが速すぎる（メートル毎秒。既定 8m/s × 体の大きさ。S61）
     /// 同じ問題が続くフレームは 1 件にまとめる（frame〜endFrame。value はその間の一番大きい値）。
     /// 左右の非対称度は問題にせず、値だけ出す（左右の muscle の差の平均の最大）
     /// </summary>
@@ -25,6 +28,8 @@ namespace Lilium
         public const string kMuscleRange = "MuscleRange";
         public const string kPop = "Pop";
         public const string kLargeKeyRotation = "LargeKeyRotation";
+        public const string kLoopVelocity = "LoopVelocity";
+        public const string kHipSpeed = "HipSpeed";
 
         /// <summary>閾値（評価指標と閾値の「検査」）</summary>
         [System.Serializable]
@@ -49,6 +54,8 @@ namespace Lilium
             public float popSpike = 0.75f;
             /// <summary>キーの間の回転の上限（度）</summary>
             public float keyRotation = 90;
+            /// <summary>腰の速さの上限（メートル毎秒。体の大きさ 1 のとき。全力で走る人の速さより少し速い）</summary>
+            public float hipSpeed = 8;
         }
 
         /// <summary>
@@ -78,6 +85,10 @@ namespace Lilium
             Quaternion[,] rotations = new Quaternion[frameCount, bones.Count];
             Vector3[] previousFeet = new Vector3[points.Count];
             bool[] previousContact = new bool[points.Count];
+            Transform hips = rig.GetEditingBone (HumanBodyBones.Hips);
+            Transform root = rig.root.transform;
+            float frameRate = session.clip != null ? CurveEdit.FrameRateOf (session.clip) : 60;
+            Vector3 previousHips = Vector3.zero;
 
             HumanoidBaker reader = CreateMuscleReader (stage);
             HumanPose pose = new HumanPose ();
@@ -87,6 +98,16 @@ namespace Lilium
                 for (int f = start; f <= end; f++) {
                     session.Evaluate (f);
                     for (int b = 0; b < bones.Count; b++) rotations[f - start, b] = bones[b].localRotation;
+                    if (hips != null) {
+                        // ルートは動かない（ルートの動きは腰に入っている）ので、ルートから見た腰の動きを見る
+                        Vector3 position = root.InverseTransformPoint (hips.position);
+                        if (f > start) {
+                            float speed = Vector3.Distance (position, previousHips) * frameRate;
+                            float limit = settings.hipSpeed * scale;
+                            runs.Add (kHipSpeed, hips.name, f, speed, limit, speed > limit);
+                        }
+                        previousHips = position;
+                    }
 
                     for (int i = 0; i < points.Count; i++) {
                         Vector3 p = points[i].position ();
@@ -121,6 +142,7 @@ namespace Lilium
             }
 
             FindPops (runs, bones, rotations, start, settings);
+            FindLoopSeam (runs, bones, rotations, start, session.targetClip ?? session.clip, settings);
             FindLargeKeyRotations (report, session.targetClip ?? session.clip, settings);
             runs.Close ();
             report.issues.Sort ((a, b) => a.frame != b.frame ? a.frame.CompareTo (b.frame) : string.CompareOrdinal (a.kind + a.target, b.kind + b.target));
@@ -196,6 +218,7 @@ namespace Lilium
 
         /// <summary>
         /// 床と接地を見る点。全身 IK の点（骨の上の点。かかと・つま先の先など）で、定義の接地の点（contact）を接地の対象にする。
+        /// 場所は、床との当たりの球（定義の radius）の下の端（高さだけ半径を引く。水平の動きは変わらない）。
         /// 点が 1 つも置けなかったキャラ（全身 IK が無い）では床と接地を見ない
         /// </summary>
         static List<(string, System.Func<Vector3>, bool)> CollectPoints (PreviewStage stage)
@@ -205,10 +228,11 @@ namespace Lilium
             if (body == null) return result;
             foreach (BodyPointId id in body.pointIds) {
                 BodyPointId point = id;
+                float radius = body.GetRadius (id);
                 result.Add ((id.name, () => {
                     Vector3 position;
                     body.TryGetBonePointWorld (point, out position);
-                    return position;
+                    return position - Vector3.up * radius;
                 }, body.IsContact (id)));
             }
             return result;
@@ -259,6 +283,31 @@ namespace Lilium
                     }
                     runs.Add (kPop, bones[b].name, start + f, off, spikeLimit, f + 1 < count && off > spikeLimit);
                 }
+            }
+        }
+
+        /// <summary>
+        /// サイクルのクリップのつなぎ目の速さ（S61）。最後のキーの手前の 1 フレーム（last-1 → last）と、先頭のキーの直後の 1 フレーム（first → first+1）の回転を、跳ねと同じ 2 通りで見る。
+        /// - 止まる・動き出す: 大きい方が、小さい方の popRatio 倍 + popMargin を越えた
+        /// - 跳ね返る（行って戻る動きのループ）: つなぎ目の姿勢が、前後（last-1 と first+1）を結んだ中間から、大きい方の popSpike 倍 + popMargin より離れた。
+        ///   速さの大きさは同じで向きだけ逆なので、上の比べ方では見つからない
+        /// 検査する範囲がつなぎ目の両側を含むときだけ見る
+        /// </summary>
+        static void FindLoopSeam (Runs runs, List<Transform> bones, Quaternion[,] rotations, int start, AnimationClip clip, Settings settings)
+        {
+            int first, last;
+            if (clip == null || !ClipCycle.Load (clip) || !ClipCycle.TryGetRange (clip, out first, out last)) return;
+            int head = first - start, tail = last - start;
+            if (head < 0 || tail >= rotations.GetLength (0) || tail - 1 <= head) return;
+            for (int b = 0; b < bones.Count; b++) {
+                float before = Quaternion.Angle (rotations[tail - 1, b], rotations[tail, b]);
+                float after = Quaternion.Angle (rotations[head, b], rotations[head + 1, b]);
+                float faster = Mathf.Max (before, after);
+                float jumpLimit = Mathf.Min (before, after) * settings.popRatio + settings.popMargin;
+                float off = Quaternion.Angle (rotations[tail, b], Quaternion.Slerp (rotations[tail - 1, b], rotations[head + 1, b], 0.5f));
+                float spikeLimit = faster * settings.popSpike + settings.popMargin;
+                bool jump = faster > jumpLimit;
+                runs.Add (kLoopVelocity, bones[b].name, last, jump ? faster : off, jump ? jumpLimit : spikeLimit, jump || off > spikeLimit);
             }
         }
 

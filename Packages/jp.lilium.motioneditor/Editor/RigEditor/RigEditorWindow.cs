@@ -534,6 +534,11 @@ namespace Lilium
                 if (entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
                 Handles.color = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
                 Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale);
+                // 床との当たりの球（定義の radius）。基準姿勢で地面に着いているのが見えるよう、3 方向の輪で描く
+                if (entry.radius > 0) {
+                    Handles.color = BodyPointTarget.kCollisionColor;
+                    foreach (Vector3 axis in new[] { Vector3.right, Vector3.up, Vector3.forward }) Handles.DrawWireDisc (entry.position.Value, axis, entry.radius);
+                }
             }
 
             // 指している物・選んでいる物は、最後に重ねて名前を出す（点は輪も。骨の線は上で太く描いた）

@@ -917,6 +917,8 @@ namespace Lilium
             foreach (BodyPointId id in contacts) {
                 Vector3 position;
                 s.body.TryGetBonePointWorld (id, out position);
+                // 床との当たりの球の下の端で見る
+                position.y -= s.body.GetRadius (id);
                 if (position.y < lowest) {
                     lowest = position.y;
                     lowestName = id.name;
@@ -935,7 +937,7 @@ namespace Lilium
                 foreach (BodyPointId id in contacts) {
                     Vector3 position;
                     s.body.TryGetBonePointWorld (id, out position);
-                    sunk = Mathf.Min (sunk, position.y);
+                    sunk = Mathf.Min (sunk, position.y - s.body.GetRadius (id));
                 }
                 Assert.Less (sunk, -0.01f, "SolveOnly では床に当てない");
             }
@@ -965,7 +967,7 @@ namespace Lilium
                 foreach (BodyPointId id in contacts) {
                     Vector3 position;
                     s.body.TryGetBonePointWorld (id, out position);
-                    Assert.GreaterOrEqual (position.y, -2e-3f, "床より下へ潜らない: " + id.name + " step " + i);
+                    Assert.GreaterOrEqual (position.y - s.body.GetRadius (id), -2e-3f, "床より下へ潜らない: " + id.name + " step " + i);
                 }
                 List<KeyValuePair<Vector3, Quaternion>> pose = Snapshot (s);
                 // 1 歩目はまっすぐな脚が曲がり始めるので大きく回る（足首を Pin にして下げたときも同じ）。2 歩目からは少しずつ
@@ -976,6 +978,177 @@ namespace Lilium
                 }
                 previous = pose;
             }
+        }
+
+        [Test]
+        public void SolePoints_HaveCollisionRadius_AndRestOnTheGround ()
+        {
+            // 標準の定義の足裏の点は床との当たりの球を持ち、基準姿勢で球の下の端が地面に着く高さ（半径）に置く（10-22）。足首の点は球を持たない
+            Setup s = Create (toes: true);
+            float scale = s.rig.humanScale;
+            BodyPointId[] soles = s.body.pointIds.Where (id => id.name.EndsWith ("Heel") || id.name.EndsWith ("SoleBall") || id.name.EndsWith ("LittleToeSide") || id.name.EndsWith ("ToeTip")).ToArray ();
+            Assert.AreEqual (8, soles.Length, "左右の足裏の点");
+            foreach (BodyPointId id in soles) {
+                Assert.AreEqual (EditRigDefinition.kSoleRadius * scale, s.body.GetRadius (id), 1e-6f, id.name);
+                Vector3 rest;
+                Quaternion rotation;
+                s.body.TryGetPointRestValues (id, out rest, out rotation);
+                Assert.AreEqual (EditRigDefinition.kSoleRadius * scale, rest.y * scale, 1e-4f, "球の下の端が地面に着く: " + id.name);
+            }
+            Assert.AreEqual (0, s.body.GetRadius (HumanBodyBones.LeftFoot), "足首の点は球を持たない");
+            Assert.AreEqual (0, s.body.GetRadius (HumanBodyBones.LeftHand), "手の点は球を持たない");
+        }
+
+        [Test]
+        public void FloorClamp_StopsMovedSolePointAtItsRadius ()
+        {
+            // 床との当たりの球を持つ点を床より下へ動かすと、球の下の端が床に着く高さ（半径）で止まる。横へはそのまま動く
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget heel = targets.OfType<BodyPointTarget> ().Single (p => p.id.name == "LeftHeel");
+            heel.floorClamp = true;
+            Assert.Greater (heel.floorRadius, 0);
+            Vector3 start = heel.framePosition;
+            heel.MoveBy (new Vector3 (0.03f, -0.1f, 0.02f));
+            Assert.LessOrEqual (Vector3.Distance (new Vector3 (start.x + 0.03f, heel.floorRadius, start.z + 0.02f), heel.framePosition), kPositionTolerance);
+        }
+
+        [Test]
+        public void FloorClamp_LowersAnkleWithTheWholeFoot ([Values (false, true)] bool raiseFirst)
+        {
+            // 足首を床より下へ動かすと、足が床に平らに着く高さ（基準姿勢の足首の高さ）で止まる。横へは床の上を滑る。
+            // 足首だけを床まで下げられると、足裏を床の上に置くには足をつま先が上を向くまで回すしかなく、足が起きた（10-22）
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget ankle = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointId[] soles = s.body.pointIds.Where (id => id.name.StartsWith ("Left") && s.body.IsContact (id) && s.body.GetRadius (id) > 0).ToArray ();
+            Assert.AreEqual (4, soles.Length, "左足の足裏の点");
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = true;
+            s.body.floorClamp = true;
+            Vector3 start = ankle.framePosition;
+            Quaternion footStart = Bone (s, HumanBodyBones.LeftFoot).rotation;
+            s.body.CaptureInput ();
+            if (raiseFirst) {
+                ankle.MoveBy (new Vector3 (0, 0.1f, 0));
+                s.body.RestoreInput ();
+                s.body.Solve ();
+            }
+            // ドラッグと同じく少しずつ下げる
+            Vector3 from = ankle.framePosition;
+            for (int i = 0; i < 30; i++) {
+                ankle.MoveBy (new Vector3 (0.001f, -0.01f, 0.0005f));
+                s.body.RestoreInput ();
+                s.body.Solve ();
+            }
+
+            Vector3 moved = ankle.framePosition - from;
+            Assert.AreEqual (0.03f, moved.x, 1e-3f, "横へは床の上を滑る");
+            Assert.AreEqual (0.015f, moved.z, 1e-3f, "横へは床の上を滑る");
+            float lowest = float.MaxValue;
+            foreach (BodyPointId id in soles) {
+                Vector3 position;
+                s.body.TryGetBonePointWorld (id, out position);
+                float bottom = position.y - s.body.GetRadius (id);
+                Assert.GreaterOrEqual (bottom, -2e-3f, "足裏の球は床に潜らない: " + id.name);
+                lowest = Mathf.Min (lowest, bottom);
+            }
+            Assert.AreEqual (0, lowest, 2e-3f, "足は床まで下がる（足裏の球が床に着く）");
+            Assert.AreEqual (start.y, ankle.framePosition.y, 1e-3f, "足首は、足が床に平らに着く高さ（基準姿勢の高さ）で止まる");
+            if (!raiseFirst) {
+                Assert.LessOrEqual (Quaternion.Angle (footStart, Bone (s, HumanBodyBones.LeftFoot).rotation), 1f, "足は起きない（向きを変えずに下がる）");
+            }
+        }
+
+        [Test]
+        public void FloorClamp_RollsRotationLockedFootFlat ([Values (false, true)] bool pinSoles)
+        {
+            // 向きを固定した足首（つま先を下げた向き）を下ろすと、足裏が床に潜らないよう向きの値ごと回り（つま先が着いたまま踵が下りる）、
+            // 足が平らになる高さ（基準姿勢の足首の高さ）で止まる。向きを固定した足は解くときに回せないので、動かすときに向きの値を回す（10-22）
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget ankle = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointId[] soles = s.body.pointIds.Where (id => id.name.StartsWith ("Left") && s.body.IsContact (id) && s.body.GetRadius (id) > 0).ToArray ();
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = true;
+            s.body.floorClamp = true;
+            Vector3 start = ankle.framePosition;
+            s.body.CaptureInput ();
+            ankle.MoveBy (new Vector3 (0, 0.15f, 0));
+            ankle.SpinRotateWorld (Quaternion.AngleAxis (30, s.rig.root.transform.rotation * s.rig.bodyRight));
+            Assert.IsTrue (ankle.rotationPinned, "向きを固定した");
+            s.body.RestoreInput ();
+            s.body.Solve ();
+            Vector3 toe;
+            s.body.TryGetBonePointWorld (new BodyPointId ("LeftToeTip"), out toe);
+            Assert.Less (toe.y, ankle.framePosition.y - 0.03f, "つま先を下げた向き");
+            // 足裏の点を Pin にしておいても、足首をつかんで動かす間は足と一緒に動く（離したときに今の場所で Pin のまま付け直す）
+            List<BodyPointTarget> solePoints = targets.OfType<BodyPointTarget> ().Where (p => soles.Contains (p.id)).ToList ();
+            if (pinSoles) {
+                foreach (BodyPointTarget sole in solePoints) sole.SetState (BodyPointState.Pin);
+            }
+
+            for (int i = 0; i < 30; i++) {
+                ankle.MoveBy (new Vector3 (0, -0.01f, 0));
+                if (pinSoles) Assert.IsTrue (s.body.IsFootCarried (soles[0]), "Pin の足裏の点は足と一緒に動く");
+                s.body.RestoreInput ();
+                s.body.Solve ();
+                foreach (BodyPointId id in soles) {
+                    Vector3 position;
+                    s.body.TryGetBonePointWorld (id, out position);
+                    Assert.GreaterOrEqual (position.y - s.body.GetRadius (id), -2e-3f, "足裏の球は床に潜らない: " + id.name + " step " + i);
+                }
+            }
+            Assert.AreEqual (start.y, ankle.framePosition.y, 1e-3f, "足首は、足が床に平らに着く高さで止まる");
+            foreach (BodyPointId id in soles) {
+                Vector3 position;
+                s.body.TryGetBonePointWorld (id, out position);
+                Assert.LessOrEqual (position.y - s.body.GetRadius (id), 5e-3f, "足は平らに床に着く: " + id.name);
+            }
+            Assert.IsTrue (ankle.rotationPinned, "向きの固定は残る");
+            if (pinSoles) {
+                // 離したとき（キーを打つ前に骨の場所へ付け直す）
+                foreach (BodyPointTarget sole in solePoints) sole.SyncToBone ();
+                s.body.ClearFootCarry ();
+                foreach (BodyPointTarget sole in solePoints) {
+                    Assert.AreEqual (BodyPointState.Pin, sole.state, "Pin のまま: " + sole.id.name);
+                    Vector3 bone;
+                    s.body.TryGetBonePointWorld (sole.id, out bone);
+                    Assert.LessOrEqual (Vector3.Distance (bone, sole.framePosition), 1e-4f, "今の場所に付け直す: " + sole.id.name);
+                }
+            }
+        }
+
+        [Test]
+        public void FloorClamp_LiftingAnkle_TurnsFootAboutLockedSoleBall ()
+        {
+            // 足首の向きを固定し、足裏の中心を Locked にして足首を持ち上げると、足裏の中心を中心に足首の向きの値が回り、踵が付いてくる（つま先立ちになる）。
+            // 向きを固定したままだと足が回れず、踵が付いてこなかった（10-22）
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget ankle = PointTarget (targets, HumanBodyBones.LeftFoot);
+            BodyPointTarget ball = targets.OfType<BodyPointTarget> ().Single (p => p.id.name == "LeftSoleBall");
+            BodyPointId heel = new BodyPointId ("LeftHeel");
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = true;
+            s.body.floorClamp = true;
+            ankle.SpinRotateWorld (Quaternion.identity);
+            Assert.IsTrue (ankle.rotationPinned, "足首の向きを固定した");
+            ball.SetState (BodyPointState.Locked);
+            Vector3 ballStart = ball.framePosition;
+            Vector3 heelStart;
+            s.body.TryGetBonePointWorld (heel, out heelStart);
+            float ankleStart = Bone (s, HumanBodyBones.LeftFoot).position.y;
+            s.body.CaptureInput ();
+            for (int i = 0; i < 10; i++) {
+                ankle.MoveBy (new Vector3 (0, 0.01f, 0));
+                s.body.RestoreInput ();
+                s.body.Solve ();
+            }
+            Vector3 heelEnd, ballEnd;
+            s.body.TryGetBonePointWorld (heel, out heelEnd);
+            s.body.TryGetBonePointWorld (ball.id, out ballEnd);
+            Assert.Greater (heelEnd.y - heelStart.y, 0.05f, "踵が付いてくる");
+            Assert.LessOrEqual (Vector3.Distance (ballStart, ballEnd), 2e-3f, "足裏の中心は留まる");
+            // 足首と足裏の中心の距離（足の長さ）は変わらないので、真上へ上げた所にぴったりは届かない。足首が上がればよい
+            Assert.Greater (Bone (s, HumanBodyBones.LeftFoot).position.y - ankleStart, 0.05f, "足首が上がる");
         }
 
         [Test]

@@ -142,7 +142,8 @@ namespace Lilium
             if (grabbed.floorClamp) {
                 float lowest = float.MaxValue;
                 foreach (BodyPointTarget point in selected) {
-                    lowest = Mathf.Min (lowest, point == grabbed ? from.y : point.framePosition.y);
+                    // 床からの余裕（球を持つ点は球の下の端、足の点は足をかたまりのまま下げたときの足裏の球の下の端）
+                    lowest = Mathf.Min (lowest, (point == grabbed ? from.y : point.framePosition.y) - point.floorLimit);
                 }
                 if (lowest + delta.y < 0) delta.y = -lowest;
                 // つかんだ点は自分だけで床に当てて置いてあるので、かたまりの動かす量で置き直す
