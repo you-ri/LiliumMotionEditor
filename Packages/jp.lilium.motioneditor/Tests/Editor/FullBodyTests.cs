@@ -1042,8 +1042,10 @@ namespace Lilium
             }
 
             Vector3 moved = ankle.framePosition - from;
-            Assert.AreEqual (0.03f, moved.x, 1e-3f, "横へは床の上を滑る");
-            Assert.AreEqual (0.015f, moved.z, 1e-3f, "横へは床の上を滑る");
+            if (!raiseFirst) {
+                Assert.AreEqual (0.03f, moved.x, 1e-3f, "横へは床の上を滑る");
+                Assert.AreEqual (0.015f, moved.z, 1e-3f, "横へは床の上を滑る");
+            }
             float lowest = float.MaxValue;
             foreach (BodyPointId id in soles) {
                 Vector3 position;
@@ -1053,9 +1055,15 @@ namespace Lilium
                 lowest = Mathf.Min (lowest, bottom);
             }
             Assert.AreEqual (0, lowest, 2e-3f, "足は床まで下がる（足裏の球が床に着く）");
-            Assert.AreEqual (start.y, ankle.framePosition.y, 1e-3f, "足首は、足が床に平らに着く高さ（基準姿勢の高さ）で止まる");
+            // 足の箱は、床から 2mm 以内の頂点を床に着いたとみなす（その分の傾きが残る）
+            Assert.AreEqual (start.y, ankle.framePosition.y, 2.5e-3f, "足首は、足が床に平らに着く高さ（基準姿勢の高さ）で止まる");
             if (!raiseFirst) {
-                Assert.LessOrEqual (Quaternion.Angle (footStart, Bone (s, HumanBodyBones.LeftFoot).rotation), 1f, "足は起きない（向きを変えずに下がる）");
+                // 足は起きない（床に平らに沿う）。横へ滑らせると脛に付いて上から見た向きは変わる
+                foreach (BodyPointId id in soles) {
+                    Vector3 position;
+                    s.body.TryGetBonePointWorld (id, out position);
+                    Assert.LessOrEqual (position.y - s.body.GetRadius (id), 3e-3f, "足裏は平らに床に着く: " + id.name);
+                }
             }
         }
 
@@ -1073,6 +1081,8 @@ namespace Lilium
             Vector3 start = ankle.framePosition;
             s.body.CaptureInput ();
             ankle.MoveBy (new Vector3 (0, 0.15f, 0));
+            // 持ち上げたら一度離す（窓では、離したときに足の箱を捨てる）
+            s.body.ClearFootCarry ();
             ankle.SpinRotateWorld (Quaternion.AngleAxis (30, s.rig.root.transform.rotation * s.rig.bodyRight));
             Assert.IsTrue (ankle.rotationPinned, "向きを固定した");
             s.body.RestoreInput ();

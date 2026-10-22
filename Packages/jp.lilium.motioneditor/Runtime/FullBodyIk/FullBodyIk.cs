@@ -77,6 +77,17 @@ namespace Lilium
     }
 
     /// <summary>
+    /// 床との当たり（S63）。骨の上の点（骨の付け根から offset。骨の枠・メートル）の球（radius）の下の端が、床より下へ行かないようにする。
+    /// 床に当たったときだけ、床の上向きに押し戻す（不等式。摩擦は無く、横へは滑る）
+    /// </summary>
+    public struct FullBodyIkContact
+    {
+        public int bone;
+        public float3 offset;
+        public float radius;
+    }
+
+    /// <summary>
     /// 全身 IK が読み書きするデータ。配列は呼ぶ側が持ち、使い終わったら Dispose する。
     /// Transform を見ない（入力も出力もルート空間の値）ので、エディタ以外（アニメーションのジョブなど）からも呼べる
     /// </summary>
@@ -111,6 +122,13 @@ namespace Lilium
         /// その先の解かない骨は、今までどおり親に付いて動く。キーの間で、固定した手足だけを IK で動かし、腰・背骨は元の姿勢（FK）のままにするときに使う
         /// </summary>
         public NativeArray<int> fixedBones;
+        /// <summary>入力。床との当たり（Floor Clamp の間だけ。S63）</summary>
+        public NativeArray<FullBodyIkContact> contacts;
+        /// <summary>contacts のうち、先頭から何個を使うか（0 なら床を見ない）</summary>
+        public int contactCount;
+        /// <summary>床の上向き（ルート空間）と、ルートの付け根の床からの高さ（メートル）</summary>
+        public float3 floorNormal;
+        public float floorHeight;
 
         // ---- 作業領域 ----
         internal NativeArray<float3> inputPositions;
@@ -149,6 +167,10 @@ namespace Lilium
         internal NativeArray<int> effectorHard;
         /// <summary>1 なら、向けるだけの点が向きを決める骨（ほかの点で解き終わってから向ける）</summary>
         internal NativeArray<int> aimed;
+        /// <summary>1 なら、床に当たって押し戻した骨（向きの固定の戻し・合わせ直しで、床に当てた向きを保つ）</summary>
+        internal NativeArray<int> contactTouched;
+        /// <summary>1 なら、床との当たりを解く（1 回目は当たりなしで解き、潜っていたときだけ当たりを入れて解き直す）</summary>
+        internal int contactsOn;
 
         public bool isCreated
         {
@@ -156,6 +178,11 @@ namespace Lilium
         }
 
         public static FullBodyIkData Create (int boneCount, int maxEffectors, Allocator allocator)
+        {
+            return Create (boneCount, maxEffectors, 0, allocator);
+        }
+
+        public static FullBodyIkData Create (int boneCount, int maxEffectors, int maxContacts, Allocator allocator)
         {
             FullBodyIkData d = new FullBodyIkData ();
             d.iterations = 1;
@@ -198,6 +225,9 @@ namespace Lilium
             d.effectorPoint = new NativeArray<float3> (math.max (1, maxEffectors), allocator);
             d.effectorHard = new NativeArray<int> (math.max (1, maxEffectors), allocator);
             d.aimed = new NativeArray<int> (boneCount, allocator);
+            d.contacts = new NativeArray<FullBodyIkContact> (math.max (1, maxContacts), allocator);
+            d.contactTouched = new NativeArray<int> (boneCount, allocator);
+            d.floorNormal = new float3 (0, 1, 0);
             return d;
         }
 
@@ -243,6 +273,8 @@ namespace Lilium
             effectorPoint.Dispose ();
             effectorHard.Dispose ();
             aimed.Dispose ();
+            contacts.Dispose ();
+            contactTouched.Dispose ();
         }
     }
 
@@ -297,6 +329,10 @@ namespace Lilium
         const int kSnapPasses = 3;
         /// <summary>位置を固定した点が「届いている」とみなす差（メートル）</summary>
         const float kReachTolerance = 1e-3f;
+        /// <summary>床より下とみなす深さ（メートル）。足裏の点は基準姿勢でちょうど床に着いているので、丸めの差では当たりを入れない</summary>
+        const float kContactTolerance = 1e-4f;
+        /// <summary>仕上げで床の上へ戻すのをくり返す回数の上限（回す角度は 1 回ごとに近似なので、数回で詰める）</summary>
+        const int kContactPasses = 16;
 
         [BurstDiscard]
         internal static void MarkManaged (ref FullBodyIkData d)
@@ -314,17 +350,58 @@ namespace Lilium
             d.status[FullBodyIkData.kStatusDefaultBend] = 0;
             if (n == 0) return;
             int effectorCount = math.clamp (d.effectorCount, 0, d.effectors.Length);
+            int contactCount = d.contacts.IsCreated ? math.clamp (d.contactCount, 0, d.contacts.Length) : 0;
 
-            SolveOnce (ref d, n, effectorCount);
+            d.contactsOn = 0;
+            SolveOnce (ref d, n, effectorCount, 0);
+            // 床との当たり（S63）: 当たりなしで解いて潜った点があるときだけ、その姿勢から当たりを入れて詰め直す
+            // （潜らない姿勢は、当たりの無いときと同じ答えになる。元の姿勢から解き直すと、当たりのために足を解く骨にした分だけ解き方が変わり、
+            // 潜り始めた所で足が 10〜16° 跳ねた。解いた姿勢から詰めれば、潜りが小さければ少しだけ動く）
+            if (contactCount == 0 || !Penetrates (ref d, n, contactCount)) return;
+            d.contactsOn = 1;
+            SolveOnce (ref d, n, effectorCount, contactCount);
+            d.contactsOn = 0;
         }
 
-        static void SolveOnce (ref FullBodyIkData d, int n, int effectorCount)
+        /// <summary>解いた姿勢（positions / rotations）で、床より下へ潜った当たりの点があるか</summary>
+        static bool Penetrates (ref FullBodyIkData d, int n, int contactCount)
+        {
+            for (int c = 0; c < contactCount; c++) {
+                FullBodyIkContact contact = d.contacts[c];
+                if (contact.bone < 0 || contact.bone >= n) continue;
+                float3 point = d.positions[contact.bone] + math.rotate (d.rotations[contact.bone], contact.offset);
+                if (math.dot (d.floorNormal, point) + d.floorHeight - contact.radius < -kContactTolerance) return true;
+            }
+            return false;
+        }
+
+        static void SolveOnce (ref FullBodyIkData d, int n, int effectorCount, int contactCount)
         {
             d.status[FullBodyIkData.kStatusDefaultBend] = 0;
             Prepare (ref d, n);
             PrepareEffectors (ref d, effectorCount);
+            PrepareContacts (ref d, n, contactCount);
 
             int iterations = math.max (1, d.iterations);
+            if (contactCount > 0) {
+                // 当たりなしで解いた姿勢（＝今の元の姿勢）から、必ず満たす物（関節・蝶番・固定した点）と床だけを詰める。
+                // 根（腰）は今の場所に柔らかく留める（固定していない腰が、床に押されて体ごと浮かない）
+                for (int iteration = 0; iteration < iterations; iteration++) {
+                    SolveRoots (ref d, n);
+                    for (int e = 0; e < effectorCount; e++) SolveReach (ref d, e);
+                    SolveBends (ref d, n);
+                    if ((iteration & 1) == 0) {
+                        for (int i = 0; i < n; i++) SolveJoint (ref d, i, false);
+                    }
+                    else {
+                        for (int i = n - 1; i >= 0; i--) SolveJoint (ref d, i, false);
+                    }
+                    for (int e = 0; e < effectorCount; e++) SolveEffector (ref d, e, false);
+                    for (int c = 0; c < contactCount; c++) SolveContact (ref d, c, n);
+                }
+                Finish (ref d, n, effectorCount, contactCount);
+                return;
+            }
             for (int iteration = 0; iteration < iterations; iteration++) {
                 SolveRoots (ref d, n);
                 for (int e = 0; e < effectorCount; e++) SolveReach (ref d, e);
@@ -354,7 +431,7 @@ namespace Lilium
                 for (int e = 0; e < effectorCount; e++) SolveEffector (ref d, e, false);
             }
 
-            Finish (ref d, n, effectorCount);
+            Finish (ref d, n, effectorCount, contactCount);
         }
 
         // ---- 準備 ----
@@ -376,6 +453,7 @@ namespace Lilium
                 d.pinnedOrigin[i] = 0;
                 d.pinCount[i] = 0;
                 d.aimed[i] = 0;
+                d.contactTouched[i] = 0;
             }
 
             // 付け根の位置（親の枠で）と、親から見た向き
@@ -607,6 +685,19 @@ namespace Lilium
                 if (IsPole (ref d, n, e, effectorCount, out hinge, out end)) continue;
                 d.rotations[bone] = AimRotation (ref d, e, d.centers[bone], d.centerLocal[bone]);
                 d.inverseInertia[bone] = 0;
+            }
+        }
+
+        /// <summary>
+        /// 床との当たりのある骨を、解く骨にする（S63）。足首の位置だけを固定した足は、ふだんは解かずに脛に付いて動くので、
+        /// そのままでは床に当たっても足が回らない
+        /// </summary>
+        static void PrepareContacts (ref FullBodyIkData d, int n, int contactCount)
+        {
+            for (int c = 0; c < contactCount; c++) {
+                int b = d.contacts[c].bone;
+                if (b < 0 || b >= n || d.fixedBones[b] != 0) continue;
+                for (int i = b; i >= 0 && d.active[i] == 0; i = d.bones[i].parent) d.active[i] = 1;
             }
         }
 
@@ -935,6 +1026,35 @@ namespace Lilium
             d.effectorLambda[e] = lambda;
         }
 
+        /// <summary>
+        /// 床との当たり（S63）。点の球の下の端が床より下なら、床の上向きに押し戻す（床より上なら何もしない。摩擦は無い）。
+        /// 押した点が骨の重心から離れていれば骨は回るので、足は床に当たった所を支点に転がる（つま先が当たれば踵が下り、足が床に沿う）。
+        /// 位置も向きも動かない骨（足首の点で位置と向きを固定した足）は、固定した点まわりに、潜った点が上がる向きへ回す（床が向きの固定に勝つ）。
+        /// 位置を固定した点が 2 つ以上ある骨は、向きが点で決まっているので回さない（届かない分は潜ったまま残る）
+        /// </summary>
+        static void SolveContact (ref FullBodyIkData d, int c, int n)
+        {
+            FullBodyIkContact contact = d.contacts[c];
+            int b = contact.bone;
+            if (b < 0 || b >= n || d.active[b] == 0 || d.fixedBones[b] != 0) return;
+            float3 normal = d.floorNormal;
+            float3 arm = math.rotate (d.rotations[b], contact.offset - d.centerLocal[b]);
+            float depth = contact.radius - d.floorHeight - math.dot (normal, d.centers[b] + arm);
+            if (depth <= 0) return;
+            d.contactTouched[b] = 1;
+            float weight = PointWeight (ref d, b, arm, normal);
+            if (weight > kEpsilon) {
+                ApplyImpulse (ref d, b, arm, normal * (depth / weight), depth);
+                return;
+            }
+            if (d.inverseMass[b] > 0 || d.pinCount[b] >= 2) return;
+            float3 axis = math.cross (arm, normal);
+            float lever = math.length (axis);
+            if (lever < 1e-4f) return;
+            float angle = math.min (depth / lever, kMaxStepAngle);
+            d.rotations[b] = math.normalizesafe (math.mul (quaternion.AxisAngle (axis / lever, angle), d.rotations[b]), d.rotations[b]);
+        }
+
         /// <summary>向けるだけの点の骨を回す中心（骨の枠で）。位置を固定した点があればその点（重心を移してある）、無ければ付け根</summary>
         static float3 AimPivot (ref FullBodyIkData d, int b)
         {
@@ -1004,7 +1124,7 @@ namespace Lilium
         /// 作り直すと、詰めきれなかった関節のずれが固定した点の側へ寄るので、固定した点ごとに手前の骨を回して点へ合わせ直す。
         /// 元の姿勢から変わらなかった骨は、元の値をそのまま返す
         /// </summary>
-        static void Finish (ref FullBodyIkData d, int n, int effectorCount)
+        static void Finish (ref FullBodyIkData d, int n, int effectorCount, int contactCount)
         {
             // 根の位置（解いた根だけ。解かなかった根は元の値のまま）
             for (int i = 0; i < n; i++) {
@@ -1037,13 +1157,18 @@ namespace Lilium
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapAim (ref d, n, e, effectorCount, true)) Rebuild (ref d, n, false);
             }
-            // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す
+            // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す。床に当たって回した骨は戻さない（床が向きの固定に勝つ。S63）
             for (int e = 0; e < effectorCount; e++) {
                 FullBodyIkEffector effector = d.effectors[e];
                 if (effector.bone < 0 || effector.bone >= n || effector.rotationWeight < 1 || IsAim (ref d, e)) continue;
+                if (d.contactTouched[effector.bone] != 0) continue;
                 // 骨の上の点（向きも留めた物）は、合わせ直しのときに向きを戻してある。ここで回すと、点が目標から外れる
                 if (IsOffset (ref d, e)) continue;
                 d.rotations[effector.bone] = math.normalizesafe (effector.rotation, d.rotations[effector.bone]);
+            }
+            if (contactCount > 0) {
+                Rebuild (ref d, n, false);
+                SnapContacts (ref d, n, effectorCount, contactCount);
             }
             Rebuild (ref d, n, true);
             for (int e = 0; e < effectorCount; e++) {
@@ -1166,24 +1291,98 @@ namespace Lilium
             quaternion rotation = d.rotations[b];
             if (!IsOffset (ref d, e)) {
                 // 付け根の点。骨が回らない物（向きも固定・同じ骨にほかの点もある）なら、手前の骨を合わせたときに一緒に回った分を戻す
-                bool keep = d.inverseInertia[b] <= 0;
-                if (!SnapOrigin (ref d, n, e, effector.position)) return false;
+                // 床に当たった骨（S63）も、床に沿わせた向きを保つ（手前の骨を合わせ直すと、足も一緒に回って床から外れる）
+                bool keep = d.inverseInertia[b] <= 0 || d.contactTouched[b] != 0;
+                if (!SnapOrigin (ref d, n, b, effector.position)) return false;
                 if (keep) RotateSubtree (ref d, n, b, math.mul (rotation, math.inverse (d.rotations[b])));
                 return true;
             }
             // 骨の上の点（付け根から離れた点）。
             // 骨の向きは今のままで、付け根が「目標 − 骨の上の点」に来るように手前の骨を合わせる。合わせると骨も一緒に回るので、向きを戻す
             float3 onBone = math.rotate (d.rotations[b], effector.offset);
-            if (!SnapOrigin (ref d, n, e, effector.position - onBone)) return false;
+            if (!SnapOrigin (ref d, n, b, effector.position - onBone)) return false;
             RotateSubtree (ref d, n, b, math.mul (rotation, math.inverse (d.rotations[b])));
             return true;
         }
 
-        /// <summary>骨の付け根が target に来るように、手前の骨を合わせ直す。骨を回したら true</summary>
-        static bool SnapOrigin (ref FullBodyIkData d, int n, int e, float3 target)
+        /// <summary>
+        /// 床との当たり（S63）の仕上げ。骨の位置を根から作り直すと、反復で床へ押し戻した分（関節を少し離して動かした分）が消えて潜るので、
+        /// 骨を回して床の上へ戻す。骨ごとに一番深い点を見て:
+        /// - 位置を強さ 1 で固定した点のある骨（足首を固定した足など）: 固定した点まわりに、一番深い点が上がる向きへ回す（付け根が動けば手前の骨を合わせ直す）
+        /// - 無い骨（Free の足）: 向きを保ったまま、付け根ごと持ち上げる（手前の骨を合わせ直す）
+        /// 位置を固定した点が 2 つ以上ある骨は回さない（向きが点で決まっている）
+        /// </summary>
+        static void SnapContacts (ref FullBodyIkData d, int n, int effectorCount, int contactCount)
         {
-            FullBodyIkEffector effector = d.effectors[e];
-            int b = effector.bone;
+            float3 normal = d.floorNormal;
+            for (int pass = 0; pass < kContactPasses; pass++) {
+                bool moved = false;
+                for (int c = 0; c < contactCount; c++) {
+                    int b = d.contacts[c].bone;
+                    if (b < 0 || b >= n || d.active[b] == 0 || d.fixedBones[b] != 0 || d.bones[b].parent < 0) continue;
+                    // 骨ごとに 1 回（その骨の最初の当たりで、その骨の一番深い点を見る）
+                    bool seen = false;
+                    for (int k = 0; k < c && !seen; k++) seen = d.contacts[k].bone == b;
+                    if (seen) continue;
+                    float depth = kContactTolerance;
+                    for (int k = c; k < contactCount; k++) {
+                        FullBodyIkContact contact = d.contacts[k];
+                        if (contact.bone != b) continue;
+                        float3 point = d.positions[b] + math.rotate (d.rotations[b], contact.offset);
+                        float below = contact.radius - d.floorHeight - math.dot (normal, point);
+                        if (below <= depth) continue;
+                        depth = below;
+                    }
+                    if (depth <= kContactTolerance) continue;
+                    int pin = -1;
+                    for (int e = 0; e < effectorCount && pin < 0; e++) {
+                        FullBodyIkEffector effector = d.effectors[e];
+                        if (effector.bone == b && effector.positionWeight >= 1 && !IsAim (ref d, e)) pin = e;
+                    }
+                    quaternion rotation = d.rotations[b];
+                    if (pin < 0) {
+                        if (!SnapOrigin (ref d, n, b, d.positions[b] + normal * depth)) continue;
+                        RotateSubtree (ref d, n, b, math.mul (rotation, math.inverse (d.rotations[b])));
+                    }
+                    else {
+                        if (d.pinCount[b] >= 2) continue;
+                        float3 pivot = d.positions[b] + math.rotate (rotation, d.effectors[pin].offset);
+                        // 潜った点ごとの、固定した点まわりに床へ上げる回転を平均する（一番深い点だけを上げると、反対側の点が潜り、
+                        // 1 回ごとに交互に押し合って数 mm 残った）
+                        float3 sum = float3.zero;
+                        int count = 0;
+                        for (int k = c; k < contactCount; k++) {
+                            FullBodyIkContact contact = d.contacts[k];
+                            if (contact.bone != b) continue;
+                            float3 point = d.positions[b] + math.rotate (rotation, contact.offset);
+                            float below = contact.radius - d.floorHeight - math.dot (normal, point);
+                            if (below <= kContactTolerance) continue;
+                            float3 cross = math.cross (point - pivot, normal);
+                            float arm = math.length (cross);
+                            if (arm < 1e-4f) continue;
+                            sum += cross / arm * (below / arm);
+                            count++;
+                        }
+                        if (count == 0) continue;
+                        float3 axis = sum / count;
+                        float angle = math.length (axis);
+                        if (angle < 1e-7f) continue;
+                        quaternion turn = quaternion.AxisAngle (axis / angle, math.min (angle, kMaxStepAngle));
+                        float3 origin = pivot + math.rotate (turn, d.positions[b] - pivot);
+                        if (math.distancesq (origin, d.positions[b]) > 1e-12f) SnapOrigin (ref d, n, b, origin);
+                        RotateSubtree (ref d, n, b, math.mul (math.mul (turn, rotation), math.inverse (d.rotations[b])));
+                    }
+                    d.contactTouched[b] = 1;
+                    Rebuild (ref d, n, false);
+                    moved = true;
+                }
+                if (!moved) break;
+            }
+        }
+
+        /// <summary>骨の付け根が target に来るように、手前の骨を合わせ直す。骨を回したら true</summary>
+        static bool SnapOrigin (ref FullBodyIkData d, int n, int b, float3 target)
+        {
             int p = d.bones[b].parent;
             if (p < 0) return false;
             float3 end = d.positions[b];

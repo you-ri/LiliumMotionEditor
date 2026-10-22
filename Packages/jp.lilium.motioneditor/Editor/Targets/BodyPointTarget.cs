@@ -116,15 +116,13 @@ namespace Lilium
         /// <summary>点を delta（ワールド）だけ動かす。Free の点は、今の骨の位置から動かして Pin にする</summary>
         public void MoveBy (Vector3 delta)
         {
-            CarryFoot ();
-            PinPosition (framePosition + delta);
+            PinPosition (MoveFoot (framePosition + delta));
         }
 
         /// <summary>点を position（ワールド）へ置いて Pin にする</summary>
         public void MoveTo (Vector3 position)
         {
-            CarryFoot ();
-            PinPosition (position);
+            PinPosition (MoveFoot (position));
         }
 
         /// <summary>
@@ -134,6 +132,17 @@ namespace Lilium
         void CarryFoot ()
         {
             if (floorClamp) body_.CarryFootPins (human_);
+        }
+
+        /// <summary>
+        /// 動かすとき（つかむ・ギズモ・Spinner・まとめて動かす）の置き場所。Floor Clamp で足の点を動かすときは、足を硬い箱として床に押し当てたように動かし
+        /// （FullBodyRig.TryMoveFoot。当たった所は滑らず、そこを支点に転がる）、点の置き場所を返す。同じ足のほかの Pin の点は足と一緒に動かす
+        /// </summary>
+        Vector3 MoveFoot (Vector3 position)
+        {
+            CarryFoot ();
+            Vector3 placed;
+            return floorClamp && body_.TryMoveFoot (human_, position, out placed) ? placed : position;
         }
 
         /// <summary>丸・ギズモで動かした量をためる。ためはじめなら、動かす前の位置を控える</summary>
@@ -221,7 +230,8 @@ namespace Lilium
         /// </summary>
         Vector3 ClampToFloor (Vector3 position)
         {
-            if (!floorClamp) return position;
+            // 足の箱で動かしている点は、箱が床との当たりを受け持つ（FullBodyRig.TryMoveFoot）
+            if (!floorClamp || body_.IsFootBoxed (human_)) return position;
             float limit = body_.GetFloorLimit (human_);
             if (position.y < limit) position.y = limit;
             return position;
@@ -479,18 +489,6 @@ namespace Lilium
             // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る
             position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
-            // 向きを固定した足の点は、同じ骨の上の Locked の点を中心に向きの値を回す（足首を上げると踵が付いてくる。FullBodyRig.TryGetPivotTurn）。
-            // そのうえで、足裏が床に潜らないよう向きの値ごと回す（解くときには回せない。FullBodyRig.TryGetFloorRoll）
-            Quaternion turned;
-            if (floorClamp && body_.TryGetPivotTurn (human_, position, out turned)) {
-                body_.SetPointRotationWorld (human_, turned);
-                rotationDirty_ = true;
-            }
-            Quaternion rolled;
-            if (floorClamp && body_.TryGetFloorRoll (human_, position, out rolled)) {
-                body_.SetPointRotationWorld (human_, rolled);
-                rotationDirty_ = true;
-            }
             body_.SetPointPositionWorld (human_, position);
             body_.SetPositionWeight (human_, 1);
             positionDirty_ = true;
@@ -704,7 +702,7 @@ namespace Lilium
             // 関節の丸（つかんで動かすと位置を固定する）
             Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
             if (moved != position) {
-                CarryFoot ();
+                moved = MoveFoot (moved);
                 AddDragDelta (position, moved);
                 PinPosition (moved);
                 position = moved;
@@ -724,7 +722,7 @@ namespace Lilium
             else if (selected && showGizmo) {
                 Vector3 gizmoPosition = PoseHandles.PositionHandle (position, PoseHandleUtility.GizmoAxes (shape));
                 if (gizmoPosition != position) {
-                    CarryFoot ();
+                    gizmoPosition = MoveFoot (gizmoPosition);
                     AddDragDelta (position, gizmoPosition);
                     PinPosition (gizmoPosition);
                     GUI.changed = true;
