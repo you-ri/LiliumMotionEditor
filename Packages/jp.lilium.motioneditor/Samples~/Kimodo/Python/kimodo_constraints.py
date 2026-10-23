@@ -23,9 +23,9 @@ import sys
 
 import torch
 
-from kimodo.exports.bvh import bvh_to_kimodo_motion
-from kimodo.exports.motion_io import complete_motion_dict
 from kimodo.geometry import matrix_to_axis_angle
+from kimodo.motion_rep.feature_utils import compute_heading_angle
+from kimodo.skeleton.bvh import parse_bvh_motion
 from kimodo.skeleton.registry import build_skeleton
 
 KIMODO_FPS = 30
@@ -50,12 +50,28 @@ def rotate_y(angle, dtype):
     return torch.tensor([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=dtype)
 
 
-def canonicalize(motion, skeleton):
+def read_keys(path, skeleton):
+    """Read the local rotations and root positions of the keys' BVH (standard T-pose rest).
+
+    Kimodo's bvh_to_kimodo_motion also smooths the root path, which fails on three
+    frames or fewer (two or three keys), so read only what is used here.
+    """
+    rotations, positions, _ = parse_bvh_motion(path)
+    if int(rotations.shape[1]) != int(skeleton.nbjoints):
+        sys.exit("The BVH has %d joints but the SOMA skeleton has %d" % (rotations.shape[1], skeleton.nbjoints))
+    device = skeleton.neutral_joints.device
+    return rotations.to(device=device), positions.to(device=device, dtype=rotations.dtype)
+
+
+def heading_angle(rotations, positions, skeleton):
+    """Kimodo's heading angle of the body at each frame."""
+    _, joints, _ = skeleton.fk(rotations, positions)
+    return compute_heading_angle(joints.unsqueeze(0), skeleton).squeeze(0)
+
+
+def canonicalize(rotations, positions, skeleton):
     """Move the first key's root to the origin and turn it to face +Z (heading 0)."""
-    rotations = motion["local_rot_mats"].clone()
-    positions = motion["root_positions"].clone()
-    heading = motion["global_root_heading"][0]
-    angle = math.atan2(float(heading[1]), float(heading[0]))
+    angle = float(heading_angle(rotations, positions, skeleton)[0])
     flat = torch.tensor([1.0, 0.0, 1.0], dtype=positions.dtype)
     # The sign of Kimodo's heading angle is not documented; take the one that ends at heading 0
     for sign in (1, -1):
@@ -63,8 +79,7 @@ def canonicalize(motion, skeleton):
         r = rotations.clone()
         r[:, 0] = turn @ rotations[:, 0]
         p = (positions - positions[0] * flat) @ turn.T
-        check = complete_motion_dict(r, p, skeleton, float(KIMODO_FPS))
-        if float(check["global_root_heading"][0][0]) > 0.99:
+        if math.cos(float(heading_angle(r, p, skeleton)[0])) > 0.99:
             return r, p
     raise RuntimeError("Could not turn the keys to face +Z")
 
@@ -88,10 +103,10 @@ def main():
         sys.exit("The clip is %.2f s; Kimodo makes at most %.0f s" % (seconds, MAX_SECONDS))
 
     skeleton = build_skeleton(77)
-    motion, _ = bvh_to_kimodo_motion(args.bvh, skeleton, standard_tpose=True)
-    if len(frames) != motion["local_rot_mats"].shape[0]:
-        sys.exit("The BVH has %d frames but the export lists %d" % (motion["local_rot_mats"].shape[0], len(frames)))
-    rotations, positions = canonicalize(motion, skeleton)
+    rotations, positions = read_keys(args.bvh, skeleton)
+    if len(frames) != rotations.shape[0]:
+        sys.exit("The BVH has %d frames but the export lists %d" % (rotations.shape[0], len(frames)))
+    rotations, positions = canonicalize(rotations, positions, skeleton)
 
     # Clip frames to Kimodo frames (two keys on the same Kimodo frame keep the first)
     indices, rows = [], []

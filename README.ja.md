@@ -45,7 +45,7 @@ Package Manager でこのパッケージを選び、Samples の `Demo` をイン
 ### Kimodo（オプション）
 
 Samples の `Kimodo (optional)` を使うと、NVIDIA のモーション生成モデル [Kimodo](https://github.com/nv-tlabs/kimodo) に、打ったキーの間の動きを文章から作らせ、
-キーの姿勢を残したまま Override として取り込めます。Kimodo は同梱していません。ライセンスを確かめたうえで、各自で用意して重みをダウンロードします。
+キーの姿勢を残したまま Override として取り込めます（窓からは `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`）。Kimodo は同梱していません。ライセンスを確かめたうえで、各自で用意して重みをダウンロードします。
 詳しくはサンプルの `README.md` を見てください。モーションエディタは Kimodo が無くても動きます。
 
 ## License

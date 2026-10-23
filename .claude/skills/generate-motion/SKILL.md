@@ -84,6 +84,10 @@ SKEL="Assets/.../Kimodo SOMA Skeleton.asset"
 
 5. **Check** with `motion_lint` and `motion_capture` (skill `author-motion`). Compare with the base: lint the clip before importing too.
    The imported Override is registered only in this CLI session; to see it in the window, tell the user to add it in the Layers overlay (+Override)
+   and move the write target (✏) to it (Overrides above the write target are not applied while editing)
+
+Users who prefer the window can do all of this without the CLI: the Kimodo sample's `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`
+(see the sample README). It works on the clip open in the Motion Editor window.
 
 ## Notes
 

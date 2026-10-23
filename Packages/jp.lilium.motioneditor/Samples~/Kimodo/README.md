@@ -12,7 +12,8 @@ What is in this sample:
 | File | What it does |
 |---|---|
 | `Editor/KimodoSkeleton.cs` | `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...` makes the External Skeleton for Kimodo's SOMA skeleton from a BVH that Kimodo wrote (only the joint-name table is included) |
-| `Python/kimodo_constraints.py` | Turns the keys exported by `motion_export_keys` into a Kimodo constraints file. Runs inside the Kimodo environment |
+| `Editor/KimodoWindow.cs`, `KimodoRunner.cs`, `KimodoSettings.cs` | `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`: generates between the keys of the clip open in the Motion Editor window and layers the result on it |
+| `Python/kimodo_constraints.py` | Turns the exported keys into a Kimodo constraints file. Runs inside the Kimodo environment |
 
 ## Licenses (check before use)
 
@@ -56,7 +57,26 @@ What is in this sample:
 
 5. In Unity, `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...`, pick `WORK/tpose.bvh`, and save the skeleton asset.
 
-## Generate from your keys
+## Generate from the window
+
+1. Open your clip in the Motion Editor window and key two or more poses (for a walk, for example, the contacts of a step). The clip must be 10 seconds or shorter.
+2. `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`. The first time, open **Settings** and set the kimodo folder, the Docker image (`kimodo:1.0`),
+   the Hugging Face cache (leave it empty for `%USERPROFILE%/.cache/huggingface`) and the SOMA skeleton. They are saved in the project's `UserSettings` folder.
+3. Write the prompt in English (the whole motion, for example "a person walks forward at a normal pace"), choose the constraints, and press **Generate Between Keys**.
+   The window checks Docker, the image, the token file and the skeleton before it starts, and says what is missing.
+4. Generation runs in the background (about 5 minutes; most of it is loading the models). **Stop** removes the container.
+   The work files go to the project's `Temp/Kimodo` folder.
+5. When it finishes, the motion is imported as `<clip>.kimodo.override.anim` next to your clip, layered on it as an Override, and made the write target (✏) so you see it play.
+   Your keyed poses are kept at their frames. If you changed the keys while Kimodo was working, the window asks before importing.
+
+After importing:
+
++ **See the Result** puts the write target on the Override (the generated motion plays). Keys you set now go into the Override.
++ **Edit the Keys** puts the write target back on your clip. The generated motion is hidden while you edit, and the next generation uses your clip's keys.
++ The list shows how far Kimodo was from each key before the keys were kept. Over about 10 cm, the blend around that key is visible; add keys or change the prompt.
++ Generating again replaces the same Override clip (Undo brings back the previous one).
+
+## Generate from your keys with the Unity CLI
 
 With the Unity CLI (`unity cmd`, as the motion editor's AI skills use it). `P` is the project folder:
 
