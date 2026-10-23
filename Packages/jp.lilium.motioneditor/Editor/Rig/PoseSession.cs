@@ -253,6 +253,43 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 書き込み先のクリップの、frame のキーから次のキーまでを mode にする（S80）。持ち替えのカーブ（重み・握り）は変えない。1 回の Undo で戻る
+        /// </summary>
+        /// <returns>変えられなかった理由（変えたら null）</returns>
+        public string SetInterpolation (int frame, KeyInterpolation mode, string undoName = "Key Interpolation")
+        {
+            AnimationClip clip = targetClip;
+            if (clip == null) return Tr ("POSE_SESSION_NO_CLIP");
+            if (!KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) return Tr ("POSE_SESSION_NO_SEGMENT", frame);
+            System.Predicate<EditorCurveBinding> exclude = SwitchCurves ();
+            WriteWithUndo (undoName, () => {
+                Undo.RecordObject (clip, undoName);
+                KeyInterpolations.SetSegment (clip, frame, mode, exclude);
+            });
+            return null;
+        }
+
+        /// <summary>書き込み先のクリップの、frame のキーから次のキーまでの補間（混在・区間が無ければ null。S80）</summary>
+        public KeyInterpolation? GetInterpolation (int frame)
+        {
+            return KeyInterpolations.GetSegment (targetClip, frame, SwitchCurves ());
+        }
+
+        /// <summary>書き込み先のクリップの区間と補間を全部（S80）</summary>
+        public List<KeyInterpolations.Segment> GetInterpolations ()
+        {
+            return KeyInterpolations.GetSegments (targetClip, SwitchCurves ());
+        }
+
+        /// <summary>キャラの設定の持ち替えのカーブか（区間の補間で外す）。設定はカーブごとに引かず、1 回だけ引く</summary>
+        System.Predicate<EditorCurveBinding> SwitchCurves ()
+        {
+            CharacterSettings settings = SettingsLookup.Find (stage.sourcePrefab);
+            if (settings == null || settings.parentSwitches == null || settings.parentSwitches.Count == 0) return null;
+            return binding => ParentSwitch.IsSwitchCurve (settings.parentSwitches, binding);
+        }
+
+        /// <summary>
         /// キーを打つ流れの共通の後ろ半分: write で打ち、サイクルキーの印があれば最後のキーを先頭のキーに合わせ直す
         /// （窓はキーが変わった知らせで合わせる）。1 回の Undo にまとめ、そのフレームの姿勢をクリップから作り直す
         /// </summary>

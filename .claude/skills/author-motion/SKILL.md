@@ -67,7 +67,10 @@ unity cmd motion_describe --project-path "$P" --json
    - Everything is checked first: a wrong point, state, preset, muscle or frame writes nothing and names the frame of the bad key
    - `--replace true` deletes every key of the clip first (start over). Without it, keys at other frames stay
    - The response has, per key, `maxResidual` and `unreached` (as above), then `lint` (the same report as `motion_lint`; `--lint false` skips it)
-   - `motion_read_motion` returns the clip's keys in the same shape (compact poses and the 40 finger muscles per key): read, edit in Python, and write back with `--replace true`
+   - `"interpolation"` on a key sets how the motion goes from that key to the next key: `"curve"` (smooth, the default), `"linear"` (even speed) or `"constant"`
+     (hold the pose until the next key; for blocking and sudden changes). Omit it to leave the segment as it is. It is refused on the last key (no next key).
+     Held-item switches and point states (Pin / Locked) are steps and are not changed
+   - `motion_read_motion` returns the clip's keys in the same shape (compact poses and the 40 finger muscles per key, and `interpolation` when a segment is not a curve; `"mixed"` when only some curves differ): read, edit in Python, and write back with `--replace true`
    - `motion_undo` removes the last `motion_write_motion` / `motion_write_pose` / `motion_write_hand` / `motion_delete_keys` as a whole (repeat to go further back, up to 32). It is refused if the clip was changed after that write (in the window, by Unity's undo...)
    - `motion_delete_keys --frames 10,20` deletes keys (`--all true` for every key). On a cycle clip, deleting the last (cycle) key removes the cycle mark (`cycleRemoved`)
 5. **Check between keys with numbers** — `motion_sample` returns, per point, positions (`x` `y` `z`), `speed` (m/s) and `contact` (1 when a contact point is on the floor) for every frame,

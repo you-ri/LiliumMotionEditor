@@ -139,6 +139,23 @@ namespace Lilium
             return bound;
         }
 
+        /// <summary>
+        /// 持ち替えのカーブ（重み・握り）か。重みはいつも段差、握りは持ち替えの 1 フレーム前から保つ段差なので、区間の補間（S80）では接線を変えない
+        /// </summary>
+        public static bool IsSwitchCurve (IEnumerable<ParentSwitchDefinition> definitions, EditorCurveBinding binding)
+        {
+            if (definitions == null) return false;
+            foreach (ParentSwitchDefinition definition in definitions) {
+                if (definition == null) continue;
+                if (!string.IsNullOrEmpty (definition.gripPath) && binding.path == RigPaths.Props (definition.gripPath)) return true;
+                if (binding.path != RigPaths.Props (definition.constraintPath) || definition.sources == null) continue;
+                foreach (ParentSource source in definition.sources) {
+                    if (source != null && source.weightProperty == binding.propertyName) return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>今（表示モデルの値で）いちばん重い親の番号。重みが全部 0 なら -1</summary>
         public static int Current (GameObject root, Bound bound)
         {

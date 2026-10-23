@@ -59,6 +59,10 @@ namespace Lilium
             /// </summary>
             public System.Predicate<EditorCurveBinding> filter;
             /// <summary>
+            /// キーの間（keys[k] から keys[k + 1]）ごとの補間（S80。混在なら null）。キーの間の矢印の形を変える
+            /// </summary>
+            public KeyInterpolation?[] interpolations;
+            /// <summary>
             /// keys と同じ並びのキーの色（全身 IK の点の、そのフレームの状態の色）。null なら既定の色
             /// </summary>
             public Color[] keyColors;
@@ -1138,6 +1142,8 @@ namespace Lilium
         {
             string reason;
             if (!poseStack_.TrySetWrite (layer, out reason)) return;
+            // キーを打つクリップが替わるので、キーの一覧を作り直す（前の書き込み先のキーがタイムラインに残っていた）
+            keyFrames_ = null;
             SaveLayerState ("Motion Editor Write Layer");
             RaiseStackChanged ();
         }
@@ -1488,7 +1494,8 @@ namespace Lilium
             if (keyed == null || stage_ == null || stage_.animator == null) return tracks;
 
             int[] allKeys = GetKeyFrames ().Where (f => f >= 0).ToArray ();
-            tracks.Add (new TimelineTrack { label = keyed.name, keys = allKeys, filter = null });
+            System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
+            tracks.Add (new TimelineTrack { label = keyed.name, keys = allKeys, filter = null, interpolations = KeyInterpolations.GetRanges (keyed, allKeys, null, exclude) });
 
             foreach (PoseTarget target in GetTrackTargets ()) {
                 HashSet<string> paths = new HashSet<string> ();
@@ -1499,7 +1506,10 @@ namespace Lilium
                 int[] keys = GetTargetKeyFrames (target);
                 BodyPointTarget point = target as BodyPointTarget;
                 Color[] keyColors = point != null ? keys.Select (f => point.GetKeyColor (keyed, f)).ToArray () : null;
-                tracks.Add (new TimelineTrack { label = target.label, keys = keys, filter = filter, keyColors = keyColors });
+                tracks.Add (new TimelineTrack {
+                    label = target.label, keys = keys, filter = filter, keyColors = keyColors,
+                    interpolations = KeyInterpolations.GetRanges (keyed, keys, filter, exclude),
+                });
             }
             return tracks;
         }

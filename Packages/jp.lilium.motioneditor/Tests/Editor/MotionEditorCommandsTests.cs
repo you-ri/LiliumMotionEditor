@@ -711,6 +711,42 @@ namespace Lilium
         }
 
         [Test]
+        public void WriteMotion_SetsInterpolation_AndReadMotionReturnsIt ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Interpolation.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            MotionEditorRequest request = new MotionEditorRequest { command = "writeMotion", lint = false };
+            MotionEditorKey first = Key (Squat (rest, 0, 0));
+            first.interpolation = "linear";
+            MotionEditorKey middle = Key (Squat (rest, 20, 0.06f));
+            middle.interpolation = "Constant";
+            request.keys.Add (first);
+            request.keys.Add (middle);
+            request.keys.Add (Key (Squat (rest, 40, 0)));
+            MotionResponse written = Run<MotionResponse> (request);
+            Assert.IsTrue (written.success, written.error);
+            Assert.AreEqual (KeyInterpolation.Linear, MotionEditorCommands.session.GetInterpolation (0));
+            Assert.AreEqual (KeyInterpolation.Constant, MotionEditorCommands.session.GetInterpolation (20));
+
+            ReadMotionResponse read = Run<ReadMotionResponse> (new MotionEditorRequest { command = "readMotion" });
+            Assert.IsTrue (read.success, read.error);
+            CollectionAssert.AreEqual (new[] { "linear", "constant", "" }, read.result.keys.Select (k => k.interpolation ?? ""), "次のキーまでの補間を返す（最後のキーには無い）");
+
+            Dictionary<EditorCurveBinding, Keyframe[]> before = Curves (clip);
+            foreach ((string name, int frame, string message) in new[] { ("smooth", 20, "分からない補間"), ("linear", 40, "最後のキー（区間が無い）") }) {
+                MotionEditorRequest bad = new MotionEditorRequest { command = "writeMotion", lint = false };
+                MotionEditorKey key = Key (Squat (rest, frame, 0.03f));
+                key.interpolation = name;
+                bad.keys.Add (key);
+                string response = MotionEditorCommands.Run (JsonUtility.ToJson (bad));
+                AssertFailed (response, message);
+                StringAssert.Contains (frame.ToString (), JsonUtility.FromJson<Head> (response).error, message + ": どのキーか分かる");
+                AssertSameCurves (before, clip, message + ": 何も書かない");
+            }
+        }
+
+        [Test]
         public void ReadMotion_RoundTripsThroughWriteMotion ()
         {
             string prefab = CreateHandsPrefab ();

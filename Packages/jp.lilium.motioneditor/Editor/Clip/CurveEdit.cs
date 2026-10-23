@@ -99,6 +99,7 @@ namespace Lilium
                 index = curve.AddKey (new Keyframe (frame / rate, value));
                 AnimationUtility.SetKeyLeftTangentMode (curve, index, AnimationUtility.TangentMode.ClampedAuto);
                 AnimationUtility.SetKeyRightTangentMode (curve, index, AnimationUtility.TangentMode.ClampedAuto);
+                KeyInterpolations.Inherit (curve, index);
             }
             RefreshTangents (curve);
         }
@@ -146,7 +147,9 @@ namespace Lilium
         /// time のキー（無ければ time を挟む 2 つ）と、その両隣の接線を自動（ClampedAuto）にしてから、自動の接線を付け直す。
         /// キーを打つ・動かす・消す・貼ったときに呼ぶ。固定の接線（Free）は、そのときの両隣から計算した傾きのまま残るので、
         /// 後で間のキーを消したり、キーを遠くへ動かしたりすると、キーの間で値が大きく行き過ぎる（2 フレーム間隔の傾きが 1.5 秒続くなど）。
-        /// 接線を手で決める操作は無いので、Free は打ったときの名残りとして自動にする（Constant・Linear などはそのまま）
+        /// 接線を手で決める操作は無いので、Free は打ったときの名残りとして自動にする（Constant・Linear などはそのまま）。
+        /// ただし反対側がリニア・一定の Free は、区間の補間の境目の曲線の側（S80。KeyInterpolations）なので残して傾きを付け直す。
+        /// time のキーが区間の中に足されたなら、区間の補間（リニア・一定）を受け継ぐ
         /// </summary>
         public static void AutoTangentsNear (AnimationCurve curve, float time)
         {
@@ -154,18 +157,20 @@ namespace Lilium
             while (after < curve.length && curve[after].time < time - 1e-5f) after++;
             for (int i = after - 2; i <= after + 1; i++) {
                 if (i < 0 || i >= curve.length) continue;
-                if (AnimationUtility.GetKeyLeftTangentMode (curve, i) == AnimationUtility.TangentMode.Free) {
+                if (AnimationUtility.GetKeyLeftTangentMode (curve, i) == AnimationUtility.TangentMode.Free && !KeyInterpolations.IsManagedFree (curve, i, false)) {
                     AnimationUtility.SetKeyLeftTangentMode (curve, i, AnimationUtility.TangentMode.ClampedAuto);
                 }
-                if (AnimationUtility.GetKeyRightTangentMode (curve, i) == AnimationUtility.TangentMode.Free) {
+                if (AnimationUtility.GetKeyRightTangentMode (curve, i) == AnimationUtility.TangentMode.Free && !KeyInterpolations.IsManagedFree (curve, i, true)) {
                     AnimationUtility.SetKeyRightTangentMode (curve, i, AnimationUtility.TangentMode.ClampedAuto);
                 }
             }
+            if (after < curve.length && Mathf.Abs (curve[after].time - time) < 1e-5f) KeyInterpolations.Inherit (curve, after);
             RefreshTangents (curve);
         }
 
         /// <summary>
-        /// 自動の接線（Auto・ClampedAuto・Linear など）を、今のキーの並びで付け直す（値や時刻を動かした後）
+        /// 自動の接線（Auto・ClampedAuto・Linear など）を、今のキーの並びで付け直す（値や時刻を動かした後）。
+        /// 区間の補間の境目の曲線の側（管理する Free）も、ClampedAuto と同じ傾きに付け直す
         /// </summary>
         public static void RefreshTangents (AnimationCurve curve)
         {
@@ -175,6 +180,7 @@ namespace Lilium
                 if (left != AnimationUtility.TangentMode.Free) AnimationUtility.SetKeyLeftTangentMode (curve, i, left);
                 if (right != AnimationUtility.TangentMode.Free) AnimationUtility.SetKeyRightTangentMode (curve, i, right);
             }
+            for (int i = 0; i < curve.length; i++) KeyInterpolations.UpdateManagedSlope (curve, i);
         }
 
         /// <summary>

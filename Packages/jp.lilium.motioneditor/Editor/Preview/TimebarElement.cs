@@ -60,6 +60,9 @@ namespace Lilium
         static readonly Color kCycleKeyColor = new Color (0.4f, 0.78f, 0.72f);
         static readonly Color kCurrentCycleKeyColor = new Color (0.72f, 0.95f, 0.9f);
         static readonly Color kCycleMarkColor = new Color (0.1f, 0.25f, 0.23f);
+        // 混在の区間の点線（S80）
+        const float kDashLength = 3;
+        const float kDashGap = 2;
         /// <summary>全身 IK の点のキー（点の状態の色）で、今のフレームのキーを白へ寄せる割合</summary>
         const float kCurrentStateKeyLighten = 0.5f;
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
@@ -469,7 +472,8 @@ namespace Lilium
                     Rect next = GetKeyRect (track.keys[k], row);
                     float x0 = Mathf.Max (prev.xMax + 2, keyArea.x);
                     float x1 = Mathf.Min (next.x - 2, keyArea.xMax);
-                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1), IntervalColor (track, k));
+                    KeyInterpolation? mode = IntervalMode (track, k);
+                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1), IntervalColor (track, k), mode);
                 }
 
                 for (int k = 0; k < track.keys.Length; k++) {
@@ -514,26 +518,54 @@ namespace Lilium
         }
 
         /// <summary>
-        /// キーの間の線と矢じり（数字は LayoutTracks が置く Label）
+        /// キーの間の線と矢じり（数字は LayoutTracks が置く Label）。形は次のキーまでの補間で変える（S80）:
+        /// 曲線は細い線と両端の矢じり、リニアは太い線と矢じり、一定は前のキーの高さで止まって次のキーで段になる形、混在は点線
         /// </summary>
         /// <param name="textWidth">真ん中に置くフレーム数の幅。線はそこを空けて引く（数字に線が重なって読みにくい）</param>
-        static void DrawInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color)
+        static void DrawInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color, KeyInterpolation? mode)
         {
             if (x1 - x0 < 8) return;
             y = Mathf.Round (y);
-            if (textWidth > 0) {
-                float mid = (x0 + x1) * 0.5f;
-                float gap = textWidth * 0.5f + 4;
-                FillRect (painter, Rect.MinMaxRect (x0, y, mid - gap, y + 1), color);
-                FillRect (painter, Rect.MinMaxRect (mid + gap, y, x1, y + 1), color);
+            float mid = (x0 + x1) * 0.5f;
+            float gap = textWidth > 0 ? textWidth * 0.5f + 4 : 0;
+            System.Action<float, float, float, float> line = (from, to, top, height) => {
+                if (gap <= 0) {
+                    DrawLine (painter, from, to, top, height, color, mode == null);
+                    return;
+                }
+                DrawLine (painter, from, Mathf.Min (to, mid - gap), top, height, color, mode == null);
+                DrawLine (painter, Mathf.Max (from, mid + gap), to, top, height, color, mode == null);
+            };
+            if (mode == KeyInterpolation.Constant) {
+                // 前のキーの値のまま進み、次のキーの手前で段になる
+                float top = y - 3;
+                FillRect (painter, new Rect (x0, top - 1, 1, 4), color);
+                line (x0, x1 - 1, top, 1);
+                FillRect (painter, new Rect (x1 - 1, top, 1, 7), color);
+                return;
             }
-            else {
-                FillRect (painter, new Rect (x0, y, x1 - x0, 1), color);
-            }
+            line (x0, x1, mode == KeyInterpolation.Linear ? y - 1 : y, mode == KeyInterpolation.Linear ? 3 : 1);
             for (int i = 0; i < 3; i++) {
                 FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), color);
                 FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), color);
             }
+        }
+
+        /// <summary>横の線（dashed なら点線）</summary>
+        static void DrawLine (Painter2D painter, float from, float to, float top, float height, Color color, bool dashed)
+        {
+            if (to - from < 1) return;
+            if (!dashed) {
+                FillRect (painter, Rect.MinMaxRect (from, top, to, top + height), color);
+                return;
+            }
+            for (float x = from; x < to; x += kDashLength + kDashGap) FillRect (painter, Rect.MinMaxRect (x, top, Mathf.Min (x + kDashLength, to), top + height), color);
+        }
+
+        /// <summary>キー k-1 と k の間の補間（S80。混在なら null。分からなければ曲線）</summary>
+        static KeyInterpolation? IntervalMode (PreviewWindow.TimelineTrack track, int k)
+        {
+            return track.interpolations != null && k - 1 < track.interpolations.Length ? track.interpolations[k - 1] : KeyInterpolation.Curve;
         }
 
         /// <summary>
@@ -988,6 +1020,19 @@ namespace Lilium
             menu.ShowAsContext ();
         }
 
+        void AddInterpolationItem (GenericMenu menu, string label, int frame, KeyInterpolation mode, KeyInterpolation? current, bool enabled)
+        {
+            GUIContent item = new GUIContent (label);
+            if (!enabled) {
+                menu.AddDisabledItem (item, current == mode);
+                return;
+            }
+            menu.AddItem (item, current == mode, () => {
+                window_.SetInterpolation (frame, mode);
+                RebuildTracks ();
+            });
+        }
+
         void ShowKeyMenu (int frame)
         {
             GenericMenu menu = new GenericMenu ();
@@ -1012,6 +1057,15 @@ namespace Lilium
                 menu.AddDisabledItem (keepOne);
                 menu.AddDisabledItem (clearAll);
             }
+            // 次のキーまでの補間（S80）。今の補間にチェック。混在なら印だけ出す
+            menu.AddSeparator ("");
+            string interpolation = Tr ("TIMELINE_OVERLAY_INTERPOLATION") + "/";
+            bool canSet = window_.CanSetInterpolation (frame);
+            KeyInterpolation? current = window_.GetInterpolation (frame);
+            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CURVE"), frame, KeyInterpolation.Curve, current, canSet);
+            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_LINEAR"), frame, KeyInterpolation.Linear, current, canSet);
+            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CONSTANT"), frame, KeyInterpolation.Constant, current, canSet);
+            if (canSet && current == null) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_MIXED")), true);
             // サイクルキー（S32）: 最後のキーに付け外しする。付いていればチェックを出す
             menu.AddSeparator ("");
             bool cycle = window_.cycle;

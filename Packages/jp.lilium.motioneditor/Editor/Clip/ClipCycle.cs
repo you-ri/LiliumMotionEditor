@@ -126,24 +126,28 @@ namespace Lilium
             }
             end.time = last / rate;
             int to = ClipKeyUtility.FindKeyAtFrame (curve, rate, last);
+            // 最後の区間の補間（最後のキーの左）は最後のキーのまま（S80。先頭のキーの左は区間を持たないので、つなぎ目の左として最後の区間にそろえる）
+            KeyInterpolation lastLeft = to >= 0 ? KeyInterpolations.Side (curve, to, false) : KeyInterpolation.Curve;
             if (to >= 0) curve.MoveKey (to, end);
             else to = curve.AddKey (end);
 
-            // 接線の種類は先頭のキーにそろえる（先頭にキーが無ければ自動）
-            AnimationUtility.SetKeyBroken (curve, to, from >= 0 && AnimationUtility.GetKeyBroken (curve, from));
-            AnimationUtility.SetKeyLeftTangentMode (curve, to, from >= 0 ? AnimationUtility.GetKeyLeftTangentMode (curve, from) : AnimationUtility.TangentMode.ClampedAuto);
-            AnimationUtility.SetKeyRightTangentMode (curve, to, from >= 0 ? AnimationUtility.GetKeyRightTangentMode (curve, from) : AnimationUtility.TangentMode.ClampedAuto);
+            // 右（最初の区間）は先頭のキーにそろえる（先頭にキーが無ければ曲線）
+            KeyInterpolation firstRight = from >= 0 ? KeyInterpolations.Side (curve, from, true) : KeyInterpolation.Curve;
+            if (from >= 0) KeyInterpolations.SetKey (curve, from, lastLeft, firstRight);
+            KeyInterpolations.SetKey (curve, to, lastLeft, firstRight);
             CurveEdit.RefreshTangents (curve);
             if (from >= 0) SetLoopTangents (curve, from, to, sign);
         }
 
         /// <summary>
-        /// 先頭のキー（start）と最後のキー（end）の接線を、つなぎ目をまたいだ自動の接線にする（両側とも自動のときだけ。Constant・Linear はそのまま）。
+        /// 先頭のキー（start）と最後のキー（end）の曲線の側の接線を、つなぎ目をまたいだ自動の接線にする（Constant・Linear の側はそのまま）。
         /// 先頭の次のキーと、最後の 1 つ前のキー（先頭の側の四元数へ戻して）を結ぶ傾き。先頭が山・谷なら平ら（ClampedAuto と同じ）
         /// </summary>
         static void SetLoopTangents (AnimationCurve curve, int start, int end, float sign)
         {
-            if (!IsAuto (AnimationUtility.GetKeyLeftTangentMode (curve, start)) || !IsAuto (AnimationUtility.GetKeyRightTangentMode (curve, start))) return;
+            bool left = IsAuto (AnimationUtility.GetKeyLeftTangentMode (curve, start));
+            bool right = IsAuto (AnimationUtility.GetKeyRightTangentMode (curve, start));
+            if (!left && !right) return;
             float slope = 0;
             if (end - start >= 2) {
                 Keyframe next = curve[start + 1];
@@ -154,8 +158,22 @@ namespace Lilium
                 bool extremum = (next.value - value) * (value - before) <= 0;
                 slope = extremum || span <= 0 ? 0 : (next.value - before) / span;
             }
-            SetFreeTangent (curve, start, slope);
-            SetFreeTangent (curve, end, slope * sign);
+            if (left && right) {
+                SetFreeTangent (curve, start, slope);
+                SetFreeTangent (curve, end, slope * sign);
+                return;
+            }
+            // 片側だけ曲線（つなぎ目が区間の補間の境目）: 曲線の側だけ傾きを入れる
+            SetFreeSide (curve, start, left, slope);
+            SetFreeSide (curve, end, left, slope * sign);
+        }
+
+        static void SetFreeSide (AnimationCurve curve, int index, bool left, float slope)
+        {
+            Keyframe key = curve[index];
+            if (left) key.inTangent = slope;
+            else key.outTangent = slope;
+            curve.MoveKey (index, key);
         }
 
         static bool IsAuto (AnimationUtility.TangentMode mode)

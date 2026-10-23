@@ -75,10 +75,17 @@ namespace Lilium
                     curves.Add (entry.binding, curve);
                 }
                 int existing = ClipKeyUtility.FindKeyAtFrame (curve, rate, target);
-                if (existing >= 0) curve.RemoveKey (existing);
+                // 上書きするキーの前後の補間（S80）は行き先のまま（値だけ貼る。境目のキーに貼って隣の区間のリニアが崩れないように）
+                KeyInterpolation keepLeft = KeyInterpolation.Curve, keepRight = KeyInterpolation.Curve;
+                if (existing >= 0) {
+                    keepLeft = KeyInterpolations.Side (curve, existing, false);
+                    keepRight = KeyInterpolations.Side (curve, existing, true);
+                    curve.RemoveKey (existing);
+                }
                 Keyframe key = entry.key;
                 key.time = target / rate;
-                curve.AddKey (key);
+                int added = curve.AddKey (key);
+                if (existing >= 0 && added >= 0) KeyInterpolations.SetKey (curve, added, keepLeft, keepRight);
                 count++;
             }
             foreach (KeyValuePair<EditorCurveBinding, AnimationCurve> pair in curves) {

@@ -109,8 +109,11 @@ namespace Lilium
             AnimationUtility.SetEditorCurve (clip_, kArm, curve);
             ClipCycle.Sync (clip_);
             curve = Curve (kArm);
-            Assert.AreEqual (AnimationUtility.TangentMode.Constant, AnimationUtility.GetKeyRightTangentMode (curve, 0), "先頭の接線の種類は変えない");
-            Assert.AreEqual (AnimationUtility.TangentMode.Constant, AnimationUtility.GetKeyLeftTangentMode (curve, curve.length - 1), "最後のキーは先頭と同じ種類");
+            Assert.AreEqual (AnimationUtility.TangentMode.Constant, AnimationUtility.GetKeyRightTangentMode (curve, 0), "先頭の右（最初の区間）の種類は変えない");
+            Assert.AreEqual (AnimationUtility.TangentMode.Constant, AnimationUtility.GetKeyRightTangentMode (curve, curve.length - 1), "最後のキーの右は先頭の右と同じ種類");
+            // つなぎ目の左は最後の区間の補間（S80）。最後のキーのまま（曲線）で、先頭のキーの左もそれにそろう
+            Assert.AreEqual (KeyInterpolation.Curve, KeyInterpolations.Side (curve, curve.length - 1, false), "最後の区間は最後のキーの補間のまま");
+            Assert.AreEqual (KeyInterpolations.Side (curve, curve.length - 1, false), KeyInterpolations.Side (curve, 0, false), "先頭のキーの左は最後の区間にそろう");
             Assert.AreEqual (1f, Value (kArm, 30), 1e-5f);
         }
 
