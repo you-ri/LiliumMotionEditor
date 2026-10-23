@@ -125,15 +125,36 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "capture", frame = frame, folder = folder, size = size });
         }
 
-        [CliCommand ("motion_import_override", "Import a Humanoid clip made elsewhere (e.g. a motion model) as an Override layered on the open clip, without changing the open clip", Tags = new[] { kTag })]
+        [CliCommand ("motion_import_override", "Import a Humanoid clip, or a BVH of an external skeleton (e.g. a motion model's output), as an Override layered on the open clip, without changing the open clip. Frames past the end of the source keep the open clip", Tags = new[] { kTag })]
         public static JToken ImportOverride (
-            [CliArg ("source", "Humanoid clip path to import", Required = true)] string source,
+            [CliArg ("source", "Humanoid clip path (Assets/....anim), or BVH file (.bvh; absolute, or relative to the project folder) to import", Required = true)] string source,
             [CliArg ("override_clip", "Override clip path to write (Assets/....anim)", Required = true)] string override_clip,
             [CliArg ("create", "Create the override clip if it does not exist")] bool create = true,
             [CliArg ("mode", "Additive or Override")] string mode = "Additive",
-            [CliArg ("lock_feet", "Keep feet on the floor where they are low and still")] bool lock_feet = false)
+            [CliArg ("lock_feet", "Keep feet on the floor where they are low and still (only for input whose feet slide)")] bool lock_feet = false,
+            [CliArg ("skeleton", "ExternalSkeleton asset path of the BVH (needed for .bvh)")] string skeleton = null,
+            [CliArg ("align_root", "BVH: move and turn the whole motion once so its first frame's body matches the open clip's first frame on the ground")] bool align_root = true,
+            [CliArg ("fingers", "BVH: also import the fingers (off keeps the keyed hand shapes)")] bool fingers = false,
+            [CliArg ("keep_keys", "At the open clip's key frames keep the keyed pose, and blend into the imported motion around them. The response lists how far the motion was from each key")] bool keep_keys = false,
+            [CliArg ("keep_keys_blend", "Seconds to blend before and after each key")] float keep_keys_blend = 0.25f)
         {
-            return Run (new MotionEditorRequest { command = "importOverride", source = source, overrideClip = override_clip, create = create, mode = mode, lockFeet = lock_feet });
+            return Run (new MotionEditorRequest {
+                command = "importOverride", source = source, overrideClip = override_clip, create = create, mode = mode, lockFeet = lock_feet,
+                skeleton = skeleton, alignRoot = align_root, fingers = fingers, keepKeys = keep_keys, keepKeysBlend = keep_keys_blend,
+            });
+        }
+
+        [CliCommand ("motion_export_keys", "Retarget the key poses (as baked for the game) onto an external skeleton (ExternalSkeleton asset, e.g. a motion model's skeleton) through Humanoid and write them as a BVH, one BVH frame per exported frame. Returns the frames written", Tags = new[] { kTag })]
+        public static JToken ExportKeys (
+            [CliArg ("skeleton", "ExternalSkeleton asset path", Required = true)] string skeleton,
+            [CliArg ("path", "BVH file to write (absolute, or relative to the project folder)", Required = true)] string path,
+            [CliArg ("frames", "Frames to write, comma separated (empty writes the key frames)")] string frames = null)
+        {
+            MotionEditorRequest request = new MotionEditorRequest { command = "exportKeys", skeleton = skeleton, path = path };
+            if (!string.IsNullOrEmpty (frames)) {
+                foreach (string f in frames.Split (',')) request.frames.Add (int.Parse (f.Trim (), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return Run (request);
         }
 
         [CliCommand ("motion_write_hand", "Key a hand shape at a frame: apply a preset (PoseBank Humanoid pose such as Hand_Fist) to the fingers, then individual finger muscles. Write the body poses first (they key the fingers too). Returns the finger muscles read back", Tags = new[] { kTag })]

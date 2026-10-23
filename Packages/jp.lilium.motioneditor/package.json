@@ -14,6 +14,11 @@
       "displayName": "Demo",
       "description": "Sample models to try the motion editor.",
       "path": "Samples~/Demo"
+    },
+    {
+      "displayName": "Kimodo (optional)",
+      "description": "Generate motion between your keys with NVIDIA Kimodo (not included; downloaded and run by you) and import it as an Override.",
+      "path": "Samples~/Kimodo"
     }
   ]
 }

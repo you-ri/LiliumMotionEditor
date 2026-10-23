@@ -42,6 +42,12 @@ The demo models are the male and female characters from Quaternius' [Universal B
 
 `Demo/Poses` contains eight hand poses (Fist, Open, Point, and more). To show them in the PoseBank, add `{prefabFolder}/Poses` and the imported `Demo/Poses` folder (e.g. `Assets/Samples/Lilium Motion Editor/<version>/Demo/Poses`) to PoseBank Folders in `Project Settings > Lilium Motion Editor`. They are Humanoid finger values, so they can be pasted onto any Humanoid character with finger bones.
 
+### Kimodo (optional)
+
+The `Kimodo (optional)` sample lets NVIDIA's [Kimodo](https://github.com/nv-tlabs/kimodo) motion model fill in the motion between your keys from a text prompt,
+and imports the result as an Override that keeps your keyed poses. Kimodo is not included: you set it up and download its weights yourself,
+after checking their licenses. See the sample's `README.md`. The motion editor does not need it.
+
 ## License
 
 [MIT](LICENSE)

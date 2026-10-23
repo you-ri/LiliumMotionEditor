@@ -10,7 +10,8 @@ namespace Lilium
     /// <summary>
     /// モーションの検査（S37）。フレームごとに姿勢を作って（PoseSession。窓と同じ段を通す）、問題のあるフレームと場所を出す。
     /// AI が自分の作ったモーションを確かめるのに使うが、人が使っても役に立つ。
-    /// - FootSlide: 接地している足の点が、1 フレームで水平に動いた（メートル）
+    /// - FootSlide: 接地している足の点が、1 フレームで水平に動いた（メートル）。接地は床から contactHeight 以内で、水平の速さが contactSpeed 以下の点
+    ///   （床すれすれを振り抜ける足は数えない）
     /// - FloorPenetration: 点（全身 IK でなければ骨）が床（Y=0）より下にある（メートル。負の高さ）。床との当たりの球（定義の radius）を持つ点は、球の下の端で見る
     /// - MuscleRange: Humanoid の muscle が範囲を超えた。ゲーム用に焼くと丸められる所（muscle の値）
     /// - Pop: 骨の 1 フレームの回転が、前後のフレームの回転の 3 倍 + 0.5° を越えた、または 1 フレームだけ前後から外れた（跳ね。度）
@@ -39,6 +40,11 @@ namespace Lilium
             public float footSlide = 0.005f;
             /// <summary>接地とみなす足の点の高さ（メートル。体の大きさ 1 のとき）</summary>
             public float contactHeight = 0.03f;
+            /// <summary>
+            /// 接地とみなす足の点の水平の速さの上限（メートル毎秒。体の大きさ 1 のとき）。床すれすれを振り抜ける足（秒速 4〜6m）を接地と数えないため。
+            /// 滑りとして拾うのは、これより遅い動き（60fps の 1 フレームで 3.3cm まで）
+            /// </summary>
+            public float contactSpeed = 2;
             /// <summary>床より下に許す深さ（メートル）</summary>
             public float floorTolerance = 0.005f;
             /// <summary>muscle の上限（1 を少し超えるのは許す）</summary>
@@ -113,10 +119,11 @@ namespace Lilium
                         Vector3 p = points[i].position ();
                         runs.Add (kFloorPenetration, points[i].name, f, -p.y, settings.floorTolerance, p.y < -settings.floorTolerance);
                         if (!points[i].foot) continue;
-                        bool contact = p.y <= settings.contactHeight * scale;
+                        // 接地は低くて速すぎない点（床すれすれを振り抜ける足は滑りではない）
+                        Vector3 move = f > start ? p - previousFeet[i] : Vector3.zero;
+                        move.y = 0;
+                        bool contact = p.y <= settings.contactHeight * scale && move.magnitude * frameRate <= settings.contactSpeed * scale;
                         if (f > start && contact && previousContact[i]) {
-                            Vector3 move = p - previousFeet[i];
-                            move.y = 0;
                             float limit = settings.footSlide * scale;
                             runs.Add (kFootSlide, points[i].name, f, move.magnitude, limit, move.magnitude > limit);
                         }

@@ -360,7 +360,33 @@ namespace Lilium
             public int keyCountBeforeReduce;
             /// <summary>足を床に付けたフレームの数（lockFeet のとき）</summary>
             public int lockedFrames;
+            /// <summary>元のクリップのキーのフレームで、取り込んだ動きが元の姿勢からどれだけずれていたか（寄せる前。S75）</summary>
+            public List<KeyDeviation> keyDeviations = new List<KeyDeviation> ();
             public List<string> notes = new List<string> ();
+        }
+
+        /// <summary>キーのフレームでの、取り込んだ動きと元の姿勢のずれ（骨の場所の差の最大と、腰の場所の差。メートル）</summary>
+        [System.Serializable]
+        public sealed class KeyDeviation
+        {
+            public int frame;
+            public float distance;
+            public string bone;
+            public float hips;
+        }
+
+        /// <summary>取り込み（ImportOverride）の指定</summary>
+        public sealed class OverrideImportOptions
+        {
+            /// <summary>足が低くて止まっている区間を床に留める（足が滑る入力のため。足を留めている元に掛けると跳ねる）</summary>
+            public bool lockFeet;
+            /// <summary>指のコントロールも取り込む（false なら元の手の形を残す。S74）</summary>
+            public bool fingers = true;
+            /// <summary>BVH: 最初のフレームの体の向きと地面の上の場所を元に合わせる（S74）</summary>
+            public bool alignRoot = true;
+            /// <summary>元のクリップのキーのフレームでは差を 0 にし（元のキーの姿勢）、前後 keepKeysBlend 秒でなめらかに差を戻す（S75）</summary>
+            public bool keepKeys;
+            public float keepKeysBlend = 0.25f;
         }
 
         /// <summary>接地とみなす足の点の高さと 1 フレームの水平の動き（メートル。体の大きさ 1 のとき）</summary>
@@ -380,10 +406,18 @@ namespace Lilium
         ///    動画から取った動きのように足が滑る入力のためのもの。足がもう留まっている動きはそのまま
         /// 3. 元のクリップの値との差分（Additive）か置き換える値（Override）にして書き、変わらないキーを間引く
         /// </summary>
+        /// <param name="fingers">指のコントロールも取り込むか。false なら指のカーブを書かず、元の手の形を残す（S74）</param>
         /// <returns>取り込めなかった理由（取り込めたら null）</returns>
-        public string ImportOverride (AnimationClip source, AnimationClip destination, OverrideMode mode, bool lockFeet, out OverrideImportResult result)
+        public string ImportOverride (AnimationClip source, AnimationClip destination, OverrideMode mode, bool lockFeet, out OverrideImportResult result, bool fingers = true)
+        {
+            return ImportOverride (source, destination, mode, new OverrideImportOptions { lockFeet = lockFeet, fingers = fingers }, out result);
+        }
+
+        public string ImportOverride (AnimationClip source, AnimationClip destination, OverrideMode mode, OverrideImportOptions options, out OverrideImportResult result)
         {
             result = new OverrideImportResult ();
+            if (options == null) options = new OverrideImportOptions ();
+            bool lockFeet = options.lockFeet;
             string character = characterProblem;
             if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
@@ -410,21 +444,38 @@ namespace Lilium
                     result.frameCount = imported1.frameCount;
                     if (imported1.notes != null) result.notes.AddRange (imported1.notes);
                 }
+                // 元のクリップのほうが長ければ、その長さまで書く（取り込み元より後ろは下で差 0 にする。書かないとカーブの最後の差が残る）
+                result.frameCount = Mathf.Max (result.frameCount, CurveEdit.FrameCount (clip_.empty ? 0 : clip_.length, rate));
                 Dictionary<EditorCurveBinding, float[]> target = ReadCurves (imported, result.frameCount, rate);
+                if (!options.fingers) {
+                    HashSet<string> fingerPaths = new HashSet<string> (rig.binding.boneControls.Where (c => c.human.HasValue && IsFinger (c.human.Value)).Select (c => c.path));
+                    foreach (EditorCurveBinding binding in target.Keys.Where (b => fingerPaths.Contains (b.path)).ToList ()) target.Remove (binding);
+                }
 
                 // 2. 足を床に付ける
                 if (lockFeet) result.lockedFrames = LockFeet (imported, target, result.frameCount, rate);
 
-                // 3. 元のクリップとの差分にする
+                // 3. 元のクリップとの差分にする。取り込み元より後ろのフレームは元のまま（差 0）にする（最後の姿勢の差を残さない）。
+                //    keepKeys なら、元のキーのフレームで差 0、前後でなめらかに差を戻す（重みは差分にする前の狙いの値に掛ける）
+                int sourceFrames = Mathf.Clamp (Mathf.RoundToInt ((source.empty ? 0 : source.length) * rate) + 1, 1, result.frameCount);
+                int[] baseKeys = ClipCycle.GetFrames (clip_).Where (k => k >= 0 && k < sourceFrames).ToArray ();
+                result.keyDeviations = MeasureKeyDeviations (imported, baseKeys, rate, options.fingers);
+                float[] weights = new float[result.frameCount];
+                for (int f = 0; f < result.frameCount; f++) {
+                    weights[f] = f >= sourceFrames ? 0 : options.keepKeys ? KeepKeysWeight (f, baseKeys, options.keepKeysBlend * rate) : 1;
+                }
                 Dictionary<EditorCurveBinding, float[]> stored = new Dictionary<EditorCurveBinding, float[]> ();
                 foreach (EditorCurveBinding binding in target.Keys) stored[binding] = new float[result.frameCount];
                 List<IGrouping<string, EditorCurveBinding>> transforms = target.Keys.Where (b => b.type == typeof (Transform)).GroupBy (b => b.path + "|" + b.propertyName.Substring (0, b.propertyName.LastIndexOf ('.'))).ToList ();
                 for (int f = 0; f < result.frameCount; f++) {
                     stage.SampleBaseAsControls (clip_, useHumanoidBase, f / rate);
-                    foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode);
+                    foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode, weights[f]);
                     // 数値（点の固定の強さ・Rig の代理の重み）は足し合わせず、Additive でも置き換える
                     foreach (EditorCurveBinding binding in target.Keys) {
-                        if (binding.type != typeof (Transform)) stored[binding][f] = target[binding][f];
+                        if (binding.type == typeof (Transform)) continue;
+                        float value = target[binding][f];
+                        if (weights[f] < 1 && AnimationUtility.GetFloatValue (root.gameObject, binding, out float baseValue)) value = Mathf.Lerp (baseValue, value, weights[f]);
+                        stored[binding][f] = value;
                     }
                 }
                 HashSet<string> rotationPaths = new HashSet<string> (target.Keys.Where (b => b.propertyName.StartsWith ("m_LocalRotation.")).Select (b => b.path));
@@ -446,6 +497,46 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// キーの姿勢を外部の骨格（学習済みモデルの骨など）へ写して BVH にする（S73）。姿勢は焼いた後のもの（Humanoid の可動範囲で丸めた後）で、
+        /// 外部の骨格の Avatar に Humanoid のまま当てるので、体型の違いは Humanoid が合わせる。BVH の 1 フレームが frames の 1 つ（1 フレームの秒数はクリップの格子）。
+        /// frames を省くとキーを打つクリップのキーのフレーム。終わったら今のフレームの姿勢へ戻す
+        /// </summary>
+        /// <returns>書き出せなかった理由（書き出せたら null）</returns>
+        public string ExportToSkeleton (ExternalSkeleton skeleton, IList<int> frames, out Bvh bvh, out List<int> exported)
+        {
+            bvh = null;
+            exported = new List<int> ();
+            string character = characterProblem;
+            if (character != null) return character;
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            if (skeleton == null) return Tr ("EXTERNAL_SKELETON_NO_JOINTS");
+            if (!stage.canPreviewHumanoid) return Tr ("POSE_SESSION_NO_CHARACTER");
+            exported = frames != null && frames.Count > 0 ? frames.Distinct ().OrderBy (f => f).ToList () : ClipCycle.GetFrames (targetClip).ToList ();
+            if (exported.Count == 0) return Tr ("POSE_SESSION_NO_KEYS_TO_EXPORT");
+            if (exported[0] < 0) return Tr ("MOTION_EDITOR_COMMANDS_NEGATIVE_FRAME");
+
+            ExternalSkeleton.Instance instance = skeleton.Instantiate (out string error);
+            if (instance == null) return error;
+            int current = frame;
+            try {
+                Bvh result = skeleton.CreateBvh (1 / frameRate);
+                HumanPose pose = new HumanPose ();
+                foreach (int f in exported) {
+                    Evaluate (f);
+                    if (!stage.ReadHumanPose (ref pose)) return Tr ("POSE_SESSION_NO_CHARACTER");
+                    instance.handler.SetHumanPose (ref pose);
+                    skeleton.Capture (instance, result);
+                }
+                bvh = result;
+                return null;
+            }
+            finally {
+                instance.Dispose ();
+                Evaluate (current);
+            }
+        }
+
         /// <summary>編集用リグのカーブをフレームごとの値にする</summary>
         static Dictionary<EditorCurveBinding, float[]> ReadCurves (AnimationClip clip, int frameCount, float rate)
         {
@@ -460,9 +551,164 @@ namespace Lilium
             return values;
         }
 
-        /// <summary>位置・回転・大きさのどれか 1 組（x/y/z[/w]）を、今のコントロールの値（元）との差分にする</summary>
+        /// <summary>
+        /// 外部の骨格（skeleton）の BVH を、今の元のクリップに重ねる Override として destination へ書く（S74）。
+        /// BVH の各フレームを外部の骨格の Avatar で Humanoid の姿勢にし、一時の Humanoid のクリップ（RootT・RootQ・muscle）にして、
+        /// .anim と同じ取り込み（ImportOverride）へ流す。指は既定で取り込まない（モデルの骨格に指の関節が無いことが多く、打った手の形を残す）。
+        /// alignRoot なら、最初のフレームの体の向き（鉛直軸まわり）と地面の上の場所を、元のクリップの最初のフレームへ合わせる（クリップ全体で 1 回。
+        /// Kimodo などは最初の腰を原点・+Z 向きにそろえて出すため。キーごとに寄せると腰が速く動いて足が滑る）
+        /// </summary>
+        public string ImportOverride (Bvh bvh, ExternalSkeleton skeleton, AnimationClip destination, OverrideMode mode, bool lockFeet, bool alignRoot, bool fingers,
+            out OverrideImportResult result)
+        {
+            return ImportOverride (bvh, skeleton, destination, mode, new OverrideImportOptions { lockFeet = lockFeet, alignRoot = alignRoot, fingers = fingers }, out result);
+        }
+
+        public string ImportOverride (Bvh bvh, ExternalSkeleton skeleton, AnimationClip destination, OverrideMode mode, OverrideImportOptions options, out OverrideImportResult result)
+        {
+            result = new OverrideImportResult ();
+            if (options == null) options = new OverrideImportOptions { fingers = false };
+            bool alignRoot = options.alignRoot;
+            string character = characterProblem;
+            if (character != null) return character;
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            if (bvh == null || bvh.frames.Count == 0) return Tr ("POSE_SESSION_EMPTY_BVH");
+            if (skeleton == null) return Tr ("EXTERNAL_SKELETON_NO_JOINTS");
+            string mismatch = skeleton.GetMismatch (bvh);
+            if (mismatch != null) return mismatch;
+            if (!stage.canPreviewHumanoid) return Tr ("POSE_SESSION_NO_CHARACTER");
+
+            ExternalSkeleton.Instance instance = skeleton.Instantiate (out string error);
+            if (instance == null) return error;
+            AnimationClip humanoid = null;
+            int current = frame;
+            try {
+                // 元の最初のフレームの体の置き場所（焼いた後の姿勢。体の大きさで割った値）
+                HumanPose start = new HumanPose ();
+                if (alignRoot) {
+                    Evaluate (0);
+                    if (!stage.ReadHumanPose (ref start)) return Tr ("POSE_SESSION_NO_CHARACTER");
+                }
+                HumanPose pose = new HumanPose ();
+                Vector3 offsetPosition = Vector3.zero;
+                Quaternion offsetRotation = Quaternion.identity;
+                int muscleCount = HumanTrait.MuscleCount;
+                List<Keyframe>[] keys = new List<Keyframe>[7 + muscleCount];
+                for (int c = 0; c < keys.Length; c++) keys[c] = new List<Keyframe> ();
+                Quaternion previous = Quaternion.identity;
+                for (int f = 0; f < bvh.frames.Count; f++) {
+                    skeleton.Apply (instance, bvh, f);
+                    instance.handler.GetHumanPose (ref pose);
+                    if (f == 0 && alignRoot) {
+                        Vector3 forward = start.bodyRotation * Quaternion.Inverse (pose.bodyRotation) * Vector3.forward;
+                        forward.y = 0;
+                        if (forward.sqrMagnitude > 1e-8f) offsetRotation = Quaternion.LookRotation (forward);
+                        Vector3 delta = start.bodyPosition - offsetRotation * pose.bodyPosition;
+                        offsetPosition = new Vector3 (delta.x, 0, delta.z);
+                    }
+                    Vector3 position = offsetPosition + offsetRotation * pose.bodyPosition;
+                    Quaternion rotation = offsetRotation * pose.bodyRotation;
+                    // 隣のフレームと同じ半球にそろえる（成分ごとに補間するので、符号が飛ぶと間で回る）
+                    if (f > 0 && Quaternion.Dot (previous, rotation) < 0) rotation = new Quaternion (-rotation.x, -rotation.y, -rotation.z, -rotation.w);
+                    previous = rotation;
+                    float time = f * bvh.frameTime;
+                    float[] values = { position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w };
+                    for (int c = 0; c < 7; c++) keys[c].Add (new Keyframe (time, values[c]));
+                    for (int m = 0; m < muscleCount; m++) keys[7 + m].Add (new Keyframe (time, pose.muscles[m]));
+                }
+                humanoid = new AnimationClip { frameRate = 1 / bvh.frameTime, hideFlags = HideFlags.HideAndDontSave };
+                string[] axes = { "x", "y", "z", "w" };
+                for (int c = 0; c < keys.Length; c++) {
+                    string name = c < 3 ? HumanoidBaker.kRootT + "." + axes[c] : c < 7 ? HumanoidBaker.kRootQ + "." + axes[c - 3] : HumanoidBaker.clipMuscleNames[c - 7];
+                    AnimationCurve curve = new AnimationCurve (keys[c].ToArray ());
+                    for (int k = 0; k < curve.length; k++) {
+                        AnimationUtility.SetKeyLeftTangentMode (curve, k, AnimationUtility.TangentMode.Linear);
+                        AnimationUtility.SetKeyRightTangentMode (curve, k, AnimationUtility.TangentMode.Linear);
+                    }
+                    AnimationUtility.SetEditorCurve (humanoid, EditorCurveBinding.FloatCurve ("", typeof (Animator), name), curve);
+                }
+            }
+            finally {
+                instance.Dispose ();
+                Evaluate (current);
+            }
+            try {
+                return ImportOverride (humanoid, destination, mode, options, out result);
+            }
+            finally {
+                Object.DestroyImmediate (humanoid);
+            }
+        }
+
+        /// <summary>
+        /// keepKeys の重み: キーのフレームで 0、キーから blendFrames 離れると 1（smoothstep。速さが途切れない）。いちばん近いキーで決める
+        /// </summary>
+        static float KeepKeysWeight (int f, int[] keys, float blendFrames)
+        {
+            float weight = 1;
+            foreach (int k in keys) {
+                float d = Mathf.Abs (f - k);
+                float w = blendFrames <= 0 ? (d < 0.5f ? 0 : 1) : Mathf.Clamp01 (d / blendFrames);
+                weight = Mathf.Min (weight, w * w * (3 - 2 * w));
+            }
+            return weight;
+        }
+
+        /// <summary>
+        /// 元のクリップのキーのフレームで、取り込んだ動き（編集用リグの値）と元の姿勢の、骨の場所の差（S75。寄せる前）。
+        /// 指を取り込まないときは、指とその先の骨を測らない（重ねても元の手の形のままなので）
+        /// </summary>
+        List<KeyDeviation> MeasureKeyDeviations (AnimationClip imported, int[] keys, float rate, bool fingers)
+        {
+            List<KeyDeviation> deviations = new List<KeyDeviation> ();
+            EditingRig rig = stage.editingRig;
+            HashSet<Transform> fingerBones = new HashSet<Transform> ();
+            if (!fingers) {
+                for (HumanBodyBones b = HumanBodyBones.LeftThumbProximal; b <= HumanBodyBones.RightLittleDistal; b++) {
+                    Transform t = rig.GetEditingBone (b);
+                    if (t != null) fingerBones.Add (t);
+                }
+            }
+            bool IsFingerBone (Transform t)
+            {
+                for (; t != null; t = t.parent) {
+                    if (fingerBones.Contains (t)) return true;
+                }
+                return false;
+            }
+            List<Transform> bones = rig.editingBones.Where (t => !IsFingerBone (t)).ToList ();
+            Transform hips = rig.GetEditingBone (HumanBodyBones.Hips);
+            Vector3[] before = new Vector3[bones.Count];
+            foreach (int k in keys) {
+                Evaluate (k);
+                for (int b = 0; b < bones.Count; b++) before[b] = bones[b].position;
+                Vector3 baseHips = hips != null ? hips.position : Vector3.zero;
+                ApplyImported (imported, k / rate);
+                KeyDeviation deviation = new KeyDeviation { frame = k, bone = "" };
+                for (int b = 0; b < bones.Count; b++) {
+                    float d = Vector3.Distance (before[b], bones[b].position);
+                    if (d > deviation.distance) {
+                        deviation.distance = d;
+                        deviation.bone = bones[b].name;
+                    }
+                }
+                deviation.hips = hips != null ? Vector3.Distance (baseHips, hips.position) : 0;
+                deviations.Add (deviation);
+            }
+            return deviations;
+        }
+
+        static bool IsFinger (HumanBodyBones bone)
+        {
+            return bone >= HumanBodyBones.LeftThumbProximal && bone <= HumanBodyBones.RightLittleDistal;
+        }
+
+        /// <summary>
+        /// 位置・回転・大きさのどれか 1 組（x/y/z[/w]）を、今のコントロールの値（元）との差分にする。
+        /// weight は狙いの値の効き（0 なら元の値のまま＝差 0。回転は Slerp、位置と大きさは Lerp で元と混ぜてから差分にする）
+        /// </summary>
         static void StoreTransform (IGrouping<string, EditorCurveBinding> group, GameObject root, Dictionary<EditorCurveBinding, float[]> target,
-            Dictionary<EditorCurveBinding, float[]> stored, int f, OverrideMode mode)
+            Dictionary<EditorCurveBinding, float[]> stored, int f, OverrideMode mode, float weight = 1)
         {
             string[] axes = { "x", "y", "z", "w" };
             EditorCurveBinding first = group.First ();
@@ -476,17 +722,18 @@ namespace Lilium
                 if (!AnimationUtility.GetFloatValue (root, bindings[i], out source[i])) source[i] = 0;
                 // 組の一部しかカーブが無いときは、無い成分を元の値のままにする
                 float[] array;
-                value[i] = target.TryGetValue (bindings[i], out array) ? array[f] : source[i];
+                value[i] = weight > 0 && target.TryGetValue (bindings[i], out array) ? array[f] : source[i];
             }
             float[] result = new float[4];
             if (count == 4) {
-                Quaternion q = OverrideMath.StoreRotation (mode, Quaternion.Normalize (new Quaternion (source[0], source[1], source[2], source[3])),
-                    Quaternion.Normalize (new Quaternion (value[0], value[1], value[2], value[3])));
+                Quaternion s = Quaternion.Normalize (new Quaternion (source[0], source[1], source[2], source[3]));
+                Quaternion v = Quaternion.Normalize (new Quaternion (value[0], value[1], value[2], value[3]));
+                Quaternion q = OverrideMath.StoreRotation (mode, s, weight < 1 ? Quaternion.Slerp (s, v, weight) : v);
                 result[0] = q.x; result[1] = q.y; result[2] = q.z; result[3] = q.w;
             }
             else {
                 Vector3 s = new Vector3 (source[0], source[1], source[2]);
-                Vector3 v = new Vector3 (value[0], value[1], value[2]);
+                Vector3 v = Vector3.Lerp (s, new Vector3 (value[0], value[1], value[2]), weight);
                 Vector3 r = prefix == "m_LocalScale." ? OverrideMath.StoreScale (mode, s, v) : OverrideMath.StorePosition (mode, s, v);
                 result[0] = r.x; result[1] = r.y; result[2] = r.z;
             }

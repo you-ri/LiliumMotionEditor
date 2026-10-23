@@ -132,6 +132,24 @@ namespace Lilium
         }
 
         [Test]
+        public void FootSwungLowAndFast_IsNotASlide ()
+        {
+            // 左足を床すれすれ（1cm 上）で 4 フレームに 30cm 前へ振る（秒速 4.5m）。床から 3cm 以内でも、振り抜ける足は接地ではない
+            PoseSession session = Open ();
+            PoseDocument rest = Rest (session);
+            Vector3 lifted = new Vector3 (0, 0.01f, 0);
+            Write (session, 0, rest, Join (Foot ("Left", "Pin", lifted), Foot ("Right", "Locked", Vector3.zero)));
+            Write (session, 4, rest, Join (Foot ("Left", "Pin", lifted + new Vector3 (0, 0, 0.3f)), Foot ("Right", "Locked", Vector3.zero)));
+
+            MotionLintReport report = MotionLint.Run (session, 0, 4);
+            Assert.AreEqual (0, report.Count (MotionLint.kFootSlide), Describe (report));
+
+            // 同じ動きでも、速さの上限を外すと（高さだけで接地とみなすと）滑りとして数えていた
+            MotionLintReport heightOnly = MotionLint.Run (session, 0, 4, new MotionLint.Settings { contactSpeed = float.PositiveInfinity });
+            Assert.Greater (heightOnly.Count (MotionLint.kFootSlide), 0, "確かめたい動きになっている: " + Describe (heightOnly));
+        }
+
+        [Test]
         public void SunkenFoot_IsFound ()
         {
             PoseSession session = Open ();

@@ -148,6 +148,69 @@ namespace Lilium
             AssertSamePose (baseOnly, WorldPose (session), "重み 0");
         }
 
+        /// <summary>外の動きをそのまま編集用クリップへ取り込む（HumanoidImport。ルートの移動は腰へ移る）</summary>
+        PoseSession OpenImported (AnimationClip source)
+        {
+            PoseSession session = new PoseSession (prefab_, definition_);
+            disposables_.Add (session);
+            AnimationClip absolute = NewClip ();
+            List<PoseTarget> targets = RigTargets.Create (session.stage.editingRig, session.stage.editingRigSolver);
+            Transform display = session.stage.animator.transform;
+            display.GetLocalPositionAndRotation (out Vector3 position, out Quaternion rotation);
+            using (ClipSampler sampler = new ClipSampler (session.stage.animator)) {
+                HumanoidImport.Import (source, absolute, session.stage.editingRig, session.stage.editingRigSolver, time => {
+                    sampler.Sample (source, time);
+                    display.SetLocalPositionAndRotation (position, rotation);
+                }, targets);
+            }
+            foreach (PoseTarget target in targets) target.Dispose ();
+            session.clip = absolute;
+            return session;
+        }
+
+        static float RootQy (AnimationClip clip)
+        {
+            return AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve ("", typeof (Animator), HumanoidBaker.kRootQ + ".y")).Evaluate (0);
+        }
+
+        [Test]
+        public void ImportOverride_OfItsOwnBake_KeepsThePose_WhenTheBodyStartsTurned ()
+        {
+            // 体が最初から後ろ（180°）を向いているクリップ（骨が -Z を向いて立つモデルを焼くとこうなる）。
+            // Unity は最初の体の向きを GameObject へ移して当てるので、取り込むと体が前を向き、元に重ねると脚がねじれていた
+            HumanPose rest = new HumanPose ();
+            using (PoseSession probe = new PoseSession (prefab_, definition_)) {
+                Animator animator = probe.stage.animator;
+                using (HumanPoseHandler handler = new HumanPoseHandler (animator.avatar, animator.transform)) handler.GetHumanPose (ref rest);
+            }
+            AnimationClip turned = Generated ();
+            float[] root = { 0, rest.bodyPosition.y, 0, 0, 1, 0, 0 };
+            string[] names = { "RootT.x", "RootT.y", "RootT.z", "RootQ.x", "RootQ.y", "RootQ.z", "RootQ.w" };
+            for (int i = 0; i < names.Length; i++) SetMuscle (turned, names[i], t => root[i]);
+
+            PoseSession session = OpenImported (turned);
+            session.Evaluate (0);
+            Transform hips = session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips);
+            Vector3 forward = session.stage.editingRig.root.transform.InverseTransformDirection (hips.forward);
+            Assert.Less (forward.z, -0.9f, "取り込んだ体は後ろを向いたまま: " + forward);
+
+            AnimationClip baked = NewClip ();
+            using (HumanoidBaker baker = session.stage.CreateHumanoidBaker (null)) {
+                baker.Bake (session.clip, baked);
+            }
+            Assert.Greater (Mathf.Abs (RootQy (baked)), 0.99f, "焼き直しても体の向きは 180°");
+
+            session.Evaluate (30);
+            List<Pose> before = WorldPose (session);
+            AnimationClip layer = NewClip ();
+            PoseSession.OverrideImportResult result;
+            Assert.IsNull (session.ImportOverride (baked, layer, OverrideMode.Additive, false, out result));
+            session.AddOverride (layer, OverrideMode.Additive);
+            session.overrideWriteIndex = 0;
+            session.Evaluate (30);
+            AssertSamePose (before, WorldPose (session), "自分を焼いたクリップを重ねても姿勢は変わらない");
+        }
+
         [Test]
         public void LockFeet_RemovesFootSliding ()
         {

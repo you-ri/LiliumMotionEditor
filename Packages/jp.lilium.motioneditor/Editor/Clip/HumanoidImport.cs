@@ -50,6 +50,13 @@ namespace Lilium
             int sourceFrames = Mathf.Clamp (Mathf.RoundToInt ((source.empty ? 0 : source.length) * rate) + 1, 1, frameCount);
             RootMotion.Sample (rig.displayAnimator, source, rate, sourceFrames, out Vector3[] rootPositions, out Quaternion[] rootRotations);
             AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings (source);
+            // 最初の体の向きと水平の場所を、クリップに焼いた値（RootT・RootQ）へ戻す。足し戻すルートの移動ごと回す
+            if (GetStartOffset (source, rig.displayAnimator, evaluate, out Vector3 startPosition, out Quaternion startRotation)) {
+                for (int f = 0; f < sourceFrames; f++) {
+                    rootPositions[f] = startPosition + startRotation * rootPositions[f];
+                    rootRotations[f] = startRotation * rootRotations[f];
+                }
+            }
 
             PoseImport.Result result = PoseImport.Run (new PoseImport.Options {
                 destination = destination,
@@ -80,6 +87,53 @@ namespace Lilium
                 notes.Add (Tr ("HUMANOID_IMPORT_OFFSETS_BAKED"));
             }
             return result;
+        }
+
+        /// <summary>
+        /// 当てた姿勢の体の置き場所を、クリップに焼いた最初の置き場所へ戻す回転（鉛直軸まわり）と水平の移動（Animator の中の長さ）。
+        /// Root Transform Rotation の基準が体の向き（Based Upon Body Orientation。焼いたクリップの既定）だと、Unity は最初の体の向きを
+        /// Animator の GameObject へ移して当て、evaluate は GameObject を元へ戻すので、最初の向きが落ちる。
+        /// 骨が後ろ（-Z）を向いて立つモデルは体の向きが 180° なので、取り込むと体が 180° 回り、元に重ねると脚がねじれた
+        /// （Override の muscle の範囲超え・跳ね）。高さは今までどおり当てた姿勢のまま
+        /// </summary>
+        static bool GetStartOffset (AnimationClip source, Animator animator, System.Action<float> evaluate, out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (animator == null || animator.avatar == null || !animator.avatar.isHuman) return false;
+            if (!TryGetRoot (source, out Vector3 rootT, out Quaternion rootQ)) return false;
+
+            evaluate (0);
+            HumanPose pose = new HumanPose ();
+            using (HumanPoseHandler handler = new HumanPoseHandler (animator.avatar, animator.transform)) {
+                handler.GetHumanPose (ref pose);
+            }
+            // Unity が GameObject へ移すのは鉛直軸まわりの向きだけ（前後・左右の傾きは姿勢に残る）
+            Vector3 forward = rootQ * Quaternion.Inverse (pose.bodyRotation) * Vector3.forward;
+            forward.y = 0;
+            if (forward.sqrMagnitude > 1e-8f) rotation = Quaternion.LookRotation (forward);
+            // HumanPose の体の場所は体の大きさで割った値
+            Vector3 delta = rootT - rotation * pose.bodyPosition;
+            position = new Vector3 (delta.x, 0, delta.z) * animator.humanScale;
+            return Quaternion.Angle (rotation, Quaternion.identity) > 0.01f || position.sqrMagnitude > 1e-10f;
+        }
+
+        /// <summary>クリップの 0 秒の体の場所（RootT）と向き（RootQ）</summary>
+        static bool TryGetRoot (AnimationClip clip, out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            string[] axes = { "x", "y", "z", "w" };
+            float[] values = new float[7];
+            for (int i = 0; i < 7; i++) {
+                string name = i < 3 ? HumanoidBaker.kRootT + "." + axes[i] : HumanoidBaker.kRootQ + "." + axes[i - 3];
+                AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve ("", typeof (Animator), name));
+                if (curve == null || curve.length == 0) return false;
+                values[i] = curve.Evaluate (0);
+            }
+            position = new Vector3 (values[0], values[1], values[2]);
+            rotation = Quaternion.Normalize (new Quaternion (values[3], values[4], values[5], values[6]));
+            return true;
         }
 
         /// <summary>

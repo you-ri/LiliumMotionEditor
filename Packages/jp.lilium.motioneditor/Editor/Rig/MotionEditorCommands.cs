@@ -266,8 +266,11 @@ namespace Lilium
                 case "readHand":
                     return ReadHand (request.frame, out error);
 
+                case "exportKeys":
+                    return ExportKeys (request, out error);
+
                 default:
-                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, deleteKeys, sample, undo, lint, bake, save, capture, importOverride, writeHand, readHand, close");
+                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, deleteKeys, sample, undo, lint, bake, save, capture, importOverride, exportKeys, writeHand, readHand, close");
                     return null;
             }
         }
@@ -776,10 +779,28 @@ namespace Lilium
         static string ImportOverride (MotionEditorRequest request, out string error)
         {
             error = null;
-            AnimationClip source = string.IsNullOrEmpty (request.source) ? null : AssetDatabase.LoadAssetAtPath<AnimationClip> (request.source);
-            if (source == null) {
-                error = Tr ("MOTION_EDITOR_COMMANDS_NO_CLIP", request.source);
-                return null;
+            // .bvh は外部の骨格（skeleton）の BVH として読む（S74）。それ以外は Humanoid のクリップのアセット
+            bool bvhSource = !string.IsNullOrEmpty (request.source) && request.source.EndsWith (".bvh", System.StringComparison.OrdinalIgnoreCase);
+            Bvh bvh = null;
+            ExternalSkeleton skeleton = null;
+            AnimationClip source = null;
+            if (bvhSource) {
+                string text = ReadJsonFile (request.source, out error);
+                if (error != null) return null;
+                bvh = Bvh.Parse (text, out error);
+                if (error != null) return null;
+                skeleton = string.IsNullOrEmpty (request.skeleton) ? null : AssetDatabase.LoadAssetAtPath<ExternalSkeleton> (request.skeleton);
+                if (skeleton == null) {
+                    error = Tr ("MOTION_EDITOR_COMMANDS_NO_SKELETON", request.skeleton);
+                    return null;
+                }
+            }
+            else {
+                source = string.IsNullOrEmpty (request.source) ? null : AssetDatabase.LoadAssetAtPath<AnimationClip> (request.source);
+                if (source == null) {
+                    error = Tr ("MOTION_EDITOR_COMMANDS_NO_CLIP", request.source);
+                    return null;
+                }
             }
             AnimationClip destination = OpenClip (request.overrideClip, request.create, out error);
             if (error != null) return null;
@@ -789,7 +810,17 @@ namespace Lilium
                 return null;
             }
             PoseSession.OverrideImportResult result;
-            error = session_.ImportOverride (source, destination, mode, request.lockFeet, out result);
+            PoseSession.OverrideImportOptions options = new PoseSession.OverrideImportOptions {
+                lockFeet = request.lockFeet,
+                alignRoot = request.alignRoot,
+                // .bvh は既定で指を取り込まない（打った手の形を残す）。.anim は今までどおり指も取り込む
+                fingers = !bvhSource || request.fingers,
+                keepKeys = request.keepKeys,
+                keepKeysBlend = request.keepKeysBlend,
+            };
+            error = bvhSource
+                ? session_.ImportOverride (bvh, skeleton, destination, mode, options, out result)
+                : session_.ImportOverride (source, destination, mode, options, out result);
             if (error != null) return null;
             int index = session_.overrides.ToList ().FindIndex (o => o.clip == destination);
             if (index < 0) {
@@ -799,6 +830,42 @@ namespace Lilium
             session_.overrideWriteIndex = index;
             AssetDatabase.SaveAssetIfDirty (destination);
             return JsonUtility.ToJson (result);
+        }
+
+        /// <summary>
+        /// キーの姿勢を外部の骨格（skeleton。ExternalSkeleton のアセット）へ写して、BVH を path へ書く（S73）。
+        /// frames を省くとキーのフレーム。path の相対パスはプロジェクトのフォルダから
+        /// </summary>
+        static string ExportKeys (MotionEditorRequest request, out string error)
+        {
+            error = null;
+            ExternalSkeleton skeleton = string.IsNullOrEmpty (request.skeleton) ? null : AssetDatabase.LoadAssetAtPath<ExternalSkeleton> (request.skeleton);
+            if (skeleton == null) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_SKELETON", request.skeleton);
+                return null;
+            }
+            if (string.IsNullOrEmpty (request.path)) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_EXPORT_PATH");
+                return null;
+            }
+            error = session_.ExportToSkeleton (skeleton, request.frames, out Bvh bvh, out List<int> frames);
+            if (error != null) return null;
+            try {
+                string folder = Path.GetDirectoryName (Path.GetFullPath (request.path));
+                if (!string.IsNullOrEmpty (folder)) Directory.CreateDirectory (folder);
+                File.WriteAllText (request.path, bvh.ToText ());
+            }
+            catch (System.Exception e) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_CANNOT_WRITE_FILE", request.path, e.Message);
+                return null;
+            }
+            return JsonUtility.ToJson (new MotionEditorExport {
+                path = Path.GetFullPath (request.path).Replace (Path.DirectorySeparatorChar, '/'),
+                frameRate = session_.clip.frameRate,
+                lastFrame = LastFrame (session_.clip),
+                frames = frames,
+                jointCount = bvh.joints.Count,
+            });
         }
 
         /// <summary>
@@ -1176,12 +1243,36 @@ namespace Lilium
         public string mode;
         /// <summary>importOverride で足を床に付けるか</summary>
         public bool lockFeet;
+        /// <summary>importOverride（.bvh）で、最初のフレームの体の向きと地面の上の場所を元に合わせる（S74）</summary>
+        public bool alignRoot = true;
+        /// <summary>importOverride（.bvh）で指も取り込む（既定は取り込まず、打った手の形を残す。.anim は今までどおり指も取り込む）</summary>
+        public bool fingers;
+        /// <summary>importOverride で、元のクリップのキーのフレームでは元のキーの姿勢に戻し、前後 keepKeysBlend 秒でなめらかにつなぐ（S75）</summary>
+        public bool keepKeys;
+        public float keepKeysBlend = 0.25f;
         /// <summary>writeHand のプリセット（PoseBank の姿勢の名前かパス。Hand_Fist など）</summary>
         public string preset;
         /// <summary>writeHand で当てる手（Left / Right / Both。省くと Both）</summary>
         public string hand;
         /// <summary>writeHand で個別に当てる指の muscle（プリセットの後に当てる）</summary>
         public List<MotionEditorMuscle> muscles = new List<MotionEditorMuscle> ();
+        /// <summary>exportKeys で写す外部の骨格（ExternalSkeleton のアセットのパス。S73）</summary>
+        public string skeleton;
+        /// <summary>exportKeys で書く BVH のパス（相対パスはプロジェクトのフォルダから）</summary>
+        public string path;
+    }
+
+    /// <summary>exportKeys の応答（S73）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorExport
+    {
+        /// <summary>書いた BVH のパス</summary>
+        public string path;
+        public float frameRate;
+        public int lastFrame;
+        /// <summary>書いたフレーム（BVH の 1 フレームがこの 1 つ）</summary>
+        public List<int> frames = new List<int> ();
+        public int jointCount;
     }
 
     /// <summary>muscle の名前と値（writeHand・readHand）</summary>

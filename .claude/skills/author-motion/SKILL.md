@@ -229,9 +229,15 @@ unity cmd motion_import_override --project-path "$P" --source "Assets/.../Genera
 ```
 
 - Stored as the difference from the base (`--mode Additive`) or as replacement values (`--mode Override`); keys that do not change are removed
-- `--lock_feet true` re-solves the leg only where a foot is low and still but slides, and holds it on the floor
+- `--lock_feet true` re-solves the leg only where a foot is low and still but slides, and holds it on the floor.
+  Use it only for input whose feet slide (mocap from video); on motion whose feet already stay put it makes them pop
+- `--keep_keys true` keeps the open clip's keyed poses at their frames and blends into the imported motion around them (0.25 s, `--keep_keys_blend`)
+- A BVH of an external skeleton can be imported too (`--source x.bvh --skeleton <ExternalSkeleton asset>`)
+- Frames after the end of the source keep the open clip
 - The imported Override is layered and becomes the write target. Continue with lint, images and bake
+- Close (`motion_close`) before opening the same clip again; otherwise Overrides imported earlier stay layered
 - For outputs of trained models, confirm the license of the training data with the user first (many are non-commercial)
+- To generate the motion between your keys with Kimodo (optional, when set up), use skill `generate-motion`
 
 ## Opening with Overrides and masks
 

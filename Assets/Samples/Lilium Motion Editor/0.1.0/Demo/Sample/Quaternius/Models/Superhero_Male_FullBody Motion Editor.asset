@@ -22,7 +22,7 @@ MonoBehaviour:
   overrideAutoBake: 0
   autoBake: 1
   layers:
-    write: EditingRig
+    write: Override:0
     manipulate: FullBodyIk
     values:
     - id: EditingRig
@@ -34,6 +34,10 @@ MonoBehaviour:
       weight: 1
       clipWeight: 1
     - id: FullBodyIk
+      enabled: 1
+      weight: 1
+      clipWeight: 1
+    - id: Override:0
       enabled: 1
       weight: 1
       clipWeight: 1

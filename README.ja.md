@@ -42,6 +42,12 @@ Package Manager でこのパッケージを選び、Samples の `Demo` をイン
 
 `Demo/Poses` には手の形の姿勢（Fist・Open・Point など 8 つ）が入っています。PoseBank に出すには、`Project Settings > Lilium Motion Editor` の PoseBank Folders に、`{prefabFolder}/Poses` と、インポートした `Demo/Poses` のフォルダ（例 `Assets/Samples/Lilium Motion Editor/<version>/Demo/Poses`）を足します。Humanoid の指の値なので、指の骨のある Humanoid のキャラクターならそのまま貼れます。
 
+### Kimodo（オプション）
+
+Samples の `Kimodo (optional)` を使うと、NVIDIA のモーション生成モデル [Kimodo](https://github.com/nv-tlabs/kimodo) に、打ったキーの間の動きを文章から作らせ、
+キーの姿勢を残したまま Override として取り込めます。Kimodo は同梱していません。ライセンスを確かめたうえで、各自で用意して重みをダウンロードします。
+詳しくはサンプルの `README.md` を見てください。モーションエディタは Kimodo が無くても動きます。
+
 ## License
 
 [MIT](LICENSE)

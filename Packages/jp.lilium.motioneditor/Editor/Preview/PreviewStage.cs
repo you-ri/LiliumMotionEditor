@@ -1051,6 +1051,19 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 今の姿勢を Humanoid に直したもの（焼いたクリップをゲームで再生したときと同じ姿勢。体の場所と向きは、表示モデルの Animator の GameObject を原点・無回転に置いたときの値）。
+        /// 直せなければ false
+        /// </summary>
+        public bool ReadHumanPose (ref HumanPose pose)
+        {
+            if (!ApplyHumanoidPose ()) return false;
+            pose.bodyPosition = humanoidPose_.bodyPosition;
+            pose.bodyRotation = humanoidPose_.bodyRotation;
+            pose.muscles = (float[])humanoidPose_.muscles.Clone ();
+            return true;
+        }
+
+        /// <summary>
         /// 既存の Humanoid のクリップを、流れてきた姿勢（編集用の体を Humanoid に直したもの）へ重みで合成して表示モデルへ当てる。
         /// muscle と体の位置・向きを混ぜ、人型でない骨（クリップにカーブのあるもの）は Transform で混ぜる。
         /// Animator の GameObject は動かさない（ルートモーションは出さない）
