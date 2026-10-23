@@ -69,6 +69,27 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 外部の骨格の BVH を、元のクリップの外部の補間の結果として書き、segments の区間に使う（S81。PoseSession.ImportBetween を窓から）。
+        /// Override の段には足さない。書いたら元のクリップを当て直す
+        /// </summary>
+        /// <returns>書けなかった理由（書けたら null）</returns>
+        public string ImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out PoseSession.OverrideImportResult result)
+        {
+            result = null;
+            AnimationClip source = baseClip;
+            if (stage_ == null || stage_.sourcePrefab == null || source == null) return Tr ("POSE_SESSION_NO_CLIP");
+            CommitHandleKeys ();
+            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
+                session.clip = source;
+                string error = session.ImportBetween (bvh, skeleton, segments, out result);
+                if (error != null) return error;
+            }
+            AfterClipEdit ();
+            RaiseStateChanged ();
+            return null;
+        }
+
+        /// <summary>
         /// clip を Override として重ね、書き込み先にする。既に重ねているクリップなら、その段の合成の仕方を mode にし、表示を作り直す
         /// （クリップを外で書き換えた後に、古いカーブのまま見えないように）。無ければ一番上に足す
         /// </summary>

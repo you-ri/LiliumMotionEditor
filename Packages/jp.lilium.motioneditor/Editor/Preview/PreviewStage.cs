@@ -518,6 +518,23 @@ namespace Lilium
             clipSampler_.Sample (clip, time);
         }
 
+        /// <summary>
+        /// 土台のクリップ（編集用クリップ）を当てる口（S81）。窓・PoseSession（BlendDataClip）、Override を重ねた焼きと取り込みの差の元
+        /// （SampleBaseAsControls）、Override の無い焼き（SampleClipForBake）はみなここを通るので、外部の補間の区間も同じ動きになる。
+        /// クリップのカーブを当て、外部の補間の区間なら結果（BetweenClips）を重みで混ぜる。
+        /// 外部の区間のあるクリップは、先に操作値を基準へ戻す: Unity は基準の値と同じ一定のカーブを当てないので、戻さないと、
+        /// 前に混ぜた値が混ぜる相手や区間の外のフレームに残る（Override の無い焼きは戻さずに当てていて、焼いた値がずれた）
+        /// </summary>
+        public void SampleBase (AnimationClip clip, float time)
+        {
+            if (BetweenClips.HasSegments (clip)) ResetControlsToRest ();
+            SampleClip (clip, time);
+            if (editingRig == null || editingRig.root == null) return;
+            if (BetweenClips.TryGetBlend (clip, time, out AnimationClip between, out float weight)) {
+                OverrideApplier.Apply (between, OverrideMode.Override, weight, time, editingRig.root.transform, null, null);
+            }
+        }
+
         public void InvalidateClipCurves ()
         {
             if (clipSampler_ != null) clipSampler_.Invalidate ();
@@ -555,14 +572,14 @@ namespace Lilium
                 // 触っていない部位（どのキーも基準の値）に前の評価の値が残り、足し算の Override が評価のたびに積み重なる。
                 // 全身 IK の点も、前に開いていたクリップや打たなかった操作の固定が残ると、点のキーが無いクリップで素通しにならない（S25）
                 ResetControlsToRest ();
-                SampleClip (clip, time);
+                SampleBase (clip, time);
                 MaskBodyPoints (clip, time);
                 return;
             }
             ResetControlsToRest ();
             if (weight <= 0 || clip == null) return;
 
-            SampleClip (clip, time);
+            SampleBase (clip, time);
             for (int i = 0; i < controlTransforms_.Length; i++) {
                 Transform t = controlTransforms_[i];
                 if (t == null) continue;
@@ -996,7 +1013,7 @@ namespace Lilium
         {
             ResetControlsToRest ();
             if (humanoid) SampleHumanoidAsControls (clip, time);
-            else if (clip != null) SampleClip (clip, time);
+            else if (clip != null) SampleBase (clip, time);
         }
 
         /// <summary>
@@ -1169,7 +1186,7 @@ namespace Lilium
         void SampleClipForBake (AnimationClip clip, float time)
         {
             RestoreBodyPoints ();
-            SampleClip (clip, time);
+            SampleBase (clip, time);
             MaskBodyPoints (clip, time);
         }
 

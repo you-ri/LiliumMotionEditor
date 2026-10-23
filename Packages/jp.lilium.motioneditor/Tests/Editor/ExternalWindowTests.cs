@@ -153,6 +153,46 @@ namespace Lilium
         }
 
         [Test]
+        public void ImportBetween_ShowsTheMotion_WithoutAddingALayer ()
+        {
+            PreviewWindow window = OpenWindow (BaseClip ());
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            List<Quaternion> before = Pose (15);
+            BetweenClips.Range range = new BetweenClips.Range { start = 0, end = 30 };
+            Assert.IsNull (window.ImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { range }, out PoseSession.OverrideImportResult result));
+            Assert.AreEqual (0, window.overrides.Count, "Override の段には足さない");
+            Assert.AreEqual (-1, window.overrideWriteIndex, "✏ は元のまま");
+            Assert.Greater (MaxAngle (before, Pose (15)), 5, "区間の中は外部の動き（✏ を移さなくても見える）");
+            Assert.LessOrEqual (MaxAngle (before, Pose (45)), 0.01f, "区間の外は元のまま");
+        }
+
+        [Test]
+        public void ImportOverride_LeavesNoPlayableGraph_AfterTheWindowCloses ()
+        {
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            Bvh bvh = Generated (skeleton, 0.4f);
+            AnimationClip clip = BaseClip ();
+            AnimationClip layer = NewAsset ("Base.generated.override");
+            int graphs = 0;
+            System.Action<UnityEngine.Playables.PlayableGraph> created = g => graphs++;
+            System.Action<UnityEngine.Playables.PlayableGraph> destroying = g => graphs--;
+            UnityEditor.Playables.Utility.graphCreated += created;
+            UnityEditor.Playables.Utility.destroyingGraph += destroying;
+            try {
+                PreviewWindow window = OpenWindow (clip);
+                Assert.IsNull (window.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, KeepKeys (), out PoseSession.OverrideImportResult result));
+                Pose (15);
+                Object.DestroyImmediate (window);
+                window_ = null;
+            }
+            finally {
+                UnityEditor.Playables.Utility.graphCreated -= created;
+                UnityEditor.Playables.Utility.destroyingGraph -= destroying;
+            }
+            Assert.AreEqual (0, graphs, "窓を閉じた後に PlayableGraph が残らない");
+        }
+
+        [Test]
         public void SetOverrideWrite_ToTheBase_HidesTheLayerWhileEditing ()
         {
             PreviewWindow window = OpenWindow (BaseClip ());

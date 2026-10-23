@@ -5,7 +5,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 編集用クリップ・Override のクリップの .meta の userData（Stacker の設定・サイクルキーの印・Override の段の印）。
+    /// 編集用クリップ・Override のクリップ・外部の補間の結果の .meta の userData（Stacker の設定・サイクルキーの印・Override の段の印・外部の補間の区間）。
     /// AnimationClip は利用者のデータを持てないため .meta に持つ。
     /// どれか 1 つを保存するときも、ほかの項目は読んだまま残す（項目ごとに上書きすると、もう片方が消える。
     /// 前は Override の印を別に書いていて、Override のクリップにサイクルキーの印を付けると Override の印が消えていた）。
@@ -18,6 +18,8 @@ namespace Lilium
         public bool cycle;
         /// <summary>Override の段の印（どの元に重ねるか。OverrideFiles）。印が無ければ baseClip が空</summary>
         public OverrideFiles.Settings overrideLayer;
+        /// <summary>外部の補間の結果の印（どの元のクリップの、どの区間か。BetweenClips。S81）</summary>
+        public BetweenClips.Settings between;
 
         public static ClipUserData Load (AnimationClip clip)
         {

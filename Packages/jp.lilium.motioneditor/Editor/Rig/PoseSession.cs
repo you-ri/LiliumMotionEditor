@@ -589,6 +589,45 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 外部の骨格の BVH を、元のクリップの外部の補間の結果（BetweenClips。`<名前>.between.anim`）として書き、segments の区間に使う印を付ける（S81）。
+        /// 結果は編集用リグの値そのもの（Override の置き換えと同じ値）。指は書かない（打った手の形を残す）。最初のフレームの体は元のクリップに合わせる（alignRoot）。
+        /// 区間は元のクリップの隣り合うキーの間であること。結果のファイルの書き換えは Undo で戻る（区間の印は .meta なので戻らない）
+        /// </summary>
+        /// <returns>書けなかった理由（書けたら null）</returns>
+        public string ImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out OverrideImportResult result)
+        {
+            result = null;
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            string path = BetweenClips.PathFor (clip_);
+            if (path == null) return Tr ("BETWEEN_CLIPS_ONLY_SAVED_CLIP");
+            if (segments == null || segments.Count == 0) return Tr ("BETWEEN_CLIPS_NO_SEGMENTS");
+            foreach (BetweenClips.Range range in segments) {
+                string problem = BetweenClips.GetSegmentProblem (clip_, range);
+                if (problem != null) return problem;
+            }
+            AnimationClip between = AssetDatabase.LoadAssetAtPath<AnimationClip> (path);
+            bool created = between == null;
+            if (created) {
+                between = new AnimationClip { frameRate = clip_.frameRate };
+                AssetDatabase.CreateAsset (between, path);
+            }
+            else {
+                Undo.RegisterCompleteObjectUndo (between, "Import Between");
+            }
+            OverrideImportOptions options = new OverrideImportOptions { fingers = false, alignRoot = true };
+            string error = ImportOverride (bvh, skeleton, between, OverrideMode.Override, options, out result);
+            if (error != null) {
+                if (created) AssetDatabase.DeleteAsset (path);
+                return error;
+            }
+            AssetDatabase.SaveAssetIfDirty (between);
+            BetweenClips.SaveSegments (between, clip_, segments);
+            stage.InvalidateClipCurves ();
+            Evaluate (frame);
+            return null;
+        }
+
+        /// <summary>
         /// 外部の骨格（skeleton）の BVH を、今の元のクリップに重ねる Override として destination へ書く（S74）。
         /// BVH の各フレームを外部の骨格の Avatar で Humanoid の姿勢にし、一時の Humanoid のクリップ（RootT・RootQ・muscle）にして、
         /// .anim と同じ取り込み（ImportOverride）へ流す。指は既定で取り込まない（モデルの骨格に指の関節が無いことが多く、打った手の形を残す）。
