@@ -3,245 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lilium Motion Editor — character animation inside the Unity Editor</title>
-  <meta name="description" content="A free, open-source Unity editor extension for posing and animating characters with FK, full-body IK, layers and Animation Rigging — and reusing the clips across body shapes.">
+  <title>Lilium Motion Editor</title>
+  <meta name="description" content="An editor extension for creating character motions inside the Unity Editor.">
   <link rel="canonical" href="https://you-ri.github.io/LiliumMotionEditor/">
   <link rel="alternate" hreflang="en" href="https://you-ri.github.io/LiliumMotionEditor/">
   <link rel="alternate" hreflang="ja" href="https://you-ri.github.io/LiliumMotionEditor/ja/">
   <link rel="icon" href="assets/img/logo.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Lilium Motion Editor">
-  <meta property="og:description" content="Pose and animate characters inside the Unity Editor. FK, full-body IK, layers, Animation Rigging. Free and open source.">
+  <meta property="og:description" content="An editor extension for creating character motions inside the Unity Editor.">
   <meta property="og:url" content="https://you-ri.github.io/LiliumMotionEditor/">
   <meta property="og:image" content="https://you-ri.github.io/LiliumMotionEditor/assets/img/og.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#0f1117">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 
-<header class="site-header">
-  <div class="wrap">
-    <a class="brand" href="./"><img src="assets/img/logo.svg" alt="">Lilium Motion Editor</a>
-    <nav class="site-nav">
-      <a class="opt" href="#features">Features</a>
-      <a class="opt" href="#workflow">Workflow</a>
-      <a class="opt" href="#install">Install</a>
-      <a class="lang-switch" href="ja/" hreflang="ja" lang="ja">日本語</a>
-      <a class="gh" href="https://github.com/you-ri/LiliumMotionEditor" aria-label="GitHub repository">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        <span class="opt">GitHub</span>
-      </a>
-    </nav>
-  </div>
+<header>
+  <h1>Lilium Motion Editor</h1>
+  <p>An editor extension for creating character motions inside the Unity Editor.</p>
+  <nav>
+    <a href="https://github.com/you-ri/LiliumMotionEditor">GitHub</a>
+    <a href="#install">Install</a>
+    <a href="ja/" hreflang="ja" lang="ja">日本語</a>
+  </nav>
 </header>
+
+<figure class="wide">
+  <video src="assets/img/demo.mp4" poster="assets/img/demo-poster.webp" width="960" height="476"
+    autoplay muted loop playsinline></video>
+  <figcaption>Making the motion between keys with Kimodo.</figcaption>
+</figure>
 
 <main>
 
-<section class="hero" aria-labelledby="hero-title" style="padding-bottom:0">
-  <div class="wrap">
-    <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
-    <h1 id="hero-title">Pose and animate characters <em>right inside the Unity Editor</em></h1>
-    <p class="lead">Lilium Motion Editor is a free, open-source editor extension for keyframe animation.
-      Pose with FK and a Burst-powered full-body IK, layer edits without touching the source,
-      and bake clips your game can play — on characters of any proportions.</p>
-    <div class="cta">
-      <a class="btn primary" href="#install">Install with Package Manager</a>
-      <a class="btn" href="https://github.com/you-ri/LiliumMotionEditor">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        View on GitHub</a>
-    </div>
-    <div class="badges">
-      <span>Unity 6000.0+</span><span>MIT License</span><span>English / 日本語 UI</span>
-    </div>
-  </div>
-  <div class="hero-shot">
-    <img src="assets/img/editor.webp" width="1918" height="948"
-      alt="The Motion Editor window: a character mid-kick with full-body IK points, the Layers, Controller and Kimodo panels, and the key timeline">
-  </div>
-</section>
+<h2>Features</h2>
+<ul>
+  <li>Pose a character through an editing rig that duplicates its bones, and save the rig values to an animation clip.</li>
+  <li>FK, two-bone IK and a full-body IK (Burst). Each IK point can be Free, Pin or Lock.</li>
+  <li>Clips made with the same editing rig can be shared between characters with different body proportions.</li>
+  <li>Saving bakes a Humanoid clip for the game, with Animation Rigging values and other properties.</li>
+  <li>Curve, linear or constant interpolation between keys, and cycle keys for loops.</li>
+  <li>Poses and motions can also be made with AI through the Unity CLI.</li>
+  <li>Optionally, NVIDIA's Kimodo motion model can make the motion between your keys from a text prompt.</li>
+  <li>Create motions non-destructively while checking the final pose as it will look in the game.</li>
+  <li>No need to go back and forth with a DCC tool. Your edits show up in the motion right away.</li>
+</ul>
 
-<section id="features" class="alt">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Features</span>
-      <h2>Everything for keyframing, in one window</h2>
-      <p>Open a character prefab, pose it, set keys, save. No round trip to a DCC tool.</p>
-    </div>
-    <div class="grid">
-      <div class="card">
-        <div class="icon"><svg viewBox="0 0 24 24"><circle cx="5" cy="18" r="2.2"/><circle cx="12" cy="6" r="2.2"/><circle cx="19" cy="17" r="2.2"/><path d="M6.2 16.2 10.8 8M13.2 8l4.6 7.2"/></svg></div>
-        <h3>Editing rig</h3>
-        <p>You pose through a rig that duplicates the character's bones. Clips store rig values, so one clip works on characters with different body proportions.</p>
-      </div>
-      <div class="card">
-        <div class="icon pin"><svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M7 10h10M12 14l-4 6M12 14l4 6"/></svg></div>
-        <h3>Full-body IK (Burst)</h3>
-        <p>Drag a hand or a foot and the whole body follows. Mark points Free, Pin or Lock; feet roll on the floor instead of sinking into it.</p>
-      </div>
-      <div class="card">
-        <div class="icon lock"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5"/></svg></div>
-        <h3>Non-destructive layers</h3>
-        <p>Stack Override and Additive layers on top of a clip — even motion capture — and limit them with channel masks. The source stays untouched.</p>
-      </div>
-      <div class="card">
-        <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 20V4M4 20h16"/><path d="M7 16c3-7 6-9 12-10"/></svg></div>
-        <h3>Timeline &amp; curves</h3>
-        <p>Curve, linear or constant interpolation per segment, a stepped preview for blocking, cycle keys for seamless loops, and a curve editor.</p>
-      </div>
-      <div class="card">
-        <div class="icon pin"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3M7 12l3-3 3 3 4-4"/></svg></div>
-        <h3>Bakes to Humanoid</h3>
-        <p>Save bakes a Humanoid clip for your game, carrying Animation Rigging weights and extra properties so it plays back the same.</p>
-      </div>
-      <div class="card">
-        <div class="icon lock"><svg viewBox="0 0 24 24"><path d="M8 4c-2 0-3 1-3 3v2c0 1.5-1 2-2 3 1 1 2 1.5 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1.5 1 2 2 3-1 1-2 1.5-2 3v2c0 2-1 3-3 3"/></svg></div>
-        <h3>Scriptable &amp; AI-ready</h3>
-        <p>Author poses without the window: full-body IK points as JSON, a motion linter for foot sliding and pops, and Unity CLI commands.</p>
-      </div>
-    </div>
-  </div>
-</section>
+<h2 id="install">Install</h2>
+<p>Enter the following in the Package Manager's <code>Install package from git URL...</code>.</p>
+<pre><code>https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motioneditor</code></pre>
 
-<section id="workflow">
-  <div class="wrap">
+<h3>Requirements</h3>
+<ul>
+  <li>Unity 6000.0 or later</li>
+  <li>Burst / Mathematics (installed automatically)</li>
+  <li>Animation Rigging (optional. When installed, Animation Rigging values can be edited)</li>
+  <li>Timeline (optional. When installed, Timeline clips can be edited)</li>
+</ul>
 
-    <div class="showcase">
-      <div class="text">
-        <span class="eyebrow">Full-body IK</span>
-        <h2>Grab a point. The body follows.</h2>
-        <p>Every joint, foot and hand is a point you can drag. The solver runs on Burst, so posing stays interactive even with many points pinned.</p>
-        <ul>
-          <li><strong>Free, Pin, Lock</strong> — choose which points move with the body and which stay where you put them.</li>
-          <li><strong>Floor Clamp</strong> — the foot behaves like a rigid box pressed onto the floor: it rolls from toe to heel and slides, never sinks.</li>
-          <li><strong>FK when you need it</strong> — click a limb to rotate its bone; pinned points further down the chain rotate with it.</li>
-        </ul>
-      </div>
-      <div class="shot"><img src="assets/img/fullbody-ik.webp" width="720" height="520" loading="lazy"
-        alt="A character in a high kick with IK points on hands, elbows, knees and feet"></div>
-    </div>
+<h2>How to use</h2>
+<ol>
+  <li>Open <code>Window &gt; Lilium Motion Editor &gt; Motion Editor</code>.</li>
+  <li>Pick a character prefab that has an Animator.</li>
+  <li>Pose it, set keys, and save to a clip.</li>
+</ol>
+<p>To try it with sample characters, select this package in the Package Manager and import the <code>Demo</code> sample.</p>
+<p>The optional <code>Kimodo</code> sample fills in the motion between your keys with NVIDIA's
+  <a href="https://github.com/nv-tlabs/kimodo">Kimodo</a> motion model. Kimodo is not included; see the sample's README.</p>
 
-    <div class="showcase flip">
-      <div class="text">
-        <span class="eyebrow">Layer stack</span>
-        <h2>Edit on top, never in place</h2>
-        <p>A pose is built by a stack of layers — editing rig, full-body IK, Override and Additive layers, display. For each layer you choose what to show, where keys are written and what your handles grab.</p>
-        <ul>
-          <li><strong>Override &amp; Additive</strong> — fix captured or generated motion without destroying it.</li>
-          <li><strong>Channel masks</strong> — limit a layer to body parts or property patterns; import from an Avatar Mask.</li>
-          <li><strong>Properties</strong> — key blend shapes, visibility and component values next to the pose.</li>
-        </ul>
-      </div>
-      <div class="shot narrow"><img src="assets/img/layers.webp" width="470" height="590" loading="lazy"
-        alt="The Layers panel with Editing Rig, Full Body IK and Display Pose layers, above the Controller panel"></div>
-    </div>
-
-    <div class="showcase">
-      <div class="text">
-        <span class="eyebrow">Optional · Kimodo</span>
-        <h2>Let a motion model fill the in-betweens</h2>
-        <p>With the optional Kimodo sample, NVIDIA's <a href="https://github.com/nv-tlabs/kimodo">Kimodo</a> motion model generates the motion between your keys from a text prompt.
-          The result comes back as an Override that keeps your keyed poses — switch it on and off, or bake it.</p>
-        <ul>
-          <li><strong>Your keys stay</strong> — generated frames only fill the ranges you pick.</li>
-          <li><strong>Guided setup</strong> — the Kimodo panel walks you through installing it with Docker or Python.</li>
-          <li><strong>Not bundled</strong> — you download Kimodo and its weights yourself, under their licenses.</li>
-        </ul>
-      </div>
-      <div class="shot narrow"><img src="assets/img/kimodo.webp" width="315" height="280" loading="lazy"
-        alt="The Kimodo panel with a text prompt and the key ranges to generate"></div>
-    </div>
-
-    <div class="wide-shot shot"><img src="assets/img/timeline.webp" width="1600" height="163" loading="lazy"
-      alt="The key timeline with keys per bone and the frame count between keys"></div>
-
-  </div>
-</section>
-
-<section class="alt">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">How it fits</span>
-      <h2>From your prefab to a clip your game plays</h2>
-      <p>Work on the character prefab you already have. What you save is an editing clip of rig values; what the game uses is a Humanoid clip baked from it.</p>
-    </div>
-    <div class="flow">
-      <div class="step"><b>Character prefab</b><span>The character you already have, with an Animator.</span></div>
-      <div class="arrow" aria-hidden="true">→</div>
-      <div class="step"><b>Editing rig</b><span>Pose with FK, two-bone IK, full-body IK and Animation Rigging values.</span></div>
-      <div class="arrow" aria-hidden="true">→</div>
-      <div class="step"><b>Editing clip</b><span>Rig values, layers and properties — reusable across body shapes.</span></div>
-      <div class="arrow" aria-hidden="true">→</div>
-      <div class="step out"><b>Humanoid clip</b><span>Baked on save, ready for Animator and Timeline.</span></div>
-    </div>
-  </div>
-</section>
-
-<section id="install">
-  <div class="wrap install">
-    <div>
-      <span class="eyebrow">Get started</span>
-      <h2>Install</h2>
-      <p style="color:var(--text-dim)">In Unity, open <code>Window &gt; Package Manager</code>, choose <code>+ &gt; Install package from git URL...</code> and enter:</p>
-      <div class="copy-box">
-        <code id="git-url">https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motioneditor</code>
-        <button type="button" data-copy="git-url">Copy</button>
-      </div>
-      <ol class="steps">
-        <li>Open <code>Window &gt; Lilium Motion Editor &gt; Motion Editor</code>.</li>
-        <li>Pick a character prefab that has an Animator.</li>
-        <li>Pose it, set keys, and save to a clip.</li>
-      </ol>
-      <p style="color:var(--text-dim)">Want something to try right away? Import the <strong>Demo</strong> sample from the package's page in the Package Manager — it includes two characters and a set of hand poses.</p>
-    </div>
-    <div class="req">
-      <h3>Requirements</h3>
-      <dl>
-        <dt>Unity 6000.0 or later</dt>
-        <dd>On 6000.6+, the bone handles plug into Unity's tool system and the Tools overlay.</dd>
-        <dt>Burst &amp; Mathematics</dt>
-        <dd>Installed automatically as dependencies.</dd>
-        <dt>Animation Rigging <span style="color:var(--text-faint);font-weight:400">— optional</span></dt>
-        <dd>Edit Animation Rigging values when installed.</dd>
-        <dt>Timeline <span style="color:var(--text-faint);font-weight:400">— optional</span></dt>
-        <dd>Edit clips in place on a Timeline when installed.</dd>
-      </dl>
-    </div>
-  </div>
-</section>
-
-<section class="alt closing">
-  <div class="wrap">
-    <h2>Free and open source</h2>
-    <p>Lilium Motion Editor is released under the MIT License. Issues and pull requests are welcome on GitHub.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/you-ri/LiliumMotionEditor">Star on GitHub</a>
-      <a class="btn" href="https://github.com/you-ri/LiliumMotionEditor/issues">Report an issue</a>
-    </div>
-  </div>
-</section>
+<p>For details, see the <a href="https://github.com/you-ri/LiliumMotionEditor#readme">README</a>.</p>
 
 </main>
 
 <footer>
-  <div class="wrap">
-    <p>© You-Ri · <a href="https://github.com/you-ri/LiliumMotionEditor/blob/master/LICENSE">MIT License</a> · <a href="ja/" hreflang="ja" lang="ja">日本語</a></p>
-    <p>Character in the screenshots: Quaternius' <a href="https://quaternius.com/packs/universalbasecharacters.html">Universal Base Characters</a> (CC0). Icons: Google <a href="https://github.com/google/material-design-icons">Material Icons</a> (Apache 2.0).</p>
-    <p>Unity is a trademark of Unity Technologies. Kimodo is developed by NVIDIA; this project is not affiliated with or endorsed by Unity Technologies, NVIDIA or Meta.</p>
-  </div>
+  <p><a href="https://github.com/you-ri/LiliumMotionEditor/blob/master/LICENSE">MIT License</a> · © You-Ri</p>
+  <p>The character in the video is from Quaternius' <a href="https://quaternius.com/packs/universalbasecharacters.html">Universal Base Characters</a> (CC0).
+    This project is not affiliated with Unity Technologies, NVIDIA or Meta.</p>
 </footer>
 
-<script>
-  document.querySelectorAll("[data-copy]").forEach(function (button) {
-    button.addEventListener("click", function () {
-      var text = document.getElementById(button.dataset.copy).textContent;
-      navigator.clipboard.writeText(text).then(function () {
-        var label = button.textContent;
-        button.textContent = button.dataset.done || "Copied";
-        setTimeout(function () { button.textContent = label; }, 1600);
-      });
-    });
-  });
-</script>
 </body>
 </html>
