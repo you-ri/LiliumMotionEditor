@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- a bent limb of three IK points: Free, Pin and Lock -->
+  <path d="M7 24 L16 9 L25 22" fill="none" stroke="#c9d1e0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="7" cy="24" r="4.2" fill="#3a86ff"/>
+  <circle cx="16" cy="9" r="4.2" fill="#ff8c28"/>
+  <circle cx="25" cy="22" r="4.2" fill="#e84848"/>
+</svg>
