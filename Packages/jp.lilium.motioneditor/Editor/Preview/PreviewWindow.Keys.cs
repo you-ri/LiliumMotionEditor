@@ -141,14 +141,16 @@ namespace Lilium
             if (targetClip == null) return;
             int count = SelectedTargets ().Count ();
             HashSet<string> paths = CollectSelectedPaths ();
+            // キーの無いフレームの全身 IK の点は、出している場所を写す。Override へ書いているときは、出している値は差分でないので読まない
+            Transform root = overrideWriteLayer == null ? editingRoot : null;
             if (count == 0) {
-                PoseClipboard.Copy (targetClip, currentFrame);
+                PoseClipboard.Copy (targetClip, currentFrame, null, root);
                 ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_COPIED_WHOLE_POSE")), 0.8);
                 return;
             }
 
             // 選んだ物にカーブが無くても、前にコピーしたものは捨てる（V で古い物を貼らないように）
-            if (PoseClipboard.Copy (targetClip, currentFrame, binding => paths.Contains (binding.path)) == 0) {
+            if (PoseClipboard.Copy (targetClip, currentFrame, binding => paths.Contains (binding.path), root) == 0) {
                 ShowNotification (new GUIContent (Tr ("PREVIEW_WINDOW_SELECTION_HAS_NO_KEYS")), 1.5);
                 return;
             }

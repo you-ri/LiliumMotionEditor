@@ -135,7 +135,10 @@ namespace Lilium
         /// その点が床に着く所まで上げる（横の動きはそのまま効き、かたまりは床の上を滑る。1 つの点を床に当てるときと同じ）。
         /// 一緒に動かさない Free の点（親を動かせば体に付いて動く）も、同じだけ動くとみなして低さに入れる。
         /// 選んだ点の骨のうちいちばん根の方の骨が腰なら、腰の FK も同じだけ動かす（10-20 ユーザー指示。点の目標だけ動かすと、全身 IK は動かす前の姿勢から寄せるので、
-        /// 体ごと動かす形に届かず背骨が曲がっていた。全部の点を選んで腰を動かすと、固定していない頭などが 35cm ずれていた）
+        /// 体ごと動かす形に届かず背骨が曲がっていた。全部の点を選んで腰を動かすと、固定していない頭などが 35cm ずれていた）。
+        /// 点は同じだけそのまま動かす（PlaceWithSelection。点ごとに床に当てたり足の箱で動かしたりすると、かたまりの形が崩れる。10-24）。
+        /// もう床の下限より下にある点（下限ができる前に床の高さへ置いた足裏の点など）があっても、持ち上げはしない（それより下へは動かさない）:
+        /// 横へ動かしただけで、かたまりが 2cm 浮いていた（10-24）
         /// </summary>
         internal static void MoveSelectedPoints (IList<PoseTarget> targets, IList<BodyPointTarget> selected, BodyPointTarget grabbed, Vector3 from, Vector3 delta)
         {
@@ -145,11 +148,12 @@ namespace Lilium
                     // 床からの余裕（球を持つ点は球の下の端、足の点は足をかたまりのまま下げたときの足裏の球の下の端）
                     lowest = Mathf.Min (lowest, (point == grabbed ? from.y : point.framePosition.y) - point.floorLimit);
                 }
-                if (lowest + delta.y < 0) delta.y = -lowest;
-                // つかんだ点は自分だけで床に当てて置いてあるので、かたまりの動かす量で置き直す
-                grabbed.MoveTo (from + delta);
+                float bottom = Mathf.Min (0, lowest);
+                if (lowest + delta.y < bottom) delta.y = bottom - lowest;
             }
-            foreach (BodyPointTarget other in PointsMovedWith (targets, selected, grabbed)) other.MoveBy (delta);
+            // つかんだ点は、窓のドラッグでは自分で動いてある。かたまりの動かす量で置き直す
+            grabbed.PlaceWithSelection (from + delta);
+            foreach (BodyPointTarget other in PointsMovedWith (targets, selected, grabbed)) other.PlaceWithSelection (other.framePosition + delta);
             // 点を先に動かす（Free の点は今の骨の上の点から動かすので、骨を先に動かすと二重に動く）。腰より先の骨は位置を持たないので動かない
             foreach (FkTarget fk in TopFkTargets (targets, selected)) fk.MoveWorld (delta);
         }

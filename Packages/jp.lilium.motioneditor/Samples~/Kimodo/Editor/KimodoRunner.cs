@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.KimodoText;
 
 namespace Lilium
 {
@@ -96,11 +97,11 @@ namespace Lilium
         /// <param name="segments">補間として使うとき、外部の動きにする区間（元のクリップの隣り合うキーの間）</param>
         public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null)
         {
-            if (job_ != null && job_.running) return "A generation is already running.";
+            if (job_ != null && job_.running) return Tr ("KIMODO_RUN_ALREADY_RUNNING");
             string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton);
             if (problem != null) return problem;
             if (target == KimodoJob.kBetween) {
-                if (segments == null || segments.Count == 0) return "Choose the segments to fill with Kimodo's motion.";
+                if (segments == null || segments.Count == 0) return Tr ("KIMODO_RUN_NO_SEGMENTS");
                 foreach (BetweenClips.Range range in segments) {
                     problem = BetweenClips.GetSegmentProblem (window.baseClip, range);
                     if (problem != null) return problem;
@@ -108,17 +109,17 @@ namespace Lilium
             }
             // 文章の読み取りのサーバー（S78）が立ち上がりかけなら待ってもらう（ローカルで読み直すと 4 分かかる）
             KimodoTextServer.State server = KimodoTextServer.state;
-            if (server == KimodoTextServer.State.Starting) return "The text server is still starting. Wait until it is ready, or stop it.";
+            if (server == KimodoTextServer.State.Starting) return Tr ("KIMODO_RUN_SERVER_STARTING");
             AnimationClip clip = window.baseClip;
             AssetDatabase.SaveAssetIfDirty (clip);
 
             string error = window.ExportKeysToSkeleton (skeleton, out Bvh bvh, out MotionEditorExport export);
             if (error != null) return error;
-            if (export.frames.Count < 2) return "Key at least two frames of the clip. Kimodo fills the frames between the keys.";
-            if (export.lastFrame / export.frameRate > 10) return "The clip is longer than 10 seconds (the longest Kimodo makes).";
+            if (export.frames.Count < 2) return Tr ("KIMODO_RUN_TOO_FEW_KEYS");
+            if (export.lastFrame / export.frameRate > 10) return Tr ("KIMODO_RUN_TOO_LONG");
             string script = FindSampleScript ("kimodo_constraints");
             string generator = FindSampleScript ("kimodo_generate");
-            if (script == null || generator == null) return "The Python scripts of the Kimodo sample are missing. Import the sample again from the Package Manager.";
+            if (script == null || generator == null) return Tr ("KIMODO_RUN_NO_SCRIPTS");
 
             string folder = Path.Combine (Path.GetFullPath ("Temp"), "Kimodo", SafeName (BaseName (clip)), System.DateTime.Now.ToString ("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory (folder);
@@ -139,7 +140,7 @@ namespace Lilium
             KimodoSettings settings = KimodoSettings.instance;
             if (settings.runner == KimodoSettings.kPython) {
                 // Python の環境で動かす（Docker を使わない）。手順は kimodo_run.py（run.sh と同じ流れ）
-                if (driver == null) return "kimodo_run.py of the Kimodo sample is missing. Import the sample again from the Package Manager.";
+                if (driver == null) return Tr ("KIMODO_RUN_NO_DRIVER");
                 ProcessStartInfo info = new ProcessStartInfo (Path.GetFullPath (settings.pythonPath), Quote (Path.Combine (folder, "kimodo_run.py")) + " " + Quote (folder) + " " + mode) {
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -155,7 +156,7 @@ namespace Lilium
                     python = Process.Start (info);
                 }
                 catch (System.Exception e) {
-                    return "Python could not be started: " + e.Message;
+                    return Tr ("KIMODO_RUN_PYTHON_FAILED", e.Message);
                 }
                 process_ = python;
                 job_ = new KimodoJob {
@@ -195,7 +196,7 @@ namespace Lilium
                 process_ = Launch (arguments);
             }
             catch (System.Exception e) {
-                return "Docker could not be started: " + e.Message;
+                return Tr ("KIMODO_RUN_DOCKER_FAILED", e.Message);
             }
             job_ = new KimodoJob {
                 state = KimodoJob.kRunning,
@@ -224,34 +225,70 @@ namespace Lilium
         {
             KimodoSettings settings = KimodoSettings.instance;
             skeleton = settings.skeleton;
-            if (window == null || window.baseClip == null) return "Open a clip in the Motion Editor window.";
-            if (!EditorUtility.IsPersistent (window.baseClip)) return "Save the clip as an asset first.";
-            if (string.IsNullOrWhiteSpace (prompt)) return "Write the prompt (English). Kimodo needs it.";
-            if (!KimodoSettings.kModes.Contains (mode)) return "Unknown constraint mode: " + mode;
-            if (skeleton == null) return "Set the SOMA skeleton (Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BVH...).";
+            if (window == null || window.baseClip == null) return Tr ("KIMODO_RUN_NO_CLIP");
+            if (!EditorUtility.IsPersistent (window.baseClip)) return Tr ("KIMODO_RUN_NOT_SAVED");
+            if (string.IsNullOrWhiteSpace (prompt)) return Tr ("KIMODO_RUN_NO_PROMPT");
+            if (!KimodoSettings.kModes.Contains (mode)) return Tr ("KIMODO_RUN_UNKNOWN_MODE", mode);
+            if (skeleton == null) return Tr ("KIMODO_RUN_NO_SKELETON");
             return CheckEnvironment ();
         }
 
         /// <summary>
-        /// 動かす環境を確かめる（足りなければ理由）。Hugging Face のトークンのファイルは、あるかだけを見る（中は読まない）。
-        /// Python の環境: python があり、kimodo と motion_correction を読み込めるか（読み込まずに、あるかだけ見る）。Docker: Kimodo のフォルダ・Docker・イメージ
+        /// 最後に CheckEnvironment で確かめた結果（null なら通った、か、まだ確かめていない）。パネルはこれがあると入れ方の案内に替わる。
+        /// python や docker を動かして確かめるので、描くたびには確かめず、生成を始めるときと案内の「Check」で確かめた結果を覚えておく
+        /// </summary>
+        public static string environmentProblem
+        {
+            get {
+                // SessionState は無いときも既定値でなく空の文字を返す
+                string problem = SessionState.GetString (kEnvironmentKey, "");
+                return problem.Length > 0 ? problem : null;
+            }
+            private set {
+                if (string.IsNullOrEmpty (value)) SessionState.EraseString (kEnvironmentKey);
+                else SessionState.SetString (kEnvironmentKey, value);
+                if (changed != null) changed ();
+            }
+        }
+
+        const string kEnvironmentKey = "Lilium.Kimodo.EnvironmentProblem";
+
+        /// <summary>設定を変えたら、前の確かめの結果を忘れる（直したのに案内のままにならないように）</summary>
+        public static void ForgetEnvironment ()
+        {
+            if (environmentProblem != null) environmentProblem = null;
+        }
+
+        /// <summary>
+        /// 動かす環境を確かめる（足りなければ理由）。結果は environmentProblem に覚える
         /// </summary>
         public static string CheckEnvironment ()
         {
+            string problem = ProbeEnvironment ();
+            environmentProblem = problem;
+            return problem;
+        }
+
+        /// <summary>
+        /// Hugging Face のトークンのファイルは、あるかだけを見る（中は読まない）。
+        /// Python の環境: python があり、kimodo と motion_correction を読み込めるか（読み込まずに、あるかだけ見る）。Docker: Kimodo のフォルダ・Docker・イメージ
+        /// </summary>
+        static string ProbeEnvironment ()
+        {
             KimodoSettings settings = KimodoSettings.instance;
-            if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return "No Hugging Face token in " + settings.huggingFaceFolder + ". Run hf auth login.";
+            if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return Tr ("KIMODO_RUN_NO_TOKEN", settings.huggingFaceFolder);
             if (settings.runner == KimodoSettings.kPython) {
-                if (string.IsNullOrEmpty (settings.pythonPath) || !File.Exists (settings.pythonPath)) return "Set the Python of the environment where Kimodo is installed (Settings > Python).";
+                if (string.IsNullOrEmpty (settings.pythonPath) || !File.Exists (settings.pythonPath)) return Tr ("KIMODO_RUN_NO_PYTHON");
                 string probe = "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('kimodo') and importlib.util.find_spec('motion_correction') else 3)";
                 int code = RunProgram (settings.pythonPath, new[] { "-c", probe }, 30000, out string probed);
-                if (code == 3) return "Kimodo is not installed in " + settings.pythonPath + ". See the sample README (Setup with Python).";
-                if (code != 0) return "The Python could not be run.\n" + Tail (probed, 5);
+                if (code == 3) return Tr ("KIMODO_RUN_NOT_INSTALLED", settings.pythonPath);
+                if (code != 0) return Tr ("KIMODO_RUN_PYTHON_BROKEN") + "\n" + Tail (probed, 5);
                 return null;
             }
-            if (string.IsNullOrEmpty (settings.kimodoFolder) || !Directory.Exists (Path.Combine (settings.kimodoFolder, "kimodo"))) return "Set the kimodo folder (the git clone of Kimodo).";
-            if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return "No Hugging Face token in " + settings.huggingFaceFolder + ". Run hf auth login.";
-            if (Run (new[] { "info", "--format", "{{.ServerVersion}}" }, 20000, out string output) != 0) return "Docker is not running.\n" + Tail (output, 5);
-            if (Run (new[] { "image", "inspect", "--format", "{{.Id}}", settings.image }, 20000, out output) != 0) return "The Docker image " + settings.image + " is not built.";
+            if (string.IsNullOrEmpty (settings.kimodoFolder) || !Directory.Exists (Path.Combine (settings.kimodoFolder, "kimodo"))) return Tr ("KIMODO_RUN_NO_FOLDER");
+            if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return Tr ("KIMODO_RUN_NO_TOKEN", settings.huggingFaceFolder);
+            if (Run (new[] { "info", "--format", "{{.ServerVersion}}" }, 20000, out string output) != 0) return Tr ("KIMODO_RUN_NO_DOCKER") + "\n" + Tail (output, 5);
+            if (Run (new[] { "image", "inspect", "--format", "{{.Id}}", settings.image }, 20000, out output) != 0) return Tr ("KIMODO_RUN_NO_IMAGE", settings.image);
             return null;
         }
 
@@ -266,7 +303,7 @@ namespace Lilium
                 try { process_.Kill (); } catch (System.Exception) { }
             }
             process_ = null;
-            Finish (KimodoJob.kCancelled, "Stopped.");
+            Finish (KimodoJob.kCancelled, Tr ("KIMODO_RUN_STOPPED"));
         }
 
         public static void Clear ()
@@ -296,11 +333,11 @@ namespace Lilium
                 process_ = null;
                 string text = File.ReadAllText (job_.exitPath).Trim ();
                 if (text == "0" && File.Exists (job_.bvhPath)) {
-                    Finish (KimodoJob.kGenerated, "Generated.");
+                    Finish (KimodoJob.kGenerated, Tr ("KIMODO_RUN_GENERATED"));
                     TryImport (null);
                 }
                 else {
-                    Finish (KimodoJob.kFailed, Diagnose ("exit code " + text, ReadLog ()));
+                    Finish (KimodoJob.kFailed, Diagnose (Tr ("KIMODO_RUN_EXIT_CODE", text), ReadLog ()));
                 }
                 return;
             }
@@ -311,7 +348,7 @@ namespace Lilium
                     lock (processOutput_) output = processOutput_.ToString ();
                     int code = process_.ExitCode;
                     process_ = null;
-                    if (!File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose ((job_.pid > 0 ? "python exit code " : "docker exit code ") + code, job_.pid > 0 ? ReadLog () : output));
+                    if (!File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose (job_.pid > 0 ? Tr ("KIMODO_RUN_PYTHON_EXIT_CODE", code) : Tr ("KIMODO_RUN_DOCKER_EXIT_CODE", code), job_.pid > 0 ? ReadLog () : output));
                 }
                 return;
             }
@@ -319,11 +356,11 @@ namespace Lilium
             if (now < nextContainerCheck_) return;
             nextContainerCheck_ = now + kContainerCheckSeconds;
             if (job_.pid > 0) {
-                if (!IsAlive (job_.pid) && !File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose ("the Python process stopped", ReadLog ()));
+                if (!IsAlive (job_.pid) && !File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose (Tr ("KIMODO_RUN_PYTHON_STOPPED"), ReadLog ()));
                 return;
             }
             if (Run (new[] { "ps", "-q", "--filter", "name=^" + job_.container + "$" }, 10000, out string ids) == 0 && string.IsNullOrWhiteSpace (ids) && !File.Exists (job_.exitPath)) {
-                Finish (KimodoJob.kFailed, Diagnose ("the container stopped", ReadLog ()));
+                Finish (KimodoJob.kFailed, Diagnose (Tr ("KIMODO_RUN_CONTAINER_STOPPED"), ReadLog ()));
             }
         }
 
@@ -333,17 +370,17 @@ namespace Lilium
         /// </summary>
         public static string TryImport (PreviewWindow window)
         {
-            if (job_ == null || job_.state != KimodoJob.kGenerated) return "Nothing to import.";
+            if (job_ == null || job_.state != KimodoJob.kGenerated) return Tr ("KIMODO_RUN_NOTHING_TO_IMPORT");
             if (window == null) window = FindWindow (job_.baseClip);
             if (window == null) {
-                job_.message = "Generated. Open " + job_.baseClip + " in the Motion Editor window and press Import.";
+                job_.message = Tr ("KIMODO_RUN_OPEN_TO_IMPORT", job_.baseClip);
                 Store ();
                 return job_.message;
             }
             AnimationClip clip = window.baseClip;
             if (Fingerprint (clip) != job_.fingerprint) {
-                if (!EditorUtility.DisplayDialog ("Kimodo", "The keys of " + clip.name + " changed after they were sent to Kimodo. Import the motion anyway?", "Import", "Not Now")) {
-                    job_.message = "Generated. The keys changed after they were sent; import or generate again.";
+                if (!EditorUtility.DisplayDialog ("Kimodo", Tr ("KIMODO_RUN_KEYS_CHANGED_DIALOG", clip.name), Tr ("KIMODO_PANEL_IMPORT"), Tr ("KIMODO_RUN_NOT_NOW"))) {
+                    job_.message = Tr ("KIMODO_RUN_KEYS_CHANGED");
                     Store ();
                     return job_.message;
                 }
@@ -356,7 +393,7 @@ namespace Lilium
                 error = window.ImportBetween (bvh, skeleton, job_.segments, out PoseSession.OverrideImportResult between);
                 if (error != null) return Fail (error);
                 job_.keyDeviations = new List<PoseSession.KeyDeviation> ();
-                Finish (KimodoJob.kImported, "Used as the interpolation of " + job_.segments.Count + " segment(s): " + BetweenClips.PathFor (clip) + ".");
+                Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_BETWEEN", job_.segments.Count, BetweenClips.PathFor (clip)));
                 return null;
             }
             AnimationClip destination = AssetDatabase.LoadAssetAtPath<AnimationClip> (job_.destination);
@@ -368,13 +405,13 @@ namespace Lilium
             error = window.ImportOverride (bvh, skeleton, destination, OverrideMode.Additive, options, out PoseSession.OverrideImportResult result);
             if (error != null) return Fail (error);
             job_.keyDeviations = result.keyDeviations;
-            Finish (KimodoJob.kImported, "Imported into " + job_.destination + ".");
+            Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_OVERRIDE", job_.destination));
             return null;
         }
 
         static string Fail (string error)
         {
-            job_.message = "Could not import: " + error;
+            job_.message = Tr ("KIMODO_RUN_IMPORT_FAILED", error);
             Store ();
             return job_.message;
         }
@@ -418,17 +455,17 @@ namespace Lilium
         static string Diagnose (string what, string log)
         {
             string hint = null;
-            if (log.Contains ("could not select device driver") || log.Contains ("nvidia-container")) hint = "Docker cannot use the NVIDIA GPU. Check the GPU driver and Docker's GPU support.";
-            else if (log.Contains ("CUDA out of memory")) hint = "The GPU ran out of memory. Close other programs that use the GPU.";
-            else if (log.Contains ("401") || log.Contains ("gated") || log.Contains ("Access to model")) hint = "Hugging Face refused the download. Check that your access to meta-llama/Meta-Llama-3-8B-Instruct was approved and run hf auth login.";
-            else if (what.EndsWith (" 137") || log.Contains ("Killed")) hint = "The container ran out of memory. Raise the WSL memory limit in %USERPROFILE%\\.wslconfig ([wsl2] memory=24GB).";
-            return "Failed (" + what + ")." + (hint != null ? "\n" + hint : "") + "\n\n" + Tail (log, 30);
+            if (log.Contains ("could not select device driver") || log.Contains ("nvidia-container")) hint = Tr ("KIMODO_RUN_HINT_GPU");
+            else if (log.Contains ("CUDA out of memory")) hint = Tr ("KIMODO_RUN_HINT_GPU_MEMORY");
+            else if (log.Contains ("401") || log.Contains ("gated") || log.Contains ("Access to model")) hint = Tr ("KIMODO_RUN_HINT_HUGGING_FACE");
+            else if (what.EndsWith (" 137") || log.Contains ("Killed")) hint = Tr ("KIMODO_RUN_HINT_WSL_MEMORY");
+            return Tr ("KIMODO_RUN_FAILED", what) + (hint != null ? "\n" + hint : "") + "\n\n" + Tail (log, 30);
         }
 
         static bool WantsToQuit ()
         {
             if (job_ == null || !job_.running) return true;
-            int choice = EditorUtility.DisplayDialogComplex ("Kimodo", "Kimodo is still generating. Stop it and quit?", "Stop and Quit", "Keep Generating", "Quit and Leave It Running");
+            int choice = EditorUtility.DisplayDialogComplex ("Kimodo", Tr ("KIMODO_RUN_QUIT_DIALOG"), Tr ("KIMODO_STOP_AND_QUIT"), Tr ("KIMODO_RUN_KEEP_GENERATING"), Tr ("KIMODO_QUIT_AND_LEAVE"));
             if (choice == 1) return false;
             if (choice == 0) Cancel ();
             return true;

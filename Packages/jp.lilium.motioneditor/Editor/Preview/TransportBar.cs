@@ -26,7 +26,11 @@ namespace Lilium
         readonly Label fractionLabel_;
         readonly Label rangeLabel_;
         readonly EnumField tracksField_;
-        readonly Toggle autoKey_;
+        readonly Button autoKey_;
+        readonly Button interpolate_;
+        // 今出しているアイコンの状態（Refresh は姿勢を作るたびに来るので、変わったときだけ差し替える）
+        bool? shownAutoKey_;
+        bool? shownInterpolate_;
 
         public TransportBar (PreviewWindow window, TimebarElement timebar, EditorWindow host)
         {
@@ -45,14 +49,23 @@ namespace Lilium
             poseGroup.style.alignItems = Align.Center;
             // プロジェクト設定の Auto Key をここでも切り替える（設定のページまで行かずに済むように）。
             // 表示は、保存を受けた窓の stateChanged → Refresh で合わせる（設定のページで変えたときも同じ道を通る）
-            autoKey_ = new Toggle { text = "Auto Key", tooltip = Tr ("TIMELINE_OVERLAY_AUTO_KEY_TOOLTIP") };
-            autoKey_.style.marginRight = 6;
-            autoKey_.RegisterValueChangedCallback (e => {
+            // アイコンが今の状態を表す（赤のひし形 = 入 / 枠だけ = 切）。押すと切り替わる
+            autoKey_ = new Button (() => {
                 ProjectSettings settings = ProjectSettings.instance;
-                settings.autoKey = e.newValue;
+                settings.autoKey = !settings.autoKey;
                 settings.Save ();
-            });
+                Refresh ();
+            }) { tooltip = Tr ("TIMELINE_OVERLAY_AUTO_KEY_TOOLTIP") };
+            autoKey_.style.width = 24;
+            autoKey_.style.height = 20;
             poseGroup.Add (autoKey_);
+            // キーの間の補間を見せるか（切るとコマ送り。キーは書き換えない）
+            // アイコンが今の見せ方（曲線でつなぐ = 補間する / 段 = コマ送り）を表し、押すと切り替わる
+            interpolate_ = new Button (() => window_.interpolate = !window_.interpolate) { tooltip = Tr ("TIMELINE_OVERLAY_INTERPOLATE_TOOLTIP") };
+            interpolate_.style.width = 24;
+            interpolate_.style.height = 20;
+            interpolate_.style.marginRight = 6;
+            poseGroup.Add (interpolate_);
             poseGroup.Add (WithShortcut (MiniButton ("Key", null, window_.KeyAll), Tr ("TIMELINE_OVERLAY_KEY_TOOLTIP"), "Key All"));
             poseGroup.Add (WithShortcut (MiniButton ("Copy", null, window_.CopyPose), Tr ("TIMELINE_OVERLAY_COPY_POSE_TOOLTIP"), "Copy Pose"));
             poseGroup.Add (WithShortcut (MiniButton ("Paste", null, window_.PastePose), Tr ("TIMELINE_OVERLAY_PASTE_POSE_TOOLTIP"), "Paste Pose"));
@@ -166,7 +179,18 @@ namespace Lilium
 
             rangeLabel_.text = window_.targetClip != null ? "/ " + window_.GetLastKeyFrame () + "   " + clock.rate + " fps" : "";
             tracksField_.SetValueWithoutNotify (window_.showTracks);
-            autoKey_.SetValueWithoutNotify (ProjectSettings.instance.autoKey);
+            bool autoKeyOn = ProjectSettings.instance.autoKey;
+            if (shownAutoKey_ != autoKeyOn) {
+                shownAutoKey_ = autoKeyOn;
+                Texture2D autoKey = Icons.Load (autoKeyOn ? "AutoKey" : "AutoKeyOff");
+                if (autoKey != null) autoKey_.iconImage = Background.FromTexture2D (autoKey);
+            }
+            bool interpolate = window_.interpolate;
+            if (shownInterpolate_ != interpolate) {
+                shownInterpolate_ = interpolate;
+                Texture2D interpolation = Icons.Load (interpolate ? "Interpolate" : "Stepped");
+                if (interpolation != null) interpolate_.iconImage = Background.FromTexture2D (interpolation);
+            }
         }
     }
 

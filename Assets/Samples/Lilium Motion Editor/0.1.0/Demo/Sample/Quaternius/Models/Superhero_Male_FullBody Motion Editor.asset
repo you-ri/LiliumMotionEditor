@@ -22,7 +22,7 @@ MonoBehaviour:
   overrideAutoBake: 0
   autoBake: 1
   layers:
-    write: Override:0
+    write: EditingRig
     manipulate: FullBodyIk
     values:
     - id: EditingRig

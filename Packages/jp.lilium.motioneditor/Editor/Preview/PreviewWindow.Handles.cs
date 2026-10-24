@@ -68,6 +68,7 @@ namespace Lilium
                             PoseHandles.locked = pointsLocked || GetMaskProblem (point) != null;
                             // いくつか選んでいる間は、中心の点にだけギズモを出す（選んだ点の数だけ重なって出る）
                             point.showGizmo = selection_.Count <= 1 || point.gameObject == pivotPoint_;
+                            point.movesWithSelection = selected && selection_.Count > 1;
                             point.inBox = box.HasValue && IsInBox (stage_.camera, viewRect, box.Value, point.framePosition);
                             point.OnHandleGUI (selected);
                             if (point.ConsumeContextClick ()) contextPoint_ = point;

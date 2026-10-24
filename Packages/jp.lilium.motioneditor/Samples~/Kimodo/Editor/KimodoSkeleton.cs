@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.KimodoText;
 
 namespace Lilium
 {
@@ -61,15 +62,16 @@ namespace Lilium
             return null;
         }
 
-        [MenuItem ("Tools/Lilium Motion Editor/Kimodo/Create SOMA Skeleton From BVH...")]
+        // 作るのは外部の骨格の定義のアセットなので、Create の External Skeleton（order 1103）の隣に置く
+        [MenuItem ("Assets/Create/Lilium Motion Editor/Kimodo SOMA Skeleton From BVH...", priority = 1104)]
         static void CreateFromMenu ()
         {
-            string bvhPath = EditorUtility.OpenFilePanel ("Kimodo BVH (made with --bvh_standard_tpose)", "", "bvh");
+            string bvhPath = EditorUtility.OpenFilePanel (Tr ("KIMODO_SKELETON_OPEN_BVH"), "", "bvh");
             if (string.IsNullOrEmpty (bvhPath)) return;
-            string assetPath = EditorUtility.SaveFilePanelInProject ("SOMA Skeleton", "Kimodo SOMA Skeleton", "asset", "Where to save the external skeleton");
+            string assetPath = EditorUtility.SaveFilePanelInProject (Tr ("KIMODO_SKELETON_SAVE_TITLE"), "Kimodo SOMA Skeleton", "asset", Tr ("KIMODO_SKELETON_SAVE_MESSAGE"));
             if (string.IsNullOrEmpty (assetPath)) return;
             string error = Create (bvhPath, assetPath);
-            if (error != null) EditorUtility.DisplayDialog ("Kimodo", error, "OK");
+            if (error != null) EditorUtility.DisplayDialog ("Kimodo", error, Tr ("KIMODO_OK"));
             else Selection.activeObject = AssetDatabase.LoadAssetAtPath<ExternalSkeleton> (assetPath);
         }
     }

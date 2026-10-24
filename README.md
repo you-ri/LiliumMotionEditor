@@ -45,8 +45,9 @@ The demo models are the male and female characters from Quaternius' [Universal B
 ### Kimodo (optional)
 
 The `Kimodo (optional)` sample lets NVIDIA's [Kimodo](https://github.com/nv-tlabs/kimodo) motion model fill in the motion between your keys from a text prompt,
-and imports the result as an Override that keeps your keyed poses (from the window: `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`). Kimodo is not included: you set it up and download its weights yourself,
+and imports the result as an Override that keeps your keyed poses (from the **Kimodo** panel of the Motion Editor window, which guides you through the setup until Kimodo is installed). Kimodo is not included: you set it up and download its weights yourself,
 after checking their licenses. See the sample's `README.md`. The motion editor does not need it.
+This project is not affiliated with or endorsed by NVIDIA or Meta.
 
 ## License
 

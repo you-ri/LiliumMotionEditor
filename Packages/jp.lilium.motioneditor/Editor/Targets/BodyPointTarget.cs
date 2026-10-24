@@ -126,6 +126,22 @@ namespace Lilium
         }
 
         /// <summary>
+        /// いくつか選んだ点をまとめて動かすとき（PreviewWindow.MoveSelectedPoints）に、点を position（ワールド）へそのまま置いて Pin にする。
+        /// 床に当てるのは窓が選んだ点のかたまりで済ませてあるので、点ごとには当てず、足の箱（FullBodyRig.TryMoveFoot）も使わない（10-24 不具合
+        /// 「全部選んで平行移動すると姿勢が崩れる」。足の箱は同じ足のほかの Locked の点を支点にするので、Locked の足の点を 1 つずつ通すと足が回り、
+        /// 床の下限より下にある足裏の点は 1 つずつ持ち上がって足がゆがんだ）
+        /// </summary>
+        public void PlaceWithSelection (Vector3 position)
+        {
+            PinPosition (position, false);
+        }
+
+        /// <summary>
+        /// いくつか選んでいて、つかむとまとめて動かす間か（窓が描く前に入れる）。丸・ギズモでつかんだときも点ごとには床に当てず、足の箱も使わない（PlaceWithSelection）
+        /// </summary>
+        public bool movesWithSelection;
+
+        /// <summary>
         /// Floor Clamp で足の点を動かすとき、同じ足のほかの Pin の点を足と一緒に動かす（FullBodyRig.CarryFootPins）。
         /// 動かすとき（つかむ・ギズモ・Spinner・まとめて動かす）だけ呼ぶ。固定の付け外しでは呼ばない（ほかの Pin の点が外れて足が動く）
         /// </summary>
@@ -484,10 +500,11 @@ namespace Lilium
         /// <summary>
         /// 位置を固定して、点を position へ置く。固定していなかった点は、向きの値も今の骨に合わせておく（後で向きを固定したときに飛ばない）
         /// </summary>
-        void PinPosition (Vector3 position)
+        /// <param name="clamp">床に当てるか（まとめて動かすときは窓がかたまりで当てるので false）</param>
+        void PinPosition (Vector3 position, bool clamp = true)
         {
             // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る
-            position = ClampToFloor (position);
+            if (clamp) position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
             body_.SetPointPositionWorld (human_, position);
             body_.SetPositionWeight (human_, 1);
@@ -702,9 +719,9 @@ namespace Lilium
             // 関節の丸（つかんで動かすと位置を固定する）
             Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
             if (moved != position) {
-                moved = MoveFoot (moved);
+                if (!movesWithSelection) moved = MoveFoot (moved);
                 AddDragDelta (position, moved);
-                PinPosition (moved);
+                PinPosition (moved, !movesWithSelection);
                 position = moved;
                 GUI.changed = true;
             }
@@ -722,9 +739,9 @@ namespace Lilium
             else if (selected && showGizmo) {
                 Vector3 gizmoPosition = PoseHandles.PositionHandle (position, PoseHandleUtility.GizmoAxes (shape));
                 if (gizmoPosition != position) {
-                    gizmoPosition = MoveFoot (gizmoPosition);
+                    if (!movesWithSelection) gizmoPosition = MoveFoot (gizmoPosition);
                     AddDragDelta (position, gizmoPosition);
-                    PinPosition (gizmoPosition);
+                    PinPosition (gizmoPosition, !movesWithSelection);
                     GUI.changed = true;
                 }
             }

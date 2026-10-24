@@ -145,6 +145,67 @@ namespace Lilium
             Assert.AreEqual (1, Keys (kOtherBinding).Length);
         }
 
+        /// <summary>
+        /// 全身 IK の点のポーズのコピー。状態は窓に出しているとおり（その時刻以前のキーの値。最初のキーより前は Free）で写し、補間しない。
+        /// キーの無いフレームの位置は、リグに出している場所を写す（10-24 ユーザー報告。最初のキーより前でコピーした膝の点が、
+        /// 最初のキーの場所に固定されて貼られた）
+        /// </summary>
+        [Test]
+        public void PointCopyTakesShownStateAndPosition ()
+        {
+            const string path = "Controls/Body/RightLowerLeg";
+            EditorCurveBinding weight = EditorCurveBinding.FloatCurve (path, typeof (BodyPoint), BodyPoint.kPositionWeightProperty);
+            EditorCurveBinding locked = EditorCurveBinding.FloatCurve (path, typeof (BodyPoint), BodyPoint.kLockedProperty);
+            EditorCurveBinding z = EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalPosition.z");
+            SetKey (weight, 9, 1);
+            SetKey (locked, 9, 1);
+            SetKey (z, 9, -0.5f);
+            SetKey (weight, 20, 0);
+            SetKey (locked, 20, 0);
+            SetKey (z, 20, -0.3f);
+
+            GameObject root = new GameObject ("Root");
+            Transform point = new GameObject ("RightLowerLeg").transform;
+            point.SetParent (new GameObject ("Body").transform);
+            point.parent.SetParent (new GameObject ("Controls").transform);
+            point.parent.parent.SetParent (root.transform);
+            point.localPosition = new Vector3 (0, 0, 0.25f);
+            try {
+                // 最初のキーより前: Free（カーブのままだと最初のキーの 1 になる）
+                PoseClipboard.Copy (clip_, 0, null, root.transform);
+                Assert.AreEqual (0, PastedValue (weight));
+                Assert.AreEqual (0, PastedValue (locked));
+                Assert.AreEqual (0.25f, PastedValue (z), 1e-6f, "キーの無いフレームはリグに出している場所");
+
+                // キーの間: 前のキーの状態のまま（補間しない）
+                PoseClipboard.Copy (clip_, 14, null, root.transform);
+                Assert.AreEqual (1, PastedValue (weight));
+                Assert.AreEqual (1, PastedValue (locked));
+
+                // キーのあるフレーム: キーの値
+                PoseClipboard.Copy (clip_, 9, null, root.transform);
+                Assert.AreEqual (-0.5f, PastedValue (z), 1e-6f);
+            }
+            finally {
+                Object.DestroyImmediate (root);
+            }
+        }
+
+        /// <summary>覚えたポーズを別のクリップの 0F に貼った値</summary>
+        float PastedValue (EditorCurveBinding binding)
+        {
+            AnimationClip other = new AnimationClip { frameRate = 60 };
+            try {
+                using (CurveWriter writer = CurveWriter.Begin (other, null, 0, null)) {
+                    PoseClipboard.Paste (writer);
+                }
+                return AnimationUtility.GetEditorCurve (other, binding).Evaluate (0);
+            }
+            finally {
+                Object.DestroyImmediate (other);
+            }
+        }
+
         [Test]
         public void PasteOverwritesKeyAtTargetFrame ()
         {

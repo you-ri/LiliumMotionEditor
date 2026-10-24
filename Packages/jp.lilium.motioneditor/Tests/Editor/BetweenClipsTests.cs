@@ -161,6 +161,48 @@ namespace Lilium
             }
         }
 
+        /// <summary>0・30・60F にキー。lockedFeet なら左足の点を Locked にし、30F だけ前へ 20cm 置く（キーの間をすべる足）</summary>
+        PoseSession OpenWithLockedFoot (string name, bool lockedFeet)
+        {
+            AnimationClip clip = new AnimationClip { frameRate = kRate };
+            AssetDatabase.CreateAsset (clip, kFolder + "/" + name + ".rig.anim");
+            PoseSession session = new PoseSession (prefab_, definition_);
+            disposables_.Add (session);
+            session.clip = clip;
+            foreach (int frame in new[] { 0, 30, 60 }) {
+                session.Evaluate (frame);
+                if (lockedFeet) {
+                    GameObject control = session.stage.fullBody.GetControl (HumanBodyBones.LeftFoot).gameObject;
+                    BodyPointTarget foot = session.targets.OfType<BodyPointTarget> ().First (t => t.gameObject == control);
+                    foot.MoveTo (foot.framePosition + prefab_.transform.forward * (frame == 30 ? 0.2f : 0));
+                    foot.SetLocked (true);
+                    session.SolveAfterEdit ();
+                }
+                Assert.IsNull (session.CommitPose ());
+            }
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            Assert.IsNull (session.ImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { kFirst }, out PoseSession.OverrideImportResult result));
+            return session;
+        }
+
+        /// <summary>
+        /// 足を Locked にしたキーの間でも、区間の中は外部の動きそのもの（10-24 不具合「Kimodo の歩きで足がすべる」）。
+        /// 結果のファイルは FK の骨だけなので、点の固定を残すと、キーの間をまっすぐ進む足の点が全身 IK で脚を引き戻していた
+        /// </summary>
+        [Test]
+        public void LockedPoints_DoNotPullInsideTheSegment ()
+        {
+            PoseSession plain = OpenWithLockedFoot ("Plain", false);
+            PoseSession locked = OpenWithLockedFoot ("Locked", true);
+            Transform leftFoot (PoseSession s) => s.stage.editingRig.GetEditingBone (HumanBodyBones.LeftFoot);
+            locked.Evaluate (30);
+            plain.Evaluate (30);
+            Assert.Greater (Vector3.Distance (leftFoot (locked).position, leftFoot (plain).position), 0.15f, "30F のキーは足を前へ置いた（確かめたい入力になっている）");
+
+            Assert.LessOrEqual (MaxAngle (Bones (plain, 15), Bones (locked, 15)), 0.1f, "区間の真ん中は点の固定に関わらず外部の動き");
+            Assert.LessOrEqual (Vector3.Distance (leftFoot (locked).position, leftFoot (plain).position), 0.005f, "足の点は脚を引かない");
+        }
+
         [Test]
         public void KeysStay_WhenTheirValuesChange_AndTheSegmentStopsWhenAKeyIsAdded ()
         {

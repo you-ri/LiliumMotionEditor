@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
+using static Lilium.KimodoText;
 
 namespace Lilium
 {
@@ -73,7 +74,7 @@ namespace Lilium
                 "-e", "PYTHONUNBUFFERED=1",
                 settings.image, "-lc", "cd /workspace && python -m kimodo.scripts.run_text_encoder_server",
             };
-            if (KimodoRunner.Run (arguments, 60000, out string output) != 0) return "The text server could not be started.\n" + KimodoRunner.Tail (output, 10);
+            if (KimodoRunner.Run (arguments, 60000, out string output) != 0) return Tr ("KIMODO_SERVER_FAILED") + "\n" + KimodoRunner.Tail (output, 10);
             state_ = State.Starting;
             log_ = "";
             nextPoll_ = 0;
@@ -136,7 +137,7 @@ namespace Lilium
         static bool WantsToQuit ()
         {
             if (state_ == State.Stopped) return true;
-            int choice = EditorUtility.DisplayDialogComplex ("Kimodo", "The Kimodo text server is running and keeps using about 15 GB of memory. Stop it?", "Stop and Quit", "Cancel", "Quit and Leave It Running");
+            int choice = EditorUtility.DisplayDialogComplex ("Kimodo", Tr ("KIMODO_SERVER_QUIT_DIALOG"), Tr ("KIMODO_STOP_AND_QUIT"), Tr ("KIMODO_CANCEL"), Tr ("KIMODO_QUIT_AND_LEAVE"));
             if (choice == 1) return false;
             if (choice == 0) Stop ();
             return true;

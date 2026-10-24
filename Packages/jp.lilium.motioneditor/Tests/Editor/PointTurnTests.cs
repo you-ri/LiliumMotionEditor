@@ -27,13 +27,14 @@ namespace Lilium
             created_.Clear ();
         }
 
-        PoseSession Open ()
+        /// <param name="toes">つま先の骨を足す（足裏の点を使うとき）</param>
+        PoseSession Open (bool toes = false)
         {
             EditRigDefinition definition = EditRigDefinition.CreateDefault ();
             created_.Add (definition);
             GameObject prefab = new GameObject ("Prefab");
             created_.Add (prefab);
-            Animator display = TestSkeleton.CreateHumanoid (created_, false);
+            Animator display = toes ? TestSkeleton.CreateHumanoidWithToes (created_) : TestSkeleton.CreateHumanoid (created_, false);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             display.transform.SetParent (prefab.transform, false);
             PoseSession session = new PoseSession (prefab, definition);
@@ -127,6 +128,37 @@ namespace Lilium
             session.SolveAfterEdit ();
             Dictionary<BodyPointTarget, Vector3> start = points.ToDictionary (p => p, p => p.bonePosition);
             Vector3 total = new Vector3 (0.4f, 0.1f, 0.3f);
+
+            for (int i = 0; i < steps; i++) {
+                Vector3 delta = total / steps;
+                Vector3 from = hips.framePosition;
+                hips.MoveBy (delta);
+                PreviewWindow.MoveSelectedPoints (targets, points, hips, from, delta);
+                session.SolveAfterEdit ();
+            }
+
+            foreach (BodyPointTarget point in points) {
+                Assert.LessOrEqual (Vector3.Distance (start[point] + total, point.bonePosition), 1e-3f, point.id.name + " は体ごと動いた所");
+            }
+        }
+
+        [Test]
+        public void MovingAllPoints_WithFloorClamp_KeepsLockedFoot ([Values (1, 10)] int steps)
+        {
+            // 左足の点を全部 Locked にして全部の点を選び、Floor Clamp を入れたまま腰をつかんで横へ動かす: 左足も体ごと同じだけ動き、浮きもしない（10-24 不具合）。
+            // 足の点を 1 つずつ足の箱で動かすと、同じ足のほかの Locked の点を支点に足が回り（足首が 26cm ずれた）、
+            // 床の下限より下にある足裏の点は 1 つずつ持ち上がっていた
+            PoseSession session = Open (true);
+            List<PoseTarget> targets = session.targets.ToList ();
+            List<BodyPointTarget> points = targets.OfType<BodyPointTarget> ().ToList ();
+            BodyPointTarget hips = points.Single (p => p.id.name == "Hips");
+            string[] leftFoot = { "LeftFoot", "LeftHeel", "LeftSoleBall", "LeftLittleToeSide", "LeftToeTip" };
+            foreach (string name in leftFoot) points.Single (p => p.id.name == name).SetState (BodyPointState.Locked);
+            foreach (string name in new[] { "Hips", "RightFoot", "LeftHand", "RightHand" }) points.Single (p => p.id.name == name).SetState (BodyPointState.Pin);
+            foreach (BodyPointTarget point in points) point.floorClamp = true;
+            session.SolveAfterEdit ();
+            Dictionary<BodyPointTarget, Vector3> start = points.ToDictionary (p => p, p => p.bonePosition);
+            Vector3 total = new Vector3 (0.3f, 0, 0.2f);
 
             for (int i = 0; i < steps; i++) {
                 Vector3 delta = total / steps;

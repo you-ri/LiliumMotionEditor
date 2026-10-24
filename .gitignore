@@ -50,3 +50,12 @@ Assets/_Private*
 
 # 開発元のリポジトリのパスや非公開の素材の名前を含むので公開しない
 CLAUDE.md
+
+# Kimodo の生成物と、Kimodo が出した骨格から作った定義（骨の長さを含む）は公開しない。
+# 生成物の扱いは利用者の責任なので、デモにも入れない（Docs/Specs の S71〜S76）
+*.kimodo.override.anim
+*.kimodo.override.anim.meta
+*.between.anim
+*.between.anim.meta
+Assets/KimodoView/
+Assets/KimodoView.meta

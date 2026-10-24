@@ -29,8 +29,11 @@ namespace Lilium
         public string skeletonGuid = "";
         public string prompt = "a person walks forward at a normal pace";
         public string mode = "fullbody";
-        /// <summary>結果の使い方（KimodoJob.kOverride: Override として重ねる / kBetween: キーの間の補間。S83）</summary>
-        public string target = KimodoJob.kOverride;
+        /// <summary>
+        /// 結果の使い方（KimodoJob.kBetween: キーの間の補間（既定）/ kOverride: Override として重ねる。S83）。
+        /// 窓のボタンは「Generate Between Keys」なので、押したら補間になるのを既定にする（Override だと ✏ を移さないと見えず、補間になっていないように見えた）
+        /// </summary>
+        public string target = KimodoJob.kBetween;
 
         public ExternalSkeleton skeleton
         {

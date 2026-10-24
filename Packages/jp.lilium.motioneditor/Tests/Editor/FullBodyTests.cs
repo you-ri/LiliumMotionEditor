@@ -1668,6 +1668,45 @@ namespace Lilium
             }
         }
 
+        [Test]
+        public void RigidSpan_TurnsPointsAboutTheFixedOne ()
+        {
+            // 足裏の中心（原点）のまわりに 120° 回し、上へ 0.1 上げる。途中の点は弧の上（足裏の中心からの距離が変わらない）
+            Vector3[] from = { Vector3.zero, new Vector3 (0, 0, 0.06f), new Vector3 (0.03f, 0, -0.15f), new Vector3 (0.02f, 0.08f, -0.12f) };
+            Quaternion turn = Quaternion.AngleAxis (120, Vector3.up);
+            Vector3 lift = new Vector3 (0, 0.1f, 0);
+            Vector3[] to = from.Select (p => turn * p + lift).ToArray ();
+            Vector3[] result = new Vector3[from.Length];
+
+            Assert.IsTrue (RigidSpan.Interpolate (from, to, 0.5f, result));
+            Quaternion half = Quaternion.AngleAxis (60, Vector3.up);
+            for (int i = 0; i < from.Length; i++) {
+                Assert.LessOrEqual (Vector3.Distance (half * from[i] + lift * 0.5f, result[i]), 1e-4f, "半分回して半分上げた所: " + i);
+            }
+            Assert.IsTrue (RigidSpan.Interpolate (from, to, 1, result));
+            for (int i = 0; i < from.Length; i++) Assert.LessOrEqual (Vector3.Distance (to[i], result[i]), 1e-4f, "次のキーの値そのもの");
+
+            // 剛体から外れる分（1 点だけ動かしたキー）は時刻で混ぜる
+            to[1] += new Vector3 (0, 0.02f, 0);
+            Assert.IsTrue (RigidSpan.Interpolate (from, to, 1, result));
+            Assert.LessOrEqual (Vector3.Distance (to[1], result[1]), 1e-4f);
+            Assert.IsFalse (RigidSpan.Interpolate (from.Take (2).ToArray (), to.Take (2).ToArray (), 0.5f, new Vector3[2]), "2 点では回し方が決まらない");
+        }
+
+        [Test]
+        public void RigidSpan_JoinsToePointsToTheFoot ()
+        {
+            // つま先（手足のいちばん先の骨）の点は足の組へ入れる。脛は足の親だが一番先でないのでまとめない（膝と足首は別に曲がる）
+            Animator animator = TestSkeleton.CreateHumanoidWithToes (created_);
+            Transform shin = animator.GetBoneTransform (HumanBodyBones.LeftLowerLeg);
+            Transform foot = animator.GetBoneTransform (HumanBodyBones.LeftFoot);
+            Transform toes = animator.GetBoneTransform (HumanBodyBones.LeftToes);
+            Transform hips = animator.GetBoneTransform (HumanBodyBones.Hips);
+            CollectionAssert.AreEqual (new[] { foot, foot, foot }, RigidSpan.Anchors (new[] { foot, foot, toes }));
+            CollectionAssert.AreEqual (new[] { shin, foot, foot }, RigidSpan.Anchors (new[] { shin, foot, toes }));
+            CollectionAssert.AreEqual (new[] { toes, hips }, RigidSpan.Anchors (new[] { toes, hips }), "親の骨に点が無ければそのまま");
+        }
+
         // ---- クリップ・Override・焼き ----
 
         static void SetPointCurves (AnimationClip clip, Setup s, HumanBodyBones bone, Vector3 worldStart, Vector3 worldEnd, float weight)

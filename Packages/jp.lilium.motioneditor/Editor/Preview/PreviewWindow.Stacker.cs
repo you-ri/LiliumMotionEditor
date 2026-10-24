@@ -384,7 +384,7 @@ namespace Lilium
                     pending = true;
                     break;
                 }
-                poseStack_.Evaluate (wanted / rate);
+                poseStack_.Evaluate (PoseTime (wanted / rate));
                 List<(Mesh, Matrix4x4)> baked = new List<(Mesh, Matrix4x4)> ();
                 // 空いているメッシュ（置き場）を頭から使い、使った分は置き場から外す
                 stage_.BakeDisplayMeshes (ghostPool_, 0, baked);
@@ -398,7 +398,7 @@ namespace Lilium
                 evaluated = true;
             }
             // 今のフレームの姿勢へ戻す（イベントは出さない。描画の途中なので）
-            if (evaluated) poseStack_.Evaluate (CurrentTime ());
+            if (evaluated) poseStack_.Evaluate (PoseTime (CurrentTime ()));
             if (pending) RepaintView ();
         }
 

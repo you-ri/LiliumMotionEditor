@@ -95,6 +95,8 @@ namespace Lilium
         [SerializeField] ShowTracksFlag showTracks_ = ShowTracksFlag.Selected;
         /// <summary>タイムライン オーバーレイのトラック一覧の高さ。下端のハンドルで変える</summary>
         [SerializeField] float timelineTracksHeight_ = 200;
+        /// <summary>キーの間を補間せずに見せる（コマ送り。タイムラインの Interpolate を切ったとき）</summary>
+        [SerializeField] bool stepped_;
         /// <summary>タイムラインの目盛りの拡大率（1 フレームあたりのピクセル数）</summary>
         [SerializeField] float timelinePixelsPerFrame_ = 12;
         /// <summary>タイムラインの目盛りの左端のフレーム</summary>
@@ -515,6 +517,39 @@ namespace Lilium
         {
             get { return layersWidth_; }
             set { layersWidth_ = Mathf.Max (kMinLayersWidth, value); }
+        }
+
+        /// <summary>
+        /// キーの間を補間して見せるか（タイムラインの Interpolate）。切ると、今のフレーム以前のいちばん近いキーの姿勢のまま、次のキーで切り替わる（コマ送り）。
+        /// 見せ方だけを変える: キーもカーブも書き換えず、ゲーム用の焼き・検査・書き出しはいつもの補間のまま
+        /// </summary>
+        public bool interpolate
+        {
+            get { return !stepped_; }
+            set {
+                if (stepped_ == !value) return;
+                stepped_ = !value;
+                SamplePose ();
+                RaiseStateChanged ();
+            }
+        }
+
+        /// <summary>
+        /// 姿勢を作る時刻。コマ送りのときは、今のフレーム以前のいちばん近いキーのフレーム（最初のキーより前は最初のキー。キーが無ければそのまま）
+        /// </summary>
+        float PoseTime (float time)
+        {
+            if (!stepped_) return time;
+            int[] keys = GetKeyFrames ();
+            if (keys.Length == 0) return time;
+            float rate = (float)clock_.rate;
+            float frame = time * rate;
+            int held = keys[0];
+            foreach (int key in keys) {
+                if (key <= frame + 1e-3f) held = key;
+                else break;
+            }
+            return held / rate;
         }
 
         /// <summary>タイムライン オーバーレイのトラック一覧の高さ</summary>
@@ -1123,7 +1158,7 @@ namespace Lilium
         /// </summary>
         void SolveAfterManipulate ()
         {
-            poseStack_.EvaluateFrom (poseStack_.Find (LayerKind.EditingRig), CurrentTime ());
+            poseStack_.EvaluateFrom (poseStack_.Find (LayerKind.EditingRig), PoseTime (CurrentTime ()));
             // 値を映しているパネル（Transform の数値欄など）も、つかんで動かしたときに追従させる
             if (poseSampled != null) poseSampled ();
         }
@@ -1325,7 +1360,8 @@ namespace Lilium
             UpdateClockMapping ();
             // 段の並び（Layers のパネルに出ているもの）をそのまま上から通す。
             // クリップを当てるのも IK を解くのも段の側にある（AnimationClip.SampleAnimation は使わない。PreviewStage.SampleClip）
-            poseStack_.Evaluate (time);
+            // コマ送りのときは、キャラの姿勢だけを前のキーで止める（演出は今の時刻のまま）
+            poseStack_.Evaluate (PoseTime (time));
             EvaluateContexts (time);
             RepaintView ();
             if (poseSampled != null) poseSampled ();

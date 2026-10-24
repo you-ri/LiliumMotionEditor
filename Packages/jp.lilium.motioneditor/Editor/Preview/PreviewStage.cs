@@ -803,23 +803,117 @@ namespace Lilium
                     bodyPointPaths_[i] = bodyPoints_[i] != null ? AnimationUtility.CalculateTransformPath (bodyPoints_[i].transform, editingRig.root.transform) : null;
                 }
             }
+            // 外部の補間の区間では、点の引く強さを外部の動きの重みだけ弱める（区間の中は 0）。
+            // 外部の動き（BetweenClips）は FK の骨だけなので、点を残すと、キーの間をまっすぐ進む Locked の足などが
+            // 全身 IK で骨を引き戻し、外部の動き（歩く足の上げ下ろし）を上書きする（10-24 不具合「Kimodo の歩きで足がすべる」）
+            BetweenClips.TryGetBlend (clip, time, out _, out float external);
+            int positionWeight = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kPositionWeightProperty);
+            int rotationWeight = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kRotationWeightProperty);
+            // 測り直しの中（GetKeyPoseGaps から呼ばれる）でも書き換えないよう、解く点の番号はここだけで持つ
+            List<int> span = null;
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
                 bool keyed;
                 EditingClip.GetPointState (clip, bodyPointPaths_[i], time, pointState_, out keyed);
+                if (external > 0) {
+                    pointState_[positionWeight] *= 1 - external;
+                    pointState_[rotationWeight] *= 1 - external;
+                }
                 bool active = false;
                 for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) {
                     bodyPoints_[i].SetValue (v, pointState_[v]);
                     active |= pointState_[v] > 0;
                 }
+                // 区間の中で引かなくなった点は、Locked の印が残っていても解かない（骨の位置へ置き直す）
+                if (external > 0 && pointState_[positionWeight] <= 0 && pointState_[rotationWeight] <= 0) active = false;
                 if (!active || keyed) continue;
                 // 前後のキーで Locked の点は、キーの間でも位置のカーブの補間した場所に留める（全身 IK の段が解く）
                 if (EditingClip.IsLockedSpan (clip, bodyPointPaths_[i], time)) {
                     lockedSpanPoints_.Add (bodyPoints_[i].transform);
-                    AddKeyPoseGap (clip, i, time);
+                    (span ??= new List<int> ()).Add (i);
                 }
                 else carriedPoints_.Add (bodyPoints_[i].transform);
             }
+            if (span == null || buildingKeyPoseGaps_) return;
+            KeyPoseGaps gaps = GetKeyPoseGaps (clip);
+            if (gaps == null) return;
+            MoveLockedSpanRigidly (clip, time, span, gaps);
+            foreach (int i in span) AddKeyPoseGap (clip, i, time, gaps);
+        }
+
+        /// <summary>
+        /// キーの間で解く Locked の点を、手足の先ごと剛体として動かした所へ置き直す（RigidSpan。10-24 不具合「左足先がパカパカする」）。
+        /// まとめるのは、前後のキーが同じで、基準の骨（RigidSpan.Anchors。つま先の点は足の組）が同じ点。
+        /// 点が 3 つ未満の組は直線のまま。カーブの補間した所との差だけ足すので、カーブの緩急（ease）と Override の値は残る
+        /// </summary>
+        void MoveLockedSpanRigidly (AnimationClip clip, float time, List<int> span, KeyPoseGaps gaps)
+        {
+            if (span.Count < 3) return;
+            Dictionary<(Transform, int, int), List<int>> groups = new Dictionary<(Transform, int, int), List<int>> ();
+            Transform[] bones = new Transform[span.Count];
+            int[] previous = new int[span.Count];
+            int[] next = new int[span.Count];
+            for (int k = 0; k < span.Count; k++) {
+                EditingClip.GetPointKeyBounds (clip, bodyPointPaths_[span[k]], time, out previous[k], out next[k]);
+                if (previous[k] >= 0 && next[k] >= 0) bones[k] = PointBone (span[k]);
+            }
+            // 前後のキーの違う点どうしはまとめない（基準の骨を決めるのも、前後のキーが同じ点の中で）
+            foreach (IGrouping<(int, int), int> bounds in Enumerable.Range (0, span.Count).GroupBy (k => (previous[k], next[k]))) {
+                int[] members = bounds.ToArray ();
+                Transform[] anchors = RigidSpan.Anchors (members.Select (k => bones[k]).ToArray ());
+                for (int m = 0; m < members.Length; m++) {
+                    if (anchors[m] == null) continue;
+                    List<int> group;
+                    if (!groups.TryGetValue ((anchors[m], bounds.Key.Item1, bounds.Key.Item2), out group)) {
+                        groups.Add ((anchors[m], bounds.Key.Item1, bounds.Key.Item2), group = new List<int> ());
+                    }
+                    group.Add (span[members[m]]);
+                }
+            }
+
+            foreach (KeyValuePair<(Transform, int, int), List<int>> pair in groups) {
+                List<int> group = pair.Value;
+                Vector3[] from, to;
+                if (group.Count < 3 || !gaps.keyPositions.TryGetValue (pair.Key.Item2, out from) || !gaps.keyPositions.TryGetValue (pair.Key.Item3, out to)) continue;
+                Vector3[] a = new Vector3[group.Count];
+                Vector3[] b = new Vector3[group.Count];
+                Vector3[] current = new Vector3[group.Count];
+                // 時刻の進み具合は、カーブの補間した所を前後のキーを結ぶ線へ写して測る（カーブの緩急に合わせる）
+                float along = 0, length = 0;
+                for (int g = 0; g < group.Count; g++) {
+                    a[g] = from[group[g]];
+                    b[g] = to[group[g]];
+                    current[g] = bodyPoints_[group[g]].transform.localPosition;
+                    along += Vector3.Dot (current[g] - a[g], b[g] - a[g]);
+                    length += (b[g] - a[g]).sqrMagnitude;
+                }
+                if (length < 1e-10f) continue;
+                float s = Mathf.Clamp01 (along / length);
+                Vector3[] moved = new Vector3[group.Count];
+                if (!RigidSpan.Interpolate (a, b, s, moved)) continue;
+                for (int g = 0; g < group.Count; g++) {
+                    bodyPoints_[group[g]].transform.localPosition = current[g] + moved[g] - Vector3.Lerp (a[g], b[g], s);
+                }
+            }
+        }
+
+        Dictionary<Transform, Transform> pointBones_;
+        FullBodyRig pointBonesOf_;
+
+        /// <summary>点 index の乗る骨（編集用リグの骨）。全身 IK が無い・点が無ければ null</summary>
+        Transform PointBone (int index)
+        {
+            if (fullBody == null || bodyPoints_[index] == null) return null;
+            if (pointBones_ == null || pointBonesOf_ != fullBody) {
+                pointBones_ = new Dictionary<Transform, Transform> ();
+                pointBonesOf_ = fullBody;
+                foreach (BodyPointId id in fullBody.pointIds) {
+                    Transform control = fullBody.GetControl (id);
+                    if (control != null) pointBones_[control] = fullBody.GetBone (id);
+                }
+            }
+            Transform bone;
+            return pointBones_.TryGetValue (bodyPoints_[index].transform, out bone) ? bone : null;
         }
 
         /// <summary>
@@ -829,15 +923,13 @@ namespace Lilium
         /// 曲げるので、キーをまたぐたびに手足が跳ねる（2026-10-01 実測で 1 フレームに 6°）。
         /// 差を足すと、キーのフレームの行き先はキーの姿勢の点そのものになり、キーの間は前後のキーの姿勢へなめらかにつながる
         /// </summary>
-        void AddKeyPoseGap (AnimationClip clip, int index, float time)
+        void AddKeyPoseGap (AnimationClip clip, int index, float time, KeyPoseGaps gaps)
         {
-            if (buildingKeyPoseGaps_) return;
             int previous, next;
             EditingClip.GetPointKeyBounds (clip, bodyPointPaths_[index], time, out previous, out next);
-            KeyPoseGaps gaps = GetKeyPoseGaps (clip);
             Vector3 fromPosition, toPosition;
             Quaternion fromRotation, toRotation;
-            if (gaps == null || !gaps.TryGet (previous, index, out fromPosition, out fromRotation)) return;
+            if (!gaps.TryGet (previous, index, out fromPosition, out fromRotation)) return;
             if (next < 0 || !gaps.TryGet (next, index, out toPosition, out toRotation)) {
                 toPosition = fromPosition;
                 toRotation = fromRotation;
@@ -857,6 +949,8 @@ namespace Lilium
             public int version;
             public readonly Dictionary<int, Vector3[]> positions = new Dictionary<int, Vector3[]> ();
             public readonly Dictionary<int, Quaternion[]> rotations = new Dictionary<int, Quaternion[]> ();
+            /// <summary>キーのフレームでの点の位置（コントロールのローカルの値。そのフレームにキーのある点はキーの値）</summary>
+            public readonly Dictionary<int, Vector3[]> keyPositions = new Dictionary<int, Vector3[]> ();
 
             public bool TryGet (int frame, int index, out Vector3 position, out Quaternion rotation)
             {
@@ -904,17 +998,20 @@ namespace Lilium
                     Solve ();
                     Vector3[] positions = new Vector3[bodyPoints_.Length];
                     Quaternion[] rotations = new Quaternion[bodyPoints_.Length];
+                    Vector3[] keyPositions = new Vector3[bodyPoints_.Length];
                     for (int i = 0; i < bodyPoints_.Length; i++) {
                         rotations[i] = Quaternion.identity;
                         if (bodyPoints_[i] == null) continue;
                         Transform control = bodyPoints_[i].transform;
-                        if (!fullBody.TryGetCapturedValues (control, out Vector3 position, out Quaternion rotation)) continue;
                         control.GetLocalPositionAndRotation (out Vector3 keyPosition, out Quaternion keyRotation);
+                        keyPositions[i] = keyPosition;
+                        if (!fullBody.TryGetCapturedValues (control, out Vector3 position, out Quaternion rotation)) continue;
                         positions[i] = position - keyPosition;
                         rotations[i] = rotation * Quaternion.Inverse (keyRotation);
                     }
                     gaps.positions[frame] = positions;
                     gaps.rotations[frame] = rotations;
+                    gaps.keyPositions[frame] = keyPositions;
                 }
             }
             finally {

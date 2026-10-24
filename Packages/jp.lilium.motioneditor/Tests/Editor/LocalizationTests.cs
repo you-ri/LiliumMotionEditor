@@ -75,8 +75,53 @@ namespace Lilium
         [Test]
         public void Locales_AreConsistent ()
         {
+            CheckLocales (LoadLocale ("en"), LoadLocale ("ja"));
+        }
+
+        /// <summary>
+        /// 拡張・サンプルの口: 足した表のキーを今の言語で引き、無い言語は英語へ落とす（Kimodo のサンプルが使う）
+        /// </summary>
+        [Test]
+        public void MotionEditorLanguage_AddsTables_AndFallsBack ()
+        {
+            MotionEditorLanguage.LoadTranslations ("en", "{ \"TEST_EXTRA_TABLE\": \"extra {0}\" }");
+            MotionEditorLanguage.LoadTranslations ("ja", "{ \"TEST_EXTRA_TABLE\": \"追加 {0}\" }");
+            LocalizationSystem.currentLanguage = "ja";
+            Assert.AreEqual ("ja", MotionEditorLanguage.current);
+            Assert.AreEqual ("追加 1", MotionEditorLanguage.Tr ("TEST_EXTRA_TABLE", 1));
+            LocalizationSystem.currentLanguage = "fr";
+            Assert.AreEqual ("extra 1", MotionEditorLanguage.Tr ("TEST_EXTRA_TABLE", 1), "表の無い言語は英語へ落とす");
             Dictionary<string, string> en = LoadLocale ("en");
-            Dictionary<string, string> ja = LoadLocale ("ja");
+            string key = en.Keys.First (k => !en[k].Contains ("{"));
+            Assert.AreEqual (en[key], MotionEditorLanguage.Tr (key), "本体のキーも引ける");
+        }
+
+        // Kimodo のサンプル（Samples~ は取り込むまでコンパイルされないので、ファイルを直に読んで比べる）
+        const string kKimodoEditor = "Packages/jp.lilium.motioneditor/Samples~/Kimodo/Editor";
+
+        [Test]
+        public void KimodoSample_Locales_AreConsistent ()
+        {
+            CheckLocales (LoadKimodoLocale ("en"), LoadKimodoLocale ("ja"));
+        }
+
+        [Test]
+        public void KimodoSample_Code_UsesOnlyKnownKeys_AndNoJapaneseLiterals ()
+        {
+            Dictionary<string, string> en = LoadKimodoLocale ("en");
+            Assert.IsTrue (en.Keys.All (k => k.StartsWith ("KIMODO_")), "本体のキーと重ならないよう KIMODO_ で始める");
+            Assert.IsEmpty (en.Keys.Intersect (LoadLocale ("en").Keys).ToList (), "本体と同じキー");
+            CheckCode (kKimodoEditor, en);
+        }
+
+        static Dictionary<string, string> LoadKimodoLocale (string language)
+        {
+            string path = Path.GetFullPath (kKimodoEditor + "/Locales/" + language + ".json");
+            return LocalizationSystem.ParseFlatJson (File.ReadAllText (path, Encoding.UTF8));
+        }
+
+        static void CheckLocales (Dictionary<string, string> en, Dictionary<string, string> ja)
+        {
             Assert.IsNotEmpty (en);
 
             Assert.IsEmpty (en.Keys.Except (ja.Keys).ToList (), "ja.json に無いキー");
@@ -92,13 +137,17 @@ namespace Lilium
         [Test]
         public void Code_UsesOnlyKnownKeys_AndNoJapaneseLiterals ()
         {
-            Dictionary<string, string> en = LoadLocale ("en");
+            CheckCode ("Packages/jp.lilium.motioneditor/Editor", LoadLocale ("en"));
+        }
+
+        static void CheckCode (string folder, Dictionary<string, string> en)
+        {
             var used = new HashSet<string> ();
             var unknown = new List<string> ();
             var japanese = new List<string> ();
 
             var call = new Regex (@"\bTr\s*\(\s*""([A-Z0-9_]+)""");
-            string root = Path.GetFullPath ("Packages/jp.lilium.motioneditor/Editor");
+            string root = Path.GetFullPath (folder);
             foreach (string file in Directory.GetFiles (root, "*.cs", SearchOption.AllDirectories)) {
                 string relative = file.Substring (root.Length + 1).Replace ('\\', '/');
                 string text = File.ReadAllText (file, Encoding.UTF8);

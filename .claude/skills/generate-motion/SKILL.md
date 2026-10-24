@@ -23,7 +23,7 @@ ls ~/.cache/huggingface/token                # the user ran hf auth login (never
 ```
 
 - The project is open in the Editor with the Pipeline server reachable (skill `unity-pipeline`)
-- A SOMA External Skeleton asset exists (`Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...` from the Kimodo sample).
+- A SOMA External Skeleton asset exists (`Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BVH...` from the Kimodo sample).
   If not, make the T-pose BVH as in the sample README and create it with `KimodoSkeleton.Create (bvhPath, assetPath)`
 - The user has accepted the licenses (Kimodo model: NVIDIA Open Model License; text encoder: Meta Llama 3). Use only the SOMA models, never SMPL-X
 - If Docker Desktop fails with "The file cannot be accessed by the system" on a socket file, stop it and delete the stale sockets from WSL
@@ -86,8 +86,9 @@ SKEL="Assets/.../Kimodo SOMA Skeleton.asset"
    The imported Override is registered only in this CLI session; to see it in the window, tell the user to add it in the Layers overlay (+Override)
    and move the write target (✏) to it (Overrides above the write target are not applied while editing)
 
-Users who prefer the window can do all of this without the CLI: the Kimodo sample's `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`
-(see the sample README). It works on the clip open in the Motion Editor window.
+Users who prefer the window can do all of this without the CLI: the Kimodo sample adds a **Kimodo** panel to the Motion Editor window
+(`Window > Lilium Motion Editor > Kimodo` shows it; the log is in `Window > Lilium Motion Editor > Kimodo Console`; see the sample README).
+It works on the clip open in that window, and shows the setup steps until Kimodo is installed.
 
 ## Use the motion as the interpolation between keys (instead of an Override)
 
