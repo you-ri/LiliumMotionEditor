@@ -17,6 +17,7 @@ namespace Lilium
         static readonly string[] kModeLabels = { "Full body (whole pose at each key)", "Hands and feet only", "Hips path only" };
         static readonly string[] kTargets = { KimodoJob.kOverride, KimodoJob.kBetween };
         static readonly string[] kTargetLabels = { "Override layer on the clip", "Interpolation between keys" };
+        static readonly string[] kRunnerLabels = { "Python environment", "Docker" };
 
         [SerializeField] PreviewWindow target_;
         [SerializeField] bool showSettings_;
@@ -41,7 +42,8 @@ namespace Lilium
             KimodoTextServer.changed += Repaint;
             EditorApplication.update -= TrackFocus;
             EditorApplication.update += TrackFocus;
-            showSettings_ |= KimodoSettings.instance.skeleton == null || string.IsNullOrEmpty (KimodoSettings.instance.kimodoFolder);
+            KimodoSettings settings = KimodoSettings.instance;
+            showSettings_ |= settings.skeleton == null || (settings.runner == KimodoSettings.kPython ? string.IsNullOrEmpty (settings.pythonPath) : string.IsNullOrEmpty (settings.kimodoFolder));
         }
 
         void OnDisable ()
@@ -104,7 +106,8 @@ namespace Lilium
             if (job != null) DrawJob (job);
 
             EditorGUILayout.Space ();
-            DrawTextServer ();
+            // 文章の読み取りのサーバーは Docker のときだけ（Python の環境では WSL のメモリの上限が無く、読み込みも速いので要らない）
+            if (settings.runner == KimodoSettings.kDocker) DrawTextServer ();
 
             EditorGUILayout.Space ();
             showSettings_ = EditorGUILayout.Foldout (showSettings_, "Settings", true);
@@ -191,7 +194,9 @@ namespace Lilium
             EditorGUILayout.Space ();
             if (job.running) {
                 System.TimeSpan elapsed = System.TimeSpan.FromTicks (System.DateTime.Now.Ticks - job.started);
-                EditorGUILayout.LabelField (string.Format (job.server ? "Generating {0:m\\:ss}  (with the text server, about a minute)" : "Generating {0:m\\:ss}  (loading the models takes about 4 minutes)", elapsed));
+                string hint = job.pid > 0 ? "(a new prompt takes about 2 minutes, the same prompt about 30 seconds)"
+                    : job.server ? "(with the text server, about a minute)" : "(loading the models takes about 4 minutes)";
+                EditorGUILayout.LabelField (string.Format ("Generating {0:m\\:ss}  ", elapsed) + hint);
                 string tail = KimodoRunner.Tail (KimodoRunner.ReadLog (), 8);
                 if (tail.Length > 0) EditorGUILayout.HelpBox (tail, MessageType.None);
                 return;
@@ -243,12 +248,35 @@ namespace Lilium
         static void DrawSettings (KimodoSettings settings)
         {
             EditorGUI.BeginChangeCheck ();
-            settings.kimodoFolder = FolderField ("Kimodo Folder", settings.kimodoFolder, "The git clone of Kimodo");
-            settings.image = EditorGUILayout.TextField ("Docker Image", settings.image);
+            int runner = settings.runner == KimodoSettings.kDocker ? 1 : 0;
+            runner = EditorGUILayout.Popup ("Run Kimodo With", runner, kRunnerLabels);
+            settings.runner = runner == 1 ? KimodoSettings.kDocker : KimodoSettings.kPython;
+            if (settings.runner == KimodoSettings.kPython) {
+                settings.pythonPath = FileField ("Python", settings.pythonPath, "The python of the environment where Kimodo is installed (for example kimodo/.venv/Scripts/python.exe)");
+            }
+            else {
+                settings.kimodoFolder = FolderField ("Kimodo Folder", settings.kimodoFolder, "The git clone of Kimodo");
+                settings.image = EditorGUILayout.TextField ("Docker Image", settings.image);
+            }
             settings.huggingFaceCache = FolderField ("Hugging Face Cache", settings.huggingFaceCache, "Empty: " + settings.huggingFaceFolder);
             settings.skeleton = (ExternalSkeleton) EditorGUILayout.ObjectField ("SOMA Skeleton", settings.skeleton, typeof (ExternalSkeleton), false);
             if (EditorGUI.EndChangeCheck ()) settings.Save ();
             EditorGUILayout.HelpBox ("Setup and licenses: the README of the Kimodo sample. The Hugging Face token is read by Kimodo from the cache (hf auth login); this window never reads it.", MessageType.None);
+        }
+
+        static string FileField (string label, string value, string tooltip)
+        {
+            using (new EditorGUILayout.HorizontalScope ()) {
+                value = EditorGUILayout.TextField (new GUIContent (label, tooltip), value);
+                if (GUILayout.Button ("...", GUILayout.Width (28))) {
+                    string picked = EditorUtility.OpenFilePanel (label, File.Exists (value) ? Path.GetDirectoryName (value) : "", "");
+                    if (!string.IsNullOrEmpty (picked)) {
+                        value = picked;
+                        GUI.FocusControl (null);
+                    }
+                }
+            }
+            return value;
         }
 
         static string FolderField (string label, string value, string tooltip)

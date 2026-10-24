@@ -13,8 +13,14 @@ namespace Lilium
     public sealed class KimodoSettings : ScriptableSingleton<KimodoSettings>
     {
         public static readonly string[] kModes = { "fullbody", "ends", "root" };
+        /// <summary>動かし方: Kimodo を入れた Python の環境で動かす（既定）か、Docker のコンテナで動かすか</summary>
+        public const string kPython = "python";
+        public const string kDocker = "docker";
 
-        /// <summary>kimodo を git clone したフォルダ（中に kimodo/ がある）</summary>
+        public string runner = kPython;
+        /// <summary>Kimodo を入れた Python の環境の python（Windows なら .venv\Scripts\python.exe）</summary>
+        public string pythonPath = "";
+        /// <summary>kimodo を git clone したフォルダ（中に kimodo/ がある。Docker で動かすとき）</summary>
         public string kimodoFolder = "";
         public string image = "kimodo:1.0";
         /// <summary>Hugging Face のキャッシュのフォルダ（空ならユーザーのフォルダの .cache/huggingface）</summary>

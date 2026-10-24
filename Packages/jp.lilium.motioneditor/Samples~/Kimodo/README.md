@@ -14,6 +14,7 @@ What is in this sample:
 | `Editor/KimodoSkeleton.cs` | `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...` makes the External Skeleton for Kimodo's SOMA skeleton from a BVH that Kimodo wrote (only the joint-name table is included) |
 | `Editor/KimodoWindow.cs`, `KimodoRunner.cs`, `KimodoSettings.cs`, `KimodoTextServer.cs` | `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`: generates between the keys of the clip open in the Motion Editor window, and layers the result on it or uses it as the interpolation between keys |
 | `Python/kimodo_constraints.py` | Turns the exported keys into a Kimodo constraints file. Runs inside the Kimodo environment |
+| `Python/kimodo_run.py` | Runs one generation (constraints, then `kimodo_generate.py`) in a Python environment, as the window does without Docker |
 | `Python/kimodo_generate.py` | Runs `kimodo_gen` with a cache of encoded prompts, so generating again with the same prompt skips the text model |
 
 ## Licenses (check before use)
@@ -28,44 +29,85 @@ What is in this sample:
 ## Requirements
 
 + An NVIDIA GPU. With the text encoder on the CPU (`TEXT_ENCODER_DEVICE=cpu`), Kimodo uses about 1.5 GB of video memory.
-+ About 16 GB of free memory for the text encoder on the CPU. With Docker Desktop on Windows, WSL gets half of the PC's memory by default;
-  raise it in `%USERPROFILE%\.wslconfig` (`[wsl2]` `memory=24GB`) if generation runs out of memory.
-+ Docker (or a Python environment as in Kimodo's install guide), and about 50 GB of disk (the image is about 35 GB, the weights about 17 GB).
++ About 16 GB of free memory for the text encoder on the CPU.
 + A Hugging Face account with access to `meta-llama/Meta-Llama-3-8B-Instruct`, and a Read token.
++ A Python environment with Kimodo (recommended; about 25 GB of disk with the weights), or Docker (about 50 GB: the image is about 35 GB).
++ Kimodo is developed on Linux. The Python environment was checked on Windows 11 with an RTX 2070. macOS has no CUDA, so Kimodo would run on the CPU only (not checked).
 
 ## Setup (once)
 
 1. Request access to [meta-llama/Meta-Llama-3-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct) on Hugging Face and wait for approval.
-2. Make a Read token on Hugging Face and run `hf auth login` (it is saved to `~/.cache/huggingface/token`).
-3. Get Kimodo and its viewer fork. On Windows, keep the line endings as they are, or the Docker entry script breaks:
+2. Make a Read token on Hugging Face. You run `hf auth login` with it below (it is saved to `~/.cache/huggingface/token`).
+3. Get Kimodo:
 
    ```
    git clone -c core.autocrlf=false https://github.com/nv-tlabs/kimodo.git
-   cd kimodo
-   git clone -c core.autocrlf=false https://github.com/nv-tlabs/kimodo-viser.git
-   docker build -t kimodo:1.0 .
    ```
 
-4. Make a T-pose BVH of Kimodo's skeleton (the weights are downloaded on the first run; it takes a while).
-   In the commands below, `KIMODO` is the kimodo folder and `WORK` is a folder for the files you exchange (for example the project's `Temp/Kimodo`):
+4. Install Kimodo in a Python environment (recommended) or build the Docker image (below).
 
-   ```
-   docker run --rm --gpus all --shm-size 16g --ipc host --entrypoint /bin/bash ^
-     -v KIMODO:/workspace -v WORK:/work -v %USERPROFILE%/.cache/huggingface:/workspace/.cache/huggingface ^
-     -e HF_HOME=/workspace/.cache/huggingface -e TEXT_ENCODER_MODE=local -e TEXT_ENCODER_DEVICE=cpu ^
-     kimodo:1.0 -lc "kimodo_gen 'a person stands still' --duration 1 --output /work/tpose --bvh --bvh_standard_tpose"
-   ```
+### Python environment (recommended)
 
-5. In Unity, `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...`, pick `WORK/tpose.bvh`, and save the skeleton asset.
+Kimodo builds a small C++ part when it is installed, so it needs a C++ compiler: on Windows, Visual Studio with "Desktop development with C++".
+With [uv](https://docs.astral.sh/uv/), in the kimodo folder (Windows; on Linux use `.venv/bin/python` and `export PATH=...`):
+
+```
+uv venv .venv --python 3.11
+uv pip install --python .venv\Scripts\python.exe torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+uv pip install --python .venv\Scripts\python.exe cmake
+set PATH=%CD%\.venv\Scripts;%PATH%
+uv pip install --python .venv\Scripts\python.exe -e .
+.venv\Scripts\hf auth login
+```
+
+Choose the PyTorch build for your GPU and driver at [pytorch.org](https://pytorch.org/get-started/locally/) (the one above supports GPUs from the RTX 20 series).
+Then make a T-pose BVH of Kimodo's skeleton (the weights are downloaded on the first run; it takes a while). `WORK` is a folder for the files you exchange:
+
+```
+set TEXT_ENCODER_MODE=local
+set TEXT_ENCODER_DEVICE=cpu
+.venv\Scripts\kimodo_gen "a person stands still" --duration 1 --output WORK\tpose --bvh --bvh_standard_tpose
+```
+
+In the Kimodo window's **Settings**, set **Run Kimodo With** to **Python environment** and **Python** to `kimodo\.venv\Scripts\python.exe`.
+This runs Kimodo directly on the PC: no WSL memory limit and no Docker Desktop. A new prompt takes about 2 minutes, the same prompt again about 40 seconds.
+
+### Docker
+
+Get the viewer fork too and build the image. On Windows, keep the line endings as they are, or the Docker entry script breaks:
+
+```
+cd kimodo
+git clone -c core.autocrlf=false https://github.com/nv-tlabs/kimodo-viser.git
+docker build -t kimodo:1.0 .
+```
+
+Run `hf auth login` on the PC (install it with `pip install --upgrade huggingface_hub` if you do not have `hf`).
+
+Make the T-pose BVH (`KIMODO` is the kimodo folder):
+
+```
+docker run --rm --gpus all --shm-size 16g --ipc host --entrypoint /bin/bash ^
+  -v KIMODO:/workspace -v WORK:/work -v %USERPROFILE%/.cache/huggingface:/workspace/.cache/huggingface ^
+  -e HF_HOME=/workspace/.cache/huggingface -e TEXT_ENCODER_MODE=local -e TEXT_ENCODER_DEVICE=cpu ^
+  kimodo:1.0 -lc "kimodo_gen 'a person stands still' --duration 1 --output /work/tpose --bvh --bvh_standard_tpose"
+```
+
+In the Kimodo window's **Settings**, set **Run Kimodo With** to **Docker**, the kimodo folder and the image (`kimodo:1.0`).
+With Docker Desktop on Windows, WSL gets half of the PC's memory by default; raise it in `%USERPROFILE%\.wslconfig` (`[wsl2]` `memory=24GB`) if generation runs out of memory.
+
+### The SOMA skeleton
+
+In Unity, `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...`, pick `WORK/tpose.bvh`, and save the skeleton asset.
 
 ## Generate from the window
 
 1. Open your clip in the Motion Editor window and key two or more poses (for a walk, for example, the contacts of a step). The clip must be 10 seconds or shorter.
-2. `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`. The first time, open **Settings** and set the kimodo folder, the Docker image (`kimodo:1.0`),
+2. `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`. The first time, open **Settings** and set how to run Kimodo (the Python, or the kimodo folder and the Docker image),
    the Hugging Face cache (leave it empty for `%USERPROFILE%/.cache/huggingface`) and the SOMA skeleton. They are saved in the project's `UserSettings` folder.
 3. Write the prompt in English (the whole motion, for example "a person walks forward at a normal pace"), choose the constraints, and press **Generate Between Keys**.
-   The window checks Docker, the image, the token file and the skeleton before it starts, and says what is missing.
-4. Generation runs in the background (about 5 minutes; most of it is loading the models). **Stop** removes the container.
+   The window checks the Python environment (or Docker and the image), the token file and the skeleton before it starts, and says what is missing.
+4. Generation runs in the background (see "Faster generations" for how long). **Stop** stops it.
    The work files go to the project's `Temp/Kimodo` folder.
 5. When it finishes, the motion is imported as `<clip>.kimodo.override.anim` next to your clip, layered on it as an Override, and made the write target (✏) so you see it play.
    Your keyed poses are kept at their frames. If you changed the keys while Kimodo was working, the window asks before importing.
@@ -97,9 +139,9 @@ Most of a generation is the text model (Llama 3 8B): loading it takes about 4 mi
 
 + **The same prompt again** (after changing the keys, for example) takes about 30 seconds: the window keeps each encoded prompt in the project's `Temp/Kimodo/text-cache`,
   so the text model is not needed at all.
-+ **A new prompt** loads the text model, unless the text server is running.
++ **A new prompt** loads the text model. In a Python environment this takes about 2 minutes in all. With Docker it takes about 6 minutes, unless the text server is running.
 
-**Start Text Server** in the Kimodo window keeps it loaded in a container
+With Docker, **Start Text Server** in the Kimodo window keeps it loaded in a container
 (`lilium-kimodo-text`, port 9550 on this PC only), and generations use it instead of loading it again.
 It keeps using about 15 GB of memory until you press **Stop Text Server** (Unity asks when you quit).
 With the default WSL memory (half of the PC's), the server leaves little room for the generation, and a new prompt takes about 2 minutes instead of about 1.

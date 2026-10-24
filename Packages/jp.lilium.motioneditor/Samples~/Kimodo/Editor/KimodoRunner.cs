@@ -36,6 +36,8 @@ namespace Lilium
         public List<BetweenClips.Range> segments = new List<BetweenClips.Range> ();
         /// <summary>文章の読み取りのサーバーを使ったか（S78）</summary>
         public bool server;
+        /// <summary>Python の環境で動かしたときのプロセスの番号（止める・再読み込みの後に生きているかを見る）</summary>
+        public int pid;
         public long started;
         public float seconds;
         public string message;
@@ -128,11 +130,51 @@ namespace Lilium
             File.WriteAllText (Path.Combine (folder, "run.sh"), RunScript (mode).Replace ("\r\n", "\n"), utf8);
             File.Copy (script, Path.Combine (folder, "kimodo_constraints.py"), true);
             File.Copy (generator, Path.Combine (folder, "kimodo_generate.py"), true);
+            string driver = FindSampleScript ("kimodo_run");
+            if (driver != null) File.Copy (driver, Path.Combine (folder, "kimodo_run.py"), true);
             // 文章の読み取りの控え（S78）。同じ文章で作り直すときは、サーバーも文章のモデルの読み込みも要らない
             string textCache = Path.Combine (Path.GetFullPath ("Temp"), "Kimodo", "text-cache");
             Directory.CreateDirectory (textCache);
 
             KimodoSettings settings = KimodoSettings.instance;
+            if (settings.runner == KimodoSettings.kPython) {
+                // Python の環境で動かす（Docker を使わない）。手順は kimodo_run.py（run.sh と同じ流れ）
+                if (driver == null) return "kimodo_run.py of the Kimodo sample is missing. Import the sample again from the Package Manager.";
+                ProcessStartInfo info = new ProcessStartInfo (Path.GetFullPath (settings.pythonPath), Quote (Path.Combine (folder, "kimodo_run.py")) + " " + Quote (folder) + " " + mode) {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = folder,
+                };
+                info.Environment["PYTHONUNBUFFERED"] = "1";
+                info.Environment["TEXT_ENCODER_MODE"] = "local";
+                info.Environment["TEXT_ENCODER_DEVICE"] = "cpu";
+                info.Environment["LILIUM_TEXT_CACHE"] = textCache;
+                if (!string.IsNullOrEmpty (settings.huggingFaceCache)) info.Environment["HF_HOME"] = settings.huggingFaceCache;
+                Process python;
+                try {
+                    python = Process.Start (info);
+                }
+                catch (System.Exception e) {
+                    return "Python could not be started: " + e.Message;
+                }
+                process_ = python;
+                job_ = new KimodoJob {
+                    state = KimodoJob.kRunning,
+                    pid = python.Id,
+                    folder = folder,
+                    baseClip = AssetDatabase.GetAssetPath (clip),
+                    destination = DestinationPath (clip),
+                    fingerprint = Fingerprint (clip),
+                    prompt = prompt.Trim (),
+                    mode = mode,
+                    target = target,
+                    segments = segments != null ? segments.ToList () : new List<BetweenClips.Range> (),
+                    started = System.DateTime.Now.Ticks,
+                };
+                nextContainerCheck_ = EditorApplication.timeSinceStartup + 30;
+                Store ();
+                return null;
+            }
             string container = "lilium-kimodo-" + System.Guid.NewGuid ().ToString ("N").Substring (0, 8);
             string[] arguments = {
                 "run", "--rm", "--name", container, "--gpus", "all", "--shm-size", "16g", "--ipc", "host", "--entrypoint", "/bin/bash",
@@ -186,14 +228,26 @@ namespace Lilium
             if (!EditorUtility.IsPersistent (window.baseClip)) return "Save the clip as an asset first.";
             if (string.IsNullOrWhiteSpace (prompt)) return "Write the prompt (English). Kimodo needs it.";
             if (!KimodoSettings.kModes.Contains (mode)) return "Unknown constraint mode: " + mode;
-            if (skeleton == null) return "Set the SOMA skeleton (Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...).";
+            if (skeleton == null) return "Set the SOMA skeleton (Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BVH...).";
             return CheckEnvironment ();
         }
 
-        /// <summary>Kimodo のフォルダ・Hugging Face のトークンのファイル（中は読まない）・Docker・イメージを確かめる（足りなければ理由）</summary>
+        /// <summary>
+        /// 動かす環境を確かめる（足りなければ理由）。Hugging Face のトークンのファイルは、あるかだけを見る（中は読まない）。
+        /// Python の環境: python があり、kimodo と motion_correction を読み込めるか（読み込まずに、あるかだけ見る）。Docker: Kimodo のフォルダ・Docker・イメージ
+        /// </summary>
         public static string CheckEnvironment ()
         {
             KimodoSettings settings = KimodoSettings.instance;
+            if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return "No Hugging Face token in " + settings.huggingFaceFolder + ". Run hf auth login.";
+            if (settings.runner == KimodoSettings.kPython) {
+                if (string.IsNullOrEmpty (settings.pythonPath) || !File.Exists (settings.pythonPath)) return "Set the Python of the environment where Kimodo is installed (Settings > Python).";
+                string probe = "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('kimodo') and importlib.util.find_spec('motion_correction') else 3)";
+                int code = RunProgram (settings.pythonPath, new[] { "-c", probe }, 30000, out string probed);
+                if (code == 3) return "Kimodo is not installed in " + settings.pythonPath + ". See the sample README (Setup with Python).";
+                if (code != 0) return "The Python could not be run.\n" + Tail (probed, 5);
+                return null;
+            }
             if (string.IsNullOrEmpty (settings.kimodoFolder) || !Directory.Exists (Path.Combine (settings.kimodoFolder, "kimodo"))) return "Set the kimodo folder (the git clone of Kimodo).";
             if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return "No Hugging Face token in " + settings.huggingFaceFolder + ". Run hf auth login.";
             if (Run (new[] { "info", "--format", "{{.ServerVersion}}" }, 20000, out string output) != 0) return "Docker is not running.\n" + Tail (output, 5);
@@ -205,7 +259,9 @@ namespace Lilium
         public static void Cancel ()
         {
             if (job_ == null || !job_.running) return;
-            Run (new[] { "rm", "-f", job_.container }, 30000, out string output);
+            // Python の環境: 子のプロセスごと止める。Docker: コンテナを消す（docker のプロセスを止めてもコンテナは止まらない）
+            if (job_.pid > 0) RunProgram ("taskkill", new[] { "/PID", job_.pid.ToString (), "/T", "/F" }, 30000, out string killed);
+            if (!string.IsNullOrEmpty (job_.container)) Run (new[] { "rm", "-f", job_.container }, 30000, out string output);
             if (process_ != null && !process_.HasExited) {
                 try { process_.Kill (); } catch (System.Exception) { }
             }
@@ -255,13 +311,17 @@ namespace Lilium
                     lock (processOutput_) output = processOutput_.ToString ();
                     int code = process_.ExitCode;
                     process_ = null;
-                    if (!File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose ("docker exit code " + code, output));
+                    if (!File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose ((job_.pid > 0 ? "python exit code " : "docker exit code ") + code, job_.pid > 0 ? ReadLog () : output));
                 }
                 return;
             }
-            // 再読み込みで docker のプロセスを見失ったときは、コンテナがまだあるかを時々見る
+            // 再読み込みでプロセスを見失ったときは、プロセス（Python の環境）かコンテナ（Docker）がまだあるかを時々見る
             if (now < nextContainerCheck_) return;
             nextContainerCheck_ = now + kContainerCheckSeconds;
+            if (job_.pid > 0) {
+                if (!IsAlive (job_.pid) && !File.Exists (job_.exitPath)) Finish (KimodoJob.kFailed, Diagnose ("the Python process stopped", ReadLog ()));
+                return;
+            }
             if (Run (new[] { "ps", "-q", "--filter", "name=^" + job_.container + "$" }, 10000, out string ids) == 0 && string.IsNullOrWhiteSpace (ids) && !File.Exists (job_.exitPath)) {
                 Finish (KimodoJob.kFailed, Diagnose ("the container stopped", ReadLog ()));
             }
@@ -458,9 +518,24 @@ namespace Lilium
             return quoted.ToString ();
         }
 
+        static bool IsAlive (int pid)
+        {
+            try {
+                return !Process.GetProcessById (pid).HasExited;
+            }
+            catch (System.Exception) {
+                return false;
+            }
+        }
+
         static ProcessStartInfo StartInfo (IEnumerable<string> arguments)
         {
-            return new ProcessStartInfo ("docker", string.Join (" ", arguments.Select (Quote))) {
+            return StartInfo ("docker", arguments);
+        }
+
+        static ProcessStartInfo StartInfo (string file, IEnumerable<string> arguments)
+        {
+            return new ProcessStartInfo (file, string.Join (" ", arguments.Select (Quote))) {
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -483,8 +558,14 @@ namespace Lilium
         /// <summary>docker を待って動かす（短いものだけ）。終了コード（起動できない・時間切れは -1）</summary>
         internal static int Run (IEnumerable<string> arguments, int timeout, out string output)
         {
+            return RunProgram ("docker", arguments, timeout, out output);
+        }
+
+        /// <summary>プログラムを待って動かす（短いものだけ）。終了コード（起動できない・時間切れは -1）</summary>
+        internal static int RunProgram (string file, IEnumerable<string> arguments, int timeout, out string output)
+        {
             try {
-                using (Process process = Process.Start (StartInfo (arguments))) {
+                using (Process process = Process.Start (StartInfo (file, arguments))) {
                     System.Threading.Tasks.Task<string> standard = process.StandardOutput.ReadToEndAsync ();
                     System.Threading.Tasks.Task<string> error = process.StandardError.ReadToEndAsync ();
                     if (!process.WaitForExit (timeout)) {
