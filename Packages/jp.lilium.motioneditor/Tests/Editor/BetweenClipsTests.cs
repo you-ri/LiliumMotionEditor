@@ -258,6 +258,120 @@ namespace Lilium
             Assert.AreEqual (0, graphs, "PlayableGraph が残らない");
         }
 
+        static List<Pose> WorldPose (PoseSession session, int frame)
+        {
+            session.Evaluate (frame);
+            return session.stage.editingRig.editingBones.Select (b => new Pose (b.position, b.rotation)).ToList ();
+        }
+
+        static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message)
+        {
+            for (int i = 0; i < expected.Count; i++) {
+                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), 0.001f, message + ": " + i + " 番目の骨の位置");
+                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), 0.1f, message + ": " + i + " 番目の骨の向き");
+            }
+        }
+
+        static List<string> BetweenIssues (PoseSession session)
+        {
+            MotionLintReport report = MotionLint.Run (session, 0, 60);
+            Assert.IsNull (report.error);
+            return report.issues.Where (i => i.kind == MotionLint.kBetween).Select (i => i.target + "@" + i.frame + "-" + i.endFrame).ToList ();
+        }
+
+        [Test]
+        public void SegmentState_TurnsStaleWhenKeyValuesChange_AndLostWhenKeyFramesChange ()
+        {
+            PoseSession session = OpenWithBetween ();
+            Assert.AreEqual (BetweenClips.State.Fresh, session.GetBetweenState (0), "作った直後");
+            Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (30), "外部の動きでない区間");
+            CollectionAssert.IsEmpty (BetweenIssues (session));
+
+            EditorCurveBinding hipsY = AnimationUtility.GetCurveBindings (session.clip).First (b => b.propertyName == CurveEdit.kPosition + ".y" && b.path.EndsWith ("Hips"));
+            CurveEdit.SetKey (session.clip, hipsY, 30, AnimationUtility.GetEditorCurve (session.clip, hipsY).Evaluate (0.5f) - 0.05f);
+            Assert.AreEqual (BetweenClips.State.Stale, session.GetBetweenState (0), "キーの値が変わった");
+            Assert.IsTrue (BetweenClips.TryGetBlend (session.clip, 15 / kRate, out AnimationClip ignored, out float weight), "古くても使い続ける");
+            CollectionAssert.AreEqual (new[] { "stale@0-30" }, BetweenIssues (session), "検査で知らせる");
+
+            session.Evaluate (15);
+            Assert.IsNull (session.CommitPose ());
+            Assert.AreEqual (BetweenClips.State.Lost, BetweenClips.GetState (session.clip, 0, 15), "キーのフレームが変わった（区間でなくなった）");
+            Assert.IsFalse (BetweenClips.TryGetBlend (session.clip, 10 / kRate, out ignored, out weight), "使わない");
+            CollectionAssert.AreEqual (new[] { "lost@0-30" }, BetweenIssues (session));
+        }
+
+        [Test]
+        public void SetExternal_AndChoosingACurve_SwitchTheSegment ()
+        {
+            PoseSession session = OpenWithBetween ();
+            Assert.IsNull (session.SetExternal (30, true));
+            Assert.AreEqual (BetweenClips.State.Fresh, session.GetBetweenState (30), "作ったときの指紋があるので古くない");
+            Assert.IsNull (session.SetInterpolation (0, KeyInterpolation.Linear));
+            Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (0), "リニアを選ぶと外部の動きから外れる");
+            Assert.IsNull (session.SetExternal (30, false));
+            Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (30));
+            Assert.IsNotNull (session.SetExternal (60, true), "最後のキーには区間が無い");
+
+            PoseSession other = Open2 ();
+            Assert.IsNotNull (other.SetExternal (0, true), "結果のファイルが無ければ付けない");
+        }
+
+        /// <summary>結果のファイルの無い別の元のクリップ</summary>
+        PoseSession Open2 ()
+        {
+            AnimationClip clip = new AnimationClip { frameRate = kRate };
+            AssetDatabase.CreateAsset (clip, kFolder + "/Other.rig.anim");
+            PoseSession session = new PoseSession (prefab_, definition_);
+            disposables_.Add (session);
+            session.clip = clip;
+            foreach (int frame in new[] { 0, 30 }) {
+                session.Evaluate (frame);
+                Assert.IsNull (session.CommitPose ());
+            }
+            return session;
+        }
+
+        [Test]
+        public void BakeBetween_KeepsThePose_WithoutTheResultFile ()
+        {
+            PoseSession session = OpenWithBetween ();
+            int[] frames = { 3, 8, 15, 22, 27 };
+            List<List<Pose>> before = frames.Select (f => WorldPose (session, f)).ToList ();
+
+            Undo.IncrementCurrentGroup ();
+            Assert.IsNull (session.BakeBetween (0));
+            Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (0), "キーにした区間は外部の動きから外れる");
+            Assert.Greater (ClipCycle.GetFrames (session.clip).Length, 20, "区間の中の毎フレームにキー");
+            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "キーにした後 " + frames[i] + "F");
+
+            AssetDatabase.DeleteAsset (kFolder + "/Walk.between.anim");
+            BetweenClips.Invalidate ();
+            session.stage.InvalidateClipCurves ();
+            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "結果のファイルを消した後 " + frames[i] + "F");
+            CollectionAssert.AreEqual (new[] { "missing@0-60" }, BetweenIssues (session), "結果のファイルが無いことを検査で知らせる");
+        }
+
+        [Test]
+        public void AnimBank_RenameDuplicateAndDelete_CarryTheResultFile ()
+        {
+            PoseSession session = OpenWithBetween ();
+            AnimationClip clip = session.clip;
+            Assert.IsNull (AnimBank.Rename (clip, "Run"));
+            Assert.AreEqual (kFolder + "/Run.between.anim", AssetDatabase.GetAssetPath (BetweenClips.Find (clip)), "名前を変えると結果のファイルも付いて行く");
+
+            AnimationClip copy = AnimBank.Duplicate (clip);
+            AnimationClip copied = BetweenClips.Find (copy);
+            Assert.IsNotNull (copied, "複製にも結果のファイル");
+            Assert.AreNotEqual (BetweenClips.Find (clip), copied, "別のファイル");
+            CollectionAssert.AreEqual (BetweenClips.GetSegments (BetweenClips.Find (clip)), BetweenClips.GetSegments (copied));
+            Assert.IsTrue (BetweenClips.TryGetBlend (copy, 15 / kRate, out AnimationClip ignored, out float weight), "複製でも外部の動き");
+
+            string copiedPath = AssetDatabase.GetAssetPath (copied);
+            Assert.IsTrue (AnimBank.Delete (copy));
+            Assert.IsNull (AssetDatabase.LoadMainAssetAtPath (copiedPath), "消すと結果のファイルも一緒に移す");
+            Assert.IsNotNull (BetweenClips.Find (clip), "元の結果のファイルは残る");
+        }
+
         [Test]
         public void ImportBetween_RejectsSegmentsThatAreNotBetweenNeighboringKeys ()
         {

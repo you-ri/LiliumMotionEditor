@@ -30,13 +30,37 @@ namespace Lilium
             public int end;
         }
 
+        /// <summary>結果を作ったときの区間の指紋（S82。区間の両端のフレームと、その 2 フレームの元のクリップの全部のカーブの値）</summary>
+        [System.Serializable]
+        public struct Stamp
+        {
+            public int start;
+            public int end;
+            public string hash;
+        }
+
+        /// <summary>
+        /// 区間の状態（S82）。Fresh: 結果を作ったときのキーのまま使う。Stale: キーの値が変わった（使い続ける。寄せる先は新しいキー）。
+        /// Lost: キーのフレームが変わって区間でなくなった（使わない。元の補間で見せる）。None: 外部の補間でない
+        /// </summary>
+        public enum State
+        {
+            None,
+            Fresh,
+            Stale,
+            Lost,
+        }
+
         /// <summary>.meta に書く印（ClipUserData.between）</summary>
         [System.Serializable]
         internal sealed class Settings
         {
             /// <summary>元のクリップの GUID</summary>
             public string baseClip;
+            /// <summary>外部の補間を使う区間</summary>
             public List<Range> segments = new List<Range> ();
+            /// <summary>結果を作ったときの、元のクリップの全部の区間の指紋</summary>
+            public List<Stamp> stamps = new List<Stamp> ();
         }
 
         /// <summary>元のクリップの名前（編集用クリップの .rig は外す）</summary>
@@ -72,16 +96,72 @@ namespace Lilium
             return settings != null && settings.segments != null ? settings.segments.ToList () : new List<Range> ();
         }
 
-        /// <summary>結果のファイルに、元のクリップと区間の印を書く（.meta なので Undo には乗らない）</summary>
-        public static bool SaveSegments (AnimationClip between, AnimationClip baseClip, IEnumerable<Range> segments)
+        /// <summary>結果のファイルの指紋（印が無ければ空）</summary>
+        public static List<Stamp> GetStamps (AnimationClip between)
+        {
+            Settings settings = between != null ? ClipUserData.Load (between).between : null;
+            return settings != null && settings.stamps != null ? settings.stamps.ToList () : new List<Stamp> ();
+        }
+
+        /// <summary>
+        /// 結果のファイルに、元のクリップと区間の印を書く（.meta なので Undo には乗らない）。stamps を渡せば指紋も書き換える（省くと今のまま）。
+        /// 元のクリップの .meta にも結果のファイルの印を付ける（結果のファイルが無くなったことを検査で知らせるため）
+        /// </summary>
+        public static bool SaveSegments (AnimationClip between, AnimationClip baseClip, IEnumerable<Range> segments, IEnumerable<Stamp> stamps = null)
         {
             string baseGuid = AssetDatabase.AssetPathToGUID (AssetDatabase.GetAssetPath (baseClip));
+            List<Stamp> kept = stamps != null ? stamps.ToList () : GetStamps (between);
             bool saved = ClipUserData.Save (between, data => data.between = new Settings {
                 baseClip = baseGuid,
                 segments = segments.Distinct ().OrderBy (r => r.start).ToList (),
+                stamps = kept,
             });
+            string betweenGuid = AssetDatabase.AssetPathToGUID (AssetDatabase.GetAssetPath (between));
+            ClipUserData.Save (baseClip, data => data.betweenClip = betweenGuid);
             version_++;
             return saved;
+        }
+
+        /// <summary>元のクリップの、今の全部の区間の指紋</summary>
+        public static List<Stamp> MakeStamps (AnimationClip baseClip)
+        {
+            List<Stamp> stamps = new List<Stamp> ();
+            int[] frames = ClipCycle.GetFrames (baseClip);
+            EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (baseClip).OrderBy (b => b.path).ThenBy (b => b.propertyName).ToArray ();
+            AnimationCurve[] curves = bindings.Select (b => AnimationUtility.GetEditorCurve (baseClip, b)).ToArray ();
+            for (int i = 0; i + 1 < frames.Length; i++) {
+                stamps.Add (new Stamp { start = frames[i], end = frames[i + 1], hash = Fingerprint (baseClip, bindings, curves, frames[i], frames[i + 1]) });
+            }
+            return stamps;
+        }
+
+        /// <summary>区間の両端のフレームと、その 2 フレームの全部のカーブの値の指紋</summary>
+        static string Fingerprint (AnimationClip baseClip, EditorCurveBinding[] bindings, AnimationCurve[] curves, int start, int end)
+        {
+            System.Text.StringBuilder text = new System.Text.StringBuilder ();
+            text.Append (start).Append ('-').Append (end).Append (':');
+            float rate = baseClip.frameRate;
+            for (int i = 0; i < bindings.Length; i++) {
+                if (curves[i] == null) continue;
+                text.Append (bindings[i].path).Append ('/').Append (bindings[i].propertyName).Append ('=')
+                    .Append (curves[i].Evaluate (start / rate).ToString ("R")).Append (',').Append (curves[i].Evaluate (end / rate).ToString ("R")).Append (';');
+            }
+            return Hash128.Compute (text.ToString ()).ToString ();
+        }
+
+        /// <summary>
+        /// 区間を外部の補間にする（on）・外す。結果のファイルが無ければ false。区間の確かめは呼ぶ側で（外すときは区間でなくてもよい）
+        /// </summary>
+        public static bool SetSegment (AnimationClip baseClip, Range range, bool on)
+        {
+            AnimationClip between = Find (baseClip);
+            if (between == null) return false;
+            List<Range> segments = GetSegments (between);
+            bool had = segments.Contains (range);
+            if (on == had) return true;
+            if (on) segments.Add (range);
+            else segments.Remove (range);
+            return SaveSegments (between, baseClip, segments);
         }
 
         /// <summary>
@@ -114,13 +194,25 @@ namespace Lilium
             /// <summary>結果のファイルを見つけたか（見つけたファイルが消されたら探し直す）</summary>
             public bool found;
             public AnimationClip between;
+            /// <summary>使う区間（両端が今も隣り合うキーのもの）と、印はあるが区間でなくなったもの</summary>
             public Range[] active;
+            public Range[] lost;
+            public Dictionary<Range, string> stamps;
+            /// <summary>使う区間の状態（Fresh か Stale。指紋はカーブを全部読むので、カーブが変わるまで覚える）</summary>
+            public Dictionary<Range, State> states = new Dictionary<Range, State> ();
         }
 
         static readonly Dictionary<AnimationClip, Entry> cache_ = new Dictionary<AnimationClip, Entry> ();
         /// <summary>印やファイルが変わるたびに増やす（カーブの版では分からない .meta の書き換え・ファイルの追加と削除）</summary>
         static int version_;
         static bool hooked_;
+
+        /// <summary>元のクリップに、外部の補間の区間の印があるか（使えなくなった区間も）</summary>
+        public static bool HasAny (AnimationClip baseClip)
+        {
+            Entry entry = GetEntry (baseClip);
+            return entry != null && entry.between != null && entry.active.Length + entry.lost.Length > 0;
+        }
 
         /// <summary>元のクリップに、今使える外部の補間の区間があるか</summary>
         public static bool HasSegments (AnimationClip baseClip)
@@ -167,12 +259,59 @@ namespace Lilium
 
         static Entry Build (AnimationClip baseClip, int baseVersion)
         {
-            Entry entry = new Entry { baseVersion = baseVersion, version = version_, active = new Range[0] };
+            Entry entry = new Entry { baseVersion = baseVersion, version = version_, active = new Range[0], lost = new Range[0] };
             entry.between = Find (baseClip);
             entry.found = entry.between != null;
             if (!entry.found) return entry;
-            entry.active = GetSegments (entry.between).Where (r => GetSegmentProblem (baseClip, r) == null).ToArray ();
+            List<Range> segments = GetSegments (entry.between);
+            entry.active = segments.Where (r => GetSegmentProblem (baseClip, r) == null).ToArray ();
+            entry.lost = segments.Except (entry.active).ToArray ();
+            entry.stamps = new Dictionary<Range, string> ();
+            foreach (Stamp stamp in GetStamps (entry.between)) entry.stamps[new Range { start = stamp.start, end = stamp.end }] = stamp.hash;
             return entry;
+        }
+
+        /// <summary>印の付いた区間 1 つの状態（使えれば Fresh か Stale、区間でなくなっていれば Lost。印が無ければ None）</summary>
+        public static State GetSegmentState (AnimationClip baseClip, Range range)
+        {
+            Entry entry = GetEntry (baseClip);
+            if (entry == null || entry.between == null) return State.None;
+            if (System.Array.IndexOf (entry.active, range) >= 0) return ActiveState (baseClip, entry, range);
+            return System.Array.IndexOf (entry.lost, range) >= 0 ? State.Lost : State.None;
+        }
+
+        /// <summary>
+        /// フレームの間（start から end。タイムラインのトラックのキーの間）に掛かる外部の補間の状態。
+        /// 使う区間が掛かれば Fresh（どれかが古ければ Stale）、使えなくなった区間だけが掛かれば Lost、どれも掛からなければ None
+        /// </summary>
+        public static State GetState (AnimationClip baseClip, int start, int end)
+        {
+            Entry entry = GetEntry (baseClip);
+            if (entry == null || entry.between == null) return State.None;
+            State result = State.None;
+            foreach (Range range in entry.active) {
+                if (range.end <= start || range.start >= end) continue;
+                State state = ActiveState (baseClip, entry, range);
+                if (state == State.Stale) return State.Stale;
+                result = state;
+            }
+            if (result != State.None) return result;
+            foreach (Range range in entry.lost) {
+                if (range.end > start && range.start < end) return State.Lost;
+            }
+            return State.None;
+        }
+
+        static State ActiveState (AnimationClip baseClip, Entry entry, Range range)
+        {
+            if (entry.states.TryGetValue (range, out State state)) return state;
+            // ほかの使う区間の状態も同じ読みで決まるので、まとめて決める
+            foreach (Range other in entry.active) entry.states[other] = State.Stale;
+            foreach (Stamp stamp in MakeStamps (baseClip)) {
+                Range other = new Range { start = stamp.start, end = stamp.end };
+                if (entry.states.ContainsKey (other) && entry.stamps.TryGetValue (other, out string hash) && hash == stamp.hash) entry.states[other] = State.Fresh;
+            }
+            return entry.states[range];
         }
 
         /// <summary>覚えた区間を捨てる（テスト・結果のファイルを外で書き換えたとき）</summary>

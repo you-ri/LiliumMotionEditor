@@ -232,7 +232,25 @@ namespace Lilium
             string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
             string name = NextName (BaseName (path), n => Exists (folder, n));
             string destination = MakePath (folder, name);
-            return AssetDatabase.CopyAsset (path, destination) ? AssetDatabase.LoadAssetAtPath<AnimationClip> (destination) : null;
+            if (!AssetDatabase.CopyAsset (path, destination)) return null;
+            AnimationClip copy = AssetDatabase.LoadAssetAtPath<AnimationClip> (destination);
+            CopyBetween (clip, copy);
+            return copy;
+        }
+
+        /// <summary>
+        /// 外部の補間の結果のファイル（S82）を複製に付ける（複製の名前の結果のファイルにし、印を複製に向け直す）。
+        /// .meta も写るので、写さないと複製の印が元の結果のファイルを指したまま、複製では外部の区間が黙って元の補間になる
+        /// </summary>
+        static void CopyBetween (AnimationClip clip, AnimationClip copy)
+        {
+            AnimationClip between = BetweenClips.Find (clip);
+            string copyPath = BetweenClips.PathFor (copy);
+            if (copy != null) ClipUserData.Save (copy, data => data.betweenClip = null);
+            if (between == null || copyPath == null || AssetDatabase.LoadMainAssetAtPath (copyPath) != null) return;
+            if (!AssetDatabase.CopyAsset (AssetDatabase.GetAssetPath (between), copyPath)) return;
+            AnimationClip copied = AssetDatabase.LoadAssetAtPath<AnimationClip> (copyPath);
+            BetweenClips.SaveSegments (copied, copy, BetweenClips.GetSegments (between), BetweenClips.GetStamps (between));
         }
 
         /// <summary>
@@ -247,6 +265,8 @@ namespace Lilium
             if (problem != null || newBaseName == null) return problem;
             string folder = Path.GetDirectoryName (path).Replace ('\\', '/');
 
+            // 外部の補間の結果のファイル（S82）も名前から決まるので、先に見つけておく
+            AnimationClip between = BetweenClips.Find (clip);
             // 焼いた版の置き場所は名前から決まるので、先に対応を調べておく
             string oldOutput = HumanoidOutput.GetOutputPath (path);
             HumanoidOutput.Link link = AssetDatabase.LoadMainAssetAtPath (oldOutput) != null ? HumanoidOutput.ReadLink (oldOutput) : null;
@@ -259,6 +279,11 @@ namespace Lilium
                 if (AssetDatabase.LoadMainAssetAtPath (newOutput) == null) {
                     AssetDatabase.RenameAsset (oldOutput, Path.GetFileNameWithoutExtension (newOutput));
                 }
+            }
+            string newBetween = between != null ? BetweenClips.PathFor (clip) : null;
+            if (newBetween != null && AssetDatabase.LoadMainAssetAtPath (newBetween) == null) {
+                AssetDatabase.RenameAsset (AssetDatabase.GetAssetPath (between), Path.GetFileNameWithoutExtension (newBetween));
+                BetweenClips.Invalidate ();
             }
             return null;
         }
@@ -284,12 +309,16 @@ namespace Lilium
         }
 
         /// <summary>
-        /// ゴミ箱へ移す（OS のゴミ箱から戻せる）。焼いた版は残す。PoseBank の姿勢も同じ
+        /// ゴミ箱へ移す（OS のゴミ箱から戻せる）。焼いた版は残す。外部の補間の結果のファイル（S82）は元が無いと使えないので一緒に移す。PoseBank の姿勢も同じ
         /// </summary>
         public static bool Delete (AnimationClip clip)
         {
             string path = AssetDatabase.GetAssetPath (clip);
-            return !string.IsNullOrEmpty (path) && AssetDatabase.MoveAssetToTrash (path);
+            if (string.IsNullOrEmpty (path)) return false;
+            AnimationClip between = BetweenClips.Find (clip);
+            if (!AssetDatabase.MoveAssetToTrash (path)) return false;
+            if (between != null) AssetDatabase.MoveAssetToTrash (AssetDatabase.GetAssetPath (between));
+            return true;
         }
 
         internal static void EnsureFolder (string folder)

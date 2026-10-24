@@ -167,6 +167,29 @@ namespace Lilium
         }
 
         [Test]
+        public void Window_SwitchesAndBakesTheExternalSegment ()
+        {
+            PreviewWindow window = OpenWindow (BaseClip ());
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            Assert.IsFalse (window.CanSetExternal (0), "結果のファイルが無ければ選べない");
+            Assert.IsNull (window.ImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { new BetweenClips.Range { start = 0, end = 30 } }, out PoseSession.OverrideImportResult result));
+            Assert.AreEqual (BetweenClips.State.Fresh, window.GetBetweenState (0));
+            Assert.IsTrue (window.CanSetExternal (30));
+            window.SetExternal (30);
+            Assert.AreEqual (BetweenClips.State.Fresh, window.GetBetweenState (30));
+            List<PreviewWindow.TimelineTrack> tracks = window.BuildTracks ();
+            CollectionAssert.AreEqual (new[] { BetweenClips.State.Fresh, BetweenClips.State.Fresh }, tracks[0].between, "トラックのキーの間に外部の動きの状態");
+
+            window.SetInterpolation (30, KeyInterpolation.Curve);
+            Assert.AreEqual (BetweenClips.State.None, window.GetBetweenState (30), "曲線を選ぶと外れる");
+            List<Quaternion> before = Pose (15);
+            Assert.IsTrue (window.CanBakeBetween (0));
+            Assert.IsNull (window.BakeBetween (0));
+            Assert.AreEqual (BetweenClips.State.None, window.GetBetweenState (0));
+            Assert.LessOrEqual (MaxAngle (before, Pose (15)), 0.1f, "キーにしても同じ姿勢");
+        }
+
+        [Test]
         public void ImportOverride_LeavesNoPlayableGraph_AfterTheWindowCloses ()
         {
             ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);

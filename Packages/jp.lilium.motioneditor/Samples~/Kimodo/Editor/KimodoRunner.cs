@@ -18,6 +18,9 @@ namespace Lilium
         public const string kImported = "imported";
         public const string kFailed = "failed";
         public const string kCancelled = "cancelled";
+        /// <summary>結果の使い方: 元のクリップに重ねる Override（S77）か、キーの間の補間（S83。BetweenClips）か</summary>
+        public const string kOverride = "override";
+        public const string kBetween = "between";
 
         public string state;
         public string container;
@@ -28,6 +31,11 @@ namespace Lilium
         public string fingerprint;
         public string prompt;
         public string mode;
+        public string target = kOverride;
+        /// <summary>補間として使うとき、外部の動きにする区間</summary>
+        public List<BetweenClips.Range> segments = new List<BetweenClips.Range> ();
+        /// <summary>文章の読み取りのサーバーを使ったか（S78）</summary>
+        public bool server;
         public long started;
         public float seconds;
         public string message;
@@ -82,11 +90,23 @@ namespace Lilium
         /// <summary>
         /// 窓の元のクリップのキーと文章から生成を始める。始められなければ理由を返す（Docker は起動しない）
         /// </summary>
-        public static string Start (PreviewWindow window, string prompt, string mode)
+        /// <param name="target">結果の使い方（KimodoJob.kOverride か kBetween）</param>
+        /// <param name="segments">補間として使うとき、外部の動きにする区間（元のクリップの隣り合うキーの間）</param>
+        public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null)
         {
             if (job_ != null && job_.running) return "A generation is already running.";
             string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton);
             if (problem != null) return problem;
+            if (target == KimodoJob.kBetween) {
+                if (segments == null || segments.Count == 0) return "Choose the segments to fill with Kimodo's motion.";
+                foreach (BetweenClips.Range range in segments) {
+                    problem = BetweenClips.GetSegmentProblem (window.baseClip, range);
+                    if (problem != null) return problem;
+                }
+            }
+            // 文章の読み取りのサーバー（S78）が立ち上がりかけなら待ってもらう（ローカルで読み直すと 4 分かかる）
+            KimodoTextServer.State server = KimodoTextServer.state;
+            if (server == KimodoTextServer.State.Starting) return "The text server is still starting. Wait until it is ready, or stop it.";
             AnimationClip clip = window.baseClip;
             AssetDatabase.SaveAssetIfDirty (clip);
 
@@ -94,8 +114,9 @@ namespace Lilium
             if (error != null) return error;
             if (export.frames.Count < 2) return "Key at least two frames of the clip. Kimodo fills the frames between the keys.";
             if (export.lastFrame / export.frameRate > 10) return "The clip is longer than 10 seconds (the longest Kimodo makes).";
-            string script = FindConstraintsScript ();
-            if (script == null) return "kimodo_constraints.py of the Kimodo sample is missing. Import the sample again from the Package Manager.";
+            string script = FindSampleScript ("kimodo_constraints");
+            string generator = FindSampleScript ("kimodo_generate");
+            if (script == null || generator == null) return "The Python scripts of the Kimodo sample are missing. Import the sample again from the Package Manager.";
 
             string folder = Path.Combine (Path.GetFullPath ("Temp"), "Kimodo", SafeName (BaseName (clip)), System.DateTime.Now.ToString ("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory (folder);
@@ -106,6 +127,10 @@ namespace Lilium
             File.WriteAllText (Path.Combine (folder, "prompt.txt"), prompt.Trim (), utf8);
             File.WriteAllText (Path.Combine (folder, "run.sh"), RunScript (mode).Replace ("\r\n", "\n"), utf8);
             File.Copy (script, Path.Combine (folder, "kimodo_constraints.py"), true);
+            File.Copy (generator, Path.Combine (folder, "kimodo_generate.py"), true);
+            // 文章の読み取りの控え（S78）。同じ文章で作り直すときは、サーバーも文章のモデルの読み込みも要らない
+            string textCache = Path.Combine (Path.GetFullPath ("Temp"), "Kimodo", "text-cache");
+            Directory.CreateDirectory (textCache);
 
             KimodoSettings settings = KimodoSettings.instance;
             string container = "lilium-kimodo-" + System.Guid.NewGuid ().ToString ("N").Substring (0, 8);
@@ -113,9 +138,12 @@ namespace Lilium
                 "run", "--rm", "--name", container, "--gpus", "all", "--shm-size", "16g", "--ipc", "host", "--entrypoint", "/bin/bash",
                 "-v", DockerPath (settings.kimodoFolder) + ":/workspace",
                 "-v", DockerPath (folder) + ":/work",
+                "-v", DockerPath (textCache) + ":/cache",
                 "-v", DockerPath (settings.huggingFaceFolder) + ":/workspace/.cache/huggingface",
                 "-e", "HF_HOME=/workspace/.cache/huggingface",
-                "-e", "TEXT_ENCODER_MODE=local",
+                // サーバーがあれば文章の読み取りはサーバーで（api。auto はサーバーが落ちていると黙ってローカルで読み直す）
+                "-e", server == KimodoTextServer.State.Ready ? "TEXT_ENCODER_MODE=api" : "TEXT_ENCODER_MODE=local",
+                "-e", "TEXT_ENCODER_URL=" + KimodoTextServer.kUrlFromContainer,
                 "-e", "TEXT_ENCODER_DEVICE=cpu",
                 "-e", "PYTHONUNBUFFERED=1",
                 settings.image, "-l", "/work/run.sh",
@@ -136,6 +164,9 @@ namespace Lilium
                 fingerprint = Fingerprint (clip),
                 prompt = prompt.Trim (),
                 mode = mode,
+                target = target,
+                segments = segments != null ? segments.ToList () : new List<BetweenClips.Range> (),
+                server = server == KimodoTextServer.State.Ready,
                 started = System.DateTime.Now.Ticks,
             };
             nextContainerCheck_ = EditorApplication.timeSinceStartup + 30;
@@ -156,6 +187,13 @@ namespace Lilium
             if (string.IsNullOrWhiteSpace (prompt)) return "Write the prompt (English). Kimodo needs it.";
             if (!KimodoSettings.kModes.Contains (mode)) return "Unknown constraint mode: " + mode;
             if (skeleton == null) return "Set the SOMA skeleton (Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...).";
+            return CheckEnvironment ();
+        }
+
+        /// <summary>Kimodo のフォルダ・Hugging Face のトークンのファイル（中は読まない）・Docker・イメージを確かめる（足りなければ理由）</summary>
+        public static string CheckEnvironment ()
+        {
+            KimodoSettings settings = KimodoSettings.instance;
             if (string.IsNullOrEmpty (settings.kimodoFolder) || !Directory.Exists (Path.Combine (settings.kimodoFolder, "kimodo"))) return "Set the kimodo folder (the git clone of Kimodo).";
             if (!File.Exists (Path.Combine (settings.huggingFaceFolder, "token"))) return "No Hugging Face token in " + settings.huggingFaceFolder + ". Run hf auth login.";
             if (Run (new[] { "info", "--format", "{{.ServerVersion}}" }, 20000, out string output) != 0) return "Docker is not running.\n" + Tail (output, 5);
@@ -253,6 +291,14 @@ namespace Lilium
             ExternalSkeleton skeleton = KimodoSettings.instance.skeleton;
             Bvh bvh = Bvh.Parse (File.ReadAllText (job_.bvhPath), out string error);
             if (bvh == null) return Fail (error);
+            if (job_.target == KimodoJob.kBetween) {
+                // キーの間の補間として使う（S83）。結果のファイルは丸ごと置き換え、選んだ区間を外部の動きにする
+                error = window.ImportBetween (bvh, skeleton, job_.segments, out PoseSession.OverrideImportResult between);
+                if (error != null) return Fail (error);
+                job_.keyDeviations = new List<PoseSession.KeyDeviation> ();
+                Finish (KimodoJob.kImported, "Used as the interpolation of " + job_.segments.Count + " segment(s): " + BetweenClips.PathFor (clip) + ".");
+                return null;
+            }
             AnimationClip destination = AssetDatabase.LoadAssetAtPath<AnimationClip> (job_.destination);
             if (destination == null) {
                 destination = new AnimationClip { frameRate = clip.frameRate };
@@ -339,17 +385,19 @@ namespace Lilium
                 "  python /work/kimodo_constraints.py /work/keys.bvh /work/export.json /work/constraints.json --mode " + mode + " > /work/constraints_out.txt || return $?\n" +
                 "  cat /work/constraints_out.txt\n" +
                 "  DURATION=$(tail -n 1 /work/constraints_out.txt | python -c 'import json, sys; print(json.load(sys.stdin)[\"duration\"])') || return $?\n" +
-                "  kimodo_gen \"$(cat /work/prompt.txt)\" --duration \"$DURATION\" --constraints /work/constraints.json --output /work/gen --bvh --bvh_standard_tpose\n" +
+                // kimodo_gen を、文章の読み取りを控える読み取り器で動かす（S78。kimodo_generate.py）
+                "  LILIUM_TEXT_CACHE=/cache python /work/kimodo_generate.py \"$(cat /work/prompt.txt)\" --duration \"$DURATION\" --constraints /work/constraints.json --output /work/gen --bvh --bvh_standard_tpose\n" +
                 "}\n" +
                 "generate > /work/log.txt 2>&1\n" +
                 "echo $? > /work/exit.tmp && mv /work/exit.tmp /work/exit.txt\n";
         }
 
-        static string FindConstraintsScript ()
+        /// <summary>サンプルの Python のスクリプト（name.py）のフルパス（無ければ null）</summary>
+        static string FindSampleScript (string name)
         {
-            foreach (string guid in AssetDatabase.FindAssets ("kimodo_constraints")) {
+            foreach (string guid in AssetDatabase.FindAssets (name)) {
                 string path = AssetDatabase.GUIDToAssetPath (guid);
-                if (path.EndsWith (".py")) return Path.GetFullPath (path);
+                if (Path.GetFileName (path) == name + ".py") return Path.GetFullPath (path);
             }
             return null;
         }
@@ -386,7 +434,7 @@ namespace Lilium
             return name.Replace (' ', '_');
         }
 
-        static string DockerPath (string path)
+        internal static string DockerPath (string path)
         {
             return Path.GetFullPath (path).Replace ('\\', '/');
         }
@@ -433,7 +481,7 @@ namespace Lilium
         }
 
         /// <summary>docker を待って動かす（短いものだけ）。終了コード（起動できない・時間切れは -1）</summary>
-        static int Run (IEnumerable<string> arguments, int timeout, out string output)
+        internal static int Run (IEnumerable<string> arguments, int timeout, out string output)
         {
             try {
                 using (Process process = Process.Start (StartInfo (arguments))) {

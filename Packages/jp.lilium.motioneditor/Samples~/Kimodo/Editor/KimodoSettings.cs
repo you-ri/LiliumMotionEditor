@@ -23,6 +23,8 @@ namespace Lilium
         public string skeletonGuid = "";
         public string prompt = "a person walks forward at a normal pace";
         public string mode = "fullbody";
+        /// <summary>結果の使い方（KimodoJob.kOverride: Override として重ねる / kBetween: キーの間の補間。S83）</summary>
+        public string target = KimodoJob.kOverride;
 
         public ExternalSkeleton skeleton
         {

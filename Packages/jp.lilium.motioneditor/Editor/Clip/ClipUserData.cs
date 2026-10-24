@@ -20,6 +20,8 @@ namespace Lilium
         public OverrideFiles.Settings overrideLayer;
         /// <summary>外部の補間の結果の印（どの元のクリップの、どの区間か。BetweenClips。S81）</summary>
         public BetweenClips.Settings between;
+        /// <summary>元のクリップの、外部の補間の結果のファイルの GUID（S82。結果のファイルが無くなったことを検査で知らせる）</summary>
+        public string betweenClip;
 
         public static ClipUserData Load (AnimationClip clip)
         {

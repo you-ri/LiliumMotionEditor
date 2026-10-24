@@ -747,6 +747,42 @@ namespace Lilium
         }
 
         [Test]
+        public void WriteMotion_External_NeedsTheResultFile_AndReadMotionReturnsIt ()
+        {
+            Assert.IsTrue (Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/External.rig.anim", create = true }).success);
+            AnimationClip clip = MotionEditorCommands.session.clip;
+            PoseDocument rest = Run<PoseResponse> (new MotionEditorRequest { command = "readPose", frame = 0 }).result;
+            MotionEditorRequest request = new MotionEditorRequest { command = "writeMotion", lint = false };
+            request.keys.Add (Key (Squat (rest, 0, 0)));
+            request.keys.Add (Key (Squat (rest, 20, 0.06f)));
+            request.keys.Add (Key (Squat (rest, 40, 0)));
+            Assert.IsTrue (Run<MotionResponse> (request).success);
+
+            MotionEditorRequest external = new MotionEditorRequest { command = "writeMotion", lint = false };
+            MotionEditorKey key = Key (Squat (rest, 20, 0.06f));
+            key.interpolation = "external";
+            external.keys.Add (key);
+            Dictionary<EditorCurveBinding, Keyframe[]> before = Curves (clip);
+            AssertFailed (MotionEditorCommands.Run (JsonUtility.ToJson (external)), "結果のファイルが無い");
+            AssertSameCurves (before, clip, "何も書かない");
+
+            // 外部の動きの結果のファイル（中身は空でよい）と、0F からの区間の印
+            AnimationClip between = new AnimationClip { frameRate = clip.frameRate };
+            AssetDatabase.CreateAsset (between, BetweenClips.PathFor (clip));
+            BetweenClips.SaveSegments (between, clip, new[] { new BetweenClips.Range { start = 0, end = 20 } }, BetweenClips.MakeStamps (clip));
+            MotionResponse written = Run<MotionResponse> (external);
+            Assert.IsTrue (written.success, written.error);
+            // 20F のキーも打ち直すので、値がわずかでも変われば古い（Stale）になる。どちらでも外部の区間
+            BetweenClips.State state = MotionEditorCommands.session.GetBetweenState (20);
+            Assert.IsTrue (state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale, state.ToString ());
+
+            ReadMotionResponse read = Run<ReadMotionResponse> (new MotionEditorRequest { command = "readMotion" });
+            Assert.IsTrue (read.success, read.error);
+            CollectionAssert.AreEqual (new[] { "external", "external", "" }, read.result.keys.Select (k => k.interpolation ?? ""));
+            Assert.AreEqual (state == BetweenClips.State.Stale, read.result.keys[1].stale, "古さを返す");
+        }
+
+        [Test]
         public void ReadMotion_RoundTripsThroughWriteMotion ()
         {
             string prefab = CreateHandsPrefab ();

@@ -60,6 +60,9 @@ namespace Lilium
         static readonly Color kCycleKeyColor = new Color (0.4f, 0.78f, 0.72f);
         static readonly Color kCurrentCycleKeyColor = new Color (0.72f, 0.95f, 0.9f);
         static readonly Color kCycleMarkColor = new Color (0.1f, 0.25f, 0.23f);
+        // 外部の動きの区間の波線（S82）
+        const float kWaveStep = 3;
+        const float kWaveHeight = 2;
         // 混在の区間の点線（S80）
         const float kDashLength = 3;
         const float kDashGap = 2;
@@ -473,7 +476,10 @@ namespace Lilium
                     float x0 = Mathf.Max (prev.xMax + 2, keyArea.x);
                     float x1 = Mathf.Min (next.x - 2, keyArea.xMax);
                     KeyInterpolation? mode = IntervalMode (track, k);
-                    DrawInterval (painter, x0, x1, midY, IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1), IntervalColor (track, k), mode);
+                    BetweenClips.State between = track.between != null && k - 1 < track.between.Length ? track.between[k - 1] : BetweenClips.State.None;
+                    float textWidth = IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1);
+                    if (between != BetweenClips.State.None) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), between != BetweenClips.State.Fresh);
+                    else DrawInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), mode);
                 }
 
                 for (int k = 0; k < track.keys.Length; k++) {
@@ -548,6 +554,33 @@ namespace Lilium
             for (int i = 0; i < 3; i++) {
                 FillRect (painter, new Rect (x0 + i, y - i, 1, i * 2 + 1), color);
                 FillRect (painter, new Rect (x1 - 1 - i, y - i, 1, i * 2 + 1), color);
+            }
+        }
+
+        /// <summary>
+        /// 外部の動きの区間（S82）の矢印: 波線と両端の矢じり。古い（キーの値が変わった）・使えなくなった（キーのフレームが変わった）区間は点線の波線
+        /// </summary>
+        void DrawExternalInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color, bool dashed)
+        {
+            if (x1 - x0 < 8) return;
+            y = Mathf.Round (y) + 0.5f;
+            float mid = (x0 + x1) * 0.5f;
+            float gap = textWidth > 0 ? textWidth * 0.5f + 4 : 0;
+            painter.strokeColor = color;
+            painter.lineWidth = 1;
+            int step = 0;
+            for (float x = x0 + 2; x + kWaveStep <= x1 - 2; x += kWaveStep, step++) {
+                if (gap > 0 && x + kWaveStep > mid - gap && x < mid + gap) continue;
+                if (dashed && step % 3 == 2) continue;
+                float from = step % 2 == 0 ? -kWaveHeight : kWaveHeight;
+                painter.BeginPath ();
+                painter.MoveTo (new Vector2 (x, y + from));
+                painter.LineTo (new Vector2 (x + kWaveStep, y - from));
+                painter.Stroke ();
+            }
+            for (int i = 0; i < 3; i++) {
+                FillRect (painter, new Rect (x0 + i, y - 0.5f - i, 1, i * 2 + 1), color);
+                FillRect (painter, new Rect (x1 - 1 - i, y - 0.5f - i, 1, i * 2 + 1), color);
             }
         }
 
@@ -1061,11 +1094,38 @@ namespace Lilium
             menu.AddSeparator ("");
             string interpolation = Tr ("TIMELINE_OVERLAY_INTERPOLATION") + "/";
             bool canSet = window_.CanSetInterpolation (frame);
-            KeyInterpolation? current = window_.GetInterpolation (frame);
+            BetweenClips.State betweenState = window_.GetBetweenState (frame);
+            bool external = betweenState == BetweenClips.State.Fresh || betweenState == BetweenClips.State.Stale;
+            // 外部の動きの区間では、接線の補間にチェックを付けない（見えているのは外部の動き）
+            KeyInterpolation? current = external ? (KeyInterpolation?) null : window_.GetInterpolation (frame);
             AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CURVE"), frame, KeyInterpolation.Curve, current, canSet);
             AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_LINEAR"), frame, KeyInterpolation.Linear, current, canSet);
             AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CONSTANT"), frame, KeyInterpolation.Constant, current, canSet);
-            if (canSet && current == null) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_MIXED")), true);
+            if (canSet && current == null && !external) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_MIXED")), true);
+            // 外部の動き（S82）。結果のファイルがあり、元のクリップへ書いているときだけ選べる
+            GUIContent externalItem = new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_EXTERNAL"));
+            if (window_.CanSetExternal (frame) && !external) {
+                menu.AddItem (externalItem, false, () => {
+                    window_.SetExternal (frame);
+                    RebuildTracks ();
+                });
+            }
+            else {
+                menu.AddDisabledItem (externalItem, external);
+            }
+            if (betweenState == BetweenClips.State.Stale) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BETWEEN_STALE")), false);
+            if (betweenState == BetweenClips.State.Lost) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BETWEEN_LOST")), false);
+            GUIContent bake = new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BAKE_BETWEEN"));
+            if (window_.CanBakeBetween (frame)) {
+                menu.AddItem (bake, false, () => {
+                    string error = window_.BakeBetween (frame);
+                    if (error != null) Debug.LogWarning ("Motion Editor: " + error);
+                    RebuildTracks ();
+                });
+            }
+            else {
+                menu.AddDisabledItem (bake);
+            }
             // サイクルキー（S32）: 最後のキーに付け外しする。付いていればチェックを出す
             menu.AddSeparator ("");
             bool cycle = window_.cycle;

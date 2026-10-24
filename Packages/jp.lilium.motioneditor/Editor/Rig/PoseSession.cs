@@ -266,6 +266,99 @@ namespace Lilium
                 Undo.RecordObject (clip, undoName);
                 KeyInterpolations.SetSegment (clip, frame, mode, exclude);
             });
+            // 曲線・リニア・一定を選んだら、外部の補間からは外す（S82）
+            if (clip == clip_) BetweenClips.SetSegment (clip_, new BetweenClips.Range { start = start, end = end }, false);
+            return null;
+        }
+
+        /// <summary>元のクリップの、frame のキーから次のキーまでの外部の補間の状態（S82）</summary>
+        public BetweenClips.State GetBetweenState (int frame)
+        {
+            if (clip_ == null || !KeyInterpolations.TryGetSegment (clip_, frame, out int start, out int end)) return BetweenClips.State.None;
+            return BetweenClips.GetState (clip_, start, end);
+        }
+
+        /// <summary>
+        /// 元のクリップの、frame のキーから次のキーまでを外部の補間にする（on）・外す（S82）。外部の補間は元のクリップにだけ効くので、
+        /// 書き込み先が Override のときは付けない。結果のファイルが無ければ付けない。区間の印は .meta なので Undo では戻らない
+        /// </summary>
+        /// <returns>変えられなかった理由（変えたら null）</returns>
+        public string SetExternal (int frame, bool on)
+        {
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            if (!KeyInterpolations.TryGetSegment (clip_, frame, out int start, out int end)) return Tr ("POSE_SESSION_NO_SEGMENT", frame);
+            if (on && overrideWriteIndex >= 0) return Tr ("BETWEEN_CLIPS_WRITE_TO_BASE");
+            if (on && BetweenClips.Find (clip_) == null) return Tr ("BETWEEN_CLIPS_NO_RESULT");
+            BetweenClips.SetSegment (clip_, new BetweenClips.Range { start = start, end = end }, on);
+            stage.InvalidateClipCurves ();
+            Evaluate (this.frame);
+            return null;
+        }
+
+        /// <summary>
+        /// 元のクリップの、frame のキーから次のキーまでの外部の補間を、元のクリップのキーにする（S82）。区間の中の毎フレームに、
+        /// 今見えている操作値（外部の結果を混ぜた後。結果のファイルにある Transform のカーブだけ）をキーとして打ち、その区間を外部の補間から外す。
+        /// 結果のファイルが無くても同じ姿勢になるので、ほかのプロジェクトへ写せる。キーは Undo で戻る（区間の印は .meta なので戻らない）
+        /// </summary>
+        /// <returns>焼けなかった理由（焼けたら null）</returns>
+        public string BakeBetween (int frame, string undoName = "Bake Between")
+        {
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            if (!KeyInterpolations.TryGetSegment (clip_, frame, out int start, out int end)) return Tr ("POSE_SESSION_NO_SEGMENT", frame);
+            BetweenClips.State state = BetweenClips.GetState (clip_, start, end);
+            AnimationClip between = BetweenClips.Find (clip_);
+            if (between == null || state != BetweenClips.State.Fresh && state != BetweenClips.State.Stale) return Tr ("BETWEEN_CLIPS_NOT_EXTERNAL", start, end);
+
+            float rate = clip_.frameRate;
+            Transform root = stage.editingRig.root.transform;
+            // 結果のファイルにある Transform の値（パスと、位置・回転・大きさ）
+            List<(string path, string property)> channels = AnimationUtility.GetCurveBindings (between)
+                .Where (b => b.type == typeof (Transform))
+                .Select (b => (b.path, b.propertyName.Substring (0, b.propertyName.LastIndexOf ('.'))))
+                .Distinct ().ToList ();
+            Dictionary<EditorCurveBinding, AnimationCurve> curves = new Dictionary<EditorCurveBinding, AnimationCurve> ();
+            AnimationCurve CurveOf (EditorCurveBinding binding)
+            {
+                if (!curves.TryGetValue (binding, out AnimationCurve curve)) curves[binding] = curve = AnimationUtility.GetEditorCurve (clip_, binding) ?? new AnimationCurve ();
+                return curve;
+            }
+            // 回転は前のフレームと同じ側の四元数にそろえる（補間で遠回りしない）
+            Dictionary<string, Quaternion> previous = new Dictionary<string, Quaternion> ();
+            for (int f = start + 1; f < end; f++) {
+                float time = f / rate;
+                stage.ResetControlsToRest ();
+                stage.SampleBase (clip_, time);
+                foreach ((string path, string property) in channels) {
+                    Transform target = CurveEdit.FindPath (root, path);
+                    if (target == null) continue;
+                    float[] values;
+                    if (property == CurveEdit.kRotation) {
+                        Quaternion q = target.localRotation;
+                        if (!previous.TryGetValue (path, out Quaternion before)) before = CurveEdit.EvaluateRotation (clip_, path, start / rate);
+                        if (Quaternion.Dot (before, q) < 0) q = new Quaternion (-q.x, -q.y, -q.z, -q.w);
+                        previous[path] = q;
+                        values = new[] { q.x, q.y, q.z, q.w };
+                    }
+                    else {
+                        Vector3 v = property == CurveEdit.kPosition ? target.localPosition : target.localScale;
+                        values = new[] { v.x, v.y, v.z };
+                    }
+                    for (int c = 0; c < values.Length; c++) {
+                        AnimationCurve curve = CurveOf (CurveEdit.TransformBinding (path, property, c));
+                        int index = ClipKeyUtility.FindKeyAtFrame (curve, rate, f);
+                        if (index >= 0) curve.RemoveKey (index);
+                        index = curve.AddKey (new Keyframe (time, values[c]));
+                        AnimationUtility.SetKeyLeftTangentMode (curve, index, AnimationUtility.TangentMode.ClampedAuto);
+                        AnimationUtility.SetKeyRightTangentMode (curve, index, AnimationUtility.TangentMode.ClampedAuto);
+                    }
+                }
+            }
+            Undo.RegisterCompleteObjectUndo (clip_, undoName);
+            foreach (AnimationCurve curve in curves.Values) CurveEdit.RefreshTangents (curve);
+            AnimationUtility.SetEditorCurves (clip_, curves.Keys.ToArray (), curves.Values.ToArray ());
+            BetweenClips.SetSegment (clip_, new BetweenClips.Range { start = start, end = end }, false);
+            stage.InvalidateClipCurves ();
+            Evaluate (this.frame);
             return null;
         }
 
@@ -621,7 +714,7 @@ namespace Lilium
                 return error;
             }
             AssetDatabase.SaveAssetIfDirty (between);
-            BetweenClips.SaveSegments (between, clip_, segments);
+            BetweenClips.SaveSegments (between, clip_, segments, BetweenClips.MakeStamps (clip_));
             stage.InvalidateClipCurves ();
             Evaluate (frame);
             return null;

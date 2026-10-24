@@ -55,14 +55,67 @@ namespace Lilium
             return CanEditClip () && KeyInterpolations.TryGetSegment (targetClip, frame, out int start, out int end);
         }
 
-        /// <summary>frame のキーから次のキーまでを mode にする（1 回の Undo で戻る）</summary>
+        /// <summary>frame のキーから次のキーまでを mode にする（1 回の Undo で戻る）。外部の動きの区間なら、外部の動きから外す（S82）</summary>
         public void SetInterpolation (int frame, KeyInterpolation mode)
         {
             if (!CanSetInterpolation (frame)) return;
             AnimationClip clip = targetClip;
             System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
+            if (clip == editingClip_ && KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) {
+                BetweenClips.SetSegment (clip, new BetweenClips.Range { start = start, end = end }, false);
+            }
             EditClip (clip, "Key Interpolation", () => KeyInterpolations.SetSegment (clip, frame, mode, exclude) > 0);
+            AfterClipEdit ();
             RaiseStateChanged ();
+        }
+
+        /// <summary>元のクリップの、frame のキーから次のキーまでの外部の動きの状態（S82）</summary>
+        public BetweenClips.State GetBetweenState (int frame)
+        {
+            AnimationClip clip = editingClip_;
+            if (clip == null || !KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) return BetweenClips.State.None;
+            return BetweenClips.GetState (clip, start, end);
+        }
+
+        /// <summary>
+        /// frame のキーから次のキーまでを外部の動きにできるか（S82）: 元のクリップへ書いていて（外部の動きは元のクリップに効く）、結果のファイルがあり、区間がある
+        /// </summary>
+        public bool CanSetExternal (int frame)
+        {
+            return CanEditClip () && overrideWriteLayer == null && editingClip_ != null
+                && KeyInterpolations.TryGetSegment (editingClip_, frame, out int start, out int end) && BetweenClips.Find (editingClip_) != null;
+        }
+
+        /// <summary>frame のキーから次のキーまでを外部の動きにする（S82。区間の印は .meta なので Undo では戻らない）</summary>
+        public void SetExternal (int frame)
+        {
+            if (!CanSetExternal (frame) || !KeyInterpolations.TryGetSegment (editingClip_, frame, out int start, out int end)) return;
+            BetweenClips.SetSegment (editingClip_, new BetweenClips.Range { start = start, end = end }, true);
+            AfterClipEdit ();
+            RaiseStateChanged ();
+        }
+
+        /// <summary>frame のキーから次のキーまでの外部の動きを、元のクリップのキーにできるか（S82）</summary>
+        public bool CanBakeBetween (int frame)
+        {
+            BetweenClips.State state = GetBetweenState (frame);
+            return CanEditClip () && overrideWriteLayer == null && (state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale);
+        }
+
+        /// <summary>frame のキーから次のキーまでの外部の動きを、元のクリップのキーにする（S82。PoseSession.BakeBetween。キーは Undo で戻る）</summary>
+        public string BakeBetween (int frame)
+        {
+            if (!CanBakeBetween (frame) || stage_ == null || stage_.sourcePrefab == null) return null;
+            CommitHandleKeys ();
+            Undo.IncrementCurrentGroup ();
+            string error;
+            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
+                session.clip = editingClip_;
+                error = session.BakeBetween (frame);
+            }
+            AfterClipEdit ();
+            RaiseStateChanged ();
+            return error;
         }
     }
 

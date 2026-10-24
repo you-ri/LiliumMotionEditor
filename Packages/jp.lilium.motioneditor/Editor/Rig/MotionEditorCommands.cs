@@ -354,7 +354,7 @@ namespace Lilium
                 bool hasPoints = key.points != null && key.points.Count > 0 || key.contacts != null && key.contacts.Count > 0;
                 bool hasHands = key.hands != null && key.hands.Count > 0;
                 if (key.frame < 0) problem = Tr ("MOTION_EDITOR_COMMANDS_NEGATIVE_FRAME");
-                else if (!string.IsNullOrEmpty (key.interpolation) && !KeyInterpolations.TryParse (key.interpolation, out KeyInterpolation ignored)) problem = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_INTERPOLATION", key.interpolation);
+                else if (!string.IsNullOrEmpty (key.interpolation) && !IsExternal (key.interpolation) && !KeyInterpolations.TryParse (key.interpolation, out KeyInterpolation ignored)) problem = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_INTERPOLATION", key.interpolation);
                 else if (i > 0 && keys[i - 1].frame == key.frame) problem = Tr ("MOTION_EDITOR_COMMANDS_DUPLICATE_FRAME");
                 else if (!hasPoints && !hasHands) problem = Tr ("MOTION_EDITOR_COMMANDS_EMPTY_KEY");
                 // replace ならキーを消してから書くので、今のサイクルキーの範囲は効かない
@@ -414,8 +414,13 @@ namespace Lilium
                     // 区間の補間は全部のキーを打ってから（次のキーが決まってから）。最後のキーなど区間の無いキーの指定は理由を返す
                     for (int i = 0; i < keys.Count && problem == null; i++) {
                         if (string.IsNullOrEmpty (keys[i].interpolation)) continue;
-                        KeyInterpolations.TryParse (keys[i].interpolation, out KeyInterpolation mode);
-                        problem = session_.SetInterpolation (keys[i].frame, mode, "Write Motion");
+                        if (IsExternal (keys[i].interpolation)) {
+                            problem = session_.SetExternal (keys[i].frame, true);
+                        }
+                        else {
+                            KeyInterpolations.TryParse (keys[i].interpolation, out KeyInterpolation mode);
+                            problem = session_.SetInterpolation (keys[i].frame, mode, "Write Motion");
+                        }
                         if (problem != null) problem = Tr ("MOTION_EDITOR_COMMANDS_BAD_KEY", keys[i].frame, problem);
                     }
                 });
@@ -430,6 +435,14 @@ namespace Lilium
             }
             return json.Append ('}').ToString ();
         }
+
+        /// <summary>補間の名前が外部の動き（S82）か</summary>
+        static bool IsExternal (string interpolation)
+        {
+            return string.Equals (interpolation, kExternal, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        const string kExternal = "external";
 
         static PoseDocument KeyPose (MotionEditorKey key)
         {
@@ -619,7 +632,13 @@ namespace Lilium
                 json.Append ("{\"frame\":").Append (frames[k]);
                 // 次のキーまでの補間（S80）。既定の曲線は省く（長くしない）
                 int segment = segments.FindIndex (s => s.start == frames[k]);
-                if (segment >= 0 && segments[segment].mode != KeyInterpolation.Curve) {
+                BetweenClips.State between = segment >= 0 ? session_.GetBetweenState (frames[k]) : BetweenClips.State.None;
+                if (between == BetweenClips.State.Fresh || between == BetweenClips.State.Stale) {
+                    // 外部の動きの区間（S82）。キーの値が変わる前に作った動きなら stale
+                    json.Append (",\"interpolation\":\"").Append (kExternal).Append ('"');
+                    if (between == BetweenClips.State.Stale) json.Append (",\"stale\":true");
+                }
+                else if (segment >= 0 && segments[segment].mode != KeyInterpolation.Curve) {
                     json.Append (",\"interpolation\":\"").Append (KeyInterpolations.ToName (segments[segment].mode)).Append ('"');
                 }
                 json.Append (",\"points\":");
@@ -1331,8 +1350,13 @@ namespace Lilium
         public List<PoseContact> contacts = new List<PoseContact> ();
         /// <summary>手の形（writeHand と同じ指定。並べた順に当て、後のものが上書きする）</summary>
         public List<MotionEditorHandShape> hands = new List<MotionEditorHandShape> ();
-        /// <summary>このキーから次のキーまでの補間（S80。curve / linear / constant）。省くと変えない。readMotion では mixed もある（最後のキーには無い）</summary>
+        /// <summary>
+        /// このキーから次のキーまでの補間（S80。curve / linear / constant、S82 の external（外部の動き。結果のファイルがあるときだけ））。
+        /// 省くと変えない。readMotion では mixed もある（最後のキーには無い）
+        /// </summary>
         public string interpolation;
+        /// <summary>readMotion: 外部の動きの区間で、キーの値が変わる前に作った動き（S82。作り直すと合う）</summary>
+        public bool stale;
     }
 
     /// <summary>手の形の指定（writeMotion。writeHand の preset・hand・muscles と同じ）</summary>

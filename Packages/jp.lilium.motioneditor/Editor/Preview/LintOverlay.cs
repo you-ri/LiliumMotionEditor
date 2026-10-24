@@ -137,7 +137,7 @@ namespace Lilium
                     ? Tr ("LINT_OVERLAY_NO_ISSUES", report_.startFrame, report_.endFrame)
                     : Tr ("LINT_OVERLAY_SUMMARY", report_.issues.Count, report_.Count (MotionLint.kFootSlide), report_.Count (MotionLint.kFloorPenetration),
                         report_.Count (MotionLint.kMuscleRange), report_.Count (MotionLint.kPop), report_.Count (MotionLint.kLargeKeyRotation),
-                        report_.Count (MotionLint.kLoopVelocity), report_.Count (MotionLint.kHipSpeed));
+                        report_.Count (MotionLint.kLoopVelocity), report_.Count (MotionLint.kHipSpeed), report_.Count (MotionLint.kBetween));
                 text += "\n" + Tr ("LINT_OVERLAY_ASYMMETRY", report_.maxAsymmetry.ToString ("0.00"), report_.asymmetryFrame);
                 if (stale_) text += "\n" + Tr ("LINT_OVERLAY_STALE");
                 summary_.text = text;
@@ -161,6 +161,9 @@ namespace Lilium
                     break;
                 case MotionLint.kHipSpeed:
                     value = issue.value.ToString ("0.0") + "m/s";
+                    break;
+                case MotionLint.kBetween:
+                    value = "";
                     break;
                 default:
                     value = issue.value.ToString ("0.00");

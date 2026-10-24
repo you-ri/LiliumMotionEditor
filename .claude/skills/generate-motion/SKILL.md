@@ -89,6 +89,20 @@ SKEL="Assets/.../Kimodo SOMA Skeleton.asset"
 Users who prefer the window can do all of this without the CLI: the Kimodo sample's `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`
 (see the sample README). It works on the clip open in the Motion Editor window.
 
+## Use the motion as the interpolation between keys (instead of an Override)
+
+The window's **Use the Result as: Interpolation between keys** saves the motion as `<clip>.between.anim` next to the clip and makes the chosen segments
+(spans between two neighboring keys) take their in-between frames from it; the other segments keep their curve / linear / constant interpolation.
+From the CLI, after generating `gen.bvh` as above, write it with `PoseSession.ImportBetween` (no CLI command yet), then switch segments with
+`motion_write_motion` keys' `"interpolation": "external"`, and check `motion_read_motion` (`"stale": true` means the keys changed after the motion was made) and `motion_lint` (`Between` issues).
+
+## Faster runs
+
+Use `Samples~/Kimodo/Python/kimodo_generate.py` in place of `kimodo_gen` (same arguments) with `-v <project>/Temp/Kimodo/text-cache:/cache`:
+it keeps each encoded prompt, so running again with the same prompt takes about 30 seconds instead of 4–6 minutes. A new prompt still loads the text model,
+unless the text server runs (`python -m kimodo.scripts.run_text_encoder_server`, port 9550, about 15 GB of memory; generate with `TEXT_ENCODER_MODE=api`
+and `TEXT_ENCODER_URL=http://host.docker.internal:9550/`).
+
 ## Notes
 
 - Kimodo moves only the body. Held items (weapons) follow the hands through the character settings; for two-handed items, write the hands back together with full-body IK keys after importing

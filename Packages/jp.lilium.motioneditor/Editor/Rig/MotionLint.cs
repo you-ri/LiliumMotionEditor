@@ -31,6 +31,8 @@ namespace Lilium
         public const string kLargeKeyRotation = "LargeKeyRotation";
         public const string kLoopVelocity = "LoopVelocity";
         public const string kHipSpeed = "HipSpeed";
+        /// <summary>外部の補間（S82）: 結果のファイルが無い（target = missing）・キーの値が変わった（stale）・キーのフレームが変わって使えない（lost）</summary>
+        public const string kBetween = "Between";
 
         /// <summary>閾値（評価指標と閾値の「検査」）</summary>
         [System.Serializable]
@@ -151,6 +153,7 @@ namespace Lilium
             FindPops (runs, bones, rotations, start, settings);
             FindLoopSeam (runs, bones, rotations, start, session.targetClip ?? session.clip, settings);
             FindLargeKeyRotations (report, session.targetClip ?? session.clip, settings);
+            FindBetweenProblems (report, session.clip);
             runs.Close ();
             report.issues.Sort ((a, b) => a.frame != b.frame ? a.frame.CompareTo (b.frame) : string.CompareOrdinal (a.kind + a.target, b.kind + b.target));
             return report;
@@ -349,6 +352,27 @@ namespace Lilium
                         limit = settings.keyRotation,
                     });
                 }
+            }
+        }
+
+        /// <summary>
+        /// 外部の補間（S82）の問題: 元のクリップに結果のファイルの印があるのに見つからない（ほかのプロジェクトへ元のクリップだけ写したなど。
+        /// 外部の区間は黙って元の補間になる）、使う区間のキーの値が変わった、キーのフレームが変わって区間でなくなった
+        /// </summary>
+        static void FindBetweenProblems (MotionLintReport report, AnimationClip clip)
+        {
+            if (clip == null) return;
+            AnimationClip between = BetweenClips.Find (clip);
+            if (between == null) {
+                if (!string.IsNullOrEmpty (ClipUserData.Load (clip).betweenClip)) {
+                    report.issues.Add (new MotionLintIssue { kind = kBetween, target = "missing", frame = report.startFrame, endFrame = report.endFrame });
+                }
+                return;
+            }
+            foreach (BetweenClips.Range range in BetweenClips.GetSegments (between)) {
+                BetweenClips.State state = BetweenClips.GetSegmentState (clip, range);
+                if (state != BetweenClips.State.Stale && state != BetweenClips.State.Lost) continue;
+                report.issues.Add (new MotionLintIssue { kind = kBetween, target = state == BetweenClips.State.Stale ? "stale" : "lost", frame = range.start, endFrame = range.end });
             }
         }
 

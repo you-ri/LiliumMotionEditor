@@ -62,6 +62,8 @@ namespace Lilium
             /// キーの間（keys[k] から keys[k + 1]）ごとの補間（S80。混在なら null）。キーの間の矢印の形を変える
             /// </summary>
             public KeyInterpolation?[] interpolations;
+            /// <summary>キーの間ごとの外部の動きの状態（S82。元のクリップへ書いているときだけ。null なら外部の動きは見せない）</summary>
+            public BetweenClips.State[] between;
             /// <summary>
             /// keys と同じ並びのキーの色（全身 IK の点の、そのフレームの状態の色）。null なら既定の色
             /// </summary>
@@ -1495,7 +1497,7 @@ namespace Lilium
 
             int[] allKeys = GetKeyFrames ().Where (f => f >= 0).ToArray ();
             System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
-            tracks.Add (new TimelineTrack { label = keyed.name, keys = allKeys, filter = null, interpolations = KeyInterpolations.GetRanges (keyed, allKeys, null, exclude) });
+            tracks.Add (new TimelineTrack { label = keyed.name, keys = allKeys, filter = null, interpolations = KeyInterpolations.GetRanges (keyed, allKeys, null, exclude), between = BetweenStates (keyed, allKeys) });
 
             foreach (PoseTarget target in GetTrackTargets ()) {
                 HashSet<string> paths = new HashSet<string> ();
@@ -1509,9 +1511,19 @@ namespace Lilium
                 tracks.Add (new TimelineTrack {
                     label = target.label, keys = keys, filter = filter, keyColors = keyColors,
                     interpolations = KeyInterpolations.GetRanges (keyed, keys, filter, exclude),
+                    between = BetweenStates (keyed, keys),
                 });
             }
             return tracks;
+        }
+
+        /// <summary>キーの間ごとの外部の動きの状態（S82）。外部の動きは元のクリップに効くので、元のクリップのトラックのときだけ</summary>
+        BetweenClips.State[] BetweenStates (AnimationClip keyed, int[] keys)
+        {
+            if (keyed != editingClip_ || keys.Length < 2 || !BetweenClips.HasAny (keyed)) return null;
+            BetweenClips.State[] states = new BetweenClips.State[keys.Length - 1];
+            for (int k = 0; k + 1 < keys.Length; k++) states[k] = BetweenClips.GetState (keyed, keys[k], keys[k + 1]);
+            return states;
         }
 
         IEnumerable<PoseTarget> GetTrackTargets ()

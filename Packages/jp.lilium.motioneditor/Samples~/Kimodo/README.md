@@ -12,8 +12,9 @@ What is in this sample:
 | File | What it does |
 |---|---|
 | `Editor/KimodoSkeleton.cs` | `Tools > Lilium Motion Editor > Kimodo > Create SOMA Skeleton From BVH...` makes the External Skeleton for Kimodo's SOMA skeleton from a BVH that Kimodo wrote (only the joint-name table is included) |
-| `Editor/KimodoWindow.cs`, `KimodoRunner.cs`, `KimodoSettings.cs` | `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`: generates between the keys of the clip open in the Motion Editor window and layers the result on it |
+| `Editor/KimodoWindow.cs`, `KimodoRunner.cs`, `KimodoSettings.cs`, `KimodoTextServer.cs` | `Tools > Lilium Motion Editor > Kimodo > Generate Between Keys`: generates between the keys of the clip open in the Motion Editor window, and layers the result on it or uses it as the interpolation between keys |
 | `Python/kimodo_constraints.py` | Turns the exported keys into a Kimodo constraints file. Runs inside the Kimodo environment |
+| `Python/kimodo_generate.py` | Runs `kimodo_gen` with a cache of encoded prompts, so generating again with the same prompt skips the text model |
 
 ## Licenses (check before use)
 
@@ -75,6 +76,35 @@ After importing:
 + **Edit the Keys** puts the write target back on your clip. The generated motion is hidden while you edit, and the next generation uses your clip's keys.
 + The list shows how far Kimodo was from each key before the keys were kept. Over about 10 cm, the blend around that key is visible; add keys or change the prompt.
 + Generating again replaces the same Override clip (Undo brings back the previous one).
+
+### Use the result as the interpolation between keys
+
+Set **Use the Result as** to **Interpolation between keys** and choose the segments (the spans between two neighboring keys) to fill.
+The motion is not layered as an Override: it is saved next to your clip as `<clip>.between.anim`, and the chosen segments take their in-between frames from it.
+At the keys the clip stays exactly on your keys, and the motion blends into them near each key. Segments you did not choose keep their curve, linear or constant interpolation.
+
++ In the timeline, segments that use the external motion are drawn with a wavy arrow. Right-click a key and use **Interpolation to the Next Key** to switch a segment
+  between Curve, Linear, Constant and External Motion.
++ If you change a key's value afterwards, the segment keeps the motion and the arrow turns dotted (it was made for the old keys; generate again to match).
+  If you add, move or delete a key inside a segment, the segment stops using the motion and goes back to its curve.
++ **Bake the External Motion into Keys** (same menu) turns a segment into keys, so the clip no longer needs the `.between.anim` file (for example, to copy the clip to another project).
+  Lint reports a missing `.between.anim`, and segments made for older keys.
++ Each generation makes the whole clip again and replaces `.between.anim`.
+
+### Faster generations
+
+Most of a generation is the text model (Llama 3 8B): loading it takes about 4 minutes, and encoding one prompt on the CPU about 50 seconds.
+
++ **The same prompt again** (after changing the keys, for example) takes about 30 seconds: the window keeps each encoded prompt in the project's `Temp/Kimodo/text-cache`,
+  so the text model is not needed at all.
++ **A new prompt** loads the text model, unless the text server is running.
+
+**Start Text Server** in the Kimodo window keeps it loaded in a container
+(`lilium-kimodo-text`, port 9550 on this PC only), and generations use it instead of loading it again.
+It keeps using about 15 GB of memory until you press **Stop Text Server** (Unity asks when you quit).
+With the default WSL memory (half of the PC's), the server leaves little room for the generation, and a new prompt takes about 2 minutes instead of about 1.
+With Docker Desktop on Windows, WSL gets half of the PC's memory by default; if the server or a generation stops with exit code 137, raise it in
+`%USERPROFILE%\.wslconfig` (`[wsl2]` `memory=24GB`).
 
 ## Generate from your keys with the Unity CLI
 
