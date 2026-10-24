@@ -34,6 +34,11 @@ namespace Lilium
         /// 窓のボタンは「Generate Between Keys」なので、押したら補間になるのを既定にする（Override だと ✏ を移さないと見えず、補間になっていないように見えた）
         /// </summary>
         public string target = KimodoJob.kBetween;
+        /// <summary>
+        /// キーの間の補間として使うとき、キーが変わるたびに作り直すか（S85）。1 回で GPU を 30 秒〜2 分使うので、既定は切る
+        /// （入れたことに気づかないまま、キーを打つたびに重い生成が走らないように）
+        /// </summary>
+        public bool auto;
 
         public ExternalSkeleton skeleton
         {

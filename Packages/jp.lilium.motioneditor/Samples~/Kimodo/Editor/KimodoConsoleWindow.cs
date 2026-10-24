@@ -52,6 +52,14 @@ namespace Lilium
             Reload ();
         }
 
+        /// <summary>生成中はタブのきらめきを動かす（S85。コマが替わったときだけ差し替える）</summary>
+        void Update ()
+        {
+            KimodoJob job = KimodoRunner.job;
+            Texture2D icon = job != null && job.running ? KimodoSetup.BusyIcon (EditorApplication.timeSinceStartup) : KimodoSetup.icon;
+            if (titleContent.image != icon) titleContent = new GUIContent (Tr ("KIMODO_CONSOLE_TITLE"), icon);
+        }
+
         void OnDisable ()
         {
             KimodoRunner.changed -= Reload;

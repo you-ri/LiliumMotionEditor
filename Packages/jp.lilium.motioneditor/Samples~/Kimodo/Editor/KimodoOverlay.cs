@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Overlays;
+using UnityEditor.Toolbars;
 using UnityEngine;
 using UnityEngine.UIElements;
 using static Lilium.KimodoText;
@@ -14,7 +15,8 @@ namespace Lilium
     /// 窓の中に置くので、相手の窓を探さずに載っている窓を使う。Kimodo の出力（ログ）は場所を取るので別の窓（KimodoConsoleWindow）に出す。
     /// Kimodo が使えるようになっていなければ、中身を入れ方の案内（KimodoSetup）に替える。
     /// 取り込んだ Override を見るには ✏ をそこへ移す必要がある（書き込み先より上の段は編集中は効かない）。
-    /// ✏ を移したまま打ったキーは Override に入り次の生成に渡らないので、「結果を見る」と「キーを直す」を切り替えられるようにする
+    /// ✏ を移したまま打ったキーは Override に入り次の生成に渡らないので、「結果を見る」と「キーを直す」を切り替えられるようにする。
+    /// キーの間の補間として使うときは、キーが変わるたびに自動で作り直せる（S85）。生成中はきらめきのアイコンが動く
     /// </summary>
     [Overlay (typeof (PreviewWindow), kId, "Kimodo", defaultDisplay = true,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
@@ -26,6 +28,8 @@ namespace Lilium
         /// <summary>入りきらないときも、これだけは見せる（スクロールして使える高さ）</summary>
         const float kMinHeight = 140;
         const float kSegmentWidth = 64;
+        /// <summary>キーが変わってから自動で作り始めるまで（秒）。打ち続けている間やつかんで動かしている間に、1 つごとに始めないように</summary>
+        const double kAutoDelay = 1.5;
 
         static readonly string[] kTargets = { KimodoJob.kBetween, KimodoJob.kOverride };
 
@@ -44,6 +48,11 @@ namespace Lilium
         /// </summary>
         float height_ = 200;
         Vector2 scroll_;
+        /// <summary>自動で作るかを確かめる時刻（キーが変わったとき。0 未満なら待っていない。生成中は終わるまで持ち越す）</summary>
+        double autoAt_ = -1;
+        /// <summary>今パネルのアイコン（collapsedIcon）に出している絵。コマが替わったときだけ差し替える</summary>
+        Texture2D shownIcon_;
+        EditorToolbarToggle toolbarToggle_;
 
         /// <summary>開いている Motion Editor の窓（無ければ開く）に、このパネルを出す</summary>
         [MenuItem ("Window/Lilium Motion Editor/Kimodo")]
@@ -67,13 +76,17 @@ namespace Lilium
         public override void OnCreated ()
         {
             base.OnCreated ();
-            collapsedIcon = KimodoSetup.icon;
+            shownIcon_ = KimodoSetup.icon;
+            collapsedIcon = shownIcon_;
+            // 自動で作るのとアイコンを動かすのは、パネルをたたんでいて中身を作っていないときもする
+            window_ = containerWindow as PreviewWindow;
+            Subscribe (true);
         }
 
         public override VisualElement CreatePanelContent ()
         {
             Subscribe (false);
-            window_ = containerWindow as PreviewWindow;
+            if (containerWindow is PreviewWindow window) window_ = window;
             // IMGUI は外枠いっぱいに敷き、外枠の大きさはこちらで決める。IMGUIContainer に大きさを測らせると、
             // 折り返す文字を 1 行に並べた幅で測って列が広がり（949px）、高さは中身が伸びても変わらなかった
             root_ = new VisualElement ();
@@ -128,17 +141,111 @@ namespace Lilium
         {
             KimodoRunner.changed -= Repaint;
             KimodoTextServer.changed -= Repaint;
+            EditorApplication.update -= Tick;
             if (window_ != null) {
                 window_.stateChanged -= Repaint;
-                window_.keysChanged -= Repaint;
+                window_.keysChanged -= OnKeysChanged;
             }
             if (!on) return;
             KimodoRunner.changed += Repaint;
             KimodoTextServer.changed += Repaint;
+            EditorApplication.update += Tick;
             if (window_ != null) {
                 window_.stateChanged += Repaint;
-                window_.keysChanged += Repaint;
+                window_.keysChanged += OnKeysChanged;
             }
+        }
+
+        void OnKeysChanged ()
+        {
+            if (KimodoSettings.instance.auto) autoAt_ = EditorApplication.timeSinceStartup + kAutoDelay;
+            Repaint ();
+        }
+
+        void Tick ()
+        {
+            KimodoJob job = KimodoRunner.job;
+            Animate (job != null && job.running);
+            ShowInProgress (job);
+            AutoGenerate (job);
+        }
+
+        /// <summary>
+        /// 生成中はきらめきを動かす（S85）。たたんだパネルのアイコン・窓のツールバーのパネルのボタンと、パネルの中の「作る」ボタンと進み具合の行。
+        /// コマが替わったときだけ差し替えて描き直す（update は毎フレーム来る）
+        /// </summary>
+        void Animate (bool busy)
+        {
+            Texture2D icon = busy ? KimodoSetup.BusyIcon (EditorApplication.timeSinceStartup) : KimodoSetup.icon;
+            if (icon == shownIcon_) return;
+            shownIcon_ = icon;
+            collapsedIcon = icon;
+            EditorToolbarToggle toggle = FindToolbarToggle ();
+            if (toggle != null) toggle.icon = icon;
+            Repaint ();
+        }
+
+        /// <summary>
+        /// 窓のツールバーの、パネルを出し入れするボタン（Unity が作る。パネルごとに作ったときのアイコンを写すので、collapsedIcon を替えても変わらない）。
+        /// ボタンは作り直されることがあるので、外れていたら探し直す。見つからなければ null（ツールバーを出していない）
+        /// </summary>
+        EditorToolbarToggle FindToolbarToggle ()
+        {
+            if (toolbarToggle_ != null && toolbarToggle_.panel != null) return toolbarToggle_;
+            toolbarToggle_ = null;
+            VisualElement root = window_ != null && window_.rootVisualElement.panel != null ? window_.rootVisualElement.panel.visualTree : null;
+            if (root == null) return null;
+            toolbarToggle_ = root.Query<EditorToolbarToggle> ().Where (t => t.tooltip == displayName && InToolbarOverlay (t)).First ();
+            return toolbarToggle_;
+        }
+
+        static bool InToolbarOverlay (VisualElement element)
+        {
+            for (VisualElement parent = element.parent; parent != null; parent = parent.parent) {
+                if (parent.ClassListContains ("unity-toolbar-overlay")) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// この窓のクリップのキーの間を作っている間は、作っている区間を窓に知らせる（S85。タイムラインがその区間の波線を流す）。
+        /// 窓はこれを保存しないので、再読み込みの後もここで入れ直す
+        /// </summary>
+        void ShowInProgress (KimodoJob job)
+        {
+            if (window_ == null) return;
+            bool making = job != null && job.running && job.target == KimodoJob.kBetween
+                && window_.baseClip != null && AssetDatabase.GetAssetPath (window_.baseClip) == job.baseClip;
+            if (making == window_.betweenInProgress.Count > 0) return;
+            window_.SetBetweenInProgress (making ? job.segments : null);
+        }
+
+        /// <summary>
+        /// キーが変わって少し経ったら、キーの間の動きを作り直す（S85）。今のキーで作ったことがある（指紋が同じ）なら作らない。
+        /// 補間として取り込むとキーが足されて知らせが来るが、取り込んだ後の指紋と比べるので、作り直しが続かない。
+        /// 生成中にキーが変わったら、終わって取り込んでから比べる（取り込んだ結果は古いキーのもの。送った指紋のままなので作り直す）
+        /// </summary>
+        void AutoGenerate (KimodoJob job)
+        {
+            if (autoAt_ < 0 || EditorApplication.timeSinceStartup < autoAt_) return;
+            if (job != null && job.running) return;
+            autoAt_ = -1;
+            KimodoSettings settings = KimodoSettings.instance;
+            if (!settings.auto || settings.target != KimodoJob.kBetween || !KimodoSetup.ready) return;
+            AnimationClip clip = window_ != null ? window_.baseClip : null;
+            if (clip == null || !EditorUtility.IsPersistent (clip) || string.IsNullOrWhiteSpace (settings.prompt)) return;
+            // 先読みが立ち上がりかけなら待つ（Start は断る）
+            if (KimodoTextServer.state == KimodoTextServer.State.Starting) {
+                autoAt_ = EditorApplication.timeSinceStartup + kAutoDelay;
+                return;
+            }
+            if (KimodoRunner.Fingerprint (clip) == KimodoRunner.GeneratedFingerprint (clip)) return;
+            List<BetweenClips.Range> segments = Segments ();
+            RefreshChosen (clip, segments);
+            List<BetweenClips.Range> chosen = segments.Where (r => chosen_.Contains (r.start)).ToList ();
+            if (chosen.Count == 0) return;
+            problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, KimodoJob.kBetween, chosen, true);
+            Repaint ();
         }
 
         void Repaint ()
@@ -242,14 +349,26 @@ namespace Lilium
             int target = Mathf.Max (0, System.Array.IndexOf (kTargets, settings.target));
             target = EditorGUILayout.Popup (Tr ("KIMODO_PANEL_TARGET"), target, new[] { Tr ("KIMODO_PANEL_TARGET_BETWEEN"), Tr ("KIMODO_PANEL_TARGET_OVERRIDE") });
             settings.target = kTargets[target];
+            bool auto = settings.auto;
+            if (settings.target == KimodoJob.kBetween) {
+                settings.auto = EditorGUILayout.ToggleLeft (new GUIContent (Tr ("KIMODO_PANEL_AUTO"), Tr ("KIMODO_PANEL_AUTO_TOOLTIP")), settings.auto);
+            }
             if (EditorGUI.EndChangeCheck ()) settings.Save ();
+            // 入れたら、今のキーでまだ作っていなければすぐ作る（次にキーを打つまで待たない）
+            if (settings.auto && !auto) autoAt_ = EditorApplication.timeSinceStartup;
             if (settings.target == KimodoJob.kBetween) DrawSegments ();
 
             EditorGUILayout.Space ();
             bool running = job != null && job.running;
             using (new EditorGUILayout.HorizontalScope ()) {
                 using (new EditorGUI.DisabledScope (running || window_ == null)) {
-                    if (GUILayout.Button (Tr ("KIMODO_PANEL_GENERATE"), GUILayout.Height (24))) {
+                    // 生成中はボタンのきらめきも動かす（押せないが、何をしているかが分かる）
+                    Vector2 iconSize = EditorGUIUtility.GetIconSize ();
+                    EditorGUIUtility.SetIconSize (new Vector2 (16, 16));
+                    GUIContent generate = new GUIContent (" " + Tr ("KIMODO_PANEL_GENERATE"), running ? KimodoSetup.BusyIcon (EditorApplication.timeSinceStartup) : KimodoSetup.icon);
+                    bool pressed = GUILayout.Button (generate, GUILayout.Height (24));
+                    EditorGUIUtility.SetIconSize (iconSize);
+                    if (pressed) {
                         problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, settings.target, ChosenSegments ());
                     }
                 }
@@ -286,14 +405,23 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 補間として使う区間を選ぶ（S83）。クリップが替わったら、外部の動きを使っている区間（無ければ全部）を選び直す。
-        /// 同じクリップでキーの並びが変わったら、残った区間の選択を引き継ぎ、新しい区間を選ぶ。
-        /// Kimodo は毎回クリップ全体を作り直し、結果のファイルを丸ごと置き換える（選ばなかった区間は元の補間のまま）
+        /// 補間として使う区間を選ぶ（S83）。Kimodo は毎回クリップ全体を作り直し、結果のファイルを丸ごと置き換える（選ばなかった区間は元の補間のまま）
         /// </summary>
         void DrawSegments ()
         {
             AnimationClip clip = window_ != null ? window_.baseClip : null;
             List<BetweenClips.Range> segments = Segments ();
+            RefreshChosen (clip, segments);
+            DrawSegmentButtons (segments);
+        }
+
+        /// <summary>
+        /// 選んだ区間を今のキーに合わせる。クリップが替わったら、外部の動きを使っている区間（無ければ全部）を選び直す。
+        /// 同じクリップでキーの並びが変わったら、残った区間の選択を引き継ぎ、新しい区間を選ぶ。
+        /// 描くときと、自動で作るとき（S85。パネルをたたんでいると描かれない）に呼ぶ
+        /// </summary>
+        void RefreshChosen (AnimationClip clip, List<BetweenClips.Range> segments)
+        {
             List<int> starts = segments.Select (r => r.start).ToList ();
             if (clip != chosenClip_) {
                 chosenClip_ = clip;
@@ -310,6 +438,10 @@ namespace Lilium
                 if (chosen_.Count == 0) chosen_ = new List<int> (starts);
                 knownStarts_ = starts;
             }
+        }
+
+        void DrawSegmentButtons (List<BetweenClips.Range> segments)
+        {
             EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_SEGMENTS"), EditorStyles.wordWrappedMiniLabel);
             if (segments.Count == 0) {
                 EditorGUILayout.HelpBox (Tr ("KIMODO_PANEL_NO_SEGMENTS"), MessageType.None);
@@ -364,7 +496,15 @@ namespace Lilium
                 System.TimeSpan elapsed = System.TimeSpan.FromTicks (System.DateTime.Now.Ticks - job.started);
                 string hint = job.pid > 0 ? Tr ("KIMODO_PANEL_HINT_PYTHON")
                     : job.server ? Tr ("KIMODO_PANEL_HINT_SERVER") : Tr ("KIMODO_PANEL_HINT_DOCKER");
-                EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_GENERATING", elapsed.ToString (@"m\:ss"), hint), EditorStyles.wordWrappedMiniLabel);
+                Vector2 iconSize = EditorGUIUtility.GetIconSize ();
+                EditorGUIUtility.SetIconSize (new Vector2 (16, 16));
+                string text = job.auto ? Tr ("KIMODO_PANEL_GENERATING_AUTO", elapsed.ToString (@"m\:ss"), hint)
+                    : Tr ("KIMODO_PANEL_GENERATING", elapsed.ToString (@"m\:ss"), hint);
+                GUIContent generating = new GUIContent (text, KimodoSetup.BusyIcon (EditorApplication.timeSinceStartup));
+                EditorGUILayout.LabelField (generating, EditorStyles.wordWrappedMiniLabel);
+                EditorGUIUtility.SetIconSize (iconSize);
+                // 作っている間にキーが変わった。終わって取り込んだら作り直す
+                if (autoAt_ >= 0) EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_AUTO_PENDING"), EditorStyles.wordWrappedMiniLabel);
                 if (GUILayout.Button (Tr ("KIMODO_PANEL_CONSOLE"))) KimodoConsoleWindow.Open ();
                 return;
             }

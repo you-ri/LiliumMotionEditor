@@ -379,6 +379,87 @@ namespace Lilium
             }
         }
 
+        const int kBusyFrames = 12;
+        const double kBusySeconds = 1.2;
+        static Texture2D[] busyFrames_;
+
+        /// <summary>
+        /// 生成中のアイコン（S85）。icon と同じ大小 2 つのきらめきが、交互にふくらんで明るくなる。time（秒）で今のコマを選ぶ。
+        /// コマの絵はファイルに置かず、icon の形をまねて描く（形は Generate@2x.png から測った。中心と半径は 32px の絵の上の値）
+        /// </summary>
+        public static Texture2D BusyIcon (double time)
+        {
+            if (busyFrames_ == null || busyFrames_[0] == null) busyFrames_ = DrawBusyFrames ();
+            int frame = (int) (time / kBusySeconds * kBusyFrames) % kBusyFrames;
+            return busyFrames_[Mathf.Clamp (frame, 0, kBusyFrames - 1)];
+        }
+
+        static Texture2D[] DrawBusyFrames ()
+        {
+            int size = EditorGUIUtility.pixelsPerPoint > 1 ? 32 : 16;
+            Color color = EditorGUIUtility.isProSkin ? new Color32 (210, 210, 210, 255) : new Color32 (85, 85, 85, 255);
+            Texture2D[] frames = new Texture2D[kBusyFrames];
+            for (int f = 0; f < kBusyFrames; f++) {
+                float wave = Mathf.Cos (2 * Mathf.PI * f / kBusyFrames);
+                // 大きい方が縮むとき小さい方がふくらむ（どちらも消えきらないので、止まって見えるコマが無い）
+                float big = 0.85f + 0.15f * wave;
+                float small = 0.8f - 0.35f * wave;
+                Color[] pixels = new Color[size * size];
+                for (int y = 0; y < size; y++) {
+                    for (int x = 0; x < size; x++) {
+                        // 4x4 で数えて縁をなめらかにする。絵の y は上から、テクスチャの y は下から
+                        float cover = 0, glow = 0;
+                        for (int s = 0; s < 16; s++) {
+                            float px = (x + (s % 4 + 0.5f) / 4) * 32f / size;
+                            float py = (y + (s / 4 + 0.5f) / 4) * 32f / size;
+                            if (InStar (px, py, 13, 18.5f, 12.8f * big)) {
+                                cover += 1 / 16f;
+                                glow += (0.55f + 0.45f * (big - 0.7f) / 0.3f) / 16f;
+                            }
+                            else if (InStar (px, py, 25.5f, 7, 6.5f * small)) {
+                                cover += 1 / 16f;
+                                glow += (0.55f + 0.45f * (small - 0.45f) / 0.7f) / 16f;
+                            }
+                        }
+                        Color c = color;
+                        c.a = Mathf.Clamp01 (glow) * color.a;
+                        pixels[(size - 1 - y) * size + x] = cover > 0 ? c : Color.clear;
+                    }
+                }
+                Texture2D texture = new Texture2D (size, size, TextureFormat.RGBA32, false) {
+                    hideFlags = HideFlags.HideAndDontSave,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                texture.SetPixels (pixels);
+                texture.Apply ();
+                frames[f] = texture;
+            }
+            // HideAndDontSave は再読み込みで消えないので、読み込み直す前に消す（再読み込みのたびに 12 枚ずつ残らないように）
+            AssemblyReloadEvents.beforeAssemblyReload -= DestroyBusyFrames;
+            AssemblyReloadEvents.beforeAssemblyReload += DestroyBusyFrames;
+            return frames;
+        }
+
+        /// <summary>四つ角のきらめきの中か（|x|^p + |y|^p ≦ 1 の p を 1 より小さくすると、辺がへこんだ星になる。p は icon に合わせた）</summary>
+        static bool InStar (float x, float y, float cx, float cy, float radius)
+        {
+            if (radius <= 0) return false;
+            float dx = Mathf.Abs (x - cx) / radius;
+            float dy = Mathf.Abs (y - cy) / radius;
+            if (dx > 1 || dy > 1) return false;
+            return Mathf.Pow (dx, 0.7f) + Mathf.Pow (dy, 0.7f) <= 1;
+        }
+
+        static void DestroyBusyFrames ()
+        {
+            if (busyFrames_ == null) return;
+            foreach (Texture2D texture in busyFrames_) {
+                if (texture != null) Object.DestroyImmediate (texture);
+            }
+            busyFrames_ = null;
+        }
+
         static Texture2D LoadIcon (string path)
         {
             Texture2D texture = EditorGUIUtility.pixelsPerPoint > 1 ? AssetDatabase.LoadAssetAtPath<Texture2D> (path + "@2x.png") : null;

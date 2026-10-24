@@ -63,6 +63,9 @@ namespace Lilium
         // 外部の動きの区間の波線（S82）
         const float kWaveStep = 3;
         const float kWaveHeight = 2;
+        /// <summary>外で作っている区間（S85）の波線が 1 山ぶん流れる秒数と、描き直す間（ミリ秒）</summary>
+        const double kWaveFlowSeconds = 0.6;
+        const long kWaveFrameMs = 50;
         // 混在の区間の点線（S80）
         const float kDashLength = 3;
         const float kDashGap = 2;
@@ -119,6 +122,7 @@ namespace Lilium
         readonly HashSet<(string, int)> boxBase_ = new HashSet<(string, int)> ();
         // Ctrl+C で覚えたキーの選択（トラック名と、一番前のフレームからのずれ）。貼った後に貼ったキーを選ぶのに使う
         readonly List<(string, int)> copiedSelection_ = new List<(string, int)> ();
+        readonly IVisualElementScheduledItem waveTicker_;
 
         public TimebarElement (PreviewWindow window)
         {
@@ -144,6 +148,9 @@ namespace Lilium
             tracksCanvas_ = new VisualElement { name = "MktTimelineTracks" };
             tracksCanvas_.generateVisualContent += OnGenerateTracks;
             trackScroll_.Add (tracksCanvas_);
+            // 外で区間を作っている間だけ、波線を流すために描き直し続ける（S85）
+            waveTicker_ = tracksCanvas_.schedule.Execute (() => tracksCanvas_.MarkDirtyRepaint ()).Every (kWaveFrameMs);
+            waveTicker_.Pause ();
 
             noClipLabel_ = new Label (Tr ("TIMELINE_OVERLAY_NO_CLIP"));
             noClipLabel_.style.position = Position.Absolute;
@@ -293,6 +300,8 @@ namespace Lilium
             tracksCanvas_.style.height = Mathf.Max (contentHeight, viewHeight);
 
             noClipLabel_.style.display = window_.targetClip == null ? DisplayStyle.Flex : DisplayStyle.None;
+            if (window_.betweenInProgress.Count > 0) waveTicker_.Resume ();
+            else waveTicker_.Pause ();
             LayoutAll ();
         }
 
@@ -460,6 +469,8 @@ namespace Lilium
 
             FillRect (painter, new Rect (0, 0, kLabelWidth, height), kLabelColor);
             int cycleFrame = window_.cycleFrame;
+            // 外で作っている区間の波線を流す位置（0〜1 で 1 山）
+            float flow = window_.betweenInProgress.Count > 0 ? (float) (EditorApplication.timeSinceStartup % kWaveFlowSeconds / kWaveFlowSeconds) : 0;
 
             for (int i = 0; i < tracks_.Count; i++) {
                 PreviewWindow.TimelineTrack track = tracks_[i];
@@ -478,7 +489,9 @@ namespace Lilium
                     KeyInterpolation? mode = IntervalMode (track, k);
                     BetweenClips.State between = track.between != null && k - 1 < track.between.Length ? track.between[k - 1] : BetweenClips.State.None;
                     float textWidth = IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1);
-                    if (between != BetweenClips.State.None) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), between != BetweenClips.State.Fresh);
+                    // 外で作っている区間は、今の補間が何であっても流れる波線（できると外部の動きになる）
+                    if (window_.IsBetweenInProgress (track.keys[k - 1], track.keys[k])) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), false, flow);
+                    else if (between != BetweenClips.State.None) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), between != BetweenClips.State.Fresh);
                     else DrawInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), mode);
                 }
 
@@ -558,24 +571,31 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 外部の動きの区間（S82）の矢印: 波線と両端の矢じり。古い（キーの値が変わった）・使えなくなった（キーのフレームが変わった）区間は点線の波線
+        /// 外部の動きの区間（S82）の矢印: 波線と両端の矢じり。古い（キーの値が変わった）・使えなくなった（キーのフレームが変わった）区間は点線の波線。
+        /// flow（0〜1）だけ波を右へずらす（S85。外で作っている区間は時間で増やして流す）。端で切れる山は途中まで描く
         /// </summary>
-        void DrawExternalInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color, bool dashed)
+        void DrawExternalInterval (Painter2D painter, float x0, float x1, float y, float textWidth, Color color, bool dashed, float flow = 0)
         {
             if (x1 - x0 < 8) return;
             y = Mathf.Round (y) + 0.5f;
             float mid = (x0 + x1) * 0.5f;
             float gap = textWidth > 0 ? textWidth * 0.5f + 4 : 0;
+            float left = x0 + 2;
+            float right = x1 - 2;
             painter.strokeColor = color;
             painter.lineWidth = 1;
+            // 2 山前から始めて左端で切る（ずらしても左端に隙間ができない。2 山なので山と谷の並びは flow 0 のときと同じ）
             int step = 0;
-            for (float x = x0 + 2; x + kWaveStep <= x1 - 2; x += kWaveStep, step++) {
-                if (gap > 0 && x + kWaveStep > mid - gap && x < mid + gap) continue;
-                if (dashed && step % 3 == 2) continue;
+            for (float x = left - 2 * kWaveStep + flow * 2 * kWaveStep; x < right; x += kWaveStep, step++) {
+                float a = Mathf.Max (x, left);
+                float b = Mathf.Min (x + kWaveStep, right);
+                if (b - a < 0.5f) continue;
+                if (gap > 0 && b > mid - gap && a < mid + gap) continue;
+                if (dashed && step % 3 == 1) continue;
                 float from = step % 2 == 0 ? -kWaveHeight : kWaveHeight;
                 painter.BeginPath ();
-                painter.MoveTo (new Vector2 (x, y + from));
-                painter.LineTo (new Vector2 (x + kWaveStep, y - from));
+                painter.MoveTo (new Vector2 (a, y + Mathf.Lerp (from, -from, (a - x) / kWaveStep)));
+                painter.LineTo (new Vector2 (b, y + Mathf.Lerp (from, -from, (b - x) / kWaveStep)));
                 painter.Stroke ();
             }
             for (int i = 0; i < 3; i++) {

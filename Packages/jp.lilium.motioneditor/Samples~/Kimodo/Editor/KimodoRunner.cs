@@ -30,6 +30,13 @@ namespace Lilium
         public string destination;
         /// <summary>書き出したときの元のクリップのキーの指紋（取り込む前に変わっていないか見る）</summary>
         public string fingerprint;
+        /// <summary>
+        /// 取り込んだ後の元のクリップのキーの指紋（S85）。補間として取り込むと境目にキーが足されて指紋が変わるので、
+        /// 自動で作るときは、これと今の指紋を比べて作り直すかを決める。送った後でキーが変わっていたら、送ったときの指紋のまま（作り直させる）
+        /// </summary>
+        public string importedFingerprint;
+        /// <summary>キーが変わったので自動で始めたか（S85）。取り込むときに確かめない（作り直すので）</summary>
+        public bool auto;
         public string prompt;
         public string mode;
         public string target = kOverride;
@@ -95,7 +102,8 @@ namespace Lilium
         /// </summary>
         /// <param name="target">結果の使い方（KimodoJob.kOverride か kBetween）</param>
         /// <param name="segments">補間として使うとき、外部の動きにする区間（元のクリップの隣り合うキーの間）</param>
-        public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null)
+        /// <param name="auto">キーが変わったので自動で始める（S85）</param>
+        public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null, bool auto = false)
         {
             if (job_ != null && job_.running) return Tr ("KIMODO_RUN_ALREADY_RUNNING");
             string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton);
@@ -166,6 +174,7 @@ namespace Lilium
                     baseClip = AssetDatabase.GetAssetPath (clip),
                     destination = DestinationPath (clip),
                     fingerprint = Fingerprint (clip),
+                    auto = auto,
                     prompt = prompt.Trim (),
                     mode = mode,
                     target = target,
@@ -205,6 +214,7 @@ namespace Lilium
                 baseClip = AssetDatabase.GetAssetPath (clip),
                 destination = DestinationPath (clip),
                 fingerprint = Fingerprint (clip),
+                auto = auto,
                 prompt = prompt.Trim (),
                 mode = mode,
                 target = target,
@@ -378,7 +388,18 @@ namespace Lilium
                 return job_.message;
             }
             AnimationClip clip = window.baseClip;
-            if (Fingerprint (clip) != job_.fingerprint) {
+            bool keysChanged = Fingerprint (clip) != job_.fingerprint;
+            List<BetweenClips.Range> segments = job_.segments;
+            if (keysChanged && job_.auto) {
+                // 自動のときは確かめずに、まだ区間のままの所だけ取り込む（すぐ作り直すので、それまでの見た目に使う）
+                segments = segments.Where (r => BetweenClips.GetSegmentProblem (clip, r) == null).ToList ();
+                if (job_.target == KimodoJob.kBetween && segments.Count == 0) {
+                    job_.message = Tr ("KIMODO_RUN_KEYS_CHANGED_AUTO");
+                    Store ();
+                    return job_.message;
+                }
+            }
+            else if (keysChanged) {
                 if (!EditorUtility.DisplayDialog ("Kimodo", Tr ("KIMODO_RUN_KEYS_CHANGED_DIALOG", clip.name), Tr ("KIMODO_PANEL_IMPORT"), Tr ("KIMODO_RUN_NOT_NOW"))) {
                     job_.message = Tr ("KIMODO_RUN_KEYS_CHANGED");
                     Store ();
@@ -390,9 +411,11 @@ namespace Lilium
             if (bvh == null) return Fail (error);
             if (job_.target == KimodoJob.kBetween) {
                 // キーの間の補間として使う（S83）。結果のファイルは丸ごと置き換え、選んだ区間を外部の動きにする
-                error = window.ImportBetween (bvh, skeleton, job_.segments, out PoseSession.OverrideImportResult between);
+                error = window.ImportBetween (bvh, skeleton, segments, out PoseSession.OverrideImportResult between);
                 if (error != null) return Fail (error);
+                job_.segments = segments;
                 job_.keyDeviations = new List<PoseSession.KeyDeviation> ();
+                job_.importedFingerprint = keysChanged ? job_.fingerprint : Fingerprint (clip);
                 Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_BETWEEN", job_.segments.Count, BetweenClips.PathFor (clip)));
                 return null;
             }
@@ -405,6 +428,7 @@ namespace Lilium
             error = window.ImportOverride (bvh, skeleton, destination, OverrideMode.Additive, options, out PoseSession.OverrideImportResult result);
             if (error != null) return Fail (error);
             job_.keyDeviations = result.keyDeviations;
+            job_.importedFingerprint = keysChanged ? job_.fingerprint : Fingerprint (clip);
             Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_OVERRIDE", job_.destination));
             return null;
         }
@@ -420,6 +444,18 @@ namespace Lilium
         public static PreviewWindow FindWindow (string clipPath)
         {
             return Resources.FindObjectsOfTypeAll<PreviewWindow> ().FirstOrDefault (w => w.baseClip != null && AssetDatabase.GetAssetPath (w.baseClip) == clipPath);
+        }
+
+        /// <summary>
+        /// clip のどのキーで最後に作ったか（指紋。S85）。自動で作るとき、今の指紋がこれと同じなら作り直さない。
+        /// 取り込んだなら取り込んだ後の指紋、それ以外（作っている・失敗した・止めた）は送ったときの指紋（同じキーで失敗を繰り返さない）。
+        /// 作っていない・ほかのクリップのものなら null
+        /// </summary>
+        public static string GeneratedFingerprint (AnimationClip clip)
+        {
+            if (job_ == null || clip == null || job_.baseClip != AssetDatabase.GetAssetPath (clip)) return null;
+            if (job_.state == KimodoJob.kImported && !string.IsNullOrEmpty (job_.importedFingerprint)) return job_.importedFingerprint;
+            return job_.fingerprint;
         }
 
         /// <summary>取り込んだ Override が窓の何枚目か（無ければ -1）</summary>

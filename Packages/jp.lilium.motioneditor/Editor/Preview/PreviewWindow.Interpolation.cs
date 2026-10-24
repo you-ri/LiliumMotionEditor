@@ -95,6 +95,36 @@ namespace Lilium
             RaiseStateChanged ();
         }
 
+        [System.NonSerialized] List<BetweenClips.Range> betweenInProgress_;
+        static readonly List<BetweenClips.Range> kNoRanges = new List<BetweenClips.Range> ();
+
+        /// <summary>
+        /// 外で今作っている元のクリップのキーの間（S85。外部のモデルで作るときなど）。タイムラインはこの区間の矢印を流れる波線にして、作っている最中だと見せる。
+        /// 窓は作り方を知らないので、作る側が始めたときに入れ、終わったら空にする（窓の状態として保存しない。再読み込みの後は作る側が入れ直す）
+        /// </summary>
+        public IReadOnlyList<BetweenClips.Range> betweenInProgress
+        {
+            get { return betweenInProgress_ ?? kNoRanges; }
+        }
+
+        public void SetBetweenInProgress (IEnumerable<BetweenClips.Range> ranges)
+        {
+            List<BetweenClips.Range> next = ranges != null ? new List<BetweenClips.Range> (ranges) : new List<BetweenClips.Range> ();
+            if (System.Linq.Enumerable.SequenceEqual (next, betweenInProgress)) return;
+            betweenInProgress_ = next;
+            RaiseStateChanged ();
+        }
+
+        /// <summary>キー from から to までが、外で作っている区間に掛かるか（S85。外部の動きは元のクリップに効くので、元のクリップへ書いているときだけ）</summary>
+        public bool IsBetweenInProgress (int from, int to)
+        {
+            if (betweenInProgress.Count == 0 || targetClip != editingClip_) return false;
+            foreach (BetweenClips.Range range in betweenInProgress) {
+                if (from < range.end && range.start < to) return true;
+            }
+            return false;
+        }
+
         /// <summary>frame のキーから次のキーまでの外部の動きを、元のクリップのキーにできるか（S82）</summary>
         public bool CanBakeBetween (int frame)
         {
