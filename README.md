@@ -4,6 +4,8 @@ English | [日本語](README.ja.md)
 
 An editor extension for creating character motions inside the Unity Editor.
 
+![Making the motion between keys with Kimodo in the Motion Editor window](Docs/Images/demo.gif)
+
 + Pose a character through an editing rig that duplicates its bones, and save the rig values to an animation clip.
 + Edit poses with full-body IK.
 + Clips made with the same editing rig can be shared between characters with different body proportions.

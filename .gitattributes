@@ -17,6 +17,9 @@
 *.png   binary
 *.PNG   binary
 *.jpg   binary
+*.gif   binary
+*.webp  binary
+*.mp4   binary
 *.tga   binary
 *.tif   binary
 *.tiff  binary
