@@ -50,6 +50,9 @@ Assets/_Private*
 
 # 開発元のリポジトリのパスや非公開の素材の名前を含むので公開しない
 CLAUDE.md
+# 同じ理由で、extrival へ写す・CHANGELOG を書く手元の作業用スキルも公開しない
+.claude/skills/sync-to-extrival/
+.claude/skills/update-changelog/
 
 # Kimodo の生成物と、Kimodo が出した骨格から作った定義（骨の長さを含む）は公開しない。
 # 生成物の扱いは利用者の責任なので、デモにも入れない（Docs/Specs の S71〜S76）
