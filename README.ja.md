@@ -52,10 +52,16 @@ Package Manager でこのパッケージを選び、Samples の `Demo` をイン
 
 ### Kimodo（オプション）
 
-Samples の `Kimodo (optional)` を使うと、NVIDIA のモーション生成モデル [Kimodo](https://github.com/nv-tlabs/kimodo) に、打ったキーの間の動きを文章から作らせ、
-キーの姿勢を残したまま Override として取り込めます（Motion Editor の窓の **Kimodo** パネルから。Kimodo を入れるまでは、パネルが入れ方を案内します）。Kimodo は同梱していません。ライセンスを確かめたうえで、各自で用意して重みをダウンロードします。
-詳しくはサンプルの `README.md` を見てください。モーションエディタは Kimodo が無くても動きます。
-このプロジェクトは NVIDIA・Meta とは関係が無く、承認も受けていません。
+Samples の Kimodo (オプション) を使うと、NVIDIA のモーション生成モデル [Kimodo](https://github.com/nv-tlabs/kimodo) に、打ったキーの間の動きを文章から作らせ、
+キーの姿勢を残したまま Override として取り込めます。Kimodo は同梱していませんが、セットアップをアシストする機能を用意しています。ライセンスを確かめたうえで、各自用意してください。モーションエディタは Kimodo が無くても動きます。
+
+Kimodo を動かすのに必要なもの:
+
++ NVIDIA の GPU（RTX 20 シリーズ以降。ビデオメモリは約 1.5 GB 使います）
++ 空きメモリ約 16 GB（文章を読む部分を CPU で動かすため）
++ ディスク約 25 GB（Python の環境と重み。Docker で動かすときは約 50 GB）
++ Hugging Face のアカウントと、Llama 3（`meta-llama/Meta-Llama-3-8B-Instruct`）の利用許可
++ Windows 11・RTX 2070 で動くことを確かめています
 
 ## License
 
