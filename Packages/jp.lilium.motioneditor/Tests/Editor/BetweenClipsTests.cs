@@ -358,6 +358,35 @@ namespace Lilium
             Assert.IsNotNull (other.SetExternal (0, true), "結果のファイルが無ければ付けない");
         }
 
+        /// <summary>
+        /// 一定にしてから外部の動きに戻すと、下の補間が曲線に戻る（外部の動きはキーの近くで下の補間へ混ぜる。一定のままだと区間の終わりが前のキーの姿勢へ寄った）。
+        /// 取り込みで外部の動きにするときも同じ
+        /// </summary>
+        [Test]
+        public void MakingASegmentExternal_PutsTheCurveBackUnderIt ()
+        {
+            PoseSession session = OpenWithBetween ();
+            Assert.AreEqual (KeyInterpolation.Curve, SegmentMode (session, 0), "初めは曲線");
+            Assert.IsNull (session.SetInterpolation (0, KeyInterpolation.Constant));
+            Assert.AreEqual (KeyInterpolation.Constant, SegmentMode (session, 0));
+            Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (0));
+
+            Assert.IsNull (session.SetExternal (0, true));
+            Assert.AreEqual (BetweenClips.State.Fresh, session.GetBetweenState (0), "曲線に戻した後の指紋");
+            Assert.AreEqual (KeyInterpolation.Curve, SegmentMode (session, 0), "外部の動きにすると曲線に戻る");
+
+            Assert.IsNull (session.SetInterpolation (0, KeyInterpolation.Linear));
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            Assert.IsNull (session.ImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { kFirst }, out PoseSession.OverrideImportResult result));
+            Assert.AreEqual (BetweenClips.State.Fresh, session.GetBetweenState (0));
+            Assert.AreEqual (KeyInterpolation.Curve, SegmentMode (session, 0), "取り込みで外部の動きにしても曲線に戻る");
+        }
+
+        static KeyInterpolation? SegmentMode (PoseSession session, int start)
+        {
+            return KeyInterpolations.GetSegments (session.clip).First (s => s.start == start).mode;
+        }
+
         /// <summary>結果のファイルの無い別の元のクリップ</summary>
         PoseSession Open2 ()
         {

@@ -58,13 +58,40 @@ namespace Lilium
         /// <summary>frame のキーから次のキーまでを mode にする（1 回の Undo で戻る）。外部の動きの区間なら、外部の動きから外す（S82）</summary>
         public void SetInterpolation (int frame, KeyInterpolation mode)
         {
-            if (!CanSetInterpolation (frame)) return;
+            if (!CanSetInterpolation (frame) || !KeyInterpolations.TryGetSegment (targetClip, frame, out int start, out int end)) return;
+            SetInterpolation (new[] { new Interval { start = start, end = end } }, mode);
+        }
+
+        /// <summary>
+        /// タイムラインで選んだキーの間（S86）。filter が null ならクリップの区間（クリップ全体のトラック）、
+        /// あれば骨のトラックの、その骨のカーブだけのその骨のキーの間
+        /// </summary>
+        public struct Interval
+        {
+            public int start;
+            public int end;
+            public System.Predicate<EditorCurveBinding> filter;
+        }
+
+        /// <summary>
+        /// キーの間をまとめて mode にする（S86。1 回の Undo で戻る）。クリップの区間で外部の動きなら、外部の動きから外す（S82）。
+        /// 骨のキーの間は外部の動きの印を変えない（印はクリップの区間に付く）
+        /// </summary>
+        public void SetInterpolation (IList<Interval> intervals, KeyInterpolation mode)
+        {
+            if (!CanEditClip () || intervals == null || intervals.Count == 0) return;
             AnimationClip clip = targetClip;
             System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
-            if (clip == editingClip_ && KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) {
-                BetweenClips.SetSegment (clip, new BetweenClips.Range { start = start, end = end }, false);
+            if (clip == editingClip_) {
+                foreach (Interval interval in intervals) {
+                    if (interval.filter == null) BetweenClips.SetSegment (clip, new BetweenClips.Range { start = interval.start, end = interval.end }, false);
+                }
             }
-            EditClip (clip, "Key Interpolation", () => KeyInterpolations.SetSegment (clip, frame, mode, exclude) > 0);
+            EditClip (clip, "Key Interpolation", () => {
+                int written = 0;
+                foreach (Interval interval in intervals) written += KeyInterpolations.SetRange (clip, interval.start, interval.end, mode, interval.filter, exclude);
+                return written > 0;
+            });
             AfterClipEdit ();
             RaiseStateChanged ();
         }
@@ -86,11 +113,33 @@ namespace Lilium
                 && KeyInterpolations.TryGetSegment (editingClip_, frame, out int start, out int end) && BetweenClips.Find (editingClip_) != null;
         }
 
-        /// <summary>frame のキーから次のキーまでを外部の動きにする（S82。区間の印は .meta なので Undo では戻らない）</summary>
+        /// <summary>
+        /// frame のキーから次のキーまでを外部の動きにする（S82。区間の印は .meta なので Undo では戻らない）。
+        /// 下の補間が一定・リニアなら曲線に戻す（外部の動きはキーの近くで下の補間へ混ぜるため。こちらは Undo で戻る）
+        /// </summary>
         public void SetExternal (int frame)
         {
-            if (!CanSetExternal (frame) || !KeyInterpolations.TryGetSegment (editingClip_, frame, out int start, out int end)) return;
-            BetweenClips.SetSegment (editingClip_, new BetweenClips.Range { start = start, end = end }, true);
+            SetExternal (new[] { frame });
+        }
+
+        /// <summary>いくつかの区間（始まりのキーのフレーム）をまとめて外部の動きにする（S86。下の補間を曲線に戻すのは 1 回の Undo）</summary>
+        public void SetExternal (IList<int> frames)
+        {
+            List<BetweenClips.Range> ranges = new List<BetweenClips.Range> ();
+            foreach (int frame in frames) {
+                if (CanSetExternal (frame) && KeyInterpolations.TryGetSegment (editingClip_, frame, out int start, out int end)) {
+                    ranges.Add (new BetweenClips.Range { start = start, end = end });
+                }
+            }
+            if (ranges.Count == 0) return;
+            AnimationClip clip = editingClip_;
+            System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
+            EditClip (clip, "Key Interpolation", () => {
+                int written = 0;
+                foreach (BetweenClips.Range range in ranges) written += KeyInterpolations.SetCurveUnderExternal (clip, range.start, exclude);
+                return written > 0;
+            });
+            foreach (BetweenClips.Range range in ranges) BetweenClips.SetSegment (clip, range, true);
             AfterClipEdit ();
             RaiseStateChanged ();
         }

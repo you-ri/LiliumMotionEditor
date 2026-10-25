@@ -42,6 +42,8 @@ namespace Lilium
         public string target = kOverride;
         /// <summary>補間として使うとき、外部の動きにする区間</summary>
         public List<BetweenClips.Range> segments = new List<BetweenClips.Range> ();
+        /// <summary>始めたときに既に外部の動きだった区間（作っている間に手で外した区間を、取り込みで戻さないため。S85）</summary>
+        public List<BetweenClips.Range> externalAtStart = new List<BetweenClips.Range> ();
         /// <summary>文章の読み取りのサーバーを使ったか（S78）</summary>
         public bool server;
         /// <summary>Python の環境で動かしたときのプロセスの番号（止める・再読み込みの後に生きているかを見る）</summary>
@@ -179,6 +181,7 @@ namespace Lilium
                     mode = mode,
                     target = target,
                     segments = segments != null ? segments.ToList () : new List<BetweenClips.Range> (),
+                    externalAtStart = ExternalSegments (clip, segments),
                     started = System.DateTime.Now.Ticks,
                 };
                 nextContainerCheck_ = EditorApplication.timeSinceStartup + 30;
@@ -219,7 +222,8 @@ namespace Lilium
                 mode = mode,
                 target = target,
                 segments = segments != null ? segments.ToList () : new List<BetweenClips.Range> (),
-                server = server == KimodoTextServer.State.Ready,
+                externalAtStart = ExternalSegments (clip, segments),
+                server =server == KimodoTextServer.State.Ready,
                 started = System.DateTime.Now.Ticks,
             };
             nextContainerCheck_ = EditorApplication.timeSinceStartup + 30;
@@ -389,7 +393,8 @@ namespace Lilium
             }
             AnimationClip clip = window.baseClip;
             bool keysChanged = Fingerprint (clip) != job_.fingerprint;
-            List<BetweenClips.Range> segments = job_.segments;
+            // 作っている間に外部の動きから手で外した区間（曲線・リニア・一定にした）は取り込まない（取り込むと外部の動きへ戻り、選んだ補間が消える）
+            List<BetweenClips.Range> segments = job_.segments.Where (r => !job_.externalAtStart.Contains (r) || IsExternal (clip, r)).ToList ();
             if (keysChanged && job_.auto) {
                 // 自動のときは確かめずに、まだ区間のままの所だけ取り込む（すぐ作り直すので、それまでの見た目に使う）
                 segments = segments.Where (r => BetweenClips.GetSegmentProblem (clip, r) == null).ToList ();
@@ -444,6 +449,17 @@ namespace Lilium
         public static PreviewWindow FindWindow (string clipPath)
         {
             return Resources.FindObjectsOfTypeAll<PreviewWindow> ().FirstOrDefault (w => w.baseClip != null && AssetDatabase.GetAssetPath (w.baseClip) == clipPath);
+        }
+
+        static List<BetweenClips.Range> ExternalSegments (AnimationClip clip, IEnumerable<BetweenClips.Range> segments)
+        {
+            return segments != null ? segments.Where (r => IsExternal (clip, r)).ToList () : new List<BetweenClips.Range> ();
+        }
+
+        static bool IsExternal (AnimationClip clip, BetweenClips.Range range)
+        {
+            BetweenClips.State state = BetweenClips.GetSegmentState (clip, range);
+            return state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale;
         }
 
         /// <summary>

@@ -41,6 +41,8 @@ namespace Lilium
         AnimationClip chosenClip_;
         /// <summary>最後に見た区間の始まり。キーの並びが変わったことを知るため</summary>
         List<int> knownStarts_ = new List<int> ();
+        /// <summary>最後に見たとき外部の動きだった区間（「始まり-終わり」）。手で外したことを知るため（S85）</summary>
+        List<string> seenExternal_ = new List<string> ();
         string problem_;
         /// <summary>
         /// IMGUI の中身の高さ。IMGUIContainer は中身が伸び縮みしても自分の高さを変えないので（はみ出して下のパネルに重なった）、
@@ -425,19 +427,33 @@ namespace Lilium
             List<int> starts = segments.Select (r => r.start).ToList ();
             if (clip != chosenClip_) {
                 chosenClip_ = clip;
-                List<int> external = segments.Where (r => {
-                    BetweenClips.State state = BetweenClips.GetSegmentState (clip, r);
-                    return state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale;
-                }).Select (r => r.start).ToList ();
+                List<int> external = segments.Where (r => IsExternal (clip, r)).Select (r => r.start).ToList ();
                 chosen_ = external.Count > 0 ? external : new List<int> (starts);
                 knownStarts_ = starts;
+                seenExternal_.Clear ();
             } else if (!starts.SequenceEqual (knownStarts_)) {
                 // キーを打ち足したり動かしたりした。残った区間は選んだままにし、新しくできた区間は選ぶ
-                // （選び直さないと、消えた区間の始まりだけが残り、新しい区間が Kimodo にならない）
-                chosen_ = starts.Where (s => chosen_.Contains (s) || !knownStarts_.Contains (s)).ToList ();
+                // （選び直さないと、消えた区間の始まりだけが残り、新しい区間が Kimodo にならない）。
+                // 1 フレームの区間は選ばない（間のフレームが無い。外部の動きをキーにすると毎フレームにキーができ、自動で作ると全部を作り直していた）
+                chosen_ = segments.Where (r => chosen_.Contains (r.start) || !knownStarts_.Contains (r.start) && r.end - r.start >= 2).Select (r => r.start).ToList ();
                 if (chosen_.Count == 0) chosen_ = new List<int> (starts);
                 knownStarts_ = starts;
             }
+            // 外部の動きだった区間を、同じ区間のまま曲線・リニア・一定にした（タイムラインのメニューなど）なら、選びから外す。
+            // 外さないと、自動で作り直したときに外部の動きへ戻り、選んだ補間が消えた（10-25 の不具合）
+            List<string> seen = new List<string> ();
+            foreach (BetweenClips.Range range in segments) {
+                string key = range.start + "-" + range.end;
+                if (IsExternal (clip, range)) seen.Add (key);
+                else if (seenExternal_.Contains (key)) chosen_.Remove (range.start);
+            }
+            seenExternal_ = seen;
+        }
+
+        static bool IsExternal (AnimationClip clip, BetweenClips.Range range)
+        {
+            BetweenClips.State state = BetweenClips.GetSegmentState (clip, range);
+            return state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale;
         }
 
         void DrawSegmentButtons (List<BetweenClips.Range> segments)

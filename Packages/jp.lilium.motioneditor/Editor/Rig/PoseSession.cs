@@ -289,10 +289,22 @@ namespace Lilium
             if (!KeyInterpolations.TryGetSegment (clip_, frame, out int start, out int end)) return Tr ("POSE_SESSION_NO_SEGMENT", frame);
             if (on && overrideWriteIndex >= 0) return Tr ("BETWEEN_CLIPS_WRITE_TO_BASE");
             if (on && BetweenClips.Find (clip_) == null) return Tr ("BETWEEN_CLIPS_NO_RESULT");
+            // 下の補間が一定・リニアなら曲線に戻す（外部の動きはキーの近くで下の補間へ混ぜる。KeyInterpolations.SetCurveUnderExternal）
+            if (on) CurveUnderExternal (new[] { new BetweenClips.Range { start = start, end = end } }, "Key Interpolation");
             BetweenClips.SetSegment (clip_, new BetweenClips.Range { start = start, end = end }, on);
             stage.InvalidateClipCurves ();
             Evaluate (this.frame);
             return null;
+        }
+
+        /// <summary>元のクリップの区間の下の補間を曲線に戻す（外部の補間にする前）。Undo は undoName で記録する（変えなければ残らない）</summary>
+        void CurveUnderExternal (IEnumerable<BetweenClips.Range> ranges, string undoName)
+        {
+            System.Predicate<EditorCurveBinding> exclude = SwitchCurves ();
+            Undo.RecordObject (clip_, undoName);
+            int written = 0;
+            foreach (BetweenClips.Range range in ranges) written += KeyInterpolations.SetCurveUnderExternal (clip_, range.start, exclude);
+            if (written > 0) stage.InvalidateClipCurves ();
         }
 
         /// <summary>
@@ -714,6 +726,8 @@ namespace Lilium
                 return error;
             }
             AssetDatabase.SaveAssetIfDirty (between);
+            // 区間の指紋はキーを足した後で取る（下の補間を曲線に戻すと、端にキーの無いカーブにキーが足される）
+            CurveUnderExternal (segments, "Import Between");
             BetweenClips.SaveSegments (between, clip_, segments, BetweenClips.MakeStamps (clip_));
             stage.InvalidateClipCurves ();
             Evaluate (frame);

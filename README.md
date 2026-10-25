@@ -4,9 +4,15 @@ English | [日本語](README.ja.md)
 
 An editor extension for creating character motions inside the Unity Editor.
 
-+ You pose a character through an "editing rig" that duplicates its bones, and the rig values are saved to an animation clip.
-+ Handles FK, full-body IK, and Animation Rigging values.
++ Pose a character through an editing rig that duplicates its bones, and save the rig values to an animation clip.
++ Edit poses with full-body IK.
 + Clips made with the same editing rig can be shared between characters with different body proportions.
++ Saving bakes a Humanoid clip for the game, with Animation Rigging values and other properties.
++ Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.
++ Poses and motions can also be made with AI through the Unity CLI.
++ Optionally, NVIDIA's Kimodo motion model can make the motion between your keys from a text prompt.
++ Create motions non-destructively while checking the final pose as it will look in the game.
++ No need to go back and forth with a DCC tool. Your edits show up in the motion right away.
 + Under development. The specification will change in future versions.
 
 ## Dependencies

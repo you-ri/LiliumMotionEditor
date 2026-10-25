@@ -93,7 +93,7 @@ It works on the clip open in that window, and shows the setup steps until Kimodo
 ## Use the motion as the interpolation between keys (instead of an Override)
 
 The window's **Use the Result as: Interpolation between keys** saves the motion as `<clip>.between.anim` next to the clip and makes the chosen segments
-(spans between two neighboring keys) take their in-between frames from it; the other segments keep their curve / linear / constant interpolation.
+(spans between two neighboring keys) take their in-between frames from it; the other segments keep their curve / linear / stepped interpolation (the window's menu shows the generated segments as **AI**).
 From the CLI, after generating `gen.bvh` as above, write it with `PoseSession.ImportBetween` (no CLI command yet), then switch segments with
 `motion_write_motion` keys' `"interpolation": "external"`, and check `motion_read_motion` (`"stale": true` means the keys changed after the motion was made) and `motion_lint` (`Between` issues).
 

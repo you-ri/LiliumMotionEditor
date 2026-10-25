@@ -7,11 +7,18 @@ namespace Lilium
     /// <summary>
     /// モーションエディタの窓に載るパネル（Overlay）の共通の基底。窓の知らせの付け外しを Subscribe の 1 か所に書く:
     /// 作るときに Resubscribe で付け直し、作り直す前に Unsubscribe で外し、消すときに基底が外す
-    /// （付けるところと外すところを別々に書いていたので、片方だけ直すと知らせが残った）
+    /// （付けるところと外すところを別々に書いていたので、片方だけ直すと知らせが残った）。
+    /// ツールバーに入れたパネルはボタン 1 つに畳む（OverlayLayout.CollapseInToolbar）
     /// </summary>
     abstract class HostOverlay<TWindow> : Overlay where TWindow : EditorWindow
     {
         protected TWindow window_;
+
+        public override void OnCreated ()
+        {
+            base.OnCreated ();
+            OverlayLayout.CollapseInToolbar (this);
+        }
 
         /// <summary>扱う窓を引き当てる（既定は載っている窓）</summary>
         protected virtual TWindow ResolveWindow ()

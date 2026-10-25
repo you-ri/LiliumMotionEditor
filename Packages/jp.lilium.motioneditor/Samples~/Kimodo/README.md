@@ -156,13 +156,13 @@ In Unity, `Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BV
 
 With **Use the Result as** set to **Interpolation between keys**, choose the segments (the spans between two neighboring keys) to fill (all of them at first).
 The motion is not layered as an Override: it is saved next to your clip as `<clip>.between.anim`, and the chosen segments take their in-between frames from it.
-At the keys the clip stays exactly on your keys, and the motion blends into them near each key. Segments you did not choose keep their curve, linear or constant interpolation.
+At the keys the clip stays exactly on your keys, and the motion blends into them near each key. Segments you did not choose keep their curve, linear or stepped interpolation.
 
-+ In the timeline, segments that use the external motion are drawn with a wavy arrow. Right-click a key and use **Interpolation to the Next Key** to switch a segment
-  between Curve, Linear, Constant and External Motion.
++ In the timeline, segments that use the generated motion are drawn with a wavy arrow. Click the arrow between two keys to select it (drag a box, Shift + click or Ctrl + click to select several),
+  then right-click it to switch the selected segments between Curve, Linear, Stepped and AI (the generated motion). Choosing AI on a Linear or Stepped segment puts the curve back under it, because the motion blends into the curve near each key.
 + If you change a key's value afterwards, the segment keeps the motion and the arrow turns dotted (it was made for the old keys; generate again to match).
   If you add, move or delete a key inside a segment, the segment stops using the motion and goes back to its curve.
-+ **Bake the External Motion into Keys** (same menu) turns a segment into keys, so the clip no longer needs the `.between.anim` file (for example, to copy the clip to another project).
++ **Bake the AI Motion into Keys** (the same arrow menu) turns a segment into keys, so the clip no longer needs the `.between.anim` file (for example, to copy the clip to another project).
   Lint reports a missing `.between.anim`, and segments made for older keys.
 + Each generation makes the whole clip again and replaces `.between.anim`.
 + With **Make it whenever the keys change (auto)** on (the default), it generates again each time you set, move or delete a key.

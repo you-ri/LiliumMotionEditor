@@ -201,11 +201,21 @@ namespace Lilium
         public static int SetSegment (AnimationClip clip, int frame, KeyInterpolation mode, System.Predicate<EditorCurveBinding> exclude = null)
         {
             if (clip == null || !TryGetSegment (clip, frame, out int start, out int end)) return 0;
+            return SetRange (clip, start, end, mode, null, exclude);
+        }
+
+        /// <summary>
+        /// start のフレームから end のフレームまでを mode にする（SetSegment と同じ書き方）。include で絞ったカーブだけを書く
+        /// （S86。タイムラインの骨のトラックの矢印: その骨のカーブの、その骨のキーの間。その間にキーのあるカーブは無いので、どのカーブも 1 つの区間に収まる）
+        /// </summary>
+        public static int SetRange (AnimationClip clip, int start, int end, KeyInterpolation mode, System.Predicate<EditorCurveBinding> include, System.Predicate<EditorCurveBinding> exclude = null)
+        {
+            if (clip == null || end <= start) return 0;
             float rate = clip.frameRate;
             List<EditorCurveBinding> bindings = new List<EditorCurveBinding> ();
             List<AnimationCurve> curves = new List<AnimationCurve> ();
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
-                if (!IsTarget (binding) || exclude != null && exclude (binding)) continue;
+                if (!IsTarget (binding) || include != null && !include (binding) || exclude != null && exclude (binding)) continue;
                 AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, binding);
                 if (SegmentIndex (curve, rate, start, end) < 0) continue;
                 int index = EnsureKey (curve, rate, start);
@@ -216,6 +226,20 @@ namespace Lilium
             }
             if (bindings.Count > 0) AnimationUtility.SetEditorCurves (clip, bindings.ToArray (), curves.ToArray ());
             return bindings.Count;
+        }
+
+        /// <summary>
+        /// 外部の動きにする区間（S82）の下の補間を曲線にする（start のキーから次のキーまで）。外部の動きはキーの近くで下の補間へ混ぜるので、
+        /// 一定のままだと区間の終わりが前のキーの姿勢へ寄ってから次のキーへ跳び、リニアでも端の速さが合わない（10-25 の不具合
+        /// 「一定にしてから外部の動きへ戻すと変になる」）。既に曲線なら何もしない（カーブを書き換えない）。書いたカーブの数を返す。Undo は呼ぶ側で
+        /// </summary>
+        public static int SetCurveUnderExternal (AnimationClip clip, int start, System.Predicate<EditorCurveBinding> exclude = null)
+        {
+            foreach (Segment segment in GetSegments (clip, exclude)) {
+                if (segment.start != start) continue;
+                return segment.mode == KeyInterpolation.Curve ? 0 : SetSegment (clip, start, KeyInterpolation.Curve, exclude);
+            }
+            return 0;
         }
 
         /// <summary>frame のキーの番号（無ければその時刻の値で足す。足したキーは曲線）</summary>

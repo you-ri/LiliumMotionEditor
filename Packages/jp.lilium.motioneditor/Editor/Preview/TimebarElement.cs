@@ -74,6 +74,8 @@ namespace Lilium
         static readonly Color kHandleColor = new Color (0, 0, 0, 0.15f);
         // 選んだキー・枠選択の枠の不透明度。色はアクセントの色
         const float kBoxFillAlpha = 0.15f;
+        /// <summary>選んだキーの間の矢印の帯の不透明度（S86。枠より少し濃くして、枠の中でも分かるように）</summary>
+        const float kIntervalFillAlpha = 0.3f;
         const float kBoxBorderAlpha = 0.8f;
         /// <summary>これより動かなければ枠選択ではなくクリック（フレームを移すだけ）</summary>
         const float kBoxDragThreshold = 3;
@@ -120,6 +122,14 @@ namespace Lilium
         Vector2 boxStart_;
         Vector2 boxEnd_;
         readonly HashSet<(string, int)> boxBase_ = new HashSet<(string, int)> ();
+        // 選んでいるキーの間の矢印（S86。トラック名と、前のキーのフレーム）。キーの選択と同じく名前で持つ
+        readonly HashSet<(string, int)> selectedIntervals_ = new HashSet<(string, int)> ();
+        readonly HashSet<(string, int)> boxBaseIntervals_ = new HashSet<(string, int)> ();
+        // 枠選択を始めた所の矢印（動かさずに離したら、その矢印を押したことにする）と、Shift + クリックの起点
+        (string, int)? pressedInterval_;
+        (string, int)? lastInterval_;
+        bool boxShift_;
+        bool boxAction_;
         // Ctrl+C で覚えたキーの選択（トラック名と、一番前のフレームからのずれ）。貼った後に貼ったキーを選ぶのに使う
         readonly List<(string, int)> copiedSelection_ = new List<(string, int)> ();
         readonly IVisualElementScheduledItem waveTicker_;
@@ -291,8 +301,9 @@ namespace Lilium
             if (window_ == null) return;
 
             tracks_ = window_.BuildTracks ();
-            // 消えたキー・見えなくなったトラックの選択は捨てる
+            // 消えたキー・見えなくなったトラックの選択は捨てる。矢印は前のキーが残っていても最後のキーになったら捨てる
             selectedKeys_.RemoveWhere (k => !tracks_.Any (t => t.label == k.Item1 && System.Array.IndexOf (t.keys, k.Item2) >= 0));
+            selectedIntervals_.RemoveWhere (k => !tracks_.Any (t => t.label == k.Item1 && System.Array.IndexOf (t.keys, k.Item2) >= 0 && System.Array.IndexOf (t.keys, k.Item2) + 1 < t.keys.Length));
 
             float viewHeight = trackScroll_.resolvedStyle.height;
             if (float.IsNaN (viewHeight)) viewHeight = window_.timelineTracksHeight;
@@ -489,6 +500,10 @@ namespace Lilium
                     KeyInterpolation? mode = IntervalMode (track, k);
                     BetweenClips.State between = track.between != null && k - 1 < track.between.Length ? track.between[k - 1] : BetweenClips.State.None;
                     float textWidth = IntervalTextWidth (track.keys[k] - track.keys[k - 1], x0, x1);
+                    // 選んだ矢印（S86）は帯を薄く塗る
+                    if (x1 > x0 && selectedIntervals_.Contains ((track.label, track.keys[k - 1]))) {
+                        FillRect (painter, Rect.MinMaxRect (x0, row.y + 2, x1, row.yMax - 3), WithAlpha (accent_, kIntervalFillAlpha));
+                    }
                     // 外で作っている区間は、今の補間が何であっても流れる波線（できると外部の動きになる）
                     if (window_.IsBetweenInProgress (track.keys[k - 1], track.keys[k])) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), false, flow);
                     else if (between != BetweenClips.State.None) DrawExternalInterval (painter, x0, x1, midY, textWidth, IntervalColor (track, k), between != BetweenClips.State.Fresh);
@@ -839,10 +854,11 @@ namespace Lilium
                         evt.StopPropagation ();
                         return;
                     }
-                    // 選んでいないキーを押したら、そのキーだけを選ぶ
+                    // 選んでいないキーを押したら、そのキーだけを選ぶ（矢印の選択も外す）
                     if (!selectedKeys_.Contains (key)) {
                         selectedKeys_.Clear ();
                         selectedKeys_.Add (key);
+                        selectedIntervals_.Clear ();
                         tracksCanvas_.MarkDirtyRepaint ();
                     }
                     if (evt.button == 1) {
@@ -862,7 +878,22 @@ namespace Lilium
                     return;
                 }
 
-                // キーの無い所: 右は選んだキーのメニュー、左のドラッグは枠選択（フレームを動かすのは目盛りの帯）
+                // キーの間の矢印（S86）: 右は選んだ矢印の補間のメニュー（選んでいなければその矢印だけを選ぶ）
+                (string, int)? interval = HitTestInterval (x, y);
+                if (evt.button == 1 && interval.HasValue) {
+                    if (!selectedIntervals_.Contains (interval.Value)) {
+                        selectedIntervals_.Clear ();
+                        selectedIntervals_.Add (interval.Value);
+                        selectedKeys_.Clear ();
+                        lastInterval_ = interval;
+                        tracksCanvas_.MarkDirtyRepaint ();
+                    }
+                    ShowIntervalMenu ();
+                    evt.StopPropagation ();
+                    return;
+                }
+                // キーの無い所: 右は選んだキーのメニュー、左のドラッグは枠選択（フレームを動かすのは目盛りの帯）。
+                // 矢印の上で押して動かさずに離したら、その矢印を選ぶ（離すまで分からないので、押した矢印を覚えておく）
                 if (evt.button == 1) {
                     ShowSelectionMenu ();
                     evt.StopPropagation ();
@@ -873,9 +904,16 @@ namespace Lilium
                 boxPointerId_ = evt.pointerId;
                 boxStart_ = new Vector2 (x, y);
                 boxEnd_ = boxStart_;
+                pressedInterval_ = interval;
+                boxShift_ = evt.shiftKey;
+                boxAction_ = evt.actionKey;
                 boxBase_.Clear ();
+                boxBaseIntervals_.Clear ();
                 // Shift / Ctrl を押しながらなら今の選択に足す
-                if (evt.shiftKey || evt.actionKey) boxBase_.UnionWith (selectedKeys_);
+                if (evt.shiftKey || evt.actionKey) {
+                    boxBase_.UnionWith (selectedKeys_);
+                    boxBaseIntervals_.UnionWith (selectedIntervals_);
+                }
                 canvas.CapturePointer (evt.pointerId);
                 evt.StopPropagation ();
                 return;
@@ -932,12 +970,18 @@ namespace Lilium
             if (boxSelecting_ && canvas.HasPointerCapture (boxPointerId_)) {
                 boxSelecting_ = false;
                 canvas.ReleasePointer (boxPointerId_);
-                // 動かさずに離したらクリック: 選択を外して、そのフレームへ移る
-                if (!boxMoved_) {
+                // 動かさずに離したらクリック: 矢印の上なら矢印を選ぶ。ほかは選択を外して、そのフレームへ移る
+                if (!boxMoved_ && pressedInterval_.HasValue) {
+                    ClickInterval (pressedInterval_.Value, boxShift_, boxAction_);
+                }
+                else if (!boxMoved_) {
                     selectedKeys_.Clear ();
                     selectedKeys_.UnionWith (boxBase_);
+                    selectedIntervals_.Clear ();
+                    selectedIntervals_.UnionWith (boxBaseIntervals_);
                     window_.SetFrame (Mathf.RoundToInt (XToFrame (boxStart_.x)));
                 }
+                pressedInterval_ = null;
                 tracksCanvas_.MarkDirtyRepaint ();
                 return;
             }
@@ -1007,6 +1051,46 @@ namespace Lilium
             return false;
         }
 
+        /// <summary>押した場所がどれかのキーの間の矢印（前のキーの右から次のキーの左まで）に当たっていれば、そのトラック名と前のキーのフレーム（S86）</summary>
+        (string, int)? HitTestInterval (float x, float y)
+        {
+            int row = Mathf.FloorToInt (y / kTrackHeight);
+            if (row < 0 || row >= tracks_.Count) return null;
+            PreviewWindow.TimelineTrack track = tracks_[row];
+            Rect rowRect = new Rect (0, row * kTrackHeight, 0, kTrackHeight);
+            for (int k = 1; k < track.keys.Length; k++) {
+                if (x > GetKeyRect (track.keys[k - 1], rowRect).xMax && x < GetKeyRect (track.keys[k], rowRect).x) return (track.label, track.keys[k - 1]);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 矢印を押した（S86）: その矢印だけを選ぶ（キーの選択は外す）。Ctrl（Mac は Cmd）なら足す・外す。
+        /// Shift なら同じトラックの前に押した矢印からの間を全部選ぶ（前に押した矢印が無い・ほかのトラックなら、その矢印だけ）
+        /// </summary>
+        void ClickInterval ((string, int) interval, bool shift, bool action)
+        {
+            if (action) {
+                if (!selectedIntervals_.Remove (interval)) selectedIntervals_.Add (interval);
+                lastInterval_ = interval;
+                return;
+            }
+            selectedKeys_.Clear ();
+            PreviewWindow.TimelineTrack track = tracks_.FirstOrDefault (t => t.label == interval.Item1);
+            if (shift && lastInterval_.HasValue && lastInterval_.Value.Item1 == interval.Item1 && track.keys != null) {
+                int from = Mathf.Min (lastInterval_.Value.Item2, interval.Item2);
+                int to = Mathf.Max (lastInterval_.Value.Item2, interval.Item2);
+                selectedIntervals_.Clear ();
+                for (int k = 0; k + 1 < track.keys.Length; k++) {
+                    if (track.keys[k] >= from && track.keys[k] <= to) selectedIntervals_.Add ((track.label, track.keys[k]));
+                }
+                return;
+            }
+            selectedIntervals_.Clear ();
+            selectedIntervals_.Add (interval);
+            lastInterval_ = interval;
+        }
+
         Rect BoxRect ()
         {
             return Rect.MinMaxRect (Mathf.Min (boxStart_.x, boxEnd_.x), Mathf.Min (boxStart_.y, boxEnd_.y),
@@ -1014,18 +1098,25 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 枠に掛かったキーを選ぶ（ドラッグ前の選択 boxBase_ に足す）
+        /// 枠に掛かったキーと、真ん中が枠に入ったキーの間の矢印（S86）を選ぶ（ドラッグ前の選択 boxBase_・boxBaseIntervals_ に足す）。
+        /// 矢印は真ん中で見る（キーだけをかすめたときに、隣の矢印まで選ばないように）
         /// </summary>
         void SelectInBox ()
         {
             Rect band = BoxRect ();
             selectedKeys_.Clear ();
             selectedKeys_.UnionWith (boxBase_);
+            selectedIntervals_.Clear ();
+            selectedIntervals_.UnionWith (boxBaseIntervals_);
             for (int i = 0; i < tracks_.Count; i++) {
                 Rect row = new Rect (0, i * kTrackHeight, 0, kTrackHeight);
                 if (row.yMax < band.yMin || row.yMin > band.yMax) continue;
-                foreach (int frame in tracks_[i].keys) {
-                    if (GetKeyRect (frame, row).Overlaps (band)) selectedKeys_.Add ((tracks_[i].label, frame));
+                int[] keys = tracks_[i].keys;
+                for (int k = 0; k < keys.Length; k++) {
+                    if (GetKeyRect (keys[k], row).Overlaps (band)) selectedKeys_.Add ((tracks_[i].label, keys[k]));
+                    if (k + 1 >= keys.Length) continue;
+                    float mid = (GetKeyRect (keys[k], row).xMax + GetKeyRect (keys[k + 1], row).x) * 0.5f;
+                    if (mid >= band.xMin && mid <= band.xMax) selectedIntervals_.Add ((tracks_[i].label, keys[k]));
                 }
             }
         }
@@ -1073,17 +1164,97 @@ namespace Lilium
             menu.ShowAsContext ();
         }
 
-        void AddInterpolationItem (GenericMenu menu, string label, int frame, KeyInterpolation mode, KeyInterpolation? current, bool enabled)
+        /// <summary>選んでいる矢印（S86）を、トラックと矢印の番号（前のキーの番号）で。トラックの並び順・左から</summary>
+        List<(PreviewWindow.TimelineTrack, int)> SelectedIntervalList ()
+        {
+            List<(PreviewWindow.TimelineTrack, int)> result = new List<(PreviewWindow.TimelineTrack, int)> ();
+            foreach (PreviewWindow.TimelineTrack track in tracks_) {
+                for (int k = 0; k + 1 < track.keys.Length; k++) {
+                    if (selectedIntervals_.Contains ((track.label, track.keys[k]))) result.Add ((track, k));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>矢印の今の補間の名前（AI の区間は ai、混在は mixed。メニューのチェックに使う）</summary>
+        static string IntervalModeName (PreviewWindow.TimelineTrack track, int k)
+        {
+            BetweenClips.State between = track.between != null && k < track.between.Length ? track.between[k] : BetweenClips.State.None;
+            if (between == BetweenClips.State.Fresh || between == BetweenClips.State.Stale) return "ai";
+            KeyInterpolation? mode = track.interpolations != null && k < track.interpolations.Length ? track.interpolations[k] : KeyInterpolation.Curve;
+            return KeyInterpolations.ToName (mode);
+        }
+
+        void AddInterpolationItem (GenericMenu menu, string label, List<PreviewWindow.Interval> intervals, KeyInterpolation mode, string current, bool enabled)
         {
             GUIContent item = new GUIContent (label);
+            bool on = current == KeyInterpolations.ToName (mode);
             if (!enabled) {
-                menu.AddDisabledItem (item, current == mode);
+                menu.AddDisabledItem (item, on);
                 return;
             }
-            menu.AddItem (item, current == mode, () => {
-                window_.SetInterpolation (frame, mode);
+            menu.AddItem (item, on, () => {
+                window_.SetInterpolation (intervals, mode);
                 RebuildTracks ();
             });
+        }
+
+        /// <summary>
+        /// 選んだ矢印の補間のメニュー（S86）: 曲線・リニア・ステップ・AI・AI の動きをキーにする。全部が同じ補間ならチェック。
+        /// AI の印はクリップの区間に付くので、AI と「キーにする」はクリップ全体のトラックの矢印だけを選んでいるときに選べる
+        /// </summary>
+        void ShowIntervalMenu ()
+        {
+            List<(PreviewWindow.TimelineTrack, int)> chosen = SelectedIntervalList ();
+            if (chosen.Count == 0) return;
+            List<PreviewWindow.Interval> intervals = chosen.Select (c => new PreviewWindow.Interval { start = c.Item1.keys[c.Item2], end = c.Item1.keys[c.Item2 + 1], filter = c.Item1.filter }).ToList ();
+            bool wholeClip = chosen.All (c => c.Item1.filter == null);
+            List<string> modes = chosen.Select (c => IntervalModeName (c.Item1, c.Item2)).Distinct ().ToList ();
+            string current = modes.Count == 1 ? modes[0] : null;
+            bool canSet = intervals.All (i => window_.CanSetInterpolation (i.start));
+
+            GenericMenu menu = new GenericMenu ();
+            menu.AddDisabledItem (new GUIContent (Tr ("TIMELINE_OVERLAY_INTERPOLATION", chosen.Count)));
+            menu.AddSeparator ("");
+            AddInterpolationItem (menu, Tr ("TIMELINE_OVERLAY_INTERPOLATION_CURVE"), intervals, KeyInterpolation.Curve, current, canSet);
+            AddInterpolationItem (menu, Tr ("TIMELINE_OVERLAY_INTERPOLATION_LINEAR"), intervals, KeyInterpolation.Linear, current, canSet);
+            AddInterpolationItem (menu, Tr ("TIMELINE_OVERLAY_INTERPOLATION_CONSTANT"), intervals, KeyInterpolation.Constant, current, canSet);
+            if (current == "mixed") menu.AddDisabledItem (new GUIContent (Tr ("TIMELINE_OVERLAY_INTERPOLATION_MIXED")), true);
+            // AI（S82）。結果のファイルがあり、元のクリップへ書いているときだけ選べる。もう AI の区間は外す
+            List<int> toExternal = wholeClip ? intervals.Where (i => window_.CanSetExternal (i.start) && !IsExternalState (window_.GetBetweenState (i.start))).Select (i => i.start).ToList () : new List<int> ();
+            GUIContent externalItem = new GUIContent (Tr ("TIMELINE_OVERLAY_INTERPOLATION_EXTERNAL"));
+            if (toExternal.Count > 0) {
+                menu.AddItem (externalItem, current == "ai", () => {
+                    window_.SetExternal (toExternal);
+                    RebuildTracks ();
+                });
+            }
+            else {
+                menu.AddDisabledItem (externalItem, current == "ai");
+            }
+            if (wholeClip && intervals.Any (i => window_.GetBetweenState (i.start) == BetweenClips.State.Stale)) menu.AddDisabledItem (new GUIContent (Tr ("TIMELINE_OVERLAY_BETWEEN_STALE")), false);
+            if (wholeClip && intervals.Any (i => window_.GetBetweenState (i.start) == BetweenClips.State.Lost)) menu.AddDisabledItem (new GUIContent (Tr ("TIMELINE_OVERLAY_BETWEEN_LOST")), false);
+            // 後ろの区間から焼く（焼くと区間の中にキーが入るが、前の区間の始まりは変わらない）
+            List<int> toBake = wholeClip ? intervals.Where (i => window_.CanBakeBetween (i.start)).Select (i => i.start).OrderByDescending (f => f).ToList () : new List<int> ();
+            GUIContent bake = new GUIContent (Tr ("TIMELINE_OVERLAY_BAKE_BETWEEN"));
+            if (toBake.Count > 0) {
+                menu.AddItem (bake, false, () => {
+                    foreach (int frame in toBake) {
+                        string error = window_.BakeBetween (frame);
+                        if (error != null) Debug.LogWarning ("Motion Editor: " + error);
+                    }
+                    RebuildTracks ();
+                });
+            }
+            else {
+                menu.AddDisabledItem (bake);
+            }
+            menu.ShowAsContext ();
+        }
+
+        static bool IsExternalState (BetweenClips.State state)
+        {
+            return state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale;
         }
 
         void ShowKeyMenu (int frame)
@@ -1109,42 +1280,6 @@ namespace Lilium
             else {
                 menu.AddDisabledItem (keepOne);
                 menu.AddDisabledItem (clearAll);
-            }
-            // 次のキーまでの補間（S80）。今の補間にチェック。混在なら印だけ出す
-            menu.AddSeparator ("");
-            string interpolation = Tr ("TIMELINE_OVERLAY_INTERPOLATION") + "/";
-            bool canSet = window_.CanSetInterpolation (frame);
-            BetweenClips.State betweenState = window_.GetBetweenState (frame);
-            bool external = betweenState == BetweenClips.State.Fresh || betweenState == BetweenClips.State.Stale;
-            // 外部の動きの区間では、接線の補間にチェックを付けない（見えているのは外部の動き）
-            KeyInterpolation? current = external ? (KeyInterpolation?) null : window_.GetInterpolation (frame);
-            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CURVE"), frame, KeyInterpolation.Curve, current, canSet);
-            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_LINEAR"), frame, KeyInterpolation.Linear, current, canSet);
-            AddInterpolationItem (menu, interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_CONSTANT"), frame, KeyInterpolation.Constant, current, canSet);
-            if (canSet && current == null && !external) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_MIXED")), true);
-            // 外部の動き（S82）。結果のファイルがあり、元のクリップへ書いているときだけ選べる
-            GUIContent externalItem = new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_INTERPOLATION_EXTERNAL"));
-            if (window_.CanSetExternal (frame) && !external) {
-                menu.AddItem (externalItem, false, () => {
-                    window_.SetExternal (frame);
-                    RebuildTracks ();
-                });
-            }
-            else {
-                menu.AddDisabledItem (externalItem, external);
-            }
-            if (betweenState == BetweenClips.State.Stale) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BETWEEN_STALE")), false);
-            if (betweenState == BetweenClips.State.Lost) menu.AddDisabledItem (new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BETWEEN_LOST")), false);
-            GUIContent bake = new GUIContent (interpolation + Tr ("TIMELINE_OVERLAY_BAKE_BETWEEN"));
-            if (window_.CanBakeBetween (frame)) {
-                menu.AddItem (bake, false, () => {
-                    string error = window_.BakeBetween (frame);
-                    if (error != null) Debug.LogWarning ("Motion Editor: " + error);
-                    RebuildTracks ();
-                });
-            }
-            else {
-                menu.AddDisabledItem (bake);
             }
             // サイクルキー（S32）: 最後のキーに付け外しする。付いていればチェックを出す
             menu.AddSeparator ("");

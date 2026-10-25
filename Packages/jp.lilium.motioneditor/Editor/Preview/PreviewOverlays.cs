@@ -11,17 +11,17 @@ namespace Lilium
 
     /// <summary>
     /// プレビュー窓の上端のツールバー Context（編集するキャラ、キャラの設定、作り直し）。
-    /// クリップは段が持つので Layers のパネルの行で選ぶ（どの段にどのクリップが付いているかを見せるため）
+    /// クリップは段が持つので Layers のパネルの行で選ぶ（どの段にどのクリップが付いているかを見せるため）。
+    /// 中身はパネルだけ。ツールバーに入れるとボタン 1 つに畳み、押すとこの並びが出る（OverlayLayout.CollapseInToolbar）
     /// </summary>
     [Icon (Icons.kFolder + "Motion.png")]
     [Overlay (typeof (PreviewWindow), "mkt-preview-toolbar", "Context", defaultDisplay = true,
         defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
-    class PreviewToolbarOverlay : MotionOverlay, ICreateHorizontalToolbar
+    class PreviewToolbarOverlay : MotionOverlay
     {
         ObjectField model_;
         ObjectField settings_;
         EditorToolbarButton createSettings_;
-        ObjectField context_;
         IntegerField contextOffset_;
         EditorToolbarDropdown timelineClip_;
         IntegerField masterFrame_;
@@ -30,11 +30,7 @@ namespace Lilium
 
         public override VisualElement CreatePanelContent ()
         {
-            return CreateHorizontalToolbarContent ();
-        }
-
-        public OverlayToolbar CreateHorizontalToolbarContent ()
-        {
+            OverlayLayout.CollapseInToolbar (this);
             OverlayToolbar toolbar = new OverlayToolbar ();
             window_ = ResolveWindow ();
             if (window_ == null) return toolbar;
@@ -64,16 +60,6 @@ namespace Lilium
 
             // リグの定義はリグエディタで直す。今のキャラと、そのキャラが使う定義で開く
             toolbar.Add (new EditorToolbarButton ("Rig", Icons.Load ("PoseTool"), OpenRigEditor) { tooltip = Tr ("PREVIEW_OVERLAYS_RIG_EDITOR_TOOLTIP") });
-
-            // 一緒に見る演出（Timeline を持つ prefab）。時計は窓が正で、フレームを動かすと演出もそのフレームになる
-            context_ = new ObjectField {
-                objectType = typeof (GameObject),
-                allowSceneObjects = false,
-                tooltip = Tr ("PREVIEW_OVERLAYS_CONTEXT_TOOLTIP"),
-            };
-            context_.style.width = 160;
-            context_.RegisterValueChangedCallback (e => window_.SetContext (e.newValue as GameObject));
-            toolbar.Add (context_);
 
             contextOffset_ = new IntegerField { tooltip = Tr ("PREVIEW_OVERLAYS_CONTEXT_OFFSET_TOOLTIP") };
             contextOffset_.style.width = 44;
@@ -163,12 +149,8 @@ namespace Lilium
                 settings_.style.display = window_.model != null ? DisplayStyle.Flex : DisplayStyle.None;
                 createSettings_.style.display = settings == null && window_.model != null ? DisplayStyle.Flex : DisplayStyle.None;
             }
-            // Motion Scene では演出は開いているシーンのもの（Timeline 窓が開いているもの）を使うので、prefab の演出は選ばせない
+            // Motion Scene では演出は開いているシーンのもの（Timeline 窓が開いているもの）を使う
             bool inScene = window_.sceneTarget != null;
-            if (context_ != null) {
-                context_.SetValueWithoutNotify (window_.contextPrefab);
-                context_.style.display = inScene ? DisplayStyle.None : DisplayStyle.Flex;
-            }
             if (contextOffset_ != null) contextOffset_.SetValueWithoutNotify (window_.contextOffset);
             if (timelineClip_ == null) return;
             bool hasCandidates = window_.timelineClipCandidates.Count > 0;
@@ -198,6 +180,7 @@ namespace Lilium
     {
         public override VisualElement CreatePanelContent ()
         {
+            OverlayLayout.CollapseInToolbar (this);
             VisualElement root = new VisualElement ();
             root.style.minWidth = 200;
             PreviewWindow window = containerWindow as PreviewWindow;

@@ -48,7 +48,7 @@ namespace Lilium
             Run (args, window => window.LookFrom (ViewPreset.Front));
         }
 
-        [Shortcut ("Lilium Motion Editor/Play", typeof (PreviewWindow), KeyCode.Space)]
+        [Shortcut ("Lilium Motion Editor/Play", typeof (PreviewWindow), KeyCode.S)]
         static void PlayShortcut (ShortcutArguments args)
         {
             Run (args, window => window.TogglePlay ());
@@ -155,13 +155,13 @@ namespace Lilium
             Run (args, window => window.SetFrame (window.currentFrame + 10));
         }
 
-        [Shortcut ("Lilium Motion Editor/Previous Key", typeof (PreviewWindow), KeyCode.Comma)]
+        [Shortcut ("Lilium Motion Editor/Previous Key", typeof (PreviewWindow), KeyCode.A)]
         static void PreviousKeyShortcut (ShortcutArguments args)
         {
             Run (args, window => window.GoToKey (-1));
         }
 
-        [Shortcut ("Lilium Motion Editor/Next Key", typeof (PreviewWindow), KeyCode.Period)]
+        [Shortcut ("Lilium Motion Editor/Next Key", typeof (PreviewWindow), KeyCode.D)]
         static void NextKeyShortcut (ShortcutArguments args)
         {
             Run (args, window => window.GoToKey (1));
