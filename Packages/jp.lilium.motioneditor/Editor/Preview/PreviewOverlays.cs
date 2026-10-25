@@ -11,13 +11,12 @@ namespace Lilium
 
     /// <summary>
     /// プレビュー窓の上端のツールバー Context（編集するキャラ、キャラの設定、作り直し）。
-    /// クリップは段が持つので Layers のパネルの行で選ぶ（どの段にどのクリップが付いているかを見せるため）。
-    /// 中身はパネルだけ。ツールバーに入れるとボタン 1 つに畳み、押すとこの並びが出る（OverlayLayout.CollapseInToolbar）
+    /// クリップは段が持つので Layers のパネルの行で選ぶ（どの段にどのクリップが付いているかを見せるため）
     /// </summary>
     [Icon (Icons.kFolder + "Motion.png")]
     [Overlay (typeof (PreviewWindow), "mkt-preview-toolbar", "Context", defaultDisplay = true,
-        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
-    class PreviewToolbarOverlay : MotionOverlay
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
+    class PreviewToolbarOverlay : MotionOverlay, ICreateHorizontalToolbar
     {
         ObjectField model_;
         ObjectField settings_;
@@ -30,7 +29,11 @@ namespace Lilium
 
         public override VisualElement CreatePanelContent ()
         {
-            OverlayLayout.CollapseInToolbar (this);
+            return CreateHorizontalToolbarContent ();
+        }
+
+        public OverlayToolbar CreateHorizontalToolbarContent ()
+        {
             OverlayToolbar toolbar = new OverlayToolbar ();
             window_ = ResolveWindow ();
             if (window_ == null) return toolbar;
@@ -174,13 +177,13 @@ namespace Lilium
     /// プレビュー窓の表示設定（骨・床の表示、ハンドルの大きさ、視点）
     /// </summary>
     [Icon (Icons.kFolder + "View.png")]
+    // 既定は上端のツールバーの右（Overlay メニューの次）。パネルだけなのでボタンに畳まれる
     [Overlay (typeof (PreviewWindow), "mkt-preview-view", "View", defaultDisplay = true,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Bottom, defaultDockIndex = 1)]
     sealed class PreviewViewOverlay : Overlay
     {
         public override VisualElement CreatePanelContent ()
         {
-            OverlayLayout.CollapseInToolbar (this);
             VisualElement root = new VisualElement ();
             root.style.minWidth = 200;
             PreviewWindow window = containerWindow as PreviewWindow;
@@ -236,7 +239,7 @@ namespace Lilium
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "Motion.png")]
     [Overlay (typeof (SceneWindow), "mkt-scene-preview-toolbar", "Context", defaultDisplay = true,
-        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
     sealed class PreviewToolbarOverlayScene : PreviewToolbarOverlay
     {
     }

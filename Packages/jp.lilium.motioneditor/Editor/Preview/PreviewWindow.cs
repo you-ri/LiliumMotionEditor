@@ -76,6 +76,11 @@ namespace Lilium
         /// <summary>タイムラインのトラック一覧の最小の高さ</summary>
         const float kMinTimelineTracksHeight = 60;
         static readonly int kViewportHash = "MktPreviewViewport".GetHashCode ();
+        /// <summary>浮かせて置くパネルの既定の場所（OverlayWindows.PlaceDefaults）</summary>
+        static readonly KeyValuePair<string, Vector2>[] kFloatingDefaults = {
+            new KeyValuePair<string, Vector2> ("mkt-picker", OverlayWindows.kPickerDefault),
+            new KeyValuePair<string, Vector2> ("mkt-transform", OverlayWindows.kControllerDefault),
+        };
 
         [SerializeField] GameObject prefab_;
         [SerializeField] AnimationClip editingClip_;
@@ -94,7 +99,7 @@ namespace Lilium
         [SerializeField] bool showFloor_ = true;
         [SerializeField] ShowTracksFlag showTracks_ = ShowTracksFlag.Selected;
         /// <summary>タイムライン オーバーレイのトラック一覧の高さ。下端のハンドルで変える</summary>
-        [SerializeField] float timelineTracksHeight_ = 200;
+        [SerializeField] float timelineTracksHeight_ = 118;
         /// <summary>キーの間を補間せずに見せる（コマ送り。タイムラインの Interpolate を切ったとき）</summary>
         [SerializeField] bool stepped_;
         /// <summary>タイムラインの目盛りの拡大率（1 フレームあたりのピクセル数）</summary>
@@ -116,6 +121,8 @@ namespace Lilium
         [SerializeField] LayerState layerState_ = new LayerState ();
 
         PreviewStage stage_;
+        /// <summary>既定の置き場所を当てるかを見終えた（OverlayWindows.PlaceDefaults）</summary>
+        bool overlayDefaultsChecked_;
         PoseStack poseStack_ = new PoseStack ();
         /// <summary>
         /// つかめるもの（骨・IK）。窓はこれを通してだけ動かしてキーを打つ
@@ -1458,7 +1465,11 @@ namespace Lilium
         void OnGUI ()
         {
             if (stage_ == null) RebuildStage ();
-            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (PreviewWindow)));
+            if (Event.current.type == EventType.Layout) {
+                if (!overlayDefaultsChecked_) overlayDefaultsChecked_ = OverlayWindows.PlaceDefaults (this, kFloatingDefaults, "mkt-preview-view", false);
+                OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (PreviewWindow)));
+                OverlayWindows.FoldMenuInToolbar (this);
+            }
             // 窓の外へ出たら、メッシュの下の物の強調を外す（外では MouseMove が来ない）
             if (Event.current.type == EventType.MouseLeaveWindow && UpdateMeshHover (false, Vector2.zero, Rect.zero)) RepaintView ();
             HandleEditCommandGUI ();

@@ -14,7 +14,7 @@ namespace Lilium
     /// Delete は消して詰める。Ghost で前後のフレームの残像（1 フレームずつ、幅は 1〜16）、Loop でサイクルキー（S32。最後のキーを先頭のキーに合わせ続ける）
     /// </summary>
     [Icon (Icons.kFolder + "Stacker.png")]
-    [Overlay (typeof (PreviewWindow), "mkt-stacker", "Stacker", defaultDisplay = true,
+    [Overlay (typeof (PreviewWindow), "mkt-stacker", "Stacker", defaultDisplay = false,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
     class StackerOverlay : MotionOverlay
     {
@@ -219,7 +219,7 @@ namespace Lilium
 
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "Stacker.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-stacker", "Stacker", defaultDisplay = true,
+    [Overlay (typeof (SceneWindow), "mkt-scene-stacker", "Stacker", defaultDisplay = false,
         defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
     sealed class StackerOverlayScene : StackerOverlay
     {

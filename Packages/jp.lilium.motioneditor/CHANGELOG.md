@@ -52,9 +52,11 @@
 
 ### Changed
 
-- パネル（Overlay）をツールバーに入れると、横に広がらずボタン 1 つに畳まれるようにした。押すとパネルが出ます。ツールバーから列や浮きへ出すと開き直します。Context・Curves・Rig Editor もパネルだけにしたので、既定の置き場所（上端・下端のツールバー）ではボタンになります。Timeline は下端の帯に中身ごと出すまま。
+- Motion Editor の窓のパネルの既定の置き場所を変えた。上端のツールバーの左に Context・AnimBank・PoseBank、右に Overlay メニュー・View・Kimodo（AnimBank から右はボタンに畳まれ、押すと中身が出ます）。左の列に Layers、下端に Timeline。Picker は右上、Controller は左寄りに浮かせて置きます。Stacker と Curves は既定では隠し、Overlay メニューから出します。タイムラインのトラック一覧の既定の高さも 200 から 118 にした。Motion Editor In Scene の窓も同じ置き場所にそろえます（View・Kimodo はありません）。ただし上端は Scene ビューのツールバー（Tool Settings など）で混んでいて右の並びが窓の右端で切れるので、Overlay メニューは左の並びの PoseBank の次に置きます。既定の置き場所になるのは、パネルの置き場所を Unity がまだ覚えていない窓（初めて開いた窓）だけで、今開いている窓や自分で並べた置き場所はそのまま残ります。
 
-- ショートカットの既定のキーを、前のキー（`Previous Key`）は A、次のキー（`Next Key`）は D、モーションエディタの窓の再生／停止（`Play`）は S にした（以前は , ・ . ・ Space）。前／次のキーは Motion Editor In Scene も同じです。Motion Editor In Scene の再生は、S が Scene ビューのツール設定の表示（`Overlays/Show Tool Settings`）とぶつかるので Space のままです。Shortcut Manager で自分で割り当て直したものはそのまま残ります。
+- Overlay メニュー（パネルごとの表示の切り替え）をツールバーに入れると、切り替えのボタンを横に並べず、目のアイコンのボタン 1 つに畳むようにした。押すとパネルの一覧が出ます。ツールバーから列や浮きへ出すと開き直します。モーションエディタ・Motion Editor In Scene・リグエディタの窓で効きます。
+
+- ショートカットの既定のキーを、前のキー（`Previous Key`）は A、次のキー（`Next Key`）は D にした（以前は , ・ .）。Motion Editor In Scene も同じです。再生／停止（`Play`）は、どちらの窓も今までどおり Space です。Shortcut Manager で自分で割り当て直したものはそのまま残ります。
 
 - 姿勢のコピー・貼り付けを、C / V から Ctrl+C / Ctrl+V（Edit > Copy / Paste）に変えた。タイムラインのキー欄にフォーカスがあるときは、今までどおり選んだキーのコピー・貼り付けです。キーは Edit > Shortcuts の `Main Menu/Edit/Copy`・`Paste`・`Select All` で変えられます。Motion Scene の窓では、キャラを編集している間だけ姿勢のコピー・貼り付け・全選択になり、編集していなければ Scene ビューのまま（GameObject のコピーなど）です。
 

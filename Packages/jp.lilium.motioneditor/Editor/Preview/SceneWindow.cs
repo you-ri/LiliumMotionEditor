@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -19,6 +20,18 @@ namespace Lilium
     {
         PreviewWindow source_;
         bool toolsHidden_;
+        /// <summary>既定の置き場所を当てるかを見終えた（OverlayWindows.PlaceDefaults）</summary>
+        bool overlayDefaultsChecked_;
+        /// <summary>浮かせて置くパネルの既定の場所。プレビュー窓とそろえる</summary>
+        static readonly KeyValuePair<string, Vector2>[] kFloatingDefaults = {
+            new KeyValuePair<string, Vector2> ("mkt-scene-picker", OverlayWindows.kPickerDefault),
+            new KeyValuePair<string, Vector2> ("mkt-scene-transform", OverlayWindows.kControllerDefault),
+        };
+        /// <summary>
+        /// Overlay メニューを後ろに置くパネル（上端の左の並びの PoseBank）。プレビュー窓では右端に置くが、Scene ビューの上端は Unity のツールバーで
+        /// 混んでいて、右の並びは窓の右端からはみ出して切れる（幅 1400 でも切れる）。メニューは隠したパネルを出す入口なので、切れない左の並びに置く
+        /// </summary>
+        const string kMenuNeighborId = "mkt-scene-posebank";
         /// <summary>この窓が作った見えないプレビュー窓（開いているものが無かったとき）</summary>
         [SerializeField] PreviewWindow ownedSource_;
 
@@ -141,7 +154,11 @@ namespace Lilium
             if (view != this) return;
             // 姿勢を作る窓を決める（閉じられた・画面に出ている窓が現れた、なら切り替えてパネルを作り直す）
             ResolveSource ();
-            if (Event.current.type == EventType.Layout) OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (SceneWindow)));
+            if (Event.current.type == EventType.Layout) {
+                if (!overlayDefaultsChecked_) overlayDefaultsChecked_ = OverlayWindows.PlaceDefaults (this, kFloatingDefaults, kMenuNeighborId, true);
+                OverlayWindows.KeepInside (this, OverlayWindows.PanelIds (typeof (SceneWindow)));
+                OverlayWindows.FoldMenuInToolbar (this);
+            }
             // Scene ビューが Copy / Paste / SelectAll を GameObject の操作として受ける前に取る
             PreviewWindow editing = editingSource;
             if (editing != null) editing.HandleEditCommandGUI ();

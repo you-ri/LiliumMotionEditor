@@ -12,13 +12,12 @@ namespace Lilium
 {
 
     /// <summary>
-    /// リグエディタの上端のツールバー（見るキャラ・直す定義・定義の複製・作り直し）。
-    /// 中身はパネルだけ。ツールバーに入れるとボタン 1 つに畳み、押すとこの並びが出る（OverlayLayout.CollapseInToolbar）
+    /// リグエディタの上端のツールバー（見るキャラ・直す定義・定義の複製・作り直し）
     /// </summary>
     [Icon (Icons.kFolder + "RigValues.png")]
     [Overlay (typeof (RigEditorWindow), "lilium-rig-editor-toolbar", "Rig Editor", defaultDisplay = true,
         defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top)]
-    class RigEditorToolbarOverlay : HostOverlay<RigEditorWindow>
+    class RigEditorToolbarOverlay : HostOverlay<RigEditorWindow>, ICreateHorizontalToolbar
     {
         ObjectField model_;
         ObjectField definition_;
@@ -26,7 +25,11 @@ namespace Lilium
 
         public override VisualElement CreatePanelContent ()
         {
-            OverlayLayout.CollapseInToolbar (this);
+            return CreateHorizontalToolbarContent ();
+        }
+
+        public OverlayToolbar CreateHorizontalToolbarContent ()
+        {
             OverlayToolbar toolbar = new OverlayToolbar ();
             window_ = ResolveWindow ();
             if (window_ == null) return toolbar;

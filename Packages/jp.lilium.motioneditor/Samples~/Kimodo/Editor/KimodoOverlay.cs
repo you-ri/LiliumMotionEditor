@@ -18,8 +18,9 @@ namespace Lilium
     /// ✏ を移したまま打ったキーは Override に入り次の生成に渡らないので、「結果を見る」と「キーを直す」を切り替えられるようにする。
     /// キーの間の補間として使うときは、キーが変わるたびに自動で作り直せる（S85）。生成中はきらめきのアイコンが動く
     /// </summary>
+    // 既定は上端のツールバーの右（View の次）。パネルだけなのでボタンに畳まれる
     [Overlay (typeof (PreviewWindow), kId, "Kimodo", defaultDisplay = true,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Bottom, defaultDockIndex = 2)]
     sealed class KimodoOverlay : Overlay
     {
         public const string kId = "lilium-kimodo";

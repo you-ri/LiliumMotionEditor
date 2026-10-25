@@ -15,9 +15,9 @@ namespace Lilium
     /// 右クリックで接線の種類と削除、Delete で削除、F で全体を収める、ホイールで横の拡大縮小（Ctrl で縦）、中ボタン / Alt ドラッグで移動
     /// </summary>
     [Icon (Icons.kFolder + "Curves.png")]
-    [Overlay (typeof (PreviewWindow), "mkt-curves", "Curves", defaultDisplay = true,
+    [Overlay (typeof (PreviewWindow), "mkt-curves", "Curves", defaultDisplay = false,
         defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom)]
-    class CurveEditorOverlay : MotionOverlay
+    class CurveEditorOverlay : MotionOverlay, ICreateHorizontalToolbar
     {
         const float kWidth = 640;
         const float kHeight = 220;
@@ -32,6 +32,15 @@ namespace Lilium
             VisualElement root = new VisualElement ();
             Build (root);
             return root;
+        }
+
+        public OverlayToolbar CreateHorizontalToolbarContent ()
+        {
+            OverlayToolbar toolbar = new OverlayToolbar ();
+            VisualElement root = new VisualElement ();
+            Build (root);
+            toolbar.Add (root);
+            return toolbar;
         }
 
         void Build (VisualElement root)
@@ -144,7 +153,7 @@ namespace Lilium
 
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "Curves.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-curves", "Curves", defaultDisplay = true,
+    [Overlay (typeof (SceneWindow), "mkt-scene-curves", "Curves", defaultDisplay = false,
         defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom)]
     sealed class CurveEditorOverlayScene : CurveEditorOverlay
     {

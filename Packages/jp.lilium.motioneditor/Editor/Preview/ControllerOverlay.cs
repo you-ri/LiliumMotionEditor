@@ -12,11 +12,11 @@ namespace Lilium
     /// 上から、モード（Move / Rot / Scale）・ギズモの軸（Local / World）・Spinner の操作盤・数値欄（位置・回転・大きさ）。
     /// 数値欄は保存している値（位置はメートル、回転はオイラー角）を出し、入力 1 回で今のフレームにキーを打つ
     /// </summary>
-    // 右の列の View の下に置く。下寄せにするとタイムラインに重なる。
+    // 既定は浮かせてタイムラインの上の左寄りに置く（場所は OverlayWindows.kControllerDefault）。
     // ID は改名前の "mkt-transform" のまま（変えると、窓に保存してあるパネルの置き場所・開閉が引き継がれない）
     [Icon (Icons.kFolder + "Controller.png")]
     [Overlay (typeof (PreviewWindow), "mkt-transform", "Controller", defaultDisplay = true,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
     class ControllerOverlay : MotionOverlay
     {
         static readonly Color[] kAxisColors = {
@@ -338,7 +338,7 @@ namespace Lilium
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "Controller.png")]
     [Overlay (typeof (SceneWindow), "mkt-scene-transform", "Controller", defaultDisplay = true,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
     sealed class ControllerOverlayScene : ControllerOverlay
     {
     }

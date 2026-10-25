@@ -48,7 +48,7 @@ namespace Lilium
             Run (args, window => window.LookFrom (ViewPreset.Front));
         }
 
-        [Shortcut ("Lilium Motion Editor/Play", typeof (PreviewWindow), KeyCode.S)]
+        [Shortcut ("Lilium Motion Editor/Play", typeof (PreviewWindow), KeyCode.Space)]
         static void PlayShortcut (ShortcutArguments args)
         {
             Run (args, window => window.TogglePlay ());

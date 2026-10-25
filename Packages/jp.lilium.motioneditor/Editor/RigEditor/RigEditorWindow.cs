@@ -353,6 +353,7 @@ namespace Lilium
         void OnGUI ()
         {
             if (session_ == null && prefab_ != null && !EditorApplication.isPlayingOrWillChangePlaymode) Rebuild ();
+            if (Event.current.type == EventType.Layout) OverlayWindows.FoldMenuInToolbar (this);
             if (Event.current.type != EventType.Repaint || viewport_ == null) return;
 
             Rect rect = viewport_.ChangeCoordinatesTo (rootVisualElement, viewport_.contentRect);

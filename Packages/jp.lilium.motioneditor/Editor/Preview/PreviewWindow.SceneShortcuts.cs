@@ -7,7 +7,7 @@ namespace Lilium
 
     /// <summary>
     /// Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）のショートカット。中身はプレビュー窓の同じ操作を呼ぶ（2 窓構成）。
-    /// Scene ビューのキーとぶつかるもの（F: 選んだ物に寄る・F1〜F3: 視点・V: 頂点スナップ・S: ツール設定の表示（再生は Space のまま））は割り当てない（視点は Scene ビューのものを使う）。
+    /// Scene ビューのキーとぶつかるもの（F: 選んだ物に寄る・F1〜F3: 視点・V: 頂点スナップ）は割り当てない（視点は Scene ビューのものを使う）。
     /// 姿勢のコピー・貼り付けと全選択（Ctrl+C / Ctrl+V / Ctrl+A）は、プレビュー窓と同じく Edit メニューのコマンドで受ける（SceneWindow）
     /// </summary>
     public partial class PreviewWindow

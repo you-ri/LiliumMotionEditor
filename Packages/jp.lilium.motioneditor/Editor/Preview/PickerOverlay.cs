@@ -14,8 +14,9 @@ namespace Lilium
     /// 表示域でメッシュをクリックしたときの選択（PreviewWindow.SelectByMeshClick）とも一致する
     /// </summary>
     [Icon (Icons.kFolder + "Picker.png")]
+    // 既定は浮かせて右上に置く（場所は OverlayWindows.kPickerDefault）
     [Overlay (typeof (PreviewWindow), "mkt-picker", "Picker", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
     class PickerOverlay : MotionOverlay
     {
         const int kRowHeight = 18;
@@ -181,7 +182,7 @@ namespace Lilium
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "Picker.png")]
     [Overlay (typeof (SceneWindow), "mkt-scene-picker", "Picker", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
     sealed class PickerOverlayScene : PickerOverlay
     {
     }

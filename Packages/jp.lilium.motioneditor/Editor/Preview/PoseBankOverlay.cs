@@ -14,8 +14,9 @@ namespace Lilium
     /// Save で今の姿勢（全部）を新しい姿勢として保存し、Update で一覧で選んでいる姿勢を今の姿勢に置き換える
     /// </summary>
     [Icon (Icons.kFolder + "PoseBank.png")]
+    // 既定は上端のツールバーの左（AnimBank の次）。パネルだけなのでボタンに畳まれる
     [Overlay (typeof (PreviewWindow), "mkt-posebank", "PoseBank", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 2)]
     class PoseBankOverlay : BankOverlay
     {
         Label scope_;
@@ -161,7 +162,7 @@ namespace Lilium
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "PoseBank.png")]
     [Overlay (typeof (SceneWindow), "mkt-scene-posebank", "PoseBank", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
     sealed class PoseBankOverlayScene : PoseBankOverlay
     {
     }

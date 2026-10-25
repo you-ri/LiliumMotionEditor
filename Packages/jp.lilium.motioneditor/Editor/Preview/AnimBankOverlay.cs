@@ -13,8 +13,9 @@ namespace Lilium
     /// 編集中のクリップは ▶、保存していない変更があれば * が付く。フォルダは「…」で選び直せる（キャラごとに覚える）
     /// </summary>
     [Icon (Icons.kFolder + "AnimBank.png")]
+    // 既定は上端のツールバーの左（Context の次）。パネルだけなのでボタンに畳まれ、押すと一覧が出る
     [Overlay (typeof (PreviewWindow), "mkt-animbank", "AnimBank", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 1)]
     class AnimBankOverlay : BankOverlay
     {
         protected override List<string> GetFolders (GameObject model)
@@ -146,8 +147,9 @@ namespace Lilium
 
     /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
     [Icon (Icons.kFolder + "AnimBank.png")]
+    // Scene ビューの Tool Settings・Grid and Snap も上端の左に並ぶ（順番 0・1）。Context・AnimBank・PoseBank をその前にまとめるため、どれも順番 0 にする
     [Overlay (typeof (SceneWindow), "mkt-scene-animbank", "AnimBank", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
+        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
     sealed class AnimBankOverlayScene : AnimBankOverlay
     {
     }
