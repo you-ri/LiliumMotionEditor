@@ -180,7 +180,7 @@ namespace Lilium
 
         void OnEnable ()
         {
-            titleContent = new GUIContent ("Rig Editor", Icons.Load ("RigValues"));
+            titleContent = new GUIContent ("Rig Editor", Icons.Load ("PoseTool"));
             // マウスを動かすたびに描き直して、指しているコントロールをすぐ強調する
             wantsMouseMove = true;
             EditRigDefinition.changed -= OnDefinitionChanged;

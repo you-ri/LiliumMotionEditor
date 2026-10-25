@@ -444,6 +444,7 @@
     "PREVIEW_OVERLAYS_MODEL_TOOLTIP": "編集するキャラクターの prefab",
     "PREVIEW_OVERLAYS_MOVE_SCALE_TOOLTIP": "Controller パネルの Spinner の Move で、ドラッグ量に掛ける倍率。1 で 1 ピクセル 2.5mm（Shift で細かくなるのは今までどおり）",
     "PREVIEW_OVERLAYS_RELOAD_TOOLTIP": "キャラを読み込み直す",
+    "PREVIEW_OVERLAYS_RIG_EDITOR_TOOLTIP": "リグエディタを開く（このキャラと、このキャラが使うリグの定義で）",
     "PREVIEW_OVERLAYS_SETTINGS_TOOLTIP": "このキャラの設定（Layers・AnimBank / PoseBank のフォルダ・リグの定義・Auto）。無いときはプロジェクト設定の値で、Layers の変更は保存されない。既にある設定のアセットを入れると、このキャラの設定になる（1 キャラ 1 設定）",
     "PREVIEW_OVERLAYS_SIDE_TOOLTIP": "横から見る",
     "PREVIEW_OVERLAYS_TIMELINE_CLIP_AUTO": "自動（編集中のクリップと同じもの）",

@@ -165,7 +165,8 @@ At the keys the clip stays exactly on your keys, and the motion blends into them
 + **Bake the External Motion into Keys** (same menu) turns a segment into keys, so the clip no longer needs the `.between.anim` file (for example, to copy the clip to another project).
   Lint reports a missing `.between.anim`, and segments made for older keys.
 + Each generation makes the whole clip again and replaces `.between.anim`.
-+ Turn on **Make it whenever the keys change (auto)** (off by default) to generate again each time you set, move or delete a key.
++ With **Make it whenever the keys change (auto)** on (the default), it generates again each time you set, move or delete a key.
+  Opening a clip does not start a generation by itself. Turn it off on the panel to generate only with **Generate Between Keys**.
   It starts 1.5 seconds after the last change, and only when the keys differ from the ones the current result was made from.
   If the keys change while it is generating, the result is imported for the segments that still fit, and then it generates again with the current keys.
   Auto runs import without asking, and each run uses the GPU for about 30 seconds to 2 minutes.

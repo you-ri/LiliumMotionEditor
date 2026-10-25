@@ -35,10 +35,10 @@ namespace Lilium
         /// </summary>
         public string target = KimodoJob.kBetween;
         /// <summary>
-        /// キーの間の補間として使うとき、キーが変わるたびに作り直すか（S85）。1 回で GPU を 30 秒〜2 分使うので、既定は切る
-        /// （入れたことに気づかないまま、キーを打つたびに重い生成が走らないように）
+        /// キーの間の補間として使うとき、キーが変わるたびに作り直すか（S85）。既定は入（10-25 ユーザー指示。
+        /// 切だと、キーを編集しても作られず、トグルに気づかないと動かないように見えた）。1 回で GPU を 30 秒〜2 分使うので、パネルで切れる
         /// </summary>
-        public bool auto;
+        public bool auto = true;
 
         public ExternalSkeleton skeleton
         {

@@ -116,14 +116,38 @@ namespace Lilium
         /// <summary>点を delta（ワールド）だけ動かす。Free の点は、今の骨の位置から動かして Pin にする</summary>
         public void MoveBy (Vector3 delta)
         {
+            ReleaseSameBoneRotations ();
             PinPosition (MoveFoot (framePosition + delta));
         }
 
         /// <summary>点を position（ワールド）へ置いて Pin にする</summary>
         public void MoveTo (Vector3 position)
         {
+            ReleaseSameBoneRotations ();
             PinPosition (MoveFoot (position));
         }
+
+        /// <summary>
+        /// この点だけを直接動かすとき（丸・ギズモでつかむ・Spinner）、同じ骨の上の別の場所にある点の向きの固定を外す（外した値は次のキーで強さ 0 を打つ）。
+        /// 向きも固定した点があると、骨は位置も向きも動かない物になり、同じ骨のほかの点を動かしても骨が回らない
+        /// （頭の点が向きを固定したキーで、顔の前の点を動かしても頭が一切向かなかった。10-25）。
+        /// 動かした点と向きを固定した点の 2 点で、骨の向きを決め直す。Locked の点は置いた場所と向きから動かさないので外さない。
+        /// まとめて動かす・回す・骨と一緒に動かすときは外さない（選んだ点どうしの向きの固定が、並びの順で外れてしまう）
+        /// </summary>
+        void ReleaseSameBoneRotations ()
+        {
+            if (sameBone_ == null) return;
+            Vector3 self = bonePoint;
+            foreach (BodyPointTarget other in sameBone_) {
+                if (!other.rotationPinned || other.locked) continue;
+                // 同じ場所の点なら、動かしても向きと食い違わない
+                if ((other.bonePoint - self).sqrMagnitude <= 1e-10f) continue;
+                other.ReleaseRotation ();
+            }
+        }
+
+        /// <summary>同じ骨の上のほかの点（無ければ null）</summary>
+        List<BodyPointTarget> sameBone_;
 
         /// <summary>
         /// いくつか選んだ点をまとめて動かすとき（PreviewWindow.MoveSelectedPoints）に、点を position（ワールド）へそのまま置いて Pin にする。
@@ -183,25 +207,26 @@ namespace Lilium
 
         /// <summary>
         /// 点を pivot を中心に delta（ワールド）だけ回す。向きを持つ点は向きも回す。
-        /// pinFree なら Free の点も、回した場所に置いて Pin にする。そうでなければ、固定している値だけ回す（Free の点は骨に付いて動く）
+        /// pinFree なら Free の点も、回した場所に置いて Pin にする。そうでなければ、固定している値だけ回す（Free の点は骨に付いて動く）。
+        /// pinFreeRotation が false なら、pinFree でも向きは固定していた点だけ回す（Free の向きは骨に付いて動く）
         /// </summary>
-        public void RotateAround (Vector3 pivot, Quaternion delta, bool pinFree)
+        public void RotateAround (Vector3 pivot, Quaternion delta, bool pinFree, bool pinFreeRotation = true)
         {
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);
-            PlaceRotated (position, rotation, pivot, pivot, delta, pinFree);
+            PlaceRotated (position, rotation, pivot, pivot, delta, pinFree, pinFree && pinFreeRotation);
         }
 
         /// <summary>
         /// 点の回し方の芯（回す・体ごと回す・骨に付けて動かすは、どこから回すかが違うだけ）:
         /// position・rotation を from を中心に delta だけ回し、from を to へ重ねた所に置く。
-        /// pinFree なら Free の点も Pin にする。そうでなければ、固定している値だけ置き直す
+        /// pinFree なら Free の位置も Pin にし、pinFreeRotation なら固定していない向きも固定する。そうでなければ、固定している値だけ置き直す
         /// </summary>
-        void PlaceRotated (Vector3 position, Quaternion rotation, Vector3 from, Vector3 to, Quaternion delta, bool pinFree)
+        void PlaceRotated (Vector3 position, Quaternion rotation, Vector3 from, Vector3 to, Quaternion delta, bool pinFree, bool pinFreeRotation)
         {
             if (pinFree || positionPinned) PinPosition (to + delta * (position - from));
-            if (hasRotation_ && (pinFree || rotationPinned)) PinRotation (delta * rotation);
+            if (hasRotation_ && (pinFreeRotation || rotationPinned)) PinRotation (delta * rotation);
         }
 
         /// <summary>乗る骨の付け根にある点か（付け根から離れた所に置いた点でない）</summary>
@@ -214,11 +239,13 @@ namespace Lilium
         /// 体ごと回す: 今の骨の上の点（目標ではない）を、pivotOnBone を pivot に重ねて、pivot を中心に delta だけ回した場所に置く。向きを持つ点は向きも今の骨から回す。
         /// 目標から回すと、届いていない点（同じ足の Pin と Locked が食い違っているなど）の食い違いが回した後も残り、Locked の点が中心からずれていく。
         /// 骨の上の点から回すと、回した点どうしは体の上で矛盾しない（剛体として回る）。
-        /// pinFree なら Free の点も Pin にする。そうでなければ、固定している値だけ置き直す
+        /// pinFree なら Free の点も Pin にする。そうでなければ、固定している値だけ置き直す。
+        /// 向きは、固定していた点だけ回す（Free の向きは固定しない）。体ごと回すときは骨も FK で回すので、向きを固定しなくても点の向きは骨と一緒に回る。
+        /// 固定すると、向きを持つ点が全部その向きで留まり、後で同じ骨のほかの点を動かしても骨が回らなかった（10-25）
         /// </summary>
         public void RotateBodyAround (Vector3 pivot, Vector3 pivotOnBone, Quaternion delta, bool pinFree)
         {
-            PlaceRotated (bonePoint, bone_.rotation, pivotOnBone, pivot, delta, pinFree);
+            PlaceRotated (bonePoint, bone_.rotation, pivotOnBone, pivot, delta, pinFree, false);
         }
 
         /// <summary>点が付いている骨の上の点の今の位置（目標ではない）</summary>
@@ -301,7 +328,7 @@ namespace Lilium
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);
-            PlaceRotated (position, rotation, pivot, pivot + offset, delta, false);
+            PlaceRotated (position, rotation, pivot, pivot + offset, delta, false, false);
         }
 
         /// <summary>右ボタンで押されたか（読むと消える）。窓が、選んでいる点をまとめて固定 / 解除する</summary>
@@ -338,6 +365,15 @@ namespace Lilium
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
                 if (point.offsetPoint_ && point.pulls_ && !joints.ContainsKey (point.bone_)) joints[point.bone_] = point;
+            }
+            foreach (PoseTarget target in targets) {
+                BodyPointTarget point = (BodyPointTarget)target;
+                foreach (PoseTarget otherTarget in targets) {
+                    BodyPointTarget other = (BodyPointTarget)otherTarget;
+                    if (other == point || other.bone_ != point.bone_) continue;
+                    if (point.sameBone_ == null) point.sameBone_ = new List<BodyPointTarget> ();
+                    point.sameBone_.Add (other);
+                }
             }
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
@@ -719,7 +755,10 @@ namespace Lilium
             // 関節の丸（つかんで動かすと位置を固定する）
             Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
             if (moved != position) {
-                if (!movesWithSelection) moved = MoveFoot (moved);
+                if (!movesWithSelection) {
+                    ReleaseSameBoneRotations ();
+                    moved = MoveFoot (moved);
+                }
                 AddDragDelta (position, moved);
                 PinPosition (moved, !movesWithSelection);
                 position = moved;
@@ -739,7 +778,10 @@ namespace Lilium
             else if (selected && showGizmo) {
                 Vector3 gizmoPosition = PoseHandles.PositionHandle (position, PoseHandleUtility.GizmoAxes (shape));
                 if (gizmoPosition != position) {
-                    if (!movesWithSelection) gizmoPosition = MoveFoot (gizmoPosition);
+                    if (!movesWithSelection) {
+                        ReleaseSameBoneRotations ();
+                        gizmoPosition = MoveFoot (gizmoPosition);
+                    }
                     AddDragDelta (position, gizmoPosition);
                     PinPosition (gizmoPosition, !movesWithSelection);
                     GUI.changed = true;

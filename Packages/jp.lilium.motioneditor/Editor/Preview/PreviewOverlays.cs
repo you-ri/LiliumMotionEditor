@@ -62,6 +62,9 @@ namespace Lilium
             createSettings_ = new EditorToolbarButton (Tr ("PREVIEW_OVERLAYS_CREATE_SETTINGS"), () => window_.CreateCharacterSettings ()) { tooltip = Tr ("PREVIEW_OVERLAYS_CREATE_SETTINGS_TOOLTIP") };
             toolbar.Add (createSettings_);
 
+            // リグの定義はリグエディタで直す。今のキャラと、そのキャラが使う定義で開く
+            toolbar.Add (new EditorToolbarButton ("Rig", Icons.Load ("PoseTool"), OpenRigEditor) { tooltip = Tr ("PREVIEW_OVERLAYS_RIG_EDITOR_TOOLTIP") });
+
             // 一緒に見る演出（Timeline を持つ prefab）。時計は窓が正で、フレームを動かすと演出もそのフレームになる
             context_ = new ObjectField {
                 objectType = typeof (GameObject),
@@ -108,6 +111,15 @@ namespace Lilium
             if (!on) return;
             window_.stateChanged += Refresh;
             window_.poseSampled += RefreshTime;
+        }
+
+        void OpenRigEditor ()
+        {
+            RigEditorWindow rigEditor = RigEditorWindow.Open ();
+            if (window_ == null || window_.model == null) return;
+            rigEditor.SetModel (window_.model);
+            // リグエディタの欄で別の定義を選んでいても、このキャラが使う定義に戻す
+            rigEditor.SetDefinition (null);
         }
 
         void ShowTimelineClipMenu ()

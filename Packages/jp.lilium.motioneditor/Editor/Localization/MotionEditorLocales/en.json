@@ -444,6 +444,7 @@
     "PREVIEW_OVERLAYS_MODEL_TOOLTIP": "Prefab of the character to edit",
     "PREVIEW_OVERLAYS_MOVE_SCALE_TOOLTIP": "Multiplier on the drag amount for Move in the Controller panel's Spinner. At 1, one pixel is 2.5 mm (Shift still gives finer control).",
     "PREVIEW_OVERLAYS_RELOAD_TOOLTIP": "Reload the character",
+    "PREVIEW_OVERLAYS_RIG_EDITOR_TOOLTIP": "Open the Rig Editor with this character and the rig definition it uses",
     "PREVIEW_OVERLAYS_SETTINGS_TOOLTIP": "Settings for this character (Layers, AnimBank / PoseBank folders, rig definition, Auto). Without them, the Project Settings values are used and changes to Layers are not saved. Assigning an existing settings asset makes it this character's settings (one per character).",
     "PREVIEW_OVERLAYS_SIDE_TOOLTIP": "View from the side",
     "PREVIEW_OVERLAYS_TIMELINE_CLIP_AUTO": "Auto (matches the clip being edited)",

@@ -210,7 +210,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// selected の点を、中心の点 pivotPoint のまわりで delta だけ回す（Free の点も、回した場所に置いて Pin にする）。
+        /// selected の点を、中心の点 pivotPoint のまわりで delta だけ回す（Free の点も、回した場所に置いて Pin にする。
+        /// 向きを固定するのは、もともと向きを固定していた点だけ）。
         /// 選んだ点の骨のうち、ほかの選んだ点の骨の子でない骨（いちばん根の方の骨）も FK で回す（10-20 ユーザー指示。
         /// 点の目標だけ回すと、全身 IK は回す前の姿勢から目標へ寄せるので、体ごと大きく回す形に届かず、届かない分が背骨や手足のねじれになっていた）。
         /// 腰を選んでいれば、腰は付け根ごと中心のまわりに回るので、全部の点を選んで回すと体がそのまま回る。
@@ -222,9 +223,10 @@ namespace Lilium
             Vector3 pivot = pivotPoint.framePosition;
             Vector3 pivotOnBone = pivotPoint.bonePosition;
             List<FkTarget> tops = TopFkTargets (targets, selected);
-            // 点を先に回す（点は今の骨の上の点から回すので、骨を先に回すと二重に回る）
+            // 点を先に回す（点は今の骨の上の点から回すので、骨を先に回すと二重に回る）。
+            // 向きは、もともと向きを固定していた点だけ固定する（骨も FK で回すので、固定しない向きも骨と一緒に回る）
             foreach (BodyPointTarget point in selected) {
-                if (point == pivotPoint) point.RotateAround (pivot, delta, true);
+                if (point == pivotPoint) point.RotateAround (pivot, delta, true, false);
                 else point.RotateBodyAround (pivot, pivotOnBone, delta, true);
             }
             // 腰の付け根も点と同じく、中心の点の骨の上の点のまわりに回して中心の点の目標へ重ねる（RotateBodyAround と同じ動かし方）

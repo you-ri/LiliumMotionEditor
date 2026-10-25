@@ -475,6 +475,46 @@ namespace Lilium
         }
 
         [Test]
+        public void MovingPoint_ReleasesRotationPinOnSameBone ([Values (false, true)] bool locked)
+        {
+            // 頭の点が位置も向きも固定しているキーで、顔の前の点を動かしても頭が一切向かなかった（10-25）。
+            // 同じ骨の別の場所の点を動かすと、その点の向きの固定を外し、2 点で骨の向きを決め直す。Locked の点は外さない
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            BodyPointTarget head = PointTarget (targets, HumanBodyBones.Head);
+            BodyPointTarget face = targets.OfType<BodyPointTarget> ().Single (t => t.id.name == "HeadDirection");
+            Transform headBone = Bone (s, HumanBodyBones.Head);
+            Transform root = s.rig.root.transform;
+
+            head.TogglePin ();
+            head.SpinRotateWorld (Quaternion.identity);
+            if (locked) head.SetLocked (true);
+            Assert.IsTrue (head.positionPinned && head.rotationPinned);
+            head.ClearPendingKeys ();
+            s.body.Solve ();
+            Quaternion before = headBone.rotation;
+
+            face.MoveBy (root.TransformDirection (s.rig.BodyToRoot (new Vector3 (0.1f, 0, 0))));
+            s.body.Solve ();
+
+            if (locked) {
+                Assert.IsTrue (head.rotationPinned, "Locked の点の向きの固定は外さない");
+                return;
+            }
+            Assert.IsFalse (head.rotationPinned, "同じ骨の点を動かすと、向きの固定が外れる");
+            Assert.IsTrue (head.positionPinned, "位置の固定は残す");
+            Assert.Greater (Quaternion.Angle (before, headBone.rotation), 5, "頭が顔の前の点の方へ向く");
+
+            // 外した向きの固定は、次のキーで強さ 0 を打つ（打たないと、前のキーの強さ 1 がこのフレームまで続く）
+            AnimationClip clip = new AnimationClip { frameRate = 60 };
+            created_.Add (clip);
+            using (CurveWriter writer = CurveWriter.Begin (clip, root, 0, "Test")) {
+                foreach (PoseTarget target in targets) ((BodyPointTarget)target).WritePendingKeys (writer);
+            }
+            Assert.AreEqual (0, Value (clip, RigPaths.Body (HumanBodyBones.Head), typeof (BodyPoint), BodyPoint.kRotationWeightProperty), 1e-6f);
+        }
+
+        [Test]
         public void KeyAll_WritesOnlyPinnedPoints_AndUnpinWritesZeroWeight ()
         {
             Setup s = Create ();

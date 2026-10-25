@@ -43,5 +43,10 @@ MonoBehaviour:
       clipWeight: 1
     outputs: []
     humanoidPose: 0
-    overrides: []
+    overrides:
+    - baseClip: 12edb20e49f487844a71047c12d49139
+      baseName: 
+      clip: f548f21855dc3cc4a92bba18bbd24299
+      mode: Additive
+      mask: 
   parentSwitches: []

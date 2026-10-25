@@ -115,6 +115,34 @@ namespace Lilium
         }
 
         [Test]
+        public void TurningAllPoints_PinsRotationOnlyWherePinnedBefore ()
+        {
+            // 全部の点を選んで回すと、向きを固定するのは、もともと向きを固定していた点だけ（10-25。全部の向きが固定されると、
+            // 後で頭の顔の前の点を動かしても頭が回らなかった）。固定しない向きも、骨と一緒に体ごと回る
+            PoseSession session = Open ();
+            List<PoseTarget> targets = session.targets.ToList ();
+            List<BodyPointTarget> points = targets.OfType<BodyPointTarget> ().ToList ();
+            System.Func<string, BodyPointTarget> named = name => points.Single (p => p.id.name == name);
+            BodyPointTarget foot = named ("LeftFoot");
+            foreach (string name in new[] { "Hips", "LeftFoot", "RightFoot" }) named (name).SetState (BodyPointState.Pin);
+            named ("RightHand").SpinRotateWorld (Quaternion.identity);
+            session.SolveAfterEdit ();
+            Transform head = named ("Head").editingBone;
+            Quaternion headStart = head.rotation;
+            Quaternion total = Quaternion.AngleAxis (60, new Vector3 (0.3f, 1, 0.2f).normalized);
+
+            PreviewWindow.RotatePointsAround (targets, points, foot, total);
+            session.SolveAfterEdit ();
+
+            Assert.IsTrue (named ("RightHand").rotationPinned, "向きを固定していた点は、回した向きで固定したまま");
+            foreach (string name in new[] { "Hips", "Head", "LeftHand", "LeftFoot", "RightFoot" }) {
+                Assert.IsFalse (named (name).rotationPinned, name + " の向きは固定しない");
+                Assert.IsTrue (named (name).positionPinned, name + " の位置は回した所で固定する");
+            }
+            Assert.LessOrEqual (Quaternion.Angle (total * headStart, head.rotation), 0.5f, "固定しない頭の向きも体ごと回る");
+        }
+
+        [Test]
         public void MovingAllPoints_MovesTheBodyAsItIs ([Values (1, 30)] int steps)
         {
             // 足と手だけを Pin にして全部の点を選び、腰をつかんで動かす: 腰の FK も同じだけ動くので、固定していない頭なども体ごと動く
