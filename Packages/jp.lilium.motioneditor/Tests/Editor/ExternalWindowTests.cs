@@ -245,6 +245,34 @@ namespace Lilium
             Assert.AreEqual (0, AnimationUtility.GetCurveBindings (layer).Length, "Undo で取り込む前（空）に戻る");
         }
 
+        /// <summary>
+        /// 外部の動きの取り込みは生成を待った後で来るので、その時の Undo のまとまり（直前の操作）に混ぜない。
+        /// Undo 1 回で取り込みだけが戻り、直前の操作は残る
+        /// </summary>
+        [Test]
+        public void ImportBetween_IsUndoneSeparately_FromTheOperationBefore ()
+        {
+            PreviewWindow window = OpenWindow (BaseClip ());
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            BetweenClips.Range[] ranges = { new BetweenClips.Range { start = 0, end = 30 } };
+            Assert.IsNull (window.ImportBetween (Generated (skeleton, 0.4f), skeleton, ranges, out PoseSession.OverrideImportResult result));
+            List<Quaternion> first = Pose (15);
+
+            // 直前の操作（まとまりを区切らないまま、次の取り込みが来る）
+            Undo.IncrementCurrentGroup ();
+            AnimationClip other = NewAsset ("Other");
+            EditorCurveBinding binding = EditorCurveBinding.FloatCurve ("Bone", typeof (Transform), "m_LocalPosition.x");
+            ClipUndo.Record (other, "Edit");
+            AnimationUtility.SetEditorCurve (other, binding, AnimationCurve.Constant (0, 1, 5));
+            Assert.IsNull (window.ImportBetween (Generated (skeleton, -0.4f), skeleton, ranges, out result));
+            Assert.Greater (MaxAngle (first, Pose (15)), 5, "取り込み直した動きが見える");
+
+            Undo.PerformUndo ();
+            Assert.LessOrEqual (MaxAngle (first, Pose (15)), 0.1f, "Undo 1 回で、前に取り込んだ動きへ戻る");
+            Assert.IsNotNull (AnimationUtility.GetEditorCurve (other, binding), "直前の操作は残る");
+            Undo.ClearUndo (other);
+        }
+
         [Test]
         public void ExportKeys_UsesTheBaseKeys_EvenWhenWritingToAnOverride ()
         {

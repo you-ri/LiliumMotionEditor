@@ -52,6 +52,9 @@ namespace Lilium
             // Home / End をタイムラインでなく一覧に効かせるため、窓にこのパネルを教える
             window_.SetPickerList (list_);
 
+            // パネルを動かす・ドックする・たたむと、Unity は中身を作り直す（ここがまた呼ばれる）。前の一覧を覚えたままだと、
+            // Refresh が「一覧は替わっていない」と見て新しい ListView に中身を渡さず、一覧が空になった（10-26 不具合）
+            entries_ = null;
             Refresh ();
             Resubscribe ();
             return root;

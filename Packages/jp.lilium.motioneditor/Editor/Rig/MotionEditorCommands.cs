@@ -492,7 +492,7 @@ namespace Lilium
         {
             bool cycle = ClipCycle.Load (clip);
             int[] before = ClipCycle.GetFrames (clip);
-            Undo.RecordObject (clip, undoName);
+            ClipUndo.Record (clip, undoName);
             if (all) {
                 EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (clip);
                 if (bindings.Length > 0) AnimationUtility.SetEditorCurves (clip, bindings, new AnimationCurve[bindings.Length]);
@@ -760,7 +760,7 @@ namespace Lilium
         /// <summary>clip のカーブを copy と同じにする（copy に無いカーブは消す）</summary>
         static void RestoreCurves (AnimationClip clip, AnimationClip copy)
         {
-            Undo.RecordObject (clip, "Undo Write");
+            ClipUndo.Record (clip, "Undo Write");
             List<EditorCurveBinding> bindings = new List<EditorCurveBinding> ();
             List<AnimationCurve> curves = new List<AnimationCurve> ();
             HashSet<EditorCurveBinding> saved = new HashSet<EditorCurveBinding> (AnimationUtility.GetCurveBindings (copy));

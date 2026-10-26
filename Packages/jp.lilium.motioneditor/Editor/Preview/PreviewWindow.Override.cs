@@ -416,7 +416,7 @@ namespace Lilium
             int removed;
             try {
                 Undo.IncrementCurrentGroup ();
-                Undo.RecordObject (editingClip_, "Merge Override");
+                ClipUndo.Record (editingClip_, "Merge Override");
                 Transform root = editingRoot;
                 int frameCount = last + 1;
                 // 書きながら同じクリップを読むと差分が二重に乗るので、全フレームぶん集めてから一度に書く（取り込みと同じ手順）

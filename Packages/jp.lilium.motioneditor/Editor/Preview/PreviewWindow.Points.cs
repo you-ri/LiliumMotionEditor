@@ -363,13 +363,13 @@ namespace Lilium
             get { return stage_ != null && stage_.fullBody != null ? GetSelectedPoints ().Count : 0; }
         }
 
-        /// <summary>選んでいる点のうち、その状態の点の数</summary>
+        /// <summary>選んでいる点のうち、その状態と出している点の数（ほとんど引いていない点は Free と数える）</summary>
         public int CountSelectedPoints (BodyPointState state)
         {
             if (stage_ == null || stage_.fullBody == null) return 0;
             int count = 0;
             foreach (BodyPointTarget point in GetSelectedPoints ()) {
-                if (point.state == state) count++;
+                if (point.shownState == state) count++;
             }
             return count;
         }

@@ -39,15 +39,12 @@
 
 <h2>Features</h2>
 <ul>
-  <li>Pose a character through an editing rig that duplicates its bones, and save the rig values to an animation clip.</li>
-  <li>Edit poses with full-body IK.</li>
-  <li>Clips made with the same editing rig can be shared between characters with different body proportions.</li>
-  <li>Saving bakes a Humanoid clip for the game, with Animation Rigging values and other properties.</li>
-  <li>Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.</li>
-  <li>Poses and motions can also be made with AI through the Unity CLI.</li>
-  <li>Optionally, NVIDIA's Kimodo motion model can make the motion between your keys from a text prompt.</li>
-  <li>Create motions non-destructively while checking the final pose as it will look in the game.</li>
   <li>No need to go back and forth with a DCC tool. Your edits show up in the motion right away.</li>
+  <li>Create motions non-destructively while checking the final pose as it will look in the game.</li>
+  <li>Edit poses with full-body IK.</li>
+  <li>Outputs Humanoid clips for the game, with Animation Rigging values and other properties.</li>
+  <li>Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.</li>
+  <li>Generates the poses between keys from a text prompt with NVIDIA's Kimodo motion model. (optional)</li>
 </ul>
 
 <h2 id="install">Install</h2>
@@ -57,9 +54,8 @@
 <h3>Requirements</h3>
 <ul>
   <li>Unity 6000.0 or later</li>
-  <li>Burst / Mathematics (installed automatically)</li>
+  <li>Burst / Mathematics (installed automatically as package dependencies)</li>
   <li>Animation Rigging (optional. When installed, Animation Rigging values can be edited)</li>
-  <li>Timeline (optional. When installed, Timeline clips can be edited)</li>
 </ul>
 
 <h2>How to use</h2>

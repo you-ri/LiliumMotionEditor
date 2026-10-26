@@ -22,11 +22,22 @@ namespace Lilium
         /// </summary>
         public static bool Interpolate (IList<Vector3> from, IList<Vector3> to, float s, IList<Vector3> result)
         {
+            return Interpolate (from, to, s, result, out Quaternion partial, out Quaternion rotation);
+        }
+
+        /// <summary>
+        /// 上と同じ。partial に s だけ進めた回り、rotation に from から to への回り全体を返す（向きを持つ点の向きを、点の組と同じだけ回すため）
+        /// </summary>
+        public static bool Interpolate (IList<Vector3> from, IList<Vector3> to, float s, IList<Vector3> result, out Quaternion partial, out Quaternion rotation)
+        {
+            partial = Quaternion.identity;
             int count = from.Count;
-            if (count < 3 || to.Count != count || result.Count != count) return false;
+            if (count < 3 || to.Count != count || result.Count != count) {
+                rotation = Quaternion.identity;
+                return false;
+            }
             Vector3 fromCenter = Center (from);
             Vector3 toCenter = Center (to);
-            Quaternion rotation;
             if (!FitRotation (from, to, fromCenter, toCenter, out rotation)) return false;
 
             // 回す軸の上の点 c を求め、c のまわりに回しながら軸に沿って進む（ねじ運動）。軸に直交する移動 d⊥ は (I - R) c = d⊥ を満たす
@@ -39,7 +50,7 @@ namespace Lilium
             Vector3 along = turns ? Vector3.Dot (move, axis) * axis : move;
             Vector3 across = move - along;
             Vector3 pivot = turns ? 0.5f * (across + Vector3.Cross (axis, across) / Mathf.Tan (angle * 0.5f * Mathf.Deg2Rad)) : Vector3.zero;
-            Quaternion partial = turns ? Quaternion.AngleAxis (angle * s, axis) : Quaternion.identity;
+            partial = turns ? Quaternion.AngleAxis (angle * s, axis) : Quaternion.identity;
 
             for (int i = 0; i < count; i++) {
                 Vector3 moved = turns ? pivot + partial * (from[i] - pivot) + along * s : from[i] + move * s;

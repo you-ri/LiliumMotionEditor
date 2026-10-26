@@ -28,7 +28,6 @@ namespace Lilium
         const float kMinWidth = 230;
         /// <summary>入りきらないときも、これだけは見せる（スクロールして使える高さ）</summary>
         const float kMinHeight = 140;
-        const float kSegmentWidth = 64;
         /// <summary>キーが変わってから自動で作り始めるまで（秒）。打ち続けている間やつかんで動かしている間に、1 つごとに始めないように</summary>
         const double kAutoDelay = 1.5;
 
@@ -314,15 +313,6 @@ namespace Lilium
             return float.IsNaN (available) ? kMinHeight : Mathf.Max (kMinHeight, available);
         }
 
-        /// <summary>中身の幅（区間のボタンを折り返す）</summary>
-        float contentWidth
-        {
-            get {
-                float width = gui_ != null ? gui_.contentRect.width : 0;
-                return float.IsNaN (width) || width < 1 ? kWidth : width;
-            }
-        }
-
         /// <summary>
         /// 使えないときは、案内の窓（KimodoInstallWindow）を開くボタンだけを出す（案内はパネルでは狭くて読みにくかった）。
         /// 生成の途中（入れた後に設定を消したなど）なら、その結果も出す
@@ -345,7 +335,7 @@ namespace Lilium
             EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_CLIP"), window_ != null && window_.baseClip != null ? window_.baseClip.name : Tr ("KIMODO_PANEL_NO_CLIP"), EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck ();
             EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_PROMPT"), EditorStyles.miniLabel);
-            settings.prompt = EditorGUILayout.TextArea (settings.prompt, EditorStyles.textArea, GUILayout.MinHeight (40));
+            settings.prompt = EditorGUILayout.TextArea (settings.prompt, EditorStyles.textArea, GUILayout.MinHeight (120));
             int mode = System.Array.IndexOf (KimodoSettings.kModes, settings.mode);
             mode = EditorGUILayout.Popup (Tr ("KIMODO_PANEL_CONSTRAINTS"), Mathf.Max (0, mode), new[] { Tr ("KIMODO_PANEL_MODE_FULL_BODY"), Tr ("KIMODO_PANEL_MODE_ENDS"), Tr ("KIMODO_PANEL_MODE_ROOT") });
             settings.mode = KimodoSettings.kModes[mode];
@@ -372,7 +362,10 @@ namespace Lilium
                     bool pressed = GUILayout.Button (generate, GUILayout.Height (24));
                     EditorGUIUtility.SetIconSize (iconSize);
                     if (pressed) {
-                        problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, settings.target, ChosenSegments ());
+                        // AI の区間が 1 つも無い（タイムラインで全部外した）ときに押したら、全部の区間を AI にする
+                        List<BetweenClips.Range> chosen = ChosenSegments ();
+                        if (chosen.Count == 0) chosen = Segments ();
+                        problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, settings.target, chosen);
                     }
                 }
                 using (new EditorGUI.DisabledScope (!running)) {
@@ -408,14 +401,16 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 補間として使う区間を選ぶ（S83）。Kimodo は毎回クリップ全体を作り直し、結果のファイルを丸ごと置き換える（選ばなかった区間は元の補間のまま）
+        /// 補間として使う区間を今のキーに合わせる（S83）。Kimodo は毎回クリップ全体（最大 10 秒）を作り直し、結果のファイルを丸ごと置き換えるので、
+        /// パネルでは区間を選ばせない（10-26 ユーザー指示。前は区間のボタンを並べていた）。どの区間を AI にするかはタイムラインの矢印のメニューで決める。
+        /// キーが 2 つ未満なら作れないことだけ出す
         /// </summary>
         void DrawSegments ()
         {
             AnimationClip clip = window_ != null ? window_.baseClip : null;
             List<BetweenClips.Range> segments = Segments ();
             RefreshChosen (clip, segments);
-            DrawSegmentButtons (segments);
+            if (segments.Count == 0) EditorGUILayout.HelpBox (Tr ("KIMODO_PANEL_NO_SEGMENTS"), MessageType.None);
         }
 
         /// <summary>
@@ -455,29 +450,6 @@ namespace Lilium
         {
             BetweenClips.State state = BetweenClips.GetSegmentState (clip, range);
             return state == BetweenClips.State.Fresh || state == BetweenClips.State.Stale;
-        }
-
-        void DrawSegmentButtons (List<BetweenClips.Range> segments)
-        {
-            EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_SEGMENTS"), EditorStyles.wordWrappedMiniLabel);
-            if (segments.Count == 0) {
-                EditorGUILayout.HelpBox (Tr ("KIMODO_PANEL_NO_SEGMENTS"), MessageType.None);
-                return;
-            }
-            // パネルは幅が狭いので、区間のボタンは折り返して並べる
-            int perRow = Mathf.Max (1, Mathf.FloorToInt ((contentWidth - 8) / kSegmentWidth));
-            for (int row = 0; row < segments.Count; row += perRow) {
-                using (new EditorGUILayout.HorizontalScope ()) {
-                    foreach (BetweenClips.Range range in segments.Skip (row).Take (perRow)) {
-                        bool on = chosen_.Contains (range.start);
-                        bool next = GUILayout.Toggle (on, range.start + "-" + range.end, EditorStyles.miniButton, GUILayout.Width (kSegmentWidth - 4));
-                        if (next == on) continue;
-                        if (next) chosen_.Add (range.start);
-                        else chosen_.Remove (range.start);
-                    }
-                    GUILayout.FlexibleSpace ();
-                }
-            }
         }
 
         /// <summary>

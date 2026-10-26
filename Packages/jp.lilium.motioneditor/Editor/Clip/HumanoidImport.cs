@@ -79,7 +79,7 @@ namespace Lilium
 
             // ルートの移動の分け方（Bake Into Pose・Based Upon）は元のクリップに合わせる。焼いた出力を新しく作るときに引き継ぐ
             if (destination != null) {
-                Undo.RecordObject (destination, "Import Motion");
+                ClipUndo.Record (destination, "Import Motion");
                 HumanoidOutput.CopyClipSettings (source, destination);
                 notes.Add (Tr ("HUMANOID_IMPORT_CLIP_SETTINGS_COPIED"));
             }
@@ -150,7 +150,7 @@ namespace Lilium
                 }
             }
 
-            Undo.RecordObject (destination, "Import Motion");
+            ClipUndo.Record (destination, "Import Motion");
             int carried = 0;
             SortedSet<string> skipped = new SortedSet<string> ();
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (source)) {

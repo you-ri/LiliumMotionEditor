@@ -146,7 +146,7 @@ In Unity, `Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BV
    Change the settings later in `Edit > Project Settings > Lilium Motion Editor > Kimodo` (**Settings...** on the panel opens it).
    They are saved in the project's `UserSettings` folder (settings of this PC, not shared through the repository).
 3. Write the prompt in English (the whole motion, for example "a person walks forward at a normal pace"), choose the constraints and how to use the result
-   (**Use the Result as**: **Interpolation between keys**, the default, or **Override layer on the clip**), and press **Generate Between Keys**.
+   (**Use the Result as**: **Interpolation between keys**, the default, or **Override layer on the clip**), and press **Generate**.
    The panel checks the Python environment (or Docker and the image), the token file and the skeleton before it starts; if Kimodo is missing, it asks you to open the install guide.
 4. Generation runs in the background (see "Faster generations" for how long). **Stop** stops it.
    **Console** opens the Kimodo Console window with the log. The work files go to the project's `Temp/Kimodo` folder (**Open Work Folder** in the console).
@@ -154,23 +154,28 @@ In Unity, `Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BV
 
 ### Use the result as the interpolation between keys (default)
 
-With **Use the Result as** set to **Interpolation between keys**, choose the segments (the spans between two neighboring keys) to fill (all of them at first).
-The motion is not layered as an Override: it is saved next to your clip as `<clip>.between.anim`, and the chosen segments take their in-between frames from it.
-At the keys the clip stays exactly on your keys, and the motion blends into them near each key. Segments you did not choose keep their curve, linear or stepped interpolation.
+With **Use the Result as** set to **Interpolation between keys**, Kimodo makes the whole clip (up to 10 seconds) every time, so the panel does not ask which segments
+(the spans between two neighboring keys) to fill. At first every segment uses the motion; switch single segments to Curve, Linear or Stepped from the timeline (below).
+New segments made by adding keys use the motion too.
+The motion is not layered as an Override: it is saved next to your clip as `<clip>.between.anim`, and the AI segments take their in-between frames from it.
+Every in-between frame of an AI segment uses the motion. The motion does not land exactly on your keys, so the difference at the two keys is spread over the segment:
+the clip stays exactly on your keys and moves the way the motion moves in between. The other segments keep their curve, linear or stepped interpolation.
+Full-body IK points follow the same rules as in any other segment: a point that is Locked on the keys at both ends stays on its path and holds the motion there
+(for example a planted foot). Make a point Free (or Pin) on those keys to let the generated motion move it.
 
 + In the timeline, segments that use the generated motion are drawn with a wavy arrow. Click the arrow between two keys to select it (drag a box, Shift + click or Ctrl + click to select several),
-  then right-click it to switch the selected segments between Curve, Linear, Stepped and AI (the generated motion). Choosing AI on a Linear or Stepped segment puts the curve back under it, because the motion blends into the curve near each key.
+  then right-click it to switch the selected segments between Curve, Linear, Stepped and AI (the generated motion). Choosing AI on a Linear or Stepped segment puts the curve back under it, so the segment is a curve again if you later switch AI off.
 + If you change a key's value afterwards, the segment keeps the motion and the arrow turns dotted (it was made for the old keys; generate again to match).
   If you add, move or delete a key inside a segment, the segment stops using the motion and goes back to its curve.
 + **Bake the AI Motion into Keys** (the same arrow menu) turns a segment into keys, so the clip no longer needs the `.between.anim` file (for example, to copy the clip to another project).
   Lint reports a missing `.between.anim`, and segments made for older keys.
 + Each generation makes the whole clip again and replaces `.between.anim`.
-+ With **Make it whenever the keys change (auto)** on (the default), it generates again each time you set, move or delete a key.
-  Opening a clip does not start a generation by itself. Turn it off on the panel to generate only with **Generate Between Keys**.
++ With **Auto Generate** on (the default), it generates again each time you set, move or delete a key.
+  Opening a clip does not start a generation by itself. Turn it off on the panel to generate only with **Generate**.
   It starts 1.5 seconds after the last change, and only when the keys differ from the ones the current result was made from.
   If the keys change while it is generating, the result is imported for the segments that still fit, and then it generates again with the current keys.
   Auto runs import without asking, and each run uses the GPU for about 30 seconds to 2 minutes.
-+ While generating, the sparkle icon animates (on the collapsed panel, the panel's button in the window toolbar, the **Generate Between Keys** button and the Kimodo Console tab),
++ While generating, the sparkle icon animates (on the collapsed panel, the panel's button in the window toolbar, the **Generate** button and the Kimodo Console tab),
   and in the timeline the segments being generated are drawn as a flowing wavy arrow.
 
 ### Layer the result as an Override

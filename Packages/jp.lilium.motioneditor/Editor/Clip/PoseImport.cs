@@ -173,7 +173,7 @@ namespace Lilium
         /// </summary>
         static void Write (AnimationClip destination, Dictionary<EditorCurveBinding, float[]> values, float rate)
         {
-            Undo.RecordObject (destination, "Import Motion");
+            ClipUndo.Record (destination, "Import Motion");
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (destination)) {
                 if (EditingClip.IsRigBinding (binding)) AnimationUtility.SetEditorCurve (destination, binding, null);
             }

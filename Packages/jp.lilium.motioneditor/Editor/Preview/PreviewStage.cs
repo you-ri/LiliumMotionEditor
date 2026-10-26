@@ -521,18 +521,61 @@ namespace Lilium
         /// <summary>
         /// 土台のクリップ（編集用クリップ）を当てる口（S81）。窓・PoseSession（BlendDataClip）、Override を重ねた焼きと取り込みの差の元
         /// （SampleBaseAsControls）、Override の無い焼き（SampleClipForBake）はみなここを通るので、外部の補間の区間も同じ動きになる。
-        /// クリップのカーブを当て、外部の補間の区間なら結果（BetweenClips）を重みで混ぜる。
+        /// クリップのカーブを当て、外部の補間の区間の中なら結果（BetweenClips）に、両端のキーでのずれを移しながら足した値を置く。
         /// 外部の区間のあるクリップは、先に操作値を基準へ戻す: Unity は基準の値と同じ一定のカーブを当てないので、戻さないと、
-        /// 前に混ぜた値が混ぜる相手や区間の外のフレームに残る（Override の無い焼きは戻さずに当てていて、焼いた値がずれた）
+        /// 前に置いた値が区間の外のフレームに残る（Override の無い焼きは戻さずに当てていて、焼いた値がずれた）
         /// </summary>
         public void SampleBase (AnimationClip clip, float time)
         {
             if (BetweenClips.HasSegments (clip)) ResetControlsToRest ();
             SampleClip (clip, time);
             if (editingRig == null || editingRig.root == null) return;
-            if (BetweenClips.TryGetBlend (clip, time, out AnimationClip between, out float weight)) {
-                OverrideApplier.Apply (between, OverrideMode.Override, weight, time, editingRig.root.transform, null, null);
+            if (!BetweenClips.TryGetSegment (clip, time, out AnimationClip between, out BetweenClips.Range range)) return;
+            Transform root = editingRig.root.transform;
+            float blend = BetweenClips.OffsetBlend (range, time * clip.frameRate);
+            BetweenOffsets offsets = GetBetweenOffsets (clip, between, range, time);
+            if (OverrideApplier.ApplyWithOffsets (between, time, root, offsets.start, offsets.end, blend)) return;
+            // 結果のファイルのカーブが読み直された（覚えたずれと合わない）。測り直す
+            betweenOffsets_.Clear ();
+            offsets = GetBetweenOffsets (clip, between, range, time);
+            OverrideApplier.ApplyWithOffsets (between, time, root, offsets.start, offsets.end, blend);
+        }
+
+        /// <summary>外部の補間の区間の両端のキーでの、キーの姿勢と結果のずれ</summary>
+        sealed class BetweenOffsets
+        {
+            public OverrideApplier.Offsets start;
+            public OverrideApplier.Offsets end;
+        }
+
+        readonly Dictionary<(AnimationClip, BetweenClips.Range), BetweenOffsets> betweenOffsets_ = new Dictionary<(AnimationClip, BetweenClips.Range), BetweenOffsets> ();
+        readonly Dictionary<AnimationClip, int> betweenOffsetVersions_ = new Dictionary<AnimationClip, int> ();
+
+        /// <summary>
+        /// 区間の両端のキーでのずれ（覚えておき、元のクリップ・結果のファイル・印が変わったら測り直す）。
+        /// 測るときはキーのフレームの姿勢を当てるので、測った後で time の元のクリップを当て直す
+        /// </summary>
+        BetweenOffsets GetBetweenOffsets (AnimationClip clip, AnimationClip between, BetweenClips.Range range, float time)
+        {
+            int version = BetweenClips.GetVersion (clip);
+            if (!betweenOffsetVersions_.TryGetValue (clip, out int known) || known != version) {
+                foreach ((AnimationClip, BetweenClips.Range) key in betweenOffsets_.Keys.Where (k => k.Item1 == clip).ToList ()) betweenOffsets_.Remove (key);
+                betweenOffsetVersions_[clip] = version;
             }
+            if (betweenOffsets_.TryGetValue ((clip, range), out BetweenOffsets offsets)) return offsets;
+            Transform root = editingRig.root.transform;
+            float rate = clip.frameRate;
+            offsets = new BetweenOffsets ();
+            ResetControlsToRest ();
+            SampleClip (clip, range.start / rate);
+            offsets.start = OverrideApplier.MeasureOffsets (between, range.start / rate, root);
+            ResetControlsToRest ();
+            SampleClip (clip, range.end / rate);
+            offsets.end = OverrideApplier.MeasureOffsets (between, range.end / rate, root);
+            ResetControlsToRest ();
+            SampleClip (clip, time);
+            betweenOffsets_[(clip, range)] = offsets;
+            return offsets;
         }
 
         public void InvalidateClipCurves ()
@@ -547,6 +590,9 @@ namespace Lilium
         /// </summary>
         void CaptureControlRest ()
         {
+            // 体を作り直したら、覚えたキーでのずれは基準が変わるので捨てる
+            betweenOffsets_.Clear ();
+            betweenOffsetVersions_.Clear ();
             if (editingRig == null || editingRig.controlsRoot == null) return;
             Transform controls = editingRig.controlsRoot;
             controlTransforms_ = controls.GetComponentsInChildren<Transform> (true);
@@ -792,40 +838,35 @@ namespace Lilium
         /// その時刻ちょうどのキーが無い点は、位置を引き継がない: 後で、その時刻の骨の位置に置き直す（SnapCarriedPoints）。
         /// 引き継ぐのは「留まる・動かさない」という状態だけで、前のキーフレームの場所へ体を引っ張ることはしない
         /// </summary>
+        void EnsureBodyPointPaths ()
+        {
+            if (bodyPointPaths_ != null && bodyPointPaths_.Length == bodyPoints_.Length) return;
+            bodyPointPaths_ = new string[bodyPoints_.Length];
+            for (int i = 0; i < bodyPoints_.Length; i++) {
+                bodyPointPaths_[i] = bodyPoints_[i] != null ? AnimationUtility.CalculateTransformPath (bodyPoints_[i].transform, editingRig.root.transform) : null;
+            }
+        }
+
         void MaskBodyPoints (AnimationClip clip, float time)
         {
             carriedPoints_.Clear ();
             lockedSpanPoints_.Clear ();
             if (bodyPoints_.Length == 0 || editingRig == null || editingRig.root == null) return;
-            if (bodyPointPaths_ == null || bodyPointPaths_.Length != bodyPoints_.Length) {
-                bodyPointPaths_ = new string[bodyPoints_.Length];
-                for (int i = 0; i < bodyPoints_.Length; i++) {
-                    bodyPointPaths_[i] = bodyPoints_[i] != null ? AnimationUtility.CalculateTransformPath (bodyPoints_[i].transform, editingRig.root.transform) : null;
-                }
-            }
-            // 外部の補間の区間では、点の引く強さを外部の動きの重みだけ弱める（区間の中は 0）。
-            // 外部の動き（BetweenClips）は FK の骨だけなので、点を残すと、キーの間をまっすぐ進む Locked の足などが
-            // 全身 IK で骨を引き戻し、外部の動き（歩く足の上げ下ろし）を上書きする（10-24 不具合「Kimodo の歩きで足がすべる」）
-            BetweenClips.TryGetBlend (clip, time, out _, out float external);
-            int positionWeight = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kPositionWeightProperty);
-            int rotationWeight = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kRotationWeightProperty);
+            EnsureBodyPointPaths ();
+            // 外部の補間（AI）の区間でも、点の状態は曲線・リニアの区間と同じ決まりで扱う（10-26 ユーザー指示）。
+            // 前後のキーで Locked の足は、AI の動きの足の上げ下ろしより点を優先して留める。AI に任せたい点は Free にする
+            // （10-24 から 10-26 までは区間の中で点を引かなかった。不具合「Kimodo の歩きで足がすべる」の直し）
             // 測り直しの中（GetKeyPoseGaps から呼ばれる）でも書き換えないよう、解く点の番号はここだけで持つ
             List<int> span = null;
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
                 bool keyed;
                 EditingClip.GetPointState (clip, bodyPointPaths_[i], time, pointState_, out keyed);
-                if (external > 0) {
-                    pointState_[positionWeight] *= 1 - external;
-                    pointState_[rotationWeight] *= 1 - external;
-                }
                 bool active = false;
                 for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) {
                     bodyPoints_[i].SetValue (v, pointState_[v]);
                     active |= pointState_[v] > 0;
                 }
-                // 区間の中で引かなくなった点は、Locked の印が残っていても解かない（骨の位置へ置き直す）
-                if (external > 0 && pointState_[positionWeight] <= 0 && pointState_[rotationWeight] <= 0) active = false;
                 if (!active || keyed) continue;
                 // 前後のキーで Locked の点は、キーの間でも位置のカーブの補間した場所に留める（全身 IK の段が解く）
                 if (EditingClip.IsLockedSpan (clip, bodyPointPaths_[i], time)) {
@@ -877,6 +918,8 @@ namespace Lilium
                 if (group.Count < 3 || !gaps.keyPositions.TryGetValue (pair.Key.Item2, out from) || !gaps.keyPositions.TryGetValue (pair.Key.Item3, out to)) continue;
                 Vector3[] a = new Vector3[group.Count];
                 Vector3[] b = new Vector3[group.Count];
+                Vector3[] reachedFrom = new Vector3[group.Count];
+                Vector3[] reachedTo = new Vector3[group.Count];
                 Vector3[] current = new Vector3[group.Count];
                 // 時刻の進み具合は、カーブの補間した所を前後のキーを結ぶ線へ写して測る（カーブの緩急に合わせる）
                 float along = 0, length = 0;
@@ -886,13 +929,40 @@ namespace Lilium
                     current[g] = bodyPoints_[group[g]].transform.localPosition;
                     along += Vector3.Dot (current[g] - a[g], b[g] - a[g]);
                     length += (b[g] - a[g]).sqrMagnitude;
+                    // 剛体として動かすのは、キーの姿勢で骨が届いた所（点のキー + キーの姿勢の差）。下で足首の向きを回すときの元
+                    // （キーの姿勢の差を掛けた向き）と同じ所から回す。差は AddKeyPoseGap が足すので、ここでは差の分を引いておく
+                    gaps.TryGet (pair.Key.Item2, group[g], out Vector3 gapFrom, out Quaternion ignoredFrom);
+                    gaps.TryGet (pair.Key.Item3, group[g], out Vector3 gapTo, out Quaternion ignoredTo);
+                    reachedFrom[g] = a[g] + gapFrom;
+                    reachedTo[g] = b[g] + gapTo;
                 }
                 if (length < 1e-10f) continue;
                 float s = Mathf.Clamp01 (along / length);
                 Vector3[] moved = new Vector3[group.Count];
-                if (!RigidSpan.Interpolate (a, b, s, moved)) continue;
+                if (!RigidSpan.Interpolate (reachedFrom, reachedTo, s, moved, out Quaternion partial, out Quaternion whole)) continue;
+                // カーブの緩急（直線から外れる分）と Override の値は、組の平均の分だけ残す。点ごとに残すと、点ごとにカーブの形が違う
+                // （次のキーへの向きで膨らみ方が変わる）ので組の形が崩れ、踵と足裏の中心の間が 16.4cm → 13.0cm に縮んだ（10-26）
+                Vector3 ease = Vector3.zero;
+                for (int g = 0; g < group.Count; g++) ease += current[g] - Vector3.Lerp (a[g], b[g], s);
+                ease /= group.Count;
+                gaps.keyRotations.TryGetValue (pair.Key.Item2, out Quaternion[] fromRotations);
+                gaps.keyRotations.TryGetValue (pair.Key.Item3, out Quaternion[] toRotations);
+                int rotationWeight = Lilium.BodyPoint.IndexOf (Lilium.BodyPoint.kRotationWeightProperty);
                 for (int g = 0; g < group.Count; g++) {
-                    bodyPoints_[group[g]].transform.localPosition = current[g] + moved[g] - Vector3.Lerp (a[g], b[g], s);
+                    int index = group[g];
+                    Transform control = bodyPoints_[index].transform;
+                    gaps.TryGet (pair.Key.Item2, index, out Vector3 gapFrom, out Quaternion turnFrom);
+                    gaps.TryGet (pair.Key.Item3, index, out Vector3 gapTo, out Quaternion turnTo);
+                    control.localPosition = moved[g] + ease - Vector3.Lerp (gapFrom, gapTo, s);
+                    // 向きを留めた点（足首）の向きも、点の組と同じだけ回す。向きだけ前後のキーの向きを slerp で補間すると、
+                    // 弧を描いて回る足裏の点と足首の向きが食い違い、足裏の点に 1〜3cm 届かずにつま先の曲がり方が飛んだ（10-26）。
+                    // 剛体から外れる分は時刻で混ぜて足す（位置と同じ）。キーの姿勢の差は AddKeyPoseGap が掛けるので、ここでは外しておく
+                    if (fromRotations == null || toRotations == null || bodyPoints_[index].GetValue (rotationWeight) <= 0) continue;
+                    Quaternion reachedFromRotation = turnFrom * fromRotations[index];
+                    Quaternion reachedToRotation = turnTo * toRotations[index];
+                    Quaternion off = reachedToRotation * Quaternion.Inverse (whole * reachedFromRotation);
+                    Quaternion rotated = Quaternion.Slerp (Quaternion.identity, off, s) * partial * reachedFromRotation;
+                    control.localRotation = Quaternion.Inverse (Quaternion.Slerp (turnFrom, turnTo, s)) * rotated;
                 }
             }
         }
@@ -951,6 +1021,8 @@ namespace Lilium
             public readonly Dictionary<int, Quaternion[]> rotations = new Dictionary<int, Quaternion[]> ();
             /// <summary>キーのフレームでの点の位置（コントロールのローカルの値。そのフレームにキーのある点はキーの値）</summary>
             public readonly Dictionary<int, Vector3[]> keyPositions = new Dictionary<int, Vector3[]> ();
+            /// <summary>キーのフレームでの点の向き（コントロールのローカルの値）</summary>
+            public readonly Dictionary<int, Quaternion[]> keyRotations = new Dictionary<int, Quaternion[]> ();
 
             public bool TryGet (int frame, int index, out Vector3 position, out Quaternion rotation)
             {
@@ -999,12 +1071,15 @@ namespace Lilium
                     Vector3[] positions = new Vector3[bodyPoints_.Length];
                     Quaternion[] rotations = new Quaternion[bodyPoints_.Length];
                     Vector3[] keyPositions = new Vector3[bodyPoints_.Length];
+                    Quaternion[] keyRotations = new Quaternion[bodyPoints_.Length];
                     for (int i = 0; i < bodyPoints_.Length; i++) {
                         rotations[i] = Quaternion.identity;
+                        keyRotations[i] = Quaternion.identity;
                         if (bodyPoints_[i] == null) continue;
                         Transform control = bodyPoints_[i].transform;
                         control.GetLocalPositionAndRotation (out Vector3 keyPosition, out Quaternion keyRotation);
                         keyPositions[i] = keyPosition;
+                        keyRotations[i] = keyRotation;
                         if (!fullBody.TryGetCapturedValues (control, out Vector3 position, out Quaternion rotation)) continue;
                         positions[i] = position - keyPosition;
                         rotations[i] = rotation * Quaternion.Inverse (keyRotation);
@@ -1012,6 +1087,7 @@ namespace Lilium
                     gaps.positions[frame] = positions;
                     gaps.rotations[frame] = rotations;
                     gaps.keyPositions[frame] = keyPositions;
+                    gaps.keyRotations[frame] = keyRotations;
                 }
             }
             finally {

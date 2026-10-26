@@ -64,7 +64,7 @@ namespace Lilium
         {
             // アセットでないクリップ（メモリ上だけの物）を記録すると、どのシーンにも属さない物として開いているシーンが変更扱いになる。
             // 名前が無いときは記録しない（統合のように、外で 1 つの Undo にまとめて何フレームも書くとき）
-            if (clip != null && !string.IsNullOrEmpty (undoName) && EditorUtility.IsPersistent (clip)) Undo.RecordObject (clip, undoName);
+            if (clip != null && !string.IsNullOrEmpty (undoName) && EditorUtility.IsPersistent (clip)) ClipUndo.Record (clip, undoName);
             return new CurveWriter (clip, root, frame);
         }
 

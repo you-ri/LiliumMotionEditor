@@ -263,7 +263,7 @@ namespace Lilium
             if (!KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) return Tr ("POSE_SESSION_NO_SEGMENT", frame);
             System.Predicate<EditorCurveBinding> exclude = SwitchCurves ();
             WriteWithUndo (undoName, () => {
-                Undo.RecordObject (clip, undoName);
+                ClipUndo.Record (clip, undoName);
                 KeyInterpolations.SetSegment (clip, frame, mode, exclude);
             });
             // 曲線・リニア・一定を選んだら、外部の補間からは外す（S82）
@@ -301,7 +301,7 @@ namespace Lilium
         void CurveUnderExternal (IEnumerable<BetweenClips.Range> ranges, string undoName)
         {
             System.Predicate<EditorCurveBinding> exclude = SwitchCurves ();
-            Undo.RecordObject (clip_, undoName);
+            ClipUndo.Record (clip_, undoName);
             int written = 0;
             foreach (BetweenClips.Range range in ranges) written += KeyInterpolations.SetCurveUnderExternal (clip_, range.start, exclude);
             if (written > 0) stage.InvalidateClipCurves ();
@@ -365,7 +365,7 @@ namespace Lilium
                     }
                 }
             }
-            Undo.RegisterCompleteObjectUndo (clip_, undoName);
+            ClipUndo.Record (clip_, undoName);
             foreach (AnimationCurve curve in curves.Values) CurveEdit.RefreshTangents (curve);
             AnimationUtility.SetEditorCurves (clip_, curves.Keys.ToArray (), curves.Values.ToArray ());
             BetweenClips.SetSegment (clip_, new BetweenClips.Range { start = start, end = end }, false);
@@ -404,7 +404,7 @@ namespace Lilium
                 write ();
                 AnimationClip written = targetClip;
                 if (ClipCycle.Load (written)) {
-                    Undo.RecordObject (written, undoName);
+                    ClipUndo.Record (written, undoName);
                     ClipCycle.Sync (written);
                 }
             });
@@ -717,7 +717,7 @@ namespace Lilium
                 AssetDatabase.CreateAsset (between, path);
             }
             else {
-                Undo.RegisterCompleteObjectUndo (between, "Import Between");
+                ClipUndo.Record (between, "Import Between");
             }
             OverrideImportOptions options = new OverrideImportOptions { fingers = false, alignRoot = true };
             string error = ImportOverride (bvh, skeleton, between, OverrideMode.Override, options, out result);

@@ -470,9 +470,30 @@ namespace Lilium
             get { return positionDirty_ || rotationDirty_ || lockedDirty_; }
         }
 
+        /// <summary>
+        /// 点が骨を引く強さ（0〜1。位置と向きの強いほう）。ふつうは固定していれば 1 だが、強さ 1 未満のキーでは弱い
+        /// </summary>
+        public float pull
+        {
+            get {
+                float rotation = hasRotation_ ? body_.GetRotationWeight (human_) : 0;
+                return Mathf.Clamp01 (Mathf.Max (body_.GetPositionWeight (human_), rotation));
+            }
+        }
+
+        /// <summary>引く強さが弱まっているか（強さ 1 未満のキー）</summary>
+        bool weakened
+        {
+            get { return pinned && pull < 1; }
+        }
+
+        /// <summary>丸の色。弱く引いている点は、引く強さのぶんだけ Free の色へ寄せる（ほとんど引いていない点を Locked の色で出さない）</summary>
         Color fillColor
         {
-            get { return locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor; }
+            get {
+                Color color = locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor;
+                return weakened ? Color.Lerp (kFreeColor, color, pull) : color;
+            }
         }
 
         static readonly float[] stateValues_ = new float[BodyPoint.kValueCount];
@@ -520,7 +541,9 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 点の位置と向き。固定していない間は、骨の今の位置と向きに出す（つかむとそこから固定が始まる）
+        /// 点の位置と向き。固定していない間は、骨の今の位置と向きに出す（つかむとそこから固定が始まる）。
+        /// 弱く引いている点（強さ 1 未満のキー）は、骨から置いた場所へ引く強さだけ寄せた所に出す。置いた場所に出すと、
+        /// ほとんど引いていない点が、キーの間をまっすぐ結んだ場所（AI の足から離れた所）に描かれていた（10-26）
         /// </summary>
         void GetPoint (out Vector3 position, out Quaternion rotation)
         {
@@ -529,8 +552,8 @@ namespace Lilium
             body_.TryGetPointWorld (human_, out pointPosition, out pointRotation);
             // 足と一緒に動かしている Pin の点は、骨の今の場所に出す（置いた場所は離したときに付け直す）
             bool carried = body_.IsFootCarried (human_);
-            position = positionPinned && !carried ? pointPosition : bonePoint;
-            rotation = rotationPinned && !carried ? pointRotation : bone_.rotation;
+            position = positionPinned && !carried ? Vector3.Lerp (bonePoint, pointPosition, body_.GetPositionWeight (human_)) : bonePoint;
+            rotation = rotationPinned && !carried ? Quaternion.Slerp (bone_.rotation, pointRotation, body_.GetRotationWeight (human_)) : bone_.rotation;
         }
 
         /// <summary>
@@ -614,11 +637,28 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 窓に出す状態（Controller のパネルのボタン）。引く強さが半分に満たない点は Free と出す（ほとんど引いていない点）
+        /// </summary>
+        public BodyPointState shownState
+        {
+            get { return pull < 0.5f ? BodyPointState.Free : state; }
+        }
+
+        /// <summary>
         /// 点の状態を変える。Free の点を Pin / Locked にするときは、今の骨の位置に置く。Locked を Pin にすると、置いた場所のまま Pin になる
-        /// （次に手を離したときに、骨の位置へ合わせ直される）
+        /// （次に手を離したときに、骨の位置へ合わせ直される）。
+        /// 弱く引いている点を Pin / Locked にするときは、今出している所に強さ 1 で置き直す（同じ状態を選んでも）
         /// </summary>
         public void SetState (BodyPointState value)
         {
+            if (value == state && !weakened) return;
+            if (weakened && value != BodyPointState.Free) {
+                Vector3 position;
+                Quaternion rotation;
+                GetPoint (out position, out rotation);
+                PinPosition (position);
+                if (rotationPinned) PinRotation (rotation);
+            }
             if (value == state) return;
             switch (value) {
                 case BodyPointState.Free:
@@ -788,11 +828,11 @@ namespace Lilium
                 }
             }
 
-            // 固定した点が届いていないときは、骨までの線を出す
+            // 固定した点が届いていないときは、骨までの線を出す（弱く引いている点は、出している所まで）
             if (Event.current.type == EventType.Repaint && positionPinned) {
                 Vector3 pointPosition;
                 Quaternion pointRotation;
-                body_.TryGetPointWorld (human_, out pointPosition, out pointRotation);
+                GetPoint (out pointPosition, out pointRotation);
                 Vector3 onBone = bonePoint;
                 if ((pointPosition - onBone).sqrMagnitude > 1e-6f) {
                     Handles.color = PoseHandles.Fade (new Color (1, 0.85f, 0.2f, 0.8f));
@@ -892,7 +932,7 @@ namespace Lilium
         /// </summary>
         public void DrawPinned ()
         {
-            if (Event.current.type != EventType.Repaint || bone_ == null || !pinned) return;
+            if (Event.current.type != EventType.Repaint || bone_ == null || shownState == BodyPointState.Free) return;
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);

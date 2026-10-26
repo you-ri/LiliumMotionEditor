@@ -213,6 +213,87 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// 層の値と今の値の差（外部の補間。BetweenClips）。カーブごとに、位置・大きさ・数値は今の値 − 層の値、回転は 層の値⁻¹ × 今の値（骨の向きから見た回り）
+        /// </summary>
+        public sealed class Offsets
+        {
+            internal object curves;
+            internal Vector3[] positions;
+            internal Quaternion[] rotations;
+            internal Vector3[] scales;
+            internal float[] floats;
+        }
+
+        /// <summary>今の値（キーの姿勢を当てた所）と、time の層の値の差を測る</summary>
+        public static Offsets MeasureOffsets (AnimationClip clip, float time, Transform root)
+        {
+            if (clip == null || root == null) return null;
+            Curves curves = GetCurves (clip);
+            Offsets offsets = new Offsets {
+                curves = curves,
+                positions = new Vector3[curves.transforms.Count],
+                rotations = new Quaternion[curves.transforms.Count],
+                scales = new Vector3[curves.transforms.Count],
+                floats = new float[curves.floats.Count],
+            };
+            for (int i = 0; i < curves.transforms.Count; i++) {
+                TransformCurves channel = curves.transforms[i];
+                offsets.rotations[i] = Quaternion.identity;
+                Transform t = CurveEdit.FindPath (root, channel.path);
+                if (t == null) continue;
+                if (channel.position != null) offsets.positions[i] = t.localPosition - Evaluate (channel.position, time, t.localPosition);
+                if (channel.rotation != null) offsets.rotations[i] = Quaternion.Inverse (EvaluateRotation (channel, time)) * t.localRotation;
+                if (channel.scale != null) offsets.scales[i] = t.localScale - Evaluate (channel.scale, time, t.localScale);
+            }
+            for (int i = 0; i < curves.floats.Count; i++) {
+                FloatCurve channel = curves.floats[i];
+                Transform t = CurveEdit.FindPath (root, channel.path);
+                Component component = t != null ? t.GetComponent (channel.type) : null;
+                float current;
+                if (component != null && TryGetFloat (component, channel.property, out current)) offsets.floats[i] = current - channel.curve.Evaluate (time);
+            }
+            return offsets;
+        }
+
+        /// <summary>
+        /// 層の値に、from から to へ blend（0〜1）だけ移した差を足して、そのまま置く。差を測ったときと同じカーブのクリップでなければ何もせず false
+        /// </summary>
+        public static bool ApplyWithOffsets (AnimationClip clip, float time, Transform root, Offsets from, Offsets to, float blend)
+        {
+            if (clip == null || root == null || from == null || to == null) return false;
+            Curves curves = GetCurves (clip);
+            if (from.curves != curves || to.curves != curves) return false;
+            for (int i = 0; i < curves.transforms.Count; i++) {
+                TransformCurves channel = curves.transforms[i];
+                Transform t = CurveEdit.FindPath (root, channel.path);
+                if (t == null) continue;
+                if (channel.position != null) {
+                    t.localPosition = Evaluate (channel.position, time, t.localPosition) + Vector3.Lerp (from.positions[i], to.positions[i], blend);
+                }
+                if (channel.rotation != null) {
+                    t.localRotation = EvaluateRotation (channel, time) * Quaternion.Slerp (from.rotations[i], to.rotations[i], blend);
+                }
+                if (channel.scale != null) {
+                    t.localScale = Evaluate (channel.scale, time, t.localScale) + Vector3.Lerp (from.scales[i], to.scales[i], blend);
+                }
+            }
+            for (int i = 0; i < curves.floats.Count; i++) {
+                FloatCurve channel = curves.floats[i];
+                Transform t = CurveEdit.FindPath (root, channel.path);
+                Component component = t != null ? t.GetComponent (channel.type) : null;
+                if (component != null) SetFloat (component, channel.property, channel.curve.Evaluate (time) + Mathf.Lerp (from.floats[i], to.floats[i], blend));
+            }
+            return true;
+        }
+
+        static Quaternion EvaluateRotation (TransformCurves channel, float time)
+        {
+            Quaternion q = new Quaternion (channel.rotation[0].Evaluate (time), channel.rotation[1].Evaluate (time), channel.rotation[2].Evaluate (time), channel.rotation[3].Evaluate (time));
+            float length = Mathf.Sqrt (q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+            return length > 1e-6f ? new Quaternion (q.x / length, q.y / length, q.z / length, q.w / length) : Quaternion.identity;
+        }
+
         static AvatarMaskBodyPart PartOf (ChannelMaskParts parts, string path)
         {
             return parts != null ? parts.PartOf (path) : AvatarMaskBodyPart.LastBodyPart;

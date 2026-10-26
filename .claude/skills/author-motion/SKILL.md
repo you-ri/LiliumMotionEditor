@@ -70,7 +70,9 @@ unity cmd motion_describe --project-path "$P" --json
    - `"interpolation"` on a key sets how the motion goes from that key to the next key: `"curve"` (smooth, the default), `"linear"` (even speed) or `"constant"`
      (hold the pose until the next key; for blocking and sudden changes. The window calls it **Stepped**). Omit it to leave the segment as it is. It is refused on the last key (no next key).
      `"external"` uses the clip's external motion (`<name>.between.anim`, made from a motion model's output; see `generate-motion`) for that segment (the window calls it **AI**;
-     a linear or constant segment gets its curve back, because the motion blends into the curve near the keys). It is refused when the clip has none. `motion_read_motion` returns `"external"` for such segments, with `"stale": true` when the keys changed after the motion was made
+     every in-between frame uses the motion, with its difference from the two keys spread over the segment so it still lands on the keys;
+     full-body IK points follow the usual rules there, so a point `Locked` on both end keys holds the motion to its path;
+     a linear or constant segment gets its curve back, so it is a curve again if the segment is switched back). It is refused when the clip has none. `motion_read_motion` returns `"external"` for such segments, with `"stale": true` when the keys changed after the motion was made
      (regenerate it). `motion_lint` reports `Between` issues: `missing` (the clip points to an external motion file that is gone), `stale`, `lost` (keys moved; the segment falls back to its curve)
      Held-item switches and point states (Pin / Locked) are steps and are not changed
    - `motion_read_motion` returns the clip's keys in the same shape (compact poses and the 40 finger muscles per key, and `interpolation` when a segment is not a curve; `"mixed"` when only some curves differ): read, edit in Python, and write back with `--replace true`

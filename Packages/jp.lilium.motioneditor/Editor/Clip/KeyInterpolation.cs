@@ -196,7 +196,7 @@ namespace Lilium
         /// <summary>
         /// クリップの frame のキーから次のキーまでを mode にする。区間に掛かる対象のカーブで、区間の端にキーが無いものには、
         /// その時刻の値でキーを足す（区間が本当にその補間になる。足したキーのまわりの曲線の形は少し変わる）。書いたカーブの数を返す。
-        /// Undo は呼ぶ側で（クリップを Undo.RecordObject してから呼ぶ）
+        /// Undo は呼ぶ側で（クリップを ClipUndo.Record してから呼ぶ）
         /// </summary>
         public static int SetSegment (AnimationClip clip, int frame, KeyInterpolation mode, System.Predicate<EditorCurveBinding> exclude = null)
         {

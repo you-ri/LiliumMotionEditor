@@ -890,7 +890,7 @@ namespace Lilium
         {
             if (clip == null) clip = targetClip;
             if (EditorUtility.IsPersistent (clip)) {
-                Undo.RecordObject (clip, name);
+                ClipUndo.Record (clip, name);
             }
         }
 

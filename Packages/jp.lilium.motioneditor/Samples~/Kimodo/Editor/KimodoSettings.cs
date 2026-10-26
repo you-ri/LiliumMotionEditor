@@ -31,7 +31,7 @@ namespace Lilium
         public string mode = "fullbody";
         /// <summary>
         /// 結果の使い方（KimodoJob.kBetween: キーの間の補間（既定）/ kOverride: Override として重ねる。S83）。
-        /// 窓のボタンは「Generate Between Keys」なので、押したら補間になるのを既定にする（Override だと ✏ を移さないと見えず、補間になっていないように見えた）
+        /// 窓のボタンは「生成」（キーの間を作る）なので、押したら補間になるのを既定にする（Override だと ✏ を移さないと見えず、補間になっていないように見えた）
         /// </summary>
         public string target = KimodoJob.kBetween;
         /// <summary>

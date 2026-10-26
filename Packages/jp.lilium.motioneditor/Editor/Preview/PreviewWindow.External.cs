@@ -57,15 +57,21 @@ namespace Lilium
             string problem = GetAddOverrideProblem ();
             if (problem != null && !IsOverrideClip (destination)) return problem;
             CommitHandleKeys ();
-            Undo.RegisterCompleteObjectUndo (destination, "Motion Editor Import Override");
-            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                session.clip = source;
-                string error = session.ImportOverride (bvh, skeleton, destination, mode, options, out result);
-                if (error != null) return error;
-            }
-            AssetDatabase.SaveAssetIfDirty (destination);
-            AddOverride (destination, mode);
-            return null;
+            PoseSession.OverrideImportResult imported = null;
+            string error = InOwnUndoGroup ("Motion Editor Import Override", () => {
+                ClipUndo.Record (destination, "Motion Editor Import Override");
+                using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
+                    session.clip = source;
+                    string importError = session.ImportOverride (bvh, skeleton, destination, mode, options, out imported);
+                    if (importError != null) return importError;
+                }
+                AssetDatabase.SaveAssetIfDirty (destination);
+                // 段を足す（キャラの設定の記録）も同じ Undo に入れる。取り込みと別にすると、Undo 1 回で段だけが外れる
+                AddOverride (destination, mode);
+                return null;
+            });
+            result = imported;
+            return error;
         }
 
         /// <summary>
@@ -79,14 +85,32 @@ namespace Lilium
             AnimationClip source = baseClip;
             if (stage_ == null || stage_.sourcePrefab == null || source == null) return Tr ("POSE_SESSION_NO_CLIP");
             CommitHandleKeys ();
-            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                session.clip = source;
-                string error = session.ImportBetween (bvh, skeleton, segments, out result);
-                if (error != null) return error;
-            }
-            AfterClipEdit ();
+            PoseSession.OverrideImportResult imported = null;
+            string error = InOwnUndoGroup ("Import Between", () => {
+                using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
+                    session.clip = source;
+                    string importError = session.ImportBetween (bvh, skeleton, segments, out imported);
+                    if (importError != null) return importError;
+                }
+                AfterClipEdit ();
+                return null;
+            });
+            result = imported;
+            if (error != null) return error;
             RaiseStateChanged ();
             return null;
+        }
+
+        /// <summary>
+        /// body の Undo を、前後の操作と分けた 1 回にまとめる。外部のツールの動きは生成を待った後で（EditorApplication.update から）
+        /// 取り込まれるので、分けないと、その時の Undo のまとまり（直前の操作）に混ざる
+        /// </summary>
+        static string InOwnUndoGroup (string name, System.Func<string> body)
+        {
+            string error = null;
+            PoseCommit.InUndoGroup (name, () => error = body ());
+            Undo.IncrementCurrentGroup ();
+            return error;
         }
 
         /// <summary>

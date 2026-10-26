@@ -123,16 +123,35 @@ namespace Lilium
         }
 
         [Test]
-        public void Weight_IsZeroAtKeys_OneInTheMiddleThird_AndCappedForLongSegments ()
+        public void Weight_IsOneInsideTheSegment_AndOffsetsMoveFromStartToEnd ()
         {
-            Assert.AreEqual (0, BetweenClips.Weight (kFirst, 0, kRate));
-            Assert.AreEqual (0, BetweenClips.Weight (kFirst, 30, kRate));
-            Assert.AreEqual (0.5f, BetweenClips.Weight (kFirst, 5, kRate), 1e-5f, "30 フレームの区間は 10 フレームで混ぜる（区間の 1/3）");
-            Assert.AreEqual (1, BetweenClips.Weight (kFirst, 10, kRate));
-            Assert.AreEqual (1, BetweenClips.Weight (kFirst, 20, kRate), "真ん中の 1/3 は外部の動きそのもの");
-            BetweenClips.Range longer = new BetweenClips.Range { start = 0, end = 120 };
-            Assert.AreEqual (1, BetweenClips.Weight (longer, 15, kRate), "長い区間は 0.25 秒で混ぜ終わる");
-            Assert.Less (BetweenClips.Weight (longer, 14, kRate), 1);
+            Assert.AreEqual (0, BetweenClips.Weight (kFirst, 0));
+            Assert.AreEqual (0, BetweenClips.Weight (kFirst, 30));
+            Assert.AreEqual (1, BetweenClips.Weight (kFirst, 1), "キーの隣のフレームから外部の動き");
+            Assert.AreEqual (1, BetweenClips.Weight (kFirst, 29));
+            Assert.AreEqual (0, BetweenClips.OffsetBlend (kFirst, 0), "始まりのキーではそのキーのずれ");
+            Assert.AreEqual (0.5f, BetweenClips.OffsetBlend (kFirst, 15), 1e-5f);
+            Assert.AreEqual (1, BetweenClips.OffsetBlend (kFirst, 30), "終わりのキーではそのキーのずれ");
+        }
+
+        /// <summary>
+        /// 区間の中の 1 フレームで、結果に両端のキーでのずれを移しながら足した回転（評価の式をテストの側で組み立てる）と、
+        /// 編集用リグの回転の最大の差。キーの値は元のクリップのカーブから読む
+        /// </summary>
+        static float MaxAngleToCorrected (PoseSession session, AnimationClip between, BetweenClips.Range range, int frame)
+        {
+            session.Evaluate (frame);
+            Transform root = session.stage.editingRig.root.transform;
+            float blend = BetweenClips.OffsetBlend (range, frame);
+            float max = 0;
+            foreach (string path in AnimationUtility.GetCurveBindings (between).Where (CurveEdit.IsRotation).Select (b => b.path).Distinct ()) {
+                Transform t = CurveEdit.FindPath (root, path);
+                if (t == null) continue;
+                Quaternion offset (int key) => Quaternion.Inverse (CurveEdit.EvaluateRotation (between, path, key / kRate)) * CurveEdit.EvaluateRotation (session.clip, path, key / kRate);
+                Quaternion expected = CurveEdit.EvaluateRotation (between, path, frame / kRate) * Quaternion.Slerp (offset (range.start), offset (range.end), blend);
+                max = Mathf.Max (max, Quaternion.Angle (expected, t.localRotation));
+            }
+            return max;
         }
 
         [Test]
@@ -153,7 +172,9 @@ namespace Lilium
             Assert.AreEqual (0, session.overrides.Count, "Override の段には足さない");
 
             Assert.Greater (MaxAngle (at15, Bones (session, 15)), 5, "区間の中は外部の動き");
-            Assert.LessOrEqual (MaxAngleToBetween (session, between, 15 / kRate), 0.1f, "区間の真ん中は外部の動きそのもの");
+            foreach (int f in new[] { 1, 5, 15, 25, 29 }) {
+                Assert.LessOrEqual (MaxAngleToCorrected (session, between, kFirst, f), 0.1f, f + "F は外部の動きにキーでのずれを移しながら足したもの（キーの近くも）");
+            }
             Assert.LessOrEqual (MaxAngle (at45, Bones (session, 45)), 0.01f, "外部の区間でない所は元のまま");
             foreach (int key in new[] { 0, 30 }) {
                 session.Evaluate (key);
@@ -186,11 +207,11 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 足を Locked にしたキーの間でも、区間の中は外部の動きそのもの（10-24 不具合「Kimodo の歩きで足がすべる」）。
-        /// 結果のファイルは FK の骨だけなので、点の固定を残すと、キーの間をまっすぐ進む足の点が全身 IK で脚を引き戻していた
+        /// 外部の区間の中でも、点の状態は曲線の区間と同じ決まり（10-26 ユーザー指示）: 前後のキーで Locked の足は、点の場所へ留まる。
+        /// 10-24 から 10-26 までは区間の中で点を引かず、外部の動きの足が点に関わらず動いていた
         /// </summary>
         [Test]
-        public void LockedPoints_DoNotPullInsideTheSegment ()
+        public void LockedPoints_FollowTheUsualRulesInsideTheSegment ()
         {
             PoseSession plain = OpenWithLockedFoot ("Plain", false);
             PoseSession locked = OpenWithLockedFoot ("Locked", true);
@@ -199,8 +220,56 @@ namespace Lilium
             plain.Evaluate (30);
             Assert.Greater (Vector3.Distance (leftFoot (locked).position, leftFoot (plain).position), 0.15f, "30F のキーは足を前へ置いた（確かめたい入力になっている）");
 
-            Assert.LessOrEqual (MaxAngle (Bones (plain, 15), Bones (locked, 15)), 0.1f, "区間の真ん中は点の固定に関わらず外部の動き");
-            Assert.LessOrEqual (Vector3.Distance (leftFoot (locked).position, leftFoot (plain).position), 0.005f, "足の点は脚を引かない");
+            GameObject control = locked.stage.fullBody.GetControl (HumanBodyBones.LeftFoot).gameObject;
+            BodyPointTarget foot = locked.targets.OfType<BodyPointTarget> ().First (t => t.gameObject == control);
+            float apart = 0;
+            foreach (int f in new[] { 1, 5, 15, 25, 29 }) {
+                locked.Evaluate (f);
+                plain.Evaluate (f);
+                Assert.AreEqual (BodyPointState.Locked, foot.state, f + "F の状態は前のキーのまま");
+                Assert.AreEqual (1, foot.pull, f + "F で足の点は強さ 1 で引く");
+                Assert.IsTrue (locked.stage.fullBody.TryGetPointWorld (HumanBodyBones.LeftFoot, out Vector3 placed, out Quaternion placedRotation));
+                Assert.LessOrEqual (Vector3.Distance (leftFoot (locked).position, placed), 0.01f, f + "F で足は点の場所に留まる");
+                apart = Mathf.Max (apart, Vector3.Distance (leftFoot (locked).position, leftFoot (plain).position));
+            }
+            Assert.Greater (apart, 0.05f, "点の無いクリップ（外部の動きのまま）とは足の場所が違う");
+        }
+
+        /// <summary>
+        /// 弱く引いている点（固定の強さが 1 未満）は、骨から置いた場所へ引く強さだけ寄せた所に描き、状態も引く強さで出す（10-26 不具合
+        /// 「13F の足の点が AI の足から 45cm 離れた所に Locked で出る」。そのときは AI の区間のキーの近くで強さを弱めていた。
+        /// 今は区間の中は強さ 0 なので、強さ 1 未満のキーで確かめる）。選んで Locked にすると、出している所に強さ 1 で置き直す
+        /// </summary>
+        [Test]
+        public void WeakenedPoints_AreShownWhereAndHowStronglyTheyPull ()
+        {
+            PoseSession session = OpenWithLockedFoot ("Locked", true);
+            GameObject control = session.stage.fullBody.GetControl (HumanBodyBones.LeftFoot).gameObject;
+            BodyPointTarget foot = session.targets.OfType<BodyPointTarget> ().First (t => t.gameObject == control);
+            string path = AnimationUtility.CalculateTransformPath (control.transform, session.stage.editingRig.root.transform);
+            EditorCurveBinding[] weights = AnimationUtility.GetCurveBindings (session.clip)
+                .Where (b => b.path == path && b.type == typeof (BodyPoint) && b.propertyName != BodyPoint.kLockedProperty).ToArray ();
+            Assert.IsNotEmpty (weights);
+            // 30F（曲線の区間 30-60 の始まり）の強さを下げ、区間の中の 45F で見る（点の状態は前のキーの値のまま）
+            foreach (float pull in new[] { 0.7f, 0.3f }) {
+                foreach (EditorCurveBinding binding in weights) CurveEdit.SetKey (session.clip, binding, 30, pull);
+                session.stage.InvalidateClipCurves ();
+                session.Evaluate (45);
+                // 置き場所を骨から 30cm 上へ離す（解き直さない）。全身 IK は弱く引いても体ごと置き場所まで寄せるので、解いた姿勢では骨と置き場所が重なる
+                Vector3 bone = foot.bonePosition;
+                session.stage.fullBody.SetPointPositionWorld (HumanBodyBones.LeftFoot, bone + Vector3.up * 0.3f);
+                Assert.IsTrue (session.stage.fullBody.TryGetPointWorld (HumanBodyBones.LeftFoot, out Vector3 placed, out Quaternion placedRotation));
+                Assert.Greater (Vector3.Distance (bone, placed), 0.005f, "置いた場所と骨が離れている（確かめたい入力になっている）");
+                Assert.AreEqual (pull, foot.pull, 1e-4f, "引く強さ");
+                Assert.LessOrEqual (Vector3.Distance (Vector3.Lerp (bone, placed, pull), foot.framePosition), 1e-4f, pull + " は引いている所に出す");
+                Assert.AreEqual (pull < 0.5f ? BodyPointState.Free : BodyPointState.Locked, foot.shownState, pull + " の出す状態");
+            }
+
+            Vector3 shown = foot.framePosition;
+            foot.SetState (BodyPointState.Locked);
+            Assert.AreEqual (1, foot.pull, 1e-6f, "選んで Locked にすると強さ 1");
+            Assert.AreEqual (BodyPointState.Locked, foot.shownState);
+            Assert.LessOrEqual (Vector3.Distance (shown, foot.framePosition), 1e-3f, "出していた所に置く");
         }
 
         [Test]
@@ -219,7 +288,7 @@ namespace Lilium
             session.Evaluate (30);
             Assert.AreEqual (lowered, CurveEdit.FindPath (session.stage.editingRig.root.transform, hipsY.path).localPosition.y, 1e-4f, "キーのフレームは新しいキーの値");
             session.Evaluate (15);
-            Assert.LessOrEqual (MaxAngleToBetween (session, between, 15 / kRate), 0.1f, "区間の中は外部の動きのまま");
+            Assert.LessOrEqual (MaxAngleToCorrected (session, between, kFirst, 15), 0.1f, "区間の中は外部の動きのまま（ずれは新しいキーから測る）");
 
             // 区間の中にキーを足すと、その区間は使わない（元のクリップの補間に戻る）
             session.Evaluate (15);

@@ -6,23 +6,19 @@ An editor extension for creating character motions inside the Unity Editor.
 
 ![Making the motion between keys with Kimodo in the Motion Editor window](Docs/Images/demo.gif)
 
-+ Pose a character through an editing rig that duplicates its bones, and save the rig values to an animation clip.
-+ Edit poses with full-body IK.
-+ Clips made with the same editing rig can be shared between characters with different body proportions.
-+ Saving bakes a Humanoid clip for the game, with Animation Rigging values and other properties.
-+ Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.
-+ Poses and motions can also be made with AI through the Unity CLI.
-+ Optionally, NVIDIA's Kimodo motion model can make the motion between your keys from a text prompt.
-+ Create motions non-destructively while checking the final pose as it will look in the game.
 + No need to go back and forth with a DCC tool. Your edits show up in the motion right away.
++ Create motions non-destructively while checking the final pose as it will look in the game.
++ Edit poses with full-body IK.
++ Outputs Humanoid clips for the game, with Animation Rigging values and other properties.
++ Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.
++ Generates the poses between keys from a text prompt with NVIDIA's Kimodo motion model. (optional)
 + Under development. The specification will change in future versions.
 
 ## Dependencies
 
-+ Unity 6000.0 or later (on 6000.6 or later, the bone handles in the preview window use Unity's tool system, and you can pick tools from the Tools overlay)
++ Unity 6000.0 or later
 + Burst / Mathematics (installed automatically as package dependencies)
 + Animation Rigging (optional. When installed, Animation Rigging values can be edited)
-+ Timeline (optional. When installed, Timeline clips can be edited)
 
 ## Install
 
@@ -52,14 +48,14 @@ The demo models are the male and female characters from Quaternius' [Universal B
 
 ### Kimodo (optional)
 
-The Kimodo (optional) sample lets NVIDIA's [Kimodo](https://github.com/nv-tlabs/kimodo) motion model fill in the motion between your keys from a text prompt,
-and imports the result as an Override that keeps your keyed poses. Kimodo is not included, but the editor helps you set it up. Check its license and prepare it yourself. The motion editor works without Kimodo.
+The Kimodo (optional) sample lets NVIDIA's [Kimodo](https://github.com/nv-tlabs/kimodo) motion model generate the motion between your keys from a text prompt.
+Kimodo itself is not included, but the editor has a setup feature for it. Check its license and run it yourself. The motion editor itself works without Kimodo.
 
 To run Kimodo you need:
 
 + An NVIDIA GPU (RTX 20 series or later; Kimodo uses about 1.5 GB of video memory)
 + About 16 GB of free memory (the text encoder runs on the CPU)
-+ About 25 GB of disk for the Python environment and the weights (about 50 GB with Docker)
++ About 25 GB of disk (the Python environment and the AI model)
 + A Hugging Face account with access to Llama 3 (`meta-llama/Meta-Llama-3-8B-Instruct`)
 + Checked on Windows 11 with an RTX 2070
 
