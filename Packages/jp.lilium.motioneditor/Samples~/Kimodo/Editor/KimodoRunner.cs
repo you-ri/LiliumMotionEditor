@@ -105,7 +105,8 @@ namespace Lilium
         /// <param name="target">結果の使い方（KimodoJob.kOverride か kBetween）</param>
         /// <param name="segments">補間として使うとき、外部の動きにする区間（元のクリップの隣り合うキーの間）</param>
         /// <param name="auto">キーが変わったので自動で始める（S85）</param>
-        public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null, bool auto = false)
+        /// <param name="seed">kimodo_gen に渡す乱数の種（負なら渡さず、毎回違う動きになる）</param>
+        public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null, bool auto = false, int seed = -1)
         {
             if (job_ != null && job_.running) return Tr ("KIMODO_RUN_ALREADY_RUNNING");
             string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton);
@@ -138,7 +139,7 @@ namespace Lilium
             File.WriteAllText (Path.Combine (folder, "export.json"), JsonUtility.ToJson (export), utf8);
             // 文章はファイルで渡す（コマンドラインに入れると ' や " で壊れる）
             File.WriteAllText (Path.Combine (folder, "prompt.txt"), prompt.Trim (), utf8);
-            File.WriteAllText (Path.Combine (folder, "run.sh"), RunScript (mode).Replace ("\r\n", "\n"), utf8);
+            File.WriteAllText (Path.Combine (folder, "run.sh"), RunScript (mode, seed).Replace ("\r\n", "\n"), utf8);
             File.Copy (script, Path.Combine (folder, "kimodo_constraints.py"), true);
             File.Copy (generator, Path.Combine (folder, "kimodo_generate.py"), true);
             string driver = FindSampleScript ("kimodo_run");
@@ -151,7 +152,7 @@ namespace Lilium
             if (settings.runner == KimodoSettings.kPython) {
                 // Python の環境で動かす（Docker を使わない）。手順は kimodo_run.py（run.sh と同じ流れ）
                 if (driver == null) return Tr ("KIMODO_RUN_NO_DRIVER");
-                ProcessStartInfo info = new ProcessStartInfo (Path.GetFullPath (settings.pythonPath), Quote (Path.Combine (folder, "kimodo_run.py")) + " " + Quote (folder) + " " + mode) {
+                ProcessStartInfo info = new ProcessStartInfo (Path.GetFullPath (settings.pythonPath), Quote (Path.Combine (folder, "kimodo_run.py")) + " " + Quote (folder) + " " + mode + SeedArgument (seed)) {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = folder,
@@ -524,7 +525,7 @@ namespace Lilium
         }
 
         /// <summary>コンテナの中の手順。終わったら終了コードを exit.txt へ（書き終えてから名前を変えるので、半端な中身は読まない）</summary>
-        static string RunScript (string mode)
+        static string RunScript (string mode, int seed)
         {
             return
                 "#!/bin/bash\n" +
@@ -535,10 +536,16 @@ namespace Lilium
                 "  cat /work/constraints_out.txt\n" +
                 "  DURATION=$(tail -n 1 /work/constraints_out.txt | python -c 'import json, sys; print(json.load(sys.stdin)[\"duration\"])') || return $?\n" +
                 // kimodo_gen を、文章の読み取りを控える読み取り器で動かす（S78。kimodo_generate.py）
-                "  LILIUM_TEXT_CACHE=/cache python /work/kimodo_generate.py \"$(cat /work/prompt.txt)\" --duration \"$DURATION\" --constraints /work/constraints.json --output /work/gen --bvh --bvh_standard_tpose\n" +
+                "  LILIUM_TEXT_CACHE=/cache python /work/kimodo_generate.py \"$(cat /work/prompt.txt)\" --duration \"$DURATION\" --constraints /work/constraints.json --output /work/gen --bvh --bvh_standard_tpose" + SeedArgument (seed) + "\n" +
                 "}\n" +
                 "generate > /work/log.txt 2>&1\n" +
                 "echo $? > /work/exit.tmp && mv /work/exit.tmp /work/exit.txt\n";
+        }
+
+        /// <summary>kimodo_gen に足す --seed（種が負なら空）</summary>
+        static string SeedArgument (int seed)
+        {
+            return seed >= 0 ? " --seed " + seed : "";
         }
 
         /// <summary>サンプルの Python のスクリプト（name.py）のフルパス（無ければ null）</summary>

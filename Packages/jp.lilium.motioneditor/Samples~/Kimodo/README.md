@@ -147,6 +147,10 @@ In Unity, `Assets > Create > Lilium Motion Editor > Kimodo SOMA Skeleton From BV
    They are saved in the project's `UserSettings` folder (settings of this PC, not shared through the repository).
 3. Write the prompt in English (the whole motion, for example "a person walks forward at a normal pace"), choose the constraints and how to use the result
    (**Use the Result as**: **Interpolation between keys**, the default, or **Override layer on the clip**), and press **Generate**.
+   Each generation makes a different motion. To make the same motion again, turn on **Fixed Seed** and set the seed
+   (with the same prompt, keys and constraints, the same seed gives the same motion).
+   The prompt and the seed are saved per clip in the clip's `.meta` file, so they go into the repository with the clip.
+   A clip without them starts with the last prompt you wrote.
    The panel checks the Python environment (or Docker and the image), the token file and the skeleton before it starts; if Kimodo is missing, it asks you to open the install guide.
 4. Generation runs in the background (see "Faster generations" for how long). **Stop** stops it.
    **Console** opens the Kimodo Console window with the log. The work files go to the project's `Temp/Kimodo` folder (**Open Work Folder** in the console).

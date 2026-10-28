@@ -3,6 +3,10 @@ guid: 6107c32f1ea599846aac4f56a3e62d87
 NativeFormatImporter:
   externalObjects: {}
   mainObjectFileID: 7400000
-  userData: '{"stacker":{"groups":[],"selected":"All","loop":false,"ghost":false,"ghostRange":12},"cycle":false,"overrideLayer":{"baseClip":"","baseName":"","mode":"","order":0,"mask":""},"between":{"baseClip":"","segments":[],"stamps":[]},"betweenClip":"72672cf7c208f504bb988e855ae4cbba"}'
+  userData: '{"stacker":{"groups":[],"selected":"All","loop":false,"ghost":false,"ghostRange":12},"cycle":false,"overrideLayer":{"baseClip":"","baseName":"","mode":"","order":0,"mask":""},"between":{"baseClip":"","segments":[],"stamps":[]},"betweenClip":"72672cf7c208f504bb988e855ae4cbba","extras":[{"name":"kimodo","json":"{\"prompt\":\"A
+    person in a fighting stance walks forward several steps toward the opponent with
+    the guard up, stops in the fighting stance, then lifts the right knee, pivots
+    on the left foot and throws a high right roundhouse kick, and returns to the
+    fighting stance.\",\"useSeed\":false,\"seed\":0}"}]}'
   assetBundleName: 
   assetBundleVariant: 

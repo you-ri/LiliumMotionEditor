@@ -27,6 +27,7 @@ namespace Lilium
         public string huggingFaceCache = "";
         /// <summary>SOMA の外部の骨格のアセットの GUID（KimodoSkeleton で作ったもの）</summary>
         public string skeletonGuid = "";
+        /// <summary>最後に書いた動きの説明。説明をまだ持っていないクリップは、これから始める（説明はクリップごと。KimodoClipSettings）</summary>
         public string prompt = "a person walks forward at a normal pace";
         public string mode = "fullbody";
         /// <summary>
@@ -62,6 +63,45 @@ namespace Lilium
         public void Save ()
         {
             Save (true);
+        }
+    }
+
+    /// <summary>
+    /// クリップごとの動きの説明とシード。クリップの .meta に持つ（ClipExtraData）ので、クリップと一緒にリポジトリに入り、ほかの PC でも同じ動きを作れる
+    /// </summary>
+    [System.Serializable]
+    public sealed class KimodoClipSettings
+    {
+        const string kName = "kimodo";
+
+        public string prompt;
+        /// <summary>
+        /// 乱数の種を決めて kimodo_gen に --seed で渡すか。既定は切（毎回違う動きになる）。同じ説明・キー・合わせる所なら同じ動きを作り直せる
+        /// （cuDNN の計算順でごくわずかに違うことはある）
+        /// </summary>
+        public bool useSeed;
+        public int seed;
+
+        /// <summary>kimodo_gen に渡す種（使わないときは -1。NumPy の種は負にできないので、負の値は 0 にする）</summary>
+        public int seedToPass
+        {
+            get { return useSeed ? Mathf.Max (0, seed) : -1; }
+        }
+
+        /// <summary>クリップの設定（まだ無ければ、最後に書いた説明から始める）</summary>
+        public static KimodoClipSettings Load (AnimationClip clip)
+        {
+            KimodoClipSettings settings = clip != null ? ClipExtraData.Load<KimodoClipSettings> (clip, kName) : null;
+            return settings ?? new KimodoClipSettings { prompt = KimodoSettings.instance.prompt };
+        }
+
+        public void Save (AnimationClip clip)
+        {
+            if (clip != null) ClipExtraData.Save (clip, kName, this);
+            KimodoSettings settings = KimodoSettings.instance;
+            if (settings.prompt == prompt) return;
+            settings.prompt = prompt;
+            settings.Save ();
         }
     }
 

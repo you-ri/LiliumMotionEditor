@@ -4,8 +4,9 @@ The window copies this script, kimodo_constraints.py and kimodo_generate.py into
 next to the exported keys (keys.bvh, export.json, prompt.txt), and runs it with the Python of
 the environment where Kimodo is installed:
 
-  python kimodo_run.py <work folder> <fullbody|ends|root>
+  python kimodo_run.py <work folder> <fullbody|ends|root> [--seed <n>]
 
+Arguments after the mode (such as --seed) are passed on to kimodo_gen.
 It does what run.sh does in the Docker container: makes the constraints, generates gen.bvh, writes
 everything to log.txt, and writes the exit code to exit.txt when it is done (the window reads it).
 """
@@ -19,6 +20,7 @@ import sys
 def main():
     work = os.path.abspath(sys.argv[1])
     mode = sys.argv[2]
+    extra = sys.argv[3:]
     here = os.path.dirname(os.path.abspath(__file__))
     code = 1
     with open(os.path.join(work, "log.txt"), "w", encoding="utf-8", buffering=1) as log:
@@ -36,7 +38,7 @@ def main():
                     prompt = f.read()
                 code = subprocess.call(
                     [sys.executable, os.path.join(here, "kimodo_generate.py"), prompt, "--duration", str(duration),
-                     "--constraints", constraints, "--output", os.path.join(work, "gen"), "--bvh", "--bvh_standard_tpose"],
+                     "--constraints", constraints, "--output", os.path.join(work, "gen"), "--bvh", "--bvh_standard_tpose"] + extra,
                     stdout=log, stderr=subprocess.STDOUT)
         except Exception as error:
             log.write("%s: %s\n" % (type(error).__name__, error))

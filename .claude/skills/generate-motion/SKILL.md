@@ -68,6 +68,7 @@ SKEL="Assets/.../Kimodo SOMA Skeleton.asset"
    ```
 
    Run it in the background (about 4 minutes). `--num_samples 3` makes three variants in one run (`gen_00.bvh`...).
+   Each run makes a different motion; add `--seed <n>` to make the same motion again from the same prompt, duration, constraints and mode.
    `--mode ends` (hands and feet only) or `--mode root` (hips path only) gives Kimodo more freedom than the default `fullbody`
 
 4. **Import with the keys kept**

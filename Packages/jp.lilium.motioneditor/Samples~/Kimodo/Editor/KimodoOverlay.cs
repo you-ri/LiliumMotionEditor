@@ -30,6 +30,8 @@ namespace Lilium
         const float kMinHeight = 140;
         /// <summary>キーが変わってから自動で作り始めるまで（秒）。打ち続けている間やつかんで動かしている間に、1 つごとに始めないように</summary>
         const double kAutoDelay = 1.5;
+        /// <summary>説明やシードを書き換えてから .meta に保存するまで（秒）。保存するとクリップを取り込み直すので、1 文字ごとにはしない</summary>
+        const double kSaveDelay = 1;
 
         static readonly string[] kTargets = { KimodoJob.kBetween, KimodoJob.kOverride };
 
@@ -55,6 +57,11 @@ namespace Lilium
         /// <summary>今パネルのアイコン（collapsedIcon）に出している絵。コマが替わったときだけ差し替える</summary>
         Texture2D shownIcon_;
         EditorToolbarToggle toolbarToggle_;
+        /// <summary>今のクリップの説明とシード（.meta に持つ）と、その持ち主のクリップ</summary>
+        KimodoClipSettings clipSettings_;
+        AnimationClip clipSettingsClip_;
+        /// <summary>説明やシードを .meta に保存する時刻（0 未満なら保存するものが無い）</summary>
+        double saveAt_ = -1;
 
         /// <summary>開いている Motion Editor の窓（無ければ開く）に、このパネルを出す</summary>
         [MenuItem ("Window/Lilium Motion Editor/Kimodo")]
@@ -135,6 +142,7 @@ namespace Lilium
         {
             floatingChanged -= OnFloatingChanged;
             Subscribe (false);
+            SaveClipSettings ();
             base.OnWillBeDestroyed ();
         }
 
@@ -164,8 +172,28 @@ namespace Lilium
             Repaint ();
         }
 
+        /// <summary>今のクリップの説明とシード（クリップが替わったら、前のクリップへ保存してから読み直す）</summary>
+        KimodoClipSettings ClipSettings ()
+        {
+            AnimationClip clip = window_ != null ? window_.baseClip : null;
+            if (clipSettings_ != null && clip == clipSettingsClip_) return clipSettings_;
+            SaveClipSettings ();
+            clipSettings_ = KimodoClipSettings.Load (clip);
+            clipSettingsClip_ = clip;
+            return clipSettings_;
+        }
+
+        /// <summary>書き換えた説明とシードを、まだ保存していなければ保存する</summary>
+        void SaveClipSettings ()
+        {
+            if (saveAt_ < 0) return;
+            saveAt_ = -1;
+            if (clipSettings_ != null) clipSettings_.Save (clipSettingsClip_);
+        }
+
         void Tick ()
         {
+            if (saveAt_ >= 0 && EditorApplication.timeSinceStartup >= saveAt_) SaveClipSettings ();
             KimodoJob job = KimodoRunner.job;
             Animate (job != null && job.running);
             ShowInProgress (job);
@@ -235,7 +263,8 @@ namespace Lilium
             KimodoSettings settings = KimodoSettings.instance;
             if (!settings.auto || settings.target != KimodoJob.kBetween || !KimodoSetup.ready) return;
             AnimationClip clip = window_ != null ? window_.baseClip : null;
-            if (clip == null || !EditorUtility.IsPersistent (clip) || string.IsNullOrWhiteSpace (settings.prompt)) return;
+            KimodoClipSettings clipSettings = ClipSettings ();
+            if (clip == null || !EditorUtility.IsPersistent (clip) || string.IsNullOrWhiteSpace (clipSettings.prompt)) return;
             // 先読みが立ち上がりかけなら待つ（Start は断る）
             if (KimodoTextServer.state == KimodoTextServer.State.Starting) {
                 autoAt_ = EditorApplication.timeSinceStartup + kAutoDelay;
@@ -246,7 +275,7 @@ namespace Lilium
             RefreshChosen (clip, segments);
             List<BetweenClips.Range> chosen = segments.Where (r => chosen_.Contains (r.start)).ToList ();
             if (chosen.Count == 0) return;
-            problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, KimodoJob.kBetween, chosen, true);
+            problem_ = KimodoRunner.Start (window_, clipSettings.prompt, settings.mode, KimodoJob.kBetween, chosen, true, clipSettings.seedToPass);
             Repaint ();
         }
 
@@ -281,11 +310,25 @@ namespace Lilium
             if (Mathf.Abs (height - height_) < 1) return;
             height_ = height;
             root_.style.height = height;
+            // ツールバーのボタンから開いた吹き出しは、最初に測った高さを上限（maxHeight）にして伸びなくなる
+            // （開いた直後は中身を測る前の高さなので、下が切れた）。上限を外して測り直させる
+            VisualElement popup = Popup ();
+            if (popup != null) popup.style.maxHeight = StyleKeyword.Null;
+        }
+
+        /// <summary>ツールバーにたたんだパネルをボタンから開いたときの吹き出し（Unity の OverlayPopup。internal なので型の名前で見る）。それ以外は null</summary>
+        VisualElement Popup ()
+        {
+            for (VisualElement element = root_.parent; element != null; element = element.parent) {
+                if (element.GetType ().Name == "OverlayPopup") return element;
+            }
+            return null;
         }
 
         /// <summary>
         /// パネルの中身に使える高さ。列にドックしているときは、列の高さから同じ列のほかのパネルを引いた残り
-        /// （列はスクロールせず、入りきらないパネルは上のパネルに重なった）。浮いているときは窓の高さ
+        /// （列はスクロールせず、入りきらないパネルは上のパネルに重なった）。浮いているときは窓の高さ。
+        /// 吹き出しで開いているときは、吹き出しの上端から窓の下端まで
         /// </summary>
         float AvailableHeight ()
         {
@@ -301,7 +344,11 @@ namespace Lilium
             float chrome = self != null ? self.layout.height - root_.layout.height : 30;
             if (float.IsNaN (chrome) || chrome < 0) chrome = 30;
             float available;
-            if (!floating && column != null) {
+            VisualElement popup = Popup ();
+            if (popup != null && canvas != null) {
+                available = canvas.worldBound.yMax - popup.worldBound.yMin - chrome - 8;
+            }
+            else if (!floating && column != null) {
                 available = column.layout.height - chrome;
                 foreach (VisualElement other in column.Query (className: "unity-overlay").ToList ()) {
                     if (other != self && other.resolvedStyle.display != DisplayStyle.None) available -= other.layout.height;
@@ -333,9 +380,20 @@ namespace Lilium
             KimodoJob job = KimodoRunner.job;
 
             EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_CLIP"), window_ != null && window_.baseClip != null ? window_.baseClip.name : Tr ("KIMODO_PANEL_NO_CLIP"), EditorStyles.boldLabel);
+            // 説明とシードはクリップごと（.meta）。それ以外はこの PC の設定
+            KimodoClipSettings clipSettings = ClipSettings ();
             EditorGUI.BeginChangeCheck ();
             EditorGUILayout.LabelField (Tr ("KIMODO_PANEL_PROMPT"), EditorStyles.miniLabel);
-            settings.prompt = EditorGUILayout.TextArea (settings.prompt, EditorStyles.textArea, GUILayout.MinHeight (120));
+            clipSettings.prompt = EditorGUILayout.TextArea (clipSettings.prompt, EditorStyles.textArea, GUILayout.MinHeight (120));
+            using (new EditorGUILayout.HorizontalScope ()) {
+                clipSettings.useSeed = EditorGUILayout.ToggleLeft (new GUIContent (Tr ("KIMODO_PANEL_SEED"), Tr ("KIMODO_PANEL_SEED_TOOLTIP")), clipSettings.useSeed);
+                using (new EditorGUI.DisabledScope (!clipSettings.useSeed)) {
+                    clipSettings.seed = Mathf.Max (0, EditorGUILayout.IntField (clipSettings.seed, GUILayout.Width (80)));
+                }
+            }
+            if (EditorGUI.EndChangeCheck ()) saveAt_ = EditorApplication.timeSinceStartup + kSaveDelay;
+
+            EditorGUI.BeginChangeCheck ();
             int mode = System.Array.IndexOf (KimodoSettings.kModes, settings.mode);
             mode = EditorGUILayout.Popup (Tr ("KIMODO_PANEL_CONSTRAINTS"), Mathf.Max (0, mode), new[] { Tr ("KIMODO_PANEL_MODE_FULL_BODY"), Tr ("KIMODO_PANEL_MODE_ENDS"), Tr ("KIMODO_PANEL_MODE_ROOT") });
             settings.mode = KimodoSettings.kModes[mode];
@@ -365,7 +423,8 @@ namespace Lilium
                         // AI の区間が 1 つも無い（タイムラインで全部外した）ときに押したら、全部の区間を AI にする
                         List<BetweenClips.Range> chosen = ChosenSegments ();
                         if (chosen.Count == 0) chosen = Segments ();
-                        problem_ = KimodoRunner.Start (window_, settings.prompt, settings.mode, settings.target, chosen);
+                        SaveClipSettings ();
+                        problem_ = KimodoRunner.Start (window_, clipSettings.prompt, settings.mode, settings.target, chosen, false, clipSettings.seedToPass);
                     }
                 }
                 using (new EditorGUI.DisabledScope (!running)) {
