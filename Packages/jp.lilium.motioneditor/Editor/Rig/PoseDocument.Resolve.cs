@@ -89,6 +89,8 @@ namespace Lilium
                 if (point == null) continue;
                 BodyPointTarget target;
                 if (!targets.TryGetValue (new BodyPointId (point.name ?? ""), out target)) return Tr ("POSE_DOCUMENT_UNKNOWN_POINT", point.name, names);
+                // 動かせない点（S89）は値を持たない（書いても何も変わらないので、黙って捨てずに断る）
+                if (target.passive) return Tr ("POSE_DOCUMENT_PASSIVE_POINT", point.name);
                 BodyPointState state;
                 if (!TryParseState (point.state, out state)) return Tr ("POSE_DOCUMENT_UNKNOWN_STATE", point.name, point.state);
                 bool aim = HasAim (point.aim);

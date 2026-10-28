@@ -21,13 +21,16 @@ namespace Lilium
             get { return stage_ != null && stage_.fullBody != null && stage_.fullBody.hasActivePoint; }
         }
 
-        /// <summary>選んでいる全身 IK の点（✋ が全身 IK の段のとき）</summary>
+        /// <summary>
+        /// 選んでいる全身 IK の点（✋ が全身 IK の段のとき）。動かせない点（passive。S89）は入れない
+        /// （まとめて動かす・回す・状態を変えるどれにも加わらず、まとめて回すときに乗る骨が FK で回ることもない）
+        /// </summary>
         List<BodyPointTarget> GetSelectedPoints ()
         {
             List<BodyPointTarget> points = new List<BodyPointTarget> ();
             foreach (PoseTarget target in targets_) {
                 BodyPointTarget point = target as BodyPointTarget;
-                if (point != null && IsSelected (point.gameObject)) points.Add (point);
+                if (point != null && !point.passive && IsSelected (point.gameObject)) points.Add (point);
             }
             return points;
         }
@@ -283,7 +286,8 @@ namespace Lilium
             HashSet<string> paths = new HashSet<string> ();
             List<PoseTarget> selected = SelectedTargets ().ToList ();
             foreach (PoseTarget target in selected) target.CollectKeyedPaths (paths);
-            foreach (FkTarget fk in RelatedFkTargets (targets_, selected.OfType<BodyPointTarget> ())) fk.CollectKeyedPaths (paths);
+            // 動かせない点はキーを持たないので、乗る骨のキーも選んだことにしない
+            foreach (FkTarget fk in RelatedFkTargets (targets_, selected.OfType<BodyPointTarget> ().Where (p => !p.passive))) fk.CollectKeyedPaths (paths);
             return paths;
         }
 

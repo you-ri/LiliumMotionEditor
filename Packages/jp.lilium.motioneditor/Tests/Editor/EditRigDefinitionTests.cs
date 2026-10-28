@@ -66,14 +66,14 @@ namespace Lilium
             Assert.AreEqual (HumanBodyBones.UpperChest, chest.bone);
             Assert.AreEqual (HumanBodyBones.Hips, chest.origin);
             Assert.AreEqual (HumanBodyBones.Head, chest.toward);
-            Assert.AreEqual (1, chest.pullStrength, "胸の点は引く点");
+            Assert.AreEqual (1, chest.weight, "胸の点は重い点");
             // 胸の点の下にお腹の点（Cascadeur の stomach）。腰と胸の点の間で Spine に乗り、線は腰 → お腹 → 胸
             EditRigDefinition.BodyPoint stomach = definition_.bodyPoints.Single (p => p.name == "Stomach");
             Assert.AreEqual (HumanBodyBones.Spine, stomach.bone);
             Assert.AreEqual (HumanBodyBones.Hips, stomach.origin);
             Assert.AreEqual (HumanBodyBones.Head, stomach.toward);
             Assert.Less (stomach.along, chest.along, "お腹は胸より下");
-            Assert.AreEqual (1, stomach.pullStrength, "お腹の点は引く点");
+            Assert.AreEqual (1, stomach.weight, "お腹の点は重い点");
             Assert.IsFalse (stomach.rotation, "お腹の点は位置だけ");
             Assert.AreEqual ("Stomach", chest.link);
             Assert.AreEqual ("Hips", stomach.link);
@@ -85,6 +85,28 @@ namespace Lilium
         }
 
         // ---- 検証・写し・ハッシュ ----
+
+        [Test]
+        public void OldPullStrength_IsReadAsWeight ()
+        {
+            // 10-27 に「引く強さ」（pullStrength）を「重さ」（weight）へ名前を換えた。前の名前で保存した定義アセットも、同じ値で読める
+            const string folder = "Assets/__MktWeightTest";
+            if (UnityEditor.AssetDatabase.IsValidFolder (folder)) UnityEditor.AssetDatabase.DeleteAsset (folder);
+            UnityEditor.AssetDatabase.CreateFolder ("Assets", "__MktWeightTest");
+            try {
+                string text = System.IO.File.ReadAllText (EditRigDefinition.kPackageDefaultPath).Replace ("\n    weight: ", "\n    pullStrength: ");
+                Assert.IsFalse (text.Contains ("\n    weight: "), "前の名前に戻した");
+                System.IO.File.WriteAllText (folder + "/Old.asset", text);
+                UnityEditor.AssetDatabase.ImportAsset (folder + "/Old.asset");
+                EditRigDefinition old = UnityEditor.AssetDatabase.LoadAssetAtPath<EditRigDefinition> (folder + "/Old.asset");
+                Assert.IsNotNull (old);
+                CollectionAssert.AreEqual (definition_.bodyPoints.Select (p => p.weight).ToArray (), old.bodyPoints.Select (p => p.weight).ToArray ());
+                Assert.Contains (0, old.bodyPoints.Select (p => p.weight).ToArray (), "0 の点も読める");
+            }
+            finally {
+                UnityEditor.AssetDatabase.DeleteAsset (folder);
+            }
+        }
 
         [Test]
         public void Validate_ReportsBadFullBodyValues ()

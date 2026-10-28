@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using UnityEngine.Serialization;
 using System.Collections.Generic;
 using System.Linq;
 using static Lilium.MotionEditorLocalization;
@@ -113,12 +114,14 @@ namespace Lilium
             /// <summary>向きも持つか（向きを固定すると、骨の向きも留まる）</summary>
             public bool rotation;
             /// <summary>
-            /// 引く強さ（0 か 1。S28）。1 は点を引くと骨ごと動き、ほかの骨も付いてくる。0 は乗る骨を回して点を目標の方へ向けるだけで、
-            /// ほかの骨を引かない（向きの点の既定）。骨の付け根そのものの点は 0 にできない。項目の無い古い定義は 1 で読まれる
+            /// 重さ（0 か 1。S28・S88。10-27 までは「引く強さ」pullStrength）。1（重い点）は点を引くと骨ごと動き、ほかの骨も付いてくる。
+            /// 0（軽い点。向きの点の既定）は重い点を動かさない: 重い点を動かない物として解くので、その向こうの点も動かず、間の骨だけが引かれる。
+            /// 重い点のある骨の上の軽い点と、向きを混ぜる点（blend）は、乗る骨を回して点を目標の方へ向けるだけ。項目の無い古い定義は 1 で読まれる
             /// </summary>
             [Range (0, 1)]
-            [Tooltip ("1: dragging the point pulls its bone and the rest of the body along. 0: the point only turns its bone to face the target and never pulls other bones (default for direction points).")]
-            public int pullStrength = 1;
+            [FormerlySerializedAs ("pullStrength")]
+            [Tooltip ("1: a heavy point; dragging it pulls its bone and the rest of the body along. 0: a light point (default for direction points); dragging it never moves heavy points, so nothing beyond them moves either.")]
+            public int weight = 1;
             /// <summary>
             /// 線でつなぐ相手の点の名前（表示だけ。解き方は変わらない）。空なら骨の階層から決める
             /// （関節の点は上の関節の点、骨の上の点はその骨の関節の点）
@@ -134,10 +137,10 @@ namespace Lilium
             /// <summary>
             /// 混ぜる割合（0〜1。S34）。ずれを、乗る骨の向きと blendBone の向きを基準姿勢からの回りで混ぜた向きで回す（0 は乗る骨だけ、1 は blendBone だけ）。
             /// 基準の場所は乗る骨に付いたまま。膝の Pole（太ももに乗る）を 0.5 にすると、膝を曲げても Pole は太ももと脛の間の向き（膝の外側）に出る。
-            /// 引く強さ 0 の点だけで使える
+            /// 重さ 0 の点だけで使える
             /// </summary>
             [Range (0, 1)]
-            [Tooltip ("How much the offset turns with Blend Bone instead of the host bone (0: host bone only, 1: Blend Bone only). 0.5 keeps a knee pole between the thigh and the shin when the knee bends. Only for points with pull strength 0.")]
+            [Tooltip ("How much the offset turns with Blend Bone instead of the host bone (0: host bone only, 1: Blend Bone only). 0.5 keeps a knee pole between the thigh and the shin when the knee bends. Only for points with weight 0.")]
             public float blend;
 
             /// <summary>
@@ -153,6 +156,16 @@ namespace Lilium
             [Min (0)]
             [Tooltip ("Radius of the sphere used for contact with the floor, as a fraction of the character's human scale (0: the point itself). Floor Clamp and Motion Lint compare the bottom of the sphere with the floor. Ground points are raised by the radius so the sphere rests on the ground in the reference pose.")]
             public float radius;
+
+            /// <summary>
+            /// 動かせない点か（S89）。選べるが、つかむ・ギズモ・数値欄・状態の切り替えでは動かず、キーもトラックも持たない（灰色で描く）。
+            /// 点どうしの力の伝わり方を決めるために置く:
+            /// - 乗る骨の上でも、親の骨から見ても動かない。付け根から離して置くと、骨は付け根と点を結ぶ軸まわりにだけ回る（鎖骨の付け根から前後にずらすと、肩が上下に回る）。
+            ///   どの点を引くときも、キーから解き直すときも同じ
+            /// - 軽い点（重さ 0）を引くと、Pin の点と同じく今の場所に留まる壁になり、その向こうの骨は動かない（肘を引いても胸が動かない）
+            /// </summary>
+            [Tooltip ("A point that can be selected but not moved, and gets no keys or tracks (drawn gray). It stays fixed on its bone and relative to the parent bone, so away from the bone's root the bone only turns about the axis from the root to the point. While a light point (weight 0) is dragged, it also stays where it is like a Pin point, so nothing beyond it moves.")]
+            public bool passive;
 
             /// <summary>乗る骨の付け根そのものの点か（基準の骨も d も無く、ずれも 0）</summary>
             public bool onBoneOrigin
@@ -265,12 +278,14 @@ namespace Lilium
                     AppendVector (text, point.fallback, culture);
                     AppendVector (text, point.offset, culture);
                     text.Append (point.ground ? 'g' : '-').Append (point.rotation ? 'r' : '-');
-                    // 引く強さ 0 の点（S28）だけ足す（1 の点だけの定義は、項目を足す前と同じハッシュのまま。焼き直しが要る扱いにしない）
-                    if (point.pullStrength <= 0) text.Append ('a');
+                    // 重さ 0 の点（S28）だけ足す（1 の点だけの定義は、項目を足す前と同じハッシュのまま。焼き直しが要る扱いにしない）
+                    if (point.weight <= 0) text.Append ('a');
                     // 向きを混ぜる点（S34）だけ足す（混ぜない定義は、項目を足す前と同じハッシュのまま）
                     if (point.blends) text.Append ('b').Append ((int)point.blendBone).Append (',').Append (point.blend.ToString ("R", culture));
                     // 半径のある点だけ足す（地面へ落とす点の場所が変わる。半径の無い定義は、項目を足す前と同じハッシュのまま）
                     if (point.radius > 0) text.Append ('c').Append (point.radius.ToString ("R", culture));
+                    // 動かせない点（passive。S89）だけ足す（骨を軸まわりにだけ回すので、キーから解いた姿勢も変わる。無い定義は、項目を足す前と同じハッシュのまま）
+                    if (point.passive) text.Append ('v');
                 }
             }
             return Hash128.Compute (text.ToString ()).ToString ();
@@ -313,9 +328,9 @@ namespace Lilium
         ///   できるので、点の値をキャラの間で使い回せる。点は UpperChest に乗り、無いキャラでは親の骨（Chest・Spine）へ乗る。間の背骨は硬さの分だけ付いてくる（肩と同じ）
         /// - 胸の点の下に、お腹の点（Cascadeur の stomach）。腰と胸の点の真ん中（kStomachHeight）に置き、Spine に乗る。お腹と胸を別々に曲げられる
         /// - 腰・胸・頭の前の点と頭のてっぺんの点。顔の前の点は目の高さ。胸の前の点も胸の点と同じ骨に乗る。
-        ///   引く強さは 0（骨を回して向けるだけ。S28）。膝・肘の Pole は置かない（膝・肘の点で足りる。S56）
+        ///   重さは 0（骨を回して向けるだけ。S28）。膝・肘の Pole は置かない（膝・肘の点で足りる。S56）
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根。踵と足裏の中心は足に乗り、足首とつなぐ。
-        ///   小指側は足に乗る向けるだけの点（引く強さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
+        ///   小指側は足に乗る向けるだけの点（重さ 0）で、足を回して傾ける・ひねるのに使い、足裏の中心とつなぐ。
         ///   つま先の先はつま先の骨に乗り、足裏の中心とつなぐ。つま先・指の骨が無いキャラには置かない
         /// </summary>
         public static List<BodyPoint> CreateDefaultBodyPoints (IEnumerable<FkControl> fk)
@@ -336,10 +351,10 @@ namespace Lilium
             // 胸を先に並べるのは、同じ骨に乗ったとき首・上腕の線が胸へつながるように（骨を引く点は先に並んだ方。BodyPointTarget.Create）
             points.Add (new BodyPoint { name = kChestPoint, bone = HumanBodyBones.UpperChest, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kChestHeight, link = kStomachPoint });
             points.Add (new BodyPoint { name = kStomachPoint, bone = HumanBodyBones.Spine, origin = HumanBodyBones.Hips, toward = HumanBodyBones.Head, along = kStomachHeight, link = HumanBodyBones.Hips.ToString () });
-            // 向きの点は、骨を回して向けるだけ（引く強さ 0。S28）。顔の向きを変えても首・胴を引かない
+            // 向きの点は、骨を回して向けるだけ（重さ 0。S28）。顔の向きを変えても首・胴を引かない
             foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.UpperChest, HumanBodyBones.Head }) {
                 string owner = bone == HumanBodyBones.UpperChest ? kChestPoint : bone.ToString ();
-                BodyPoint direction = new BodyPoint { name = owner + "Direction", bone = bone, offset = new Vector3 (0, 0, kDirectionLength), pullStrength = 0 };
+                BodyPoint direction = new BodyPoint { name = owner + "Direction", bone = bone, offset = new Vector3 (0, 0, kDirectionLength), weight = 0 };
                 if (bone == HumanBodyBones.Head) {
                     // 顔の前の点は目の高さ（頭を目線で向ける）。目の骨の高さだけを借りる。目の骨が無いキャラは決まった高さ
                     direction.toward = HumanBodyBones.LeftEye;
@@ -349,7 +364,7 @@ namespace Lilium
                 }
                 points.Add (direction);
             }
-            points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, kDirectionLength, 0), pullStrength = 0 });
+            points.Add (new BodyPoint { name = HumanBodyBones.Head + "Top", bone = HumanBodyBones.Head, offset = new Vector3 (0, kDirectionLength, 0), weight = 0 });
             foreach (string side in new[] { "Left", "Right" }) {
                 bool left = side == "Left";
                 HumanBodyBones foot = left ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
@@ -495,15 +510,12 @@ namespace Lilium
                     if (point.origin < 0 || point.origin > HumanBodyBones.LastBone || point.toward < 0 || point.toward > HumanBodyBones.LastBone) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
                     }
-                    if (point.pullStrength <= 0 && point.onBoneOrigin) {
-                        errors.Add (Tr ("EDIT_RIG_DEFINITION_ORIGIN_POINT_NEEDS_PULL", point.name));
-                    }
                     if (point.blend < 0 || point.blend > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_OUT_OF_RANGE", point.name));
                     if (point.blend > 0 && (point.blendBone < 0 || point.blendBone >= HumanBodyBones.LastBone)) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_BONE_OUT_OF_RANGE", point.name));
                     }
-                    // 引く強さ 1 の点は、骨を剛体として引き合う解き方なので、2 本の骨の向きで決まる場所は扱えない
-                    if (point.blends && point.pullStrength > 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_NEEDS_AIM", point.name));
+                    // 重さ 1 の点は、骨を剛体として引き合う解き方なので、2 本の骨の向きで決まる場所は扱えない
+                    if (point.blends && point.weight > 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_NEEDS_AIM", point.name));
                 }
             }
 

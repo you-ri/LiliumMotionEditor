@@ -49,9 +49,16 @@ namespace Lilium
         internal const float kLinkHighlightWidth = 1.8f;
         /// <summary>点をつかまない間に出す、固定した点の印の大きさ（ハンドルの大きさの何倍か）</summary>
         const float kMarkScale = 0.6f;
+        /// <summary>
+        /// 重さ 0 の点（向けるだけの点）の丸の大きさ（引く点の何倍か）。ほかの骨を引かない点だと見て分かるよう小さくする。
+        /// リグエディタの点の丸も同じ割合で描く
+        /// </summary>
+        internal const float kAimScale = 0.5f;
         static readonly Color kPinnedColor = new Color (1f, 0.55f, 0.1f, 0.8f);
         static readonly Color kFreeColor = new Color (0.2f, 0.8f, 1f, 0.35f);
         static readonly Color kLockedColor = new Color (1f, 0.2f, 0.15f, 0.85f);
+        /// <summary>動かせない点（定義の passive。S89）の丸の色。状態を持たないので、状態の色と見分けられる灰色。リグエディタも同じ色で描く</summary>
+        internal static readonly Color kPassiveColor = new Color (0.6f, 0.6f, 0.6f, 0.6f);
         /// <summary>
         /// 丸の外に出す輪。丸との隙間（ハンドルの大きさの何倍か）と線の太さ（ピクセル）。
         /// 色で選び方を表す（丸の色は状態のためにとってある）: 選ぼうとしている（マウスが乗っている・枠に入っている）/ 選んで動かせる
@@ -73,8 +80,10 @@ namespace Lilium
         readonly string linkName_;
         /// <summary>関節の点でないか（骨の付け根から離れた、骨の上の点。骨から線でつないで描く）</summary>
         readonly bool offsetPoint_;
-        /// <summary>引く点か（引く強さ 1。向けるだけの点でない）</summary>
+        /// <summary>引く点か（重さ 1。向けるだけの点でない）</summary>
         readonly bool pulls_;
+        /// <summary>動かせない点か（定義の passive。S89）。選べるが、値を変える操作はどれも何もしない</summary>
+        readonly bool passive_;
         readonly HumanBodyBones humanBone_;
         readonly Transform control_;
         readonly Transform bone_;
@@ -353,8 +362,8 @@ namespace Lilium
             }
             // 線でつなぐ相手。定義で名前を指していればその点（つま先の先 → 母趾球など）。
             // 無ければ、関節の点は骨の階層を上へたどって最初に当たる関節の点、骨の上の点はその骨の関節の点。
-            // 関節の点の無い骨（背骨の胸・お腹の点の骨）は、その骨を引く点を関節の代わりにする（首・上腕の線が腰まで飛ばない）。
-            // 同じ骨を引く点が複数あれば、先に並んだ点
+            // 関節の点の無い骨（背骨の胸・お腹の点の骨）は、その骨の上の点を関節の代わりにする（首・上腕の線が腰まで飛ばない）。
+            // 重い点を軽い点より先に選び、同じ重さの点が複数あれば、先に並んだ点
             Dictionary<Transform, BodyPointTarget> joints = new Dictionary<Transform, BodyPointTarget> ();
             Dictionary<string, BodyPointTarget> byName = new Dictionary<string, BodyPointTarget> ();
             foreach (PoseTarget target in targets) {
@@ -362,9 +371,12 @@ namespace Lilium
                 if (!point.offsetPoint_) joints[point.bone_] = point;
                 byName[point.human_.name] = point;
             }
-            foreach (PoseTarget target in targets) {
-                BodyPointTarget point = (BodyPointTarget)target;
-                if (point.offsetPoint_ && point.pulls_ && !joints.ContainsKey (point.bone_)) joints[point.bone_] = point;
+            // 胸の点を重さ 0 にした定義でも、胸の骨の代わりの点が要る（重い点だけにすると、首・上腕の線が腰まで飛ぶ）
+            foreach (bool heavy in new[] { true, false }) {
+                foreach (PoseTarget target in targets) {
+                    BodyPointTarget point = (BodyPointTarget)target;
+                    if (point.offsetPoint_ && point.pulls_ == heavy && !joints.ContainsKey (point.bone_)) joints[point.bone_] = point;
+                }
             }
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
@@ -396,7 +408,8 @@ namespace Lilium
             humanBone_ = point.humanBone;
             linkName_ = point.definition != null ? point.definition.link : null;
             offsetPoint_ = rig.GetPointRestOffset (point).sqrMagnitude > 1e-10f;
-            pulls_ = point.definition == null || point.definition.pullStrength > 0;
+            pulls_ = point.definition == null || point.definition.weight > 0;
+            passive_ = body.IsPassive (human_);
             control_ = body.GetControl (human_);
             bone_ = body.GetBone (human_);
             displayBone_ = point.bone;
@@ -405,10 +418,22 @@ namespace Lilium
             linkHash_ = ("MktBodyPointLink" + control_.GetEntityId ()).GetHashCode ();
         }
 
+        /// <summary>丸の大きさ（ハンドルの大きさの何倍か）。重さで変える</summary>
+        float handleScale
+        {
+            get { return pulls_ ? 1 : kAimScale; }
+        }
+
         /// <summary>点が乗る骨</summary>
         public HumanBodyBones bone
         {
             get { return humanBone_; }
+        }
+
+        /// <summary>動かせない点か（定義の passive。S89）</summary>
+        public bool passive
+        {
+            get { return passive_; }
         }
 
         /// <summary>点の名前（リグ定義の点の一覧の名前）</summary>
@@ -491,6 +516,7 @@ namespace Lilium
         Color fillColor
         {
             get {
+                if (passive_) return kPassiveColor;
                 Color color = locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor;
                 return weakened ? Color.Lerp (kFreeColor, color, pull) : color;
             }
@@ -550,10 +576,11 @@ namespace Lilium
             Vector3 pointPosition;
             Quaternion pointRotation;
             body_.TryGetPointWorld (human_, out pointPosition, out pointRotation);
-            // 足と一緒に動かしている Pin の点は、骨の今の場所に出す（置いた場所は離したときに付け直す）
-            bool carried = body_.IsFootCarried (human_);
-            position = positionPinned && !carried ? Vector3.Lerp (bonePoint, pointPosition, body_.GetPositionWeight (human_)) : bonePoint;
-            rotation = rotationPinned && !carried ? Quaternion.Slerp (bone_.rotation, pointRotation, body_.GetRotationWeight (human_)) : bone_.rotation;
+            // 足と一緒に動かしている Pin の点と、ほかの点を動かしている間の Pin の点は、骨の今の場所に出す（置いた場所は離したときに付け直す）
+            bool positionOnBone, rotationOnBone;
+            body_.GetShownOnBone (human_, out positionOnBone, out rotationOnBone);
+            position = positionPinned && !positionOnBone ? Vector3.Lerp (bonePoint, pointPosition, body_.GetPositionWeight (human_)) : bonePoint;
+            rotation = rotationPinned && !rotationOnBone ? Quaternion.Slerp (bone_.rotation, pointRotation, body_.GetRotationWeight (human_)) : bone_.rotation;
         }
 
         /// <summary>
@@ -562,9 +589,11 @@ namespace Lilium
         /// <param name="clamp">床に当てるか（まとめて動かすときは窓がかたまりで当てるので false）</param>
         void PinPosition (Vector3 position, bool clamp = true)
         {
-            // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る
+            // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る。動かせない点は値を持たないので何もしない
+            if (passive_) return;
             if (clamp) position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
+            body_.MarkGrabbed (human_);
             body_.SetPointPositionWorld (human_, position);
             body_.SetPositionWeight (human_, 1);
             positionDirty_ = true;
@@ -572,7 +601,7 @@ namespace Lilium
 
         void PinRotation (Quaternion rotation)
         {
-            if (!hasRotation_) return;
+            if (!hasRotation_ || passive_) return;
             if (!pinned) body_.CapturePoint (human_);
             body_.SetPointRotationWorld (human_, rotation);
             body_.SetRotationWeight (human_, 1);
@@ -606,6 +635,7 @@ namespace Lilium
         /// <summary>位置も向きも固定を外し、完全固定も外す（外した値は次のキーで強さ 0 を打つ。位置のキーは呼ぶ側が決める）</summary>
         void Unpin ()
         {
+            if (passive_) return;
             rotationDirty_ = rotationPinned;
             lockedDirty_ = body_.GetLocked (human_);
             body_.SetPositionWeight (human_, 0);
@@ -616,7 +646,7 @@ namespace Lilium
         /// <summary>完全固定を付け外しする（変わったら次のキーで打つ）</summary>
         void SetLockedFlag (bool on)
         {
-            if (body_.GetLocked (human_) == on) return;
+            if (passive_ || body_.GetLocked (human_) == on) return;
             body_.SetLocked (human_, on);
             lockedDirty_ = true;
         }
@@ -744,6 +774,7 @@ namespace Lilium
 
         public override TransformChannels GetSpinChannels ()
         {
+            if (passive_) return TransformChannels.None;
             return hasRotation_ ? TransformChannels.Position | TransformChannels.Rotation : TransformChannels.Position;
         }
 
@@ -772,9 +803,9 @@ namespace Lilium
         {
             if (bone_ == null || control_ == null) return;
 
-            // 右ボタン: 丸の上で、固定を付け外しする（プレビュー窓では動かさずに離したとき。動かすと視点の回転）
+            // 右ボタン: 丸の上で、固定を付け外しする（プレビュー窓では動かさずに離したとき。動かすと視点の回転）。動かせない点は固定を持たない
             Event ev = Event.current;
-            if (!ev.alt && PoseHandleUtility.IsContextClick (ev, moveHash_)) {
+            if (!passive_ && !ev.alt && PoseHandleUtility.IsContextClick (ev, moveHash_)) {
                 contextClicked_ = true;
                 ev.Use ();
                 GUI.changed = true;
@@ -792,8 +823,12 @@ namespace Lilium
             DrawRing (position, selected);
             DrawCollision (position);
 
-            // 関節の丸（つかんで動かすと位置を固定する）
-            Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false);
+            // 関節の丸（つかんで動かすと位置を固定する）。動かせない点は押して選べるだけで、つかんで動かしても何もしない。ギズモも出さない
+            Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, control_, position, rotation, false, false, handleScale);
+            if (passive_) {
+                PoseHandleUtility.color = PoseHandleUtility.StandardColor;
+                return;
+            }
             if (moved != position) {
                 if (!movesWithSelection) {
                     ReleaseSameBoneRotations ();
@@ -867,7 +902,7 @@ namespace Lilium
             Color saved = Handles.color;
             Handles.color = PoseHandles.Fade (selected ? kRingSelectedColor : kRingHoverColor);
             Vector3 normal = Camera.current != null ? Camera.current.transform.forward : Vector3.forward;
-            Handles.DrawWireDisc (position, normal, EditorHost.current.handleSize * (1 + kRingGap), kRingWidth);
+            Handles.DrawWireDisc (position, normal, EditorHost.current.handleSize * (handleScale + kRingGap), kRingWidth);
             Handles.color = saved;
         }
 
@@ -911,11 +946,13 @@ namespace Lilium
             if (link_ == null) return false;
             Vector3 delta = link_.framePosition - position;
             float length = delta.magnitude;
-            float gap = EditorHost.current.handleSize * kLinkGap;
-            if (length <= gap * 2 + 1e-5f) return false;
+            // 隙間は両端それぞれの丸の大きさに合わせる
+            float gap = EditorHost.current.handleSize * kLinkGap * handleScale;
+            float linkGap = EditorHost.current.handleSize * kLinkGap * link_.handleScale;
+            if (length <= gap + linkGap + 1e-5f) return false;
             Vector3 direction = delta / length;
             start = position + direction * gap;
-            end = position + direction * (length - gap);
+            end = position + direction * (length - linkGap);
             return true;
         }
 
@@ -940,7 +977,7 @@ namespace Lilium
             Handles.color = fillColor;
             if (offsetPoint_) DrawLink (position);
             Vector3 normal = Camera.current != null ? Camera.current.transform.forward : Vector3.forward;
-            Handles.DrawSolidDisc (position, normal, EditorHost.current.handleSize * kMarkScale);
+            Handles.DrawSolidDisc (position, normal, EditorHost.current.handleSize * kMarkScale * handleScale);
             Handles.color = saved;
         }
 
@@ -998,6 +1035,8 @@ namespace Lilium
 
         public override void CollectKeyedPaths (ICollection<string> result)
         {
+            // 動かせない点はキーを持たない（トラックも出さない）
+            if (passive_) return;
             result.Add (AnimationUtility.CalculateTransformPath (control_, rig_.root.transform));
         }
 
@@ -1053,7 +1092,7 @@ namespace Lilium
         {
             Vector3 position;
             Quaternion rotation;
-            if (!body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
+            if (passive_ || !body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
             if ((channels & TransformChannels.Position) != 0) {
                 body_.SetPointPositionWorld (human_, ClampToFloor (position));
                 positionDirty_ = true;
@@ -1071,7 +1110,7 @@ namespace Lilium
         {
             Vector3 position;
             Quaternion rotation;
-            if (!body_.TryGetPointRestValues (human_, out position, out rotation)) return;
+            if (passive_ || !body_.TryGetPointRestValues (human_, out position, out rotation)) return;
             control_.localPosition = position;
             control_.localRotation = rotation;
             positionDirty_ = positionPinned;

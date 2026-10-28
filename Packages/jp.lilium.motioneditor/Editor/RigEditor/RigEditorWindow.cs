@@ -487,18 +487,20 @@ namespace Lilium
             float length = delta.magnitude;
             if (length < 1e-5f) return false;
             Vector3 direction = delta / length;
-            float gap = Mathf.Min (handleSize_ * kPointScale * BodyPointTarget.kLinkGap, length * kMaxLineGap);
-            if (HasPointAt (start)) start += direction * gap;
-            if (HasPointAt (end)) end -= direction * gap;
+            float gap = handleSize_ * kPointScale * BodyPointTarget.kLinkGap;
+            start += direction * Mathf.Min (gap * PointScaleAt (start), length * kMaxLineGap);
+            end -= direction * Mathf.Min (gap * PointScaleAt (end), length * kMaxLineGap);
             return true;
         }
 
-        bool HasPointAt (Vector3 position)
+        /// <summary>その場所にある点の丸の大きさ（RigControlEntry.scale。いくつかあれば大きい方）。点が無ければ 0</summary>
+        float PointScaleAt (Vector3 position)
         {
+            float scale = 0;
             foreach (RigControlEntry entry in entries_) {
-                if (entry.kind == RigControlKind.Point && entry.position.HasValue && (entry.position.Value - position).sqrMagnitude < 1e-8f) return true;
+                if (entry.kind == RigControlKind.Point && entry.position.HasValue && (entry.position.Value - position).sqrMagnitude < 1e-8f) scale = Mathf.Max (scale, entry.scale);
             }
-            return false;
+            return scale;
         }
 
         /// <summary>
@@ -534,7 +536,7 @@ namespace Lilium
             foreach (RigControlEntry entry in entries_) {
                 if (entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
                 Handles.color = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
-                Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale);
+                Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale * entry.scale);
                 // 床との当たりの球（定義の radius）。基準姿勢で地面に着いているのが見えるよう、3 方向の輪で描く
                 if (entry.radius > 0) {
                     Handles.color = BodyPointTarget.kCollisionColor;
@@ -560,7 +562,7 @@ namespace Lilium
             }
             if (!entry.position.HasValue) return;
             Handles.color = color;
-            Handles.DrawWireDisc (entry.position.Value, facing, size * 1.1f, 2);
+            Handles.DrawWireDisc (entry.position.Value, facing, size * 1.1f * entry.scale, 2);
             Handles.Label (entry.position.Value, entry.label, EditorStyles.whiteMiniLabel);
         }
 

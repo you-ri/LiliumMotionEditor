@@ -1163,6 +1163,7 @@ namespace Lilium
                         length = link != null ? Vector3.Distance (rest, PoseDocument.RestPosition (session, link.id)) : 0,
                         contact = body.IsContact (id),
                         ground = binding != null && binding.definition != null && binding.definition.ground,
+                        passive = body.IsPassive (id),
                     });
                 }
             }
@@ -1418,6 +1419,8 @@ namespace Lilium
         public bool contact;
         /// <summary>基準の場所を地面に落とす点か（定義の ground。足裏の点）</summary>
         public bool ground;
+        /// <summary>動かせない点か（定義の passive。S89）。姿勢の JSON には書けない</summary>
+        public bool passive;
     }
 
 }

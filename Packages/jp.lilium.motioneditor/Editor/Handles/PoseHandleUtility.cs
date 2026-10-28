@@ -49,14 +49,15 @@ namespace Lilium
 
         /// <param name="gizmo">押したときに移動のギズモを出すか（出さないなら呼んだ側が出す）</param>
         /// <param name="selectColor">選んでいる間、選択の色で塗るか（false なら color のまま。色で状態を表す丸は、呼んだ側が選択の色を決める）</param>
-        public static Vector3 DoJointHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, bool gizmo = true, bool selectColor = true)
+        /// <param name="scale">丸の大きさ（ハンドルの大きさの何倍か）</param>
+        public static Vector3 DoJointHandle (int controlHash, Transform t, Vector3 position, Quaternion rotation, bool gizmo = true, bool selectColor = true, float scale = 1)
         {
             Event ev = Event.current;
             Vector3 outPosition;
             PoseHandles.color = selectColor && EditorHost.current.IsSelected (t.gameObject) ? SelectBoneColor : color;
             PoseHandles.hoverControl = MeshHoverControl (controlHash, t);
             PoseHandles.edgeColor = PoseHandles.color;
-            if (PoseHandles.JointHandle (controlHash, position, EditorHost.current.handleSize, out outPosition)) {
+            if (PoseHandles.JointHandle (controlHash, position, EditorHost.current.handleSize * scale, out outPosition)) {
                 if (ev.type == EventType.MouseDown) {
                     EditorHost.current.RecordUndo (t, "Move " + t.name);
                 }

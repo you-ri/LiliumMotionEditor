@@ -77,7 +77,7 @@ namespace Lilium
                 if (point != null) point.SyncToBone ();
             }
             // 足と一緒に動かした Pin の点は、骨の今の場所へ付け直した（Floor Clamp。FullBodyRig.CarryFootPins）
-            stage.fullBody.ClearFootCarry ();
+            stage.fullBody.ClearCarry ();
             // ここからは、この姿勢が元の姿勢
             if (stage.editingRigSolver != null) stage.editingRigSolver.Capture ();
             stage.fullBody.CaptureInput ();

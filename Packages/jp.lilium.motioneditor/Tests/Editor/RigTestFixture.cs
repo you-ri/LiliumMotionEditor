@@ -55,7 +55,7 @@ namespace Lilium
         protected const float kPoleBlend = 0.5f;
 
         /// <summary>
-        /// 膝・肘の Pole を定義へ足す。既定の一覧には置かない（S56）が、引く強さ 0 の点を Pole として解く仕組みは残っているので、それを確かめるテストで足す。
+        /// 膝・肘の Pole を定義へ足す。既定の一覧には置かない（S56）が、重さ 0 の点を Pole として解く仕組みは残っているので、それを確かめるテストで足す。
         /// 膝の Pole は太ももに乗せて膝の前、肘の Pole は上腕に乗せて肘の後ろに置き、ずれの向きは脛・前腕の向きと半分ずつ混ぜる（S34・S43）
         /// </summary>
         protected static void AddPoles (EditRigDefinition definition)
@@ -66,11 +66,11 @@ namespace Lilium
                 HumanBodyBones forearm = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
                 definition.bodyPoints.Add (new EditRigDefinition.BodyPoint {
                     name = side + "KneePole", bone = left ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg, origin = shin,
-                    offset = new Vector3 (0, 0, EditRigDefinition.kDirectionLength), pullStrength = 0, link = shin.ToString (), blendBone = shin, blend = kPoleBlend,
+                    offset = new Vector3 (0, 0, EditRigDefinition.kDirectionLength), weight = 0, link = shin.ToString (), blendBone = shin, blend = kPoleBlend,
                 });
                 definition.bodyPoints.Add (new EditRigDefinition.BodyPoint {
                     name = side + "ElbowPole", bone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm, origin = forearm,
-                    offset = new Vector3 (0, 0, -EditRigDefinition.kDirectionLength), pullStrength = 0, link = forearm.ToString (), blendBone = forearm, blend = kPoleBlend,
+                    offset = new Vector3 (0, 0, -EditRigDefinition.kDirectionLength), weight = 0, link = forearm.ToString (), blendBone = forearm, blend = kPoleBlend,
                 });
             }
         }
@@ -91,12 +91,14 @@ namespace Lilium
         /// テスト用の人型を作り、prefab の中に置く（PlaceInPrefab）。toes・fingers・eyes は TestSkeleton の作り分けのまま
         /// （どれも胸と首が付き、fingers と eyes は size を使わない）。fingers と toes は両方付けられる（足の点と手のひらの点を両方使うとき。
         /// このときは toeOut も使わない）。littleFingers は fingers のときだけ、小指も足す（手のひらの小指側の点が要るとき）。
-        /// twistFrames なら骨の軸の向きをばらばらにする（位置は変えない。体の形は同じで骨の軸だけ違うキャラ）
+        /// twistFrames なら骨の軸の向きをばらばらにする（位置は変えない。体の形は同じで骨の軸だけ違うキャラ）。
+        /// shoulders なら胸と首と両肩（鎖骨）を持つ人型（ほかの作り分けより先に見る）
         /// </summary>
         protected Animator CreateCharacter (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0,
-            bool fingers = false, bool eyes = false, bool twistFrames = false, bool littleFingers = false)
+            bool fingers = false, bool eyes = false, bool twistFrames = false, bool littleFingers = false, bool shoulders = false)
         {
-            Animator display = eyes ? TestSkeleton.CreateHumanoidWithEyes (created_)
+            Animator display = shoulders ? TestSkeleton.CreateHumanoidWithShoulders (created_)
+                : eyes ? TestSkeleton.CreateHumanoidWithEyes (created_)
                 : fingers ? TestSkeleton.CreateHumanoidWithFingers (created_, toes, littleFingers)
                 : toes ? TestSkeleton.CreateHumanoidWithToes (created_, size, toeOut)
                 : TestSkeleton.CreateHumanoid (created_, withChest, size);

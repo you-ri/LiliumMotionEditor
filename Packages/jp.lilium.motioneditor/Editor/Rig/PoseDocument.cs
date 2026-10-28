@@ -135,6 +135,8 @@ namespace Lilium
             Quaternion toBody = Quaternion.Inverse (BodyBasis (rig));
             PoseDocument document = new PoseDocument { frame = session.frame, humanScale = rig.humanScale };
             foreach (BodyPointId id in body.pointIds) {
+                // 動かせない点（S89）は値を持たず書けないので出さない（読んだ物をそのまま書き戻せるように）
+                if (body.IsPassive (id)) continue;
                 Vector3 local;
                 Quaternion delta;
                 if (!body.TryGetCapturedValues (body.GetControl (id), out local, out delta)) continue;

@@ -207,6 +207,22 @@ namespace Lilium
         }
 
         [Test]
+        public void PassivePoint_IsNotRead_AndCannotBeWritten ()
+        {
+            // 動かせない点（S89）は値を持たないので読まず、書こうとすると断る（読んだ物はそのまま書き戻せる）
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Pivot", bone = HumanBodyBones.Chest, weight = 0, passive = true });
+            PoseSession session = Open ();
+            Assert.IsTrue (session.stage.fullBody.HasPoint (new BodyPointId ("Pivot")));
+            PoseDocument rest = Read (session, 0);
+            Assert.IsNull (rest.Find ("Pivot"), "動かせない点は読まない");
+
+            PoseDocument document = One (rest, "LeftHand", "Pin", Vector3.up * 0.1f);
+            document.points.Add (new PosePoint { name = "Pivot", state = "Pin" });
+            StringAssert.Contains ("Pivot", PoseDocument.Write (session, document));
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (session.clip), "何も書かない");
+        }
+
+        [Test]
         public void NoBodyPoints_ExplainsThatItCannotReadOrWrite ()
         {
             // 点が 1 つも無ければ全身 IK が作られず、点で姿勢を表せない

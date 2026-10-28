@@ -23,7 +23,7 @@ namespace Lilium
         /// <param name="size">骨の長さの倍率（体の大きさ。Avatar の humanScale が変わる）</param>
         public static Animator CreateHumanoid (List<Object> created, bool withChest, float size, params string[] extraBones)
         {
-            return Build (created, withChest, size, false, false, false, 0, false, extraBones);
+            return Build (created, withChest, size, false, false, false, 0, false, false, extraBones);
         }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace Lilium
         /// </summary>
         public static Animator CreateHumanoidWithToes (List<Object> created, float size = 1, float toeOut = 0)
         {
-            return Build (created, true, size, false, false, true, toeOut, false);
+            return Build (created, true, size, false, false, true, toeOut, false, false);
         }
 
         /// <summary>
@@ -43,7 +43,7 @@ namespace Lilium
         /// <param name="littleFingers">両手の小指（3 節）も足す</param>
         public static Animator CreateHumanoidWithFingers (List<Object> created, bool toes = false, bool littleFingers = false)
         {
-            return Build (created, true, 1, true, littleFingers, toes, 0, false);
+            return Build (created, true, 1, true, littleFingers, toes, 0, false, false);
         }
 
         /// <summary>
@@ -51,10 +51,18 @@ namespace Lilium
         /// </summary>
         public static Animator CreateHumanoidWithEyes (List<Object> created)
         {
-            return Build (created, true, 1, false, false, false, 0, true);
+            return Build (created, true, 1, false, false, false, 0, true, false);
         }
 
-        static Animator Build (List<Object> created, bool withChest, float size, bool fingers, bool littleFingers, bool toes, float toeOut, bool eyes, params string[] extraBones)
+        /// <summary>
+        /// 胸と首と、両肩（鎖骨）を持つ人型（肩の骨の上の点を試すとき）。肩は胸の付け根から横へ 5cm・上へ 15cm で、上腕の付け根は肩のない人型と同じ場所
+        /// </summary>
+        public static Animator CreateHumanoidWithShoulders (List<Object> created)
+        {
+            return Build (created, true, 1, false, false, false, 0, false, true);
+        }
+
+        static Animator Build (List<Object> created, bool withChest, float size, bool fingers, bool littleFingers, bool toes, float toeOut, bool eyes, bool shoulders, params string[] extraBones)
         {
             GameObject root = new GameObject ("Character");
             created.Add (root);
@@ -96,10 +104,18 @@ namespace Lilium
             }
 
             float armY = withChest ? 0.15f : 0.3f;
-            Transform leftArm = Add (HumanBodyBones.LeftUpperArm, upper, new Vector3 (-0.2f, armY, 0));
+            Transform leftArmParent = upper, rightArmParent = upper;
+            float armX = 0.2f;
+            if (shoulders) {
+                leftArmParent = Add (HumanBodyBones.LeftShoulder, upper, new Vector3 (-0.05f, armY, 0));
+                rightArmParent = Add (HumanBodyBones.RightShoulder, upper, new Vector3 (0.05f, armY, 0));
+                armX = 0.15f;
+                armY = 0;
+            }
+            Transform leftArm = Add (HumanBodyBones.LeftUpperArm, leftArmParent, new Vector3 (-armX, armY, 0));
             Transform leftElbow = Add (HumanBodyBones.LeftLowerArm, leftArm, new Vector3 (-0.3f, 0, 0));
             Transform leftHand = Add (HumanBodyBones.LeftHand, leftElbow, new Vector3 (-0.25f, 0, 0));
-            Transform rightArm = Add (HumanBodyBones.RightUpperArm, upper, new Vector3 (0.2f, armY, 0));
+            Transform rightArm = Add (HumanBodyBones.RightUpperArm, rightArmParent, new Vector3 (armX, armY, 0));
             Transform rightElbow = Add (HumanBodyBones.RightLowerArm, rightArm, new Vector3 (0.3f, 0, 0));
             Transform rightHand = Add (HumanBodyBones.RightHand, rightElbow, new Vector3 (0.25f, 0, 0));
 

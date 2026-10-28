@@ -35,10 +35,11 @@ namespace Lilium
 
         /// <param name="twistFrames">骨の軸の向きをばらばらにする（体の形は同じで骨の軸だけ違うキャラ）</param>
         /// <param name="toes">つま先の骨を足す（足の点はつま先の骨のあるキャラにだけできる）</param>
-        Setup Create (bool withChest = true, bool twistFrames = false, bool fingers = false, float size = 1, bool toes = false)
+        /// <param name="shoulders">両肩（鎖骨）を足す（胸と首も付く）</param>
+        Setup Create (bool withChest = true, bool twistFrames = false, bool fingers = false, float size = 1, bool toes = false, bool shoulders = false)
         {
             Setup s = new Setup ();
-            s.display = CreateCharacter (withChest, size, toes, fingers: fingers, twistFrames: twistFrames);
+            s.display = CreateCharacter (withChest, size, toes, fingers: fingers, twistFrames: twistFrames, shoulders: shoulders);
             s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             s.rig = CreateEditingRig (definition_, s.display);
@@ -408,6 +409,43 @@ namespace Lilium
                 Assert.AreSame (ball, named (side + "LittleToeSide").link, side + " 小指側 → 足裏の中心");
                 Assert.AreSame (ball, named (side + "ToeTip").link, side + " つま先の先 → 足裏の中心");
             }
+        }
+
+        [Test]
+        public void PassivePoint_CannotBeMoved_AndHasNoKeys ()
+        {
+            // 動かせない点（S89）は選べるが、動かす・回す・状態を変えるどの操作でも値が変わらず、キー（トラック）を持たない
+            definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "LeftShoulder", bone = HumanBodyBones.LeftShoulder, weight = 0, passive = true });
+            Setup s = Create (shoulders: true);
+            BodyPointId id = new BodyPointId ("LeftShoulder");
+            BodyPointTarget shoulder = BodyPointTarget.Create (s.rig, s.body).OfType<BodyPointTarget> ().Single (t => t.id.Equals (id));
+            Assert.IsTrue (shoulder.passive);
+            Assert.AreSame (Bone (s, HumanBodyBones.LeftShoulder), shoulder.editingBone, "肩の骨に乗る");
+            Vector3 before = shoulder.framePosition;
+            Transform root = s.rig.root.transform;
+
+            shoulder.SetValues (TransformChannels.Position, root.InverseTransformPoint (before + Vector3.up * 0.1f), Quaternion.identity);
+            shoulder.MoveBy (Vector3.forward * 0.1f);
+            shoulder.RotateAround (before + Vector3.right, Quaternion.Euler (0, 30, 0), true);
+            shoulder.SetState (BodyPointState.Pin);
+            shoulder.ToggleLock ();
+            shoulder.TogglePin ();
+            shoulder.ResetValues (TransformChannels.All);
+            Assert.AreEqual (BodyPointState.Free, shoulder.state, "固定できない");
+            Assert.IsFalse (shoulder.hasPendingKeys, "打つ値が無い");
+            Assert.AreEqual (TransformChannels.None, shoulder.GetSpinChannels (), "数値欄で動かせない");
+            Assert.LessOrEqual (Vector3.Distance (before, shoulder.framePosition), 1e-6f, "骨の上から動かない");
+            Assert.IsFalse (s.body.hasActivePoint, "解く点が増えない");
+            HashSet<string> paths = new HashSet<string> ();
+            shoulder.CollectKeyedPaths (paths);
+            Assert.IsEmpty (paths, "キー（トラック）を持たない");
+
+            // 前の定義で打ったキーが残っていても、値を使わない
+            s.body.SetPositionWeight (id, 1);
+            s.body.SetLocked (id, true);
+            Assert.AreEqual (0, s.body.GetPositionWeight (id));
+            Assert.IsFalse (s.body.GetLocked (id));
+            Assert.IsFalse (s.body.hasActivePoint);
         }
 
         [Test]
@@ -1021,6 +1059,35 @@ namespace Lilium
         }
 
         [Test]
+        public void FloorClamp_PullingHeavyFoot_PullsPinnedHips ()
+        {
+            // Floor Clamp で重い足（1）をつかんで、床に沿って前へ引く。脚が伸びきったら、Pin の腰も引かれて付いてくる（S88。10-28 ユーザー報告
+            // 「足の点でひっぱると腰まで伸び切ったあと、ついてこない」）。足の箱で動かす足も、つかんだ重い点として数える
+            Setup s = Create (toes: true);
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            s.body.floorClamp = true;
+            foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = true;
+            PointTarget (targets, HumanBodyBones.Hips).SetState (BodyPointState.Pin);
+            s.body.ClearCarry ();
+            s.body.CaptureInput ();
+            s.body.Solve ();
+            s.body.CaptureInput ();
+            BodyPointTarget foot = PointTarget (targets, HumanBodyBones.LeftFoot);
+            Transform hips = Bone (s, HumanBodyBones.Hips);
+            Transform footBone = Bone (s, HumanBodyBones.LeftFoot);
+            Vector3 forward = s.rig.root.transform.TransformDirection (s.rig.bodyForward).normalized;
+            Vector3 hipsStart = hips.position, footStart = footBone.position, start = foot.framePosition;
+            for (int i = 1; i <= 40; i++) {
+                foot.MoveTo (start + forward * (0.02f * i));
+                s.body.RestoreInput ();
+                s.body.Solve ();
+            }
+            Assert.LessOrEqual (Vector3.Distance (footStart + forward * 0.8f, footBone.position), 0.01f, "足は引いた所へ届く");
+            Assert.Greater (Vector3.Dot (hips.position - hipsStart, forward), 0.1f, "Pin の腰は引かれて付いてくる");
+            s.body.ClearCarry ();
+        }
+
+        [Test]
         public void SolePoints_HaveCollisionRadius_AndRestOnTheGround ()
         {
             // 標準の定義の足裏の点は床との当たりの球を持ち、基準姿勢で球の下の端が地面に着く高さ（半径）に置く（10-22）。足首の点は球を持たない
@@ -1122,7 +1189,7 @@ namespace Lilium
             s.body.CaptureInput ();
             ankle.MoveBy (new Vector3 (0, 0.15f, 0));
             // 持ち上げたら一度離す（窓では、離したときに足の箱を捨てる）
-            s.body.ClearFootCarry ();
+            s.body.ClearCarry ();
             ankle.SpinRotateWorld (Quaternion.AngleAxis (30, s.rig.root.transform.rotation * s.rig.bodyRight));
             Assert.IsTrue (ankle.rotationPinned, "向きを固定した");
             s.body.RestoreInput ();
@@ -1138,7 +1205,7 @@ namespace Lilium
 
             for (int i = 0; i < 30; i++) {
                 ankle.MoveBy (new Vector3 (0, -0.01f, 0));
-                if (pinSoles) Assert.IsTrue (s.body.IsFootCarried (soles[0]), "Pin の足裏の点は足と一緒に動く");
+                if (pinSoles) Assert.IsTrue (s.body.IsCarried (soles[0]), "Pin の足裏の点は足と一緒に動く");
                 s.body.RestoreInput ();
                 s.body.Solve ();
                 foreach (BodyPointId id in soles) {
@@ -1157,7 +1224,7 @@ namespace Lilium
             if (pinSoles) {
                 // 離したとき（キーを打つ前に骨の場所へ付け直す）
                 foreach (BodyPointTarget sole in solePoints) sole.SyncToBone ();
-                s.body.ClearFootCarry ();
+                s.body.ClearCarry ();
                 foreach (BodyPointTarget sole in solePoints) {
                     Assert.AreEqual (BodyPointState.Pin, sole.state, "Pin のまま: " + sole.id.name);
                     Vector3 bone;
@@ -1263,6 +1330,21 @@ namespace Lilium
             BodyPointTarget stomach = named ("Stomach");
             Assert.AreSame (stomach, named ("Chest").link, "胸 → お腹");
             Assert.AreSame (PointTarget (targets, HumanBodyBones.Hips), stomach.link, "お腹 → 腰");
+        }
+
+        [Test]
+        public void LightChest_StillJoinsNeckAndArms ()
+        {
+            // 胸・お腹の点を軽く（重さ 0）しても、首・上腕・胸の前の点は胸の点へつなぐ（腰まで飛ばない）。胸の前の点は胸の点の代わりにならない
+            foreach (string name in new[] { "Chest", "Stomach" }) definition_.bodyPoints.First (p => p.name == name).weight = 0;
+            Setup s = Create ();
+            List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
+            System.Func<string, BodyPointTarget> named = name => targets.OfType<BodyPointTarget> ().Single (p => p.id.name == name);
+            BodyPointTarget chest = named ("Chest");
+            Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.Neck).link, "首 → 胸");
+            Assert.AreSame (chest, PointTarget (targets, HumanBodyBones.LeftUpperArm).link, "上腕 → 胸");
+            Assert.AreSame (chest, named ("ChestDirection").link, "胸の前 → 胸");
+            Assert.AreSame (named ("Stomach"), chest.link, "胸 → お腹");
         }
 
         [Test]
@@ -1414,7 +1496,7 @@ namespace Lilium
             head.SetState (BodyPointState.Pin);
             Assert.LessOrEqual (s.body.GetResidual (id), kPositionTolerance);
 
-            // 遠くへ動かして解く（既定の引く強さ 0 では、頭が点の方を向くだけ。S28）。手を離すと、点は骨の上の点（骨から決まった距離）へ合わせ直される
+            // 遠くへ動かして解く（既定の重さ 0 では、頭が点の方を向くだけ。S28）。手を離すと、点は骨の上の点（骨から決まった距離）へ合わせ直される
             Vector3 side = Vector3.Cross (Vector3.up, onBone - bone.position).normalized;
             head.MoveBy (side * 1.5f);
             s.body.CaptureInput ();

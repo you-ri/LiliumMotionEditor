@@ -23,6 +23,13 @@ namespace Lilium
         /// 元の姿勢がはっきり曲がっているときは、その曲がりの面を優先する
         /// </summary>
         public float3 hingeAxis;
+        /// <summary>
+        /// 1 なら、親との関節は lockAxis のまわりにだけ回る（S89）。骨の付け根と、骨の上の動かせない点の両方が親に対して動かないので、
+        /// 残る動きは 2 点を結ぶ軸まわりだけになる。肘・膝の蝶番（hinge）と違い、曲がる範囲は無く、軸は骨に直交しなくてよい
+        /// </summary>
+        public int axisLock;
+        /// <summary>axisLock の軸（自分の骨の枠で。付け根から動かせない点への向き）。元の姿勢でのこの軸を、親から見た向きに留める</summary>
+        public float3 lockAxis;
     }
 
     /// <summary>
@@ -55,12 +62,12 @@ namespace Lilium
         /// <summary>向きを寄せる強さ（0〜1）</summary>
         public float rotationWeight;
         /// <summary>
-        /// 1 なら向けるだけの点（S28。リグ定義の「引く強さ」0）。ほかの点で解き終わってから、骨を付け根まわりに回して、
+        /// 1 なら向けるだけの点（S28。リグ定義の「重さ」0）。ほかの点で解き終わってから、骨を付け根まわりに回して、
         /// 骨の上の点を position の方へ向ける。骨の付け根は親に付いて動き、ほかの骨を引かない（根の側の骨は、この点が無いときと同じ）。
         /// 骨より先に位置を固定した点（胸を向けたときの手）があれば、手足を曲げて合わせ直す。rotation / rotationWeight は使わない。
         /// 同じ骨に 2 つあるとき、並びで後ろの方は、前の方の点の向きまわりにだけ回す（顔の前で向きを決め、頭のてっぺんでかしげを決める）。
         /// 骨の向きがほかの点で決まっている（位置を固定した点が 2 つ以上・向きの固定）・付け根から離れた所で位置を固定している骨では効かない。
-        /// 骨の付け根そのものの点（offset が 0）は向ける腕が無いので、0 と同じに扱う
+        /// 骨の付け根そのものの点（offset が 0）は向ける腕が無いので、0 と同じに扱う（エディタの FullBodyRig は、親の骨の上の点にして渡す）
         /// </summary>
         public int aim;
         /// <summary>
@@ -152,6 +159,9 @@ namespace Lilium
         internal NativeArray<float3> hingeDirParent;
         internal NativeArray<float3> hingeDirChild;
         internal NativeArray<float2> hingeRange;
+        /// <summary>1 なら、軸まわりにだけ回る関節（FullBodyIkBone.axisLock）。軸は親の枠（lockAxisParent）と自分の枠（lockAxis）で持つ</summary>
+        internal NativeArray<int> lockOn;
+        internal NativeArray<float3> lockAxisParent;
         internal NativeArray<float2> rootLambda;
         internal NativeArray<float2> effectorLambda;
         internal NativeArray<int> active;
@@ -214,6 +224,8 @@ namespace Lilium
             d.hingeDirParent = new NativeArray<float3> (boneCount, allocator);
             d.hingeDirChild = new NativeArray<float3> (boneCount, allocator);
             d.hingeRange = new NativeArray<float2> (boneCount, allocator);
+            d.lockOn = new NativeArray<int> (boneCount, allocator);
+            d.lockAxisParent = new NativeArray<float3> (boneCount, allocator);
             d.rootLambda = new NativeArray<float2> (boneCount, allocator);
             d.effectorLambda = new NativeArray<float2> (math.max (1, maxEffectors), allocator);
             d.active = new NativeArray<int> (boneCount, allocator);
@@ -262,6 +274,8 @@ namespace Lilium
             hingeDirParent.Dispose ();
             hingeDirChild.Dispose ();
             hingeRange.Dispose ();
+            lockOn.Dispose ();
+            lockAxisParent.Dispose ();
             rootLambda.Dispose ();
             effectorLambda.Dispose ();
             active.Dispose ();
@@ -448,6 +462,7 @@ namespace Lilium
                 d.stiffnessLambda[i] = 0;
                 d.rootLambda[i] = float2.zero;
                 d.hingeOn[i] = 0;
+                d.lockOn[i] = 0;
                 d.active[i] = 0;
                 d.effectorsBelow[i] = 0;
                 d.pinnedOrigin[i] = 0;
@@ -522,6 +537,18 @@ namespace Lilium
             }
 
             for (int i = 0; i < n; i++) PrepareHinge (ref d, i);
+            for (int i = 0; i < n; i++) PrepareLock (ref d, i);
+        }
+
+        /// <summary>軸まわりにだけ回る関節（axisLock）の軸を、元の姿勢で親から見た向きにする</summary>
+        static void PrepareLock (ref FullBodyIkData d, int i)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            int p = bone.parent;
+            if (bone.axisLock == 0 || p < 0 || math.lengthsq (bone.lockAxis) <= 1e-12f) return;
+            float3 axis = math.rotate (d.rotations[i], math.normalize (bone.lockAxis));
+            d.lockAxisParent[i] = math.rotate (math.inverse (d.rotations[p]), axis);
+            d.lockOn[i] = 1;
         }
 
         /// <summary>
@@ -794,20 +821,14 @@ namespace Lilium
                 }
             }
 
+            // 軸まわりにだけ回る関節（S89）: 軸をそろえる
+            if (d.lockOn[i] != 0) AlignAxis (ref d, i, p, d.lockAxisParent[i], math.normalize (d.bones[i].lockAxis));
+
             if (d.hingeOn[i] != 0) {
                 // 蝶番の軸をそろえる
-                float3 parentAxis = math.rotate (d.rotations[p], d.hingeAxisParent[i]);
-                float3 selfAxis = math.rotate (d.rotations[i], d.hingeAxisChild[i]);
-                float3 cross = math.cross (selfAxis, parentAxis);
-                float sine = math.length (cross);
-                if (sine > kEpsilon) {
-                    float angle = math.asin (math.min (sine, 1));
-                    if (math.dot (selfAxis, parentAxis) < 0) angle = math.PI - angle;
-                    float lambda = 0;
-                    ApplyAngular (ref d, i, p, cross / sine * angle, 0, ref lambda);
-                }
+                AlignAxis (ref d, i, p, d.hingeAxisParent[i], d.hingeAxisChild[i]);
                 // 曲がる範囲（逆に曲がらない）
-                parentAxis = math.rotate (d.rotations[p], d.hingeAxisParent[i]);
+                float3 parentAxis = math.rotate (d.rotations[p], d.hingeAxisParent[i]);
                 float3 upper = math.rotate (d.rotations[p], d.hingeDirParent[i]);
                 float3 lower = math.rotate (d.rotations[i], d.hingeDirChild[i]);
                 float bend = SignedAngle (upper, lower, parentAxis);
@@ -827,6 +848,22 @@ namespace Lilium
             float spring = d.stiffnessLambda[i];
             ApplyAngular (ref d, i, p, correction, StiffnessCompliance (stiffness) * (d.inverseInertia[i] + d.inverseInertia[p]), ref spring);
             d.stiffnessLambda[i] = spring;
+        }
+
+        /// <summary>
+        /// 親の枠の軸 parentLocal と、自分の枠の軸 selfLocal を同じ向きにそろえる（親から見て、その軸まわりにだけ回れる関節にする）
+        /// </summary>
+        static void AlignAxis (ref FullBodyIkData d, int i, int p, float3 parentLocal, float3 selfLocal)
+        {
+            float3 parentAxis = math.rotate (d.rotations[p], parentLocal);
+            float3 selfAxis = math.rotate (d.rotations[i], selfLocal);
+            float3 cross = math.cross (selfAxis, parentAxis);
+            float sine = math.length (cross);
+            if (sine <= kEpsilon) return;
+            float angle = math.asin (math.min (sine, 1));
+            if (math.dot (selfAxis, parentAxis) < 0) angle = math.PI - angle;
+            float lambda = 0;
+            ApplyAngular (ref d, i, p, cross / sine * angle, 0, ref lambda);
         }
 
         /// <summary>
@@ -1419,7 +1456,7 @@ namespace Lilium
                     if (distanceToTop <= reach) break;
                     if (d.effectorsBelow[a] != 1 || d.inverseInertia[a] <= 0) break;
                     float3 wantedTop = target + (from - target) * (reach / distanceToTop);
-                    RotateSubtree (ref d, n, a, FromTo (from - d.positions[a], wantedTop - d.positions[a]));
+                    RotateSubtree (ref d, n, a, TurnToward (ref d, a, from - d.positions[a], wantedTop - d.positions[a]));
                     Rebuild (ref d, n, false);
                 }
                 float3 top = d.positions[g];
@@ -1459,7 +1496,7 @@ namespace Lilium
                     if (d.effectorsBelow[a] != 1 || d.inverseInertia[a] <= 0) break;
                     end = d.positions[b];
                     if (math.distancesq (target, end) < 1e-14f) return turned;
-                    RotateSubtree (ref d, n, a, FromTo (end - d.positions[a], target - d.positions[a]));
+                    RotateSubtree (ref d, n, a, TurnToward (ref d, a, end - d.positions[a], target - d.positions[a]));
                     Rebuild (ref d, n, false);
                     turned = true;
                     // 付け根を点で固定した骨より先（根の側）は回さない
@@ -1467,6 +1504,20 @@ namespace Lilium
                 }
             }
             return turned;
+        }
+
+        /// <summary>
+        /// 骨 a を回して、from の向きを to へ近づける回転。軸まわりにだけ回る骨（axisLock。S89）は、その軸まわりにだけ回す
+        /// （軸に直交する面へ写した向きどうしの角度）。そうでなければ FromTo
+        /// </summary>
+        static quaternion TurnToward (ref FullBodyIkData d, int a, float3 from, float3 to)
+        {
+            if (d.lockOn[a] == 0) return FromTo (from, to);
+            float3 axis = math.normalizesafe (math.rotate (d.rotations[a], d.bones[a].lockAxis));
+            float3 f = from - axis * math.dot (from, axis);
+            float3 t = to - axis * math.dot (to, axis);
+            if (math.lengthsq (f) < 1e-12f || math.lengthsq (t) < 1e-12f) return quaternion.identity;
+            return quaternion.AxisAngle (axis, SignedAngle (math.normalize (f), math.normalize (t), axis));
         }
 
         /// <summary>骨と、その先の解いた骨の向きを turn で回す（位置は Rebuild で作り直す）</summary>

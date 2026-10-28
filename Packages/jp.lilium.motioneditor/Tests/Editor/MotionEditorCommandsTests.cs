@@ -18,6 +18,7 @@ namespace Lilium
         readonly List<Object> created_ = new List<Object> ();
         readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         string prefabPath_;
+        string projectBackup_;
 
         [System.Serializable]
         sealed class Head
@@ -78,6 +79,13 @@ namespace Lilium
             MotionEditorCommands.Close ();
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
             AssetDatabase.CreateFolder ("Assets", "__MktCommandsTest");
+            // 定義を指定しない open はプロジェクト設定の定義を使う。プロジェクトで直した定義（点の重さなど）でテストの結果が変わらないよう、
+            // 既定の定義をテストのフォルダに作って差し替える。プロジェクト設定は 1 つしか無いので、値を控えて後で戻す（保存はしない）
+            projectBackup_ = EditorJsonUtility.ToJson (ProjectSettings.instance);
+            EditRigDefinition definition = ScriptableObject.CreateInstance<EditRigDefinition> ();
+            definition.SetDefault ();
+            AssetDatabase.CreateAsset (definition, kFolder + "/Rig Definition.asset");
+            ProjectSettings.instance.rigDefinition = definition;
             // キャラの prefab（Avatar もアセットにしてから保存する。でないと prefab の Animator から Avatar が外れる）。
             // 足を踵・つま先の先・小指側で置くので、つま先の骨のあるキャラにする（足の点はつま先の骨のあるキャラにだけできる）
             GameObject temp = new GameObject ("Hero");
@@ -101,6 +109,8 @@ namespace Lilium
                 if (o != null && !EditorUtility.IsPersistent (o)) Object.DestroyImmediate (o);
             }
             created_.Clear ();
+            if (projectBackup_ != null) EditorJsonUtility.FromJsonOverwrite (projectBackup_, ProjectSettings.instance);
+            projectBackup_ = null;
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
         }
 

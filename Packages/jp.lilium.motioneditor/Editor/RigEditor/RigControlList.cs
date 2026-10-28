@@ -35,6 +35,8 @@ namespace Lilium
         public string propertyPath;
         /// <summary>全身 IK の点の、床との当たりの球の半径（メートル。定義の radius × humanScale。無ければ 0）</summary>
         public float radius;
+        /// <summary>全身 IK の点の丸の大きさ（引く点の何倍か）。重さ 0 の点はモーションエディタと同じく小さい</summary>
+        public float scale = 1;
         /// <summary>使えない理由。null なら使える</summary>
         public string disabledReason;
 
@@ -95,6 +97,7 @@ namespace Lilium
                     propertyPath = ElementPath (definition, "bodyPoints", definition != null ? definition.bodyPoints.IndexOf (point.definition) : -1),
                     disabledReason = point.disabledReason,
                     radius = point.definition != null ? Mathf.Max (0, point.definition.radius) * rig.humanScale : 0,
+                    scale = point.definition != null && point.definition.weight <= 0 ? BodyPointTarget.kAimScale : 1,
                 });
             }
             return entries;
