@@ -132,6 +132,8 @@ namespace Lilium
         const float kReachTolerance = 1e-3f;
         /// <summary>Pin の点の目標を運ぶと Lock の点が動くときに、運ぶ割合を半分ずつ絞って探す回数（1/2^回数 の細かさ）</summary>
         const int kShiftSearches = 4;
+        /// <summary>道の上の Pin の点を運ぶ量を、道の外の Pin の点を外して詰め直す回数</summary>
+        const int kPathRefines = 2;
         /// <summary>
         /// 軽い点をつかんでいる間の反復の回数（定義の iterations の何倍か）。重い点を留めたまま軽い点を引くと、関節のずれが詰まりにくい（10-27 実測で、1 倍では首が 1.45mm、4 倍で 0.5mm）。
         /// 残りは SnapHeld で合わせる
@@ -212,6 +214,8 @@ namespace Lilium
         readonly List<int> grabbedEffectors_ = new List<int> ();
         // 元の姿勢での、Lock の点ごとのずれ（m。lockedEffectors_ と同じ並び。LocksHeld で、Lock の点が動いたかを見る基準）
         readonly List<float> lockBases_ = new List<float> ();
+        // BranchShifts で決めた、道の外の Pin の点を運ぶ量（points_ と同じ並び。ルート空間）
+        Vector3[] branchShifts_;
         // 重い点をつかんでいる間の、Lock の点の目標の並び（Lock の点が動いたかを見る）と、つかんだ点を譲らせて解いた姿勢（保持解き）
         readonly List<int> lockedEffectors_ = new List<int> ();
         Vector3[] yieldedPositions_;
@@ -300,6 +304,7 @@ namespace Lilium
             heldOrigin_ = new bool[bodies_.Count];
             heldRotation_ = new bool[bodies_.Count];
             frozen_ = new bool[bodies_.Count];
+            branchShifts_ = new Vector3[points_.Count];
             yieldedPositions_ = new Vector3[bodies_.Count];
             yieldedRotations_ = new Quaternion[bodies_.Count];
             for (int i = 0; i < bodies_.Count; i++) {
@@ -1171,44 +1176,53 @@ namespace Lilium
             // Lock の点が動いたかは、点ごとに元の姿勢でのずれと比べる（同じ足に Lock の点が 3 つ以上あると、元の姿勢でも数 mm ずれている。
             // 一番大きいずれを全部の点に使うと、ずれの小さい足首の点がその差だけ動けた。10-28 実測で 1cm）
             lockBases_.Clear ();
-            foreach (int e in lockedEffectors_) {
-                FullBodyIkEffector effector = data_.effectors[e];
-                Vector3 point = solvePositions_[effector.bone] + solveRotations_[effector.bone] * (Vector3)effector.offset;
-                lockBases_.Add (Vector3.Distance (effector.position, point));
-            }
+            foreach (int e in lockedEffectors_) lockBases_.Add (InputResidual (e));
             data_.iterations = Mathf.Max (1, settings_.iterations) * (pins ? kLightIterations : 1);
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
             SetContacts (rootPosition.y, rootInverse * Vector3.up);
             if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
             // 届かなければ、まず根への道の上の Pin の点だけを外し、それでも届かなければ残りも外す
             // 届かないか Lock の点が動いたら、届かなかった分だけ Pin の点の目標を運んで解き直す（10-28。Fable の見立てを受けて、段に分けて外す形から換えた）:
-            // まず Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き（保持解き）、つかんだ点が届かなかった分 shift を測る。
-            // 届かなければ、つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を shift だけ運んで解き、まだ届かない分 rest を測る。
-            // それでも届かなければ（両手が伸びきって引っ張られる）、道の上の Pin の点はさらに rest、道の外の Pin の点（両手・両足）も rest だけ運ぶ。
-            // Pin の点は届かなかった分だけ動き、それより先へは動かない。shift・rest は前の答えから連続に決まり、届く所では 0 なので、境目で姿勢が跳ねず、
-            // 元の姿勢（キーの形）へ戻すこともない（10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）。
-            // 道の上と外を分けたのは、全部の Pin の点を同じだけ運ぶと、首を阻んでいるのは腰なのに、腕の伸びに余裕のある手の Pin まで動いたため
-            // （10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」）
+            // 1. 保持解き: Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き、つかんだ点が届かなかった分 shift を測る。
+            // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、shift だけ運ぶ。運ぶ量は、道の外の Pin の点（両手・両足）を外して解き、
+            //    腰だけで届く所まで詰め直す（両手を残して測ると、両手に引き止められた分だけ小さく出た）。
+            // 3. 道の外の Pin の点は、その姿勢で、手足の付け根（肩・股）から目標までが手足の長さ（伸びきった長さ）を超えた分だけ、付け根の方へ運ぶ（BranchShifts）。
+            //    腕が伸びきるまでは動かず、伸びきったらその先だけ付いてくる（10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」、
+            //    10-29「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を両手に運ぶと、体が傾くと肩の動きと合わず、運びすぎて腕が曲がった）。
+            // 4. Lock の点が動いたら、運ぶ割合を絞る（CarryPins）。Lock の点が無ければ、つかんだ点を強さ 1 にして、運んだ目標のまま解く。
+            // どの量も前の答えから連続に決まり、届く所では 0 なので、境目で姿勢が跳ねず、元の姿勢（キーの形）へ戻すこともない
+            // （10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）
             if (pins && !Solved ()) {
                 bool locks = lockedEffectors_.Count > 0;
                 bool[] path = PathToRoot ();
-                count = HeavyEffectors (path, Vector3.zero, Vector3.zero, true, pull, scale, rootInverse, rootPosition);
+                count = HeavyEffectors (path, Vector3.zero, null, 0, true, pull, scale, rootInverse, rootPosition);
                 RunSolver (count, solvePositions_, solveRotations_);
                 Vector3 shift = GrabbedShift ();
                 if (shift.sqrMagnitude > kReachTolerance * kReachTolerance) {
                     KeepYielded ();
-                    Vector3 pathShift = shift * CarryPins (path, Vector3.zero, Vector3.zero, shift, Vector3.zero, pull, scale, rootInverse, rootPosition);
-                    Vector3 otherShift = Vector3.zero;
-                    Vector3 rest = GrabbedShift ();
-                    if (rest.sqrMagnitude > kReachTolerance * kReachTolerance) {
-                        float fraction = CarryPins (path, pathShift, Vector3.zero, rest, rest, pull, scale, rootInverse, rootPosition);
-                        pathShift += rest * fraction;
-                        otherShift = rest * fraction;
+                    // 運んだあと Lock の点が動いたかは、保持解き（運ぶ前）のずれと比べる。同じ足に Lock の点が 3 つ以上あると、首に引かれて足が少し回るだけで
+                    // どれかの点のずれが元の姿勢より増え、どれだけ少なく運んでも動いたとみなした（10-29 実測で、両足が Lock のキーで腰が上がらなかった）
+                    for (int k = 0; k < lockedEffectors_.Count; k++) lockBases_[k] = Mathf.Max (lockBases_[k], data_.residuals[lockedEffectors_[k]]);
+                    for (int k = 0; k < kPathRefines; k++) {
+                        count = HeavyEffectors (path, shift, null, 0, true, pull, scale, rootInverse, rootPosition, false);
+                        RunSolver (count, solvePositions_, solveRotations_);
+                        Vector3 more = GrabbedShift ();
+                        if (more.sqrMagnitude <= kReachTolerance * kReachTolerance) break;
+                        shift += more;
                     }
-                    // 仕上げ: Lock の点が無ければ、運んだ目標のまま、つかんだ点を強さ 1 にして解き直す（譲らせると、仕上げで目標が外れて数 mm〜数 cm 届かない）。
-                    // Lock の点があれば、つかんだ点は譲らせたまま（Lock の点とぶつかったら、つかんだ点が譲る）
+                    // Lock の点（足）は、手足の付け根（股）から目標までが手足の長さを超えない所までしか、道の上の Pin の点（腰）を運ばない（LockLimit）。
+                    // 運んでから Lock の点が動いたかで割合を絞ると、遠くへ引いたとき絞る細かさが足りず、運べる所でも運ばなかった（10-29 実測で、腰が 5.8cm 上がってから 0 に戻った）
+                    float limit = LockLimit (path, shift, pull, scale);
+                    if (limit < 1) {
+                        shift *= limit;
+                        count = HeavyEffectors (path, shift, null, 0, true, pull, scale, rootInverse, rootPosition, false);
+                        RunSolver (count, solvePositions_, solveRotations_);
+                    }
+                    BranchShifts (path, pull, scale);
+                    RestoreYielded ();
+                    float fraction = CarryPins (path, shift, pull, scale, rootInverse, rootPosition);
                     if (!locks) {
-                        count = HeavyEffectors (path, pathShift, otherShift, false, pull, scale, rootInverse, rootPosition);
+                        count = HeavyEffectors (path, shift * fraction, branchShifts_, fraction, false, pull, scale, rootInverse, rootPosition);
                         RunSolver (count, solvePositions_, solveRotations_);
                     }
                 }
@@ -1296,10 +1310,24 @@ namespace Lilium
         /// <summary>Lock の点がどれも、元の姿勢でのずれ（lockBases_）から kReachTolerance より大きくは動いていないか</summary>
         bool LocksHeld ()
         {
-            for (int k = 0; k < lockedEffectors_.Count; k++) {
-                if (data_.residuals[lockedEffectors_[k]] > lockBases_[k] + kReachTolerance) return false;
+            return Held (lockedEffectors_, lockBases_);
+        }
+
+        /// <summary>目標（effectors）がどれも、元の姿勢でのずれ（bases。同じ並び）から kReachTolerance より大きくは外れていないか</summary>
+        bool Held (List<int> effectors, List<float> bases)
+        {
+            for (int k = 0; k < effectors.Count; k++) {
+                if (data_.residuals[effectors[k]] > bases[k] + kReachTolerance) return false;
             }
             return true;
+        }
+
+        /// <summary>目標 e の、元の姿勢（解く前）での点と目標の離れ（m）</summary>
+        float InputResidual (int e)
+        {
+            FullBodyIkEffector effector = data_.effectors[e];
+            Vector3 point = solvePositions_[effector.bone] + solveRotations_[effector.bone] * (Vector3)effector.offset;
+            return Vector3.Distance (effector.position, point);
         }
 
         /// <summary>解いた目標（data_.effectors の並び）が、どれも tolerance（m。既定 kReachTolerance）より近くへ届いたか</summary>
@@ -1314,23 +1342,27 @@ namespace Lilium
         /// <summary>
         /// 重い点をつかんで、届かないか Lock の点が動いたときに解き直す目標を、先頭から入れる（S88）。並びは 1 回目と同じで、grabbedEffectors_・lockedEffectors_ も作り直す。
         /// 重さ 0 の Pin の点は入れない（Free の点と同じ）。Lock でない重さ 1 の Pin の点（PullsPin）は、目標を、つかんだ点から根への道の上（path）の骨の点なら pathShift、
-        /// 道の外なら otherShift（ルート空間）だけずらす。yield なら、つかんだ点（足の箱を含む）を譲らせる（kLightPull）。入れた数を返す
+        /// 道の外なら branchShifts（points_ と同じ並び。null なら 0）× branchScale（ルート空間）だけずらす。branches が false なら、道の外の Pin の点は入れない。
+        /// yield なら、つかんだ点（足の箱を含む）を譲らせる（kLightPull）。入れた数を返す
         /// </summary>
-        int HeavyEffectors (bool[] path, Vector3 pathShift, Vector3 otherShift, bool yield, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition)
+        int HeavyEffectors (bool[] path, Vector3 pathShift, Vector3[] branchShifts, float branchScale, bool yield, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition, bool branches = true)
         {
             int count = 0;
             grabbedEffectors_.Clear ();
             lockedEffectors_.Clear ();
-            foreach (Point point in points_) {
+            for (int i = 0; i < points_.Count; i++) {
+                Point point = points_[i];
                 float positionWeight, rotationWeight;
                 if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
                 bool grabbed = grabbed_.Contains (point);
-                if (!grabbed && point.aim && PullsPin (point)) continue;
+                bool pulled = !grabbed && PullsPin (point);
+                if (pulled && point.aim) continue;
+                if (pulled && !branches && !path[point.body]) continue;
                 if (grabbed) grabbedEffectors_.Add (count);
                 else if (point.values.locked > 0.5f && positionWeight >= 1) lockedEffectors_.Add (count);
                 if (grabbed && yield) positionWeight = Mathf.Min (positionWeight, kLightPull);
                 FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight, scale);
-                if (!grabbed && PullsPin (point)) effector.position += (float3)(path[point.body] ? pathShift : otherShift);
+                if (pulled) effector.position += (float3)(path[point.body] ? pathShift : branchShifts != null ? branchShifts[i] * branchScale : Vector3.zero);
                 data_.effectors[count++] = effector;
             }
             int boxes = count;
@@ -1346,14 +1378,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// つかんだ点を譲らせて、Pin の点の目標を道の上は basePath + extraPath、道の外は baseOther + extraOther だけ運んで解く（HeavyEffectors）。
-        /// Lock の点が動いたら、Lock の点が動かない範囲で一番遠くまで運ぶ（extra を掛ける割合を半分ずつ kShiftSearches 回絞る。全部運ぶか運ばないかで切り替えると、
-        /// Lock の足から届かなくなった所で姿勢が跳ねた。10-28 実測で頭が 1 回 9.6cm）。運べた割合を返し、その答えを data_ に残す
-        /// （どこまでも運べなければ 0 で、呼ぶ前に KeepYielded で控えた答え）
+        /// つかんだ点を譲らせて、Pin の点の目標を、道の上は pathShift、道の外は branchShifts_ だけ運んで解く（HeavyEffectors）。運べた割合を返し、その答えを data_ に残す。
+        /// Lock の点が動いたら、Lock の点が動かない範囲で一番遠くまで運ぶ（運ぶ割合を半分ずつ kShiftSearches 回絞る。全部運ぶか運ばないかで切り替えると、
+        /// Lock の足から届かなくなった所で姿勢が跳ねた。10-28 実測で頭が 1 回 9.6cm）。どこまでも運べなければ 0 で、呼ぶ前に KeepYielded で控えた答え
         /// </summary>
-        float CarryPins (bool[] path, Vector3 basePath, Vector3 baseOther, Vector3 extraPath, Vector3 extraOther, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition)
+        float CarryPins (bool[] path, Vector3 pathShift, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition)
         {
-            int count = HeavyEffectors (path, basePath + extraPath, baseOther + extraOther, true, pull, scale, rootInverse, rootPosition);
+            int count = HeavyEffectors (path, pathShift, branchShifts_, 1, true, pull, scale, rootInverse, rootPosition);
             RunSolver (count, solvePositions_, solveRotations_);
             if (LocksHeld ()) {
                 KeepYielded ();
@@ -1362,7 +1393,7 @@ namespace Lilium
             float valid = 0, invalid = 1;
             for (int k = 0; k < kShiftSearches; k++) {
                 float fraction = (valid + invalid) * 0.5f;
-                count = HeavyEffectors (path, basePath + extraPath * fraction, baseOther + extraOther * fraction, true, pull, scale, rootInverse, rootPosition);
+                count = HeavyEffectors (path, pathShift * fraction, branchShifts_, fraction, true, pull, scale, rootInverse, rootPosition);
                 RunSolver (count, solvePositions_, solveRotations_);
                 if (LocksHeld ()) {
                     valid = fraction;
@@ -1374,6 +1405,68 @@ namespace Lilium
             }
             RestoreYielded ();
             return valid;
+        }
+
+        /// <summary>
+        /// 今の姿勢（data_。道の外の Pin の点を外して解いた姿勢）で、道の外の Lock でない重さ 1 の Pin の点（両手・両足）を運ぶ量を branchShifts_ に入れる（points_ と同じ並び）。
+        /// 手足の付け根（つかんだ点から根への道から分かれた最初の骨の付け根。肩・股）から目標までが、手足の長さ（付け根から点まで、骨を伸ばしきった長さ）を超えた分だけ、
+        /// 付け根の方へ運ぶ。超えなければ 0（腕が伸びきるまでは手は動かない）
+        /// </summary>
+        void BranchShifts (bool[] path, float pull, float scale)
+        {
+            for (int i = 0; i < points_.Count; i++) {
+                branchShifts_[i] = Vector3.zero;
+                Point point = points_[i];
+                float positionWeight, rotationWeight;
+                if (point.body < 0 || path[point.body] || point.aim || grabbed_.Contains (point) || !PullsPin (point)) continue;
+                if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
+                float length;
+                int root = LimbRoot (point, path, out length);
+                Vector3 target = (Vector3)PointEffector (point, 1, 0, scale).position;
+                Vector3 toRoot = (Vector3)data_.positions[root] - target;
+                float over = toRoot.magnitude - length;
+                if (over > 0) branchShifts_[i] = toRoot.normalized * over;
+            }
+        }
+
+        /// <summary>
+        /// 道の上の Pin の点を pathShift の何割まで運べるか（0〜1）。道の外の Lock の点（足）ごとに、手足の付け根（股）を pathShift と一緒に動かしたとき、
+        /// 付け根から Lock の点の目標までが手足の長さを超えない一番大きい割合（2 次方程式）。付け根の場所は、控えた保持解きの姿勢（yieldedPositions_）で見る
+        /// </summary>
+        float LockLimit (bool[] path, Vector3 pathShift, float pull, float scale)
+        {
+            float limit = 1;
+            float ss = pathShift.sqrMagnitude;
+            if (ss <= 0) return limit;
+            foreach (Point point in points_) {
+                float positionWeight, rotationWeight;
+                if (point.body < 0 || path[point.body] || grabbed_.Contains (point) || point.values.locked <= 0.5f) continue;
+                if (!GetWeights (point, pull, out positionWeight, out rotationWeight) || positionWeight < 1) continue;
+                float length;
+                int root = LimbRoot (point, path, out length);
+                Vector3 a = yieldedPositions_[root] - (Vector3)PointEffector (point, 1, 0, scale).position;
+                // |a + t s| = length を満たす t のうち大きい方。今でも届かなければ 0
+                float c = a.sqrMagnitude - length * length;
+                if (c > 0) return 0;
+                float b = Vector3.Dot (a, pathShift);
+                float t = (-b + Mathf.Sqrt (Mathf.Max (0, b * b - ss * c))) / ss;
+                limit = Mathf.Min (limit, Mathf.Max (0, t));
+            }
+            return limit;
+        }
+
+        /// <summary>
+        /// 点の手足の付け根の骨（点の骨から根へたどり、つかんだ点から根への道 path に出る手前の骨。肩・股）と、付け根から点までの手足の長さ（骨を伸ばしきった長さ）
+        /// </summary>
+        int LimbRoot (Point point, bool[] path, out float length)
+        {
+            int root = point.body;
+            length = point.offset.magnitude;
+            while (bodyParents_[root] >= 0 && !path[bodyParents_[root]]) {
+                length += Vector3.Distance (solvePositions_[root], solvePositions_[bodyParents_[root]]);
+                root = bodyParents_[root];
+            }
+            return root;
         }
 
         /// <summary>つかんだ点の骨から根（腰）へたどる道の上の骨（足の箱で動かす足は、足の根の骨から）</summary>

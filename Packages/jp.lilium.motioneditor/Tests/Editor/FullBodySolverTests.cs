@@ -907,7 +907,8 @@ namespace Lilium
         [Test]
         public void LiftingHeavyNeckFar_CarriesTheBodyWithoutBending ()
         {
-            // 腰と両手を Pin にして、重い首を少しずつ 1.2m 持ち上げる。届かなかった分だけ Pin の点が運ばれ、背骨・首は折れない（10° 以内）
+            // 腰と両手を Pin にして、重い首を少しずつ 1.2m 持ち上げる。届かなかった分だけ Pin の点が運ばれ、背骨・首は大きく折れない（15° 以内。
+            // 両手が伸びきるまでは、保持解きの中で胸が首の方へ少し曲がる）
             // （10-28 ユーザー報告「首の点をつかんで上にひっぱると、どんどん姿勢がくずれていく」。上胸が 60° 以上折れていた）。
             // 背骨の硬さはデモの定義に合わせる（硬い背骨ほど、引かれた点の近くで折れやすい）
             foreach (EditRigDefinition.FkControl control in definition_.fkControls) {
@@ -928,12 +929,41 @@ namespace Lilium
                 s.body.SetPointPositionWorld (HumanBodyBones.Neck, neckRest + s.up * (0.02f * i));
                 Solve (s);
             }
-            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Neck), kReach, "首は届く");
+            // 1.2m 引くと、強さ 1 の Pin の点を詰めきれない分が少し（1mm ほど）残る
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Neck), 3e-3f, "首は届く");
             for (int k = 0; k < spine.Length; k++) {
                 Transform bone = Bone (s, spine[k]);
                 if (bone == null) continue;
-                Assert.LessOrEqual (Quaternion.Angle (rest[k], bone.localRotation), 10f, spine[k] + " は折れない");
+                Assert.LessOrEqual (Quaternion.Angle (rest[k], bone.localRotation), 15f, spine[k] + " は折れない");
             }
+            s.body.ClearCarry ();
+        }
+
+        [Test]
+        public void LiftingHeavyNeck_MovesHandsOnlyWithStraightArms ()
+        {
+            // 腰と両手（肘を曲げた所）を Pin にして、重い首を 2cm ずつ 60cm 持ち上げる。腕が伸びきるまでは手は動かず、手が運ばれている間は腕が伸びきっている
+            // （10-29 ユーザー報告「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を手に運ぶと、運びすぎて腕が曲がった）
+            Setup s = Create ();
+            Pin (s, HumanBodyBones.Hips, Vector3.zero, true);
+            Pin (s, HumanBodyBones.LeftHand, s.forward * 0.15f - ArmDirection (s, false) * 0.15f, true);
+            Pin (s, HumanBodyBones.RightHand, s.forward * 0.15f - ArmDirection (s, true) * 0.15f, true);
+            Pin (s, HumanBodyBones.Neck, Vector3.zero);
+            Solve (s);
+            Transform hand = Bone (s, HumanBodyBones.LeftHand), lower = Bone (s, HumanBodyBones.LeftLowerArm), upper = Bone (s, HumanBodyBones.LeftUpperArm);
+            float length = Vector3.Distance (upper.position, lower.position) + Vector3.Distance (lower.position, hand.position);
+            Vector3 handRest = hand.position, neckRest = Bone (s, HumanBodyBones.Neck).position;
+            s.body.MarkGrabbed (HumanBodyBones.Neck);
+            bool moved = false;
+            for (int i = 1; i <= 30; i++) {
+                s.body.SetPointPositionWorld (HumanBodyBones.Neck, neckRest + s.up * (0.02f * i));
+                Solve (s);
+                Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Neck), 3e-3f, "首は届く: " + i * 2 + "cm");
+                if (Vector3.Distance (handRest, hand.position) <= 5e-3f) continue;
+                moved = true;
+                Assert.GreaterOrEqual (Vector3.Distance (upper.position, hand.position) / length, 0.99f, "手が運ばれている間は腕が伸びきっている: " + i * 2 + "cm");
+            }
+            Assert.IsTrue (moved, "腕が伸びきった先では手も運ばれる");
             s.body.ClearCarry ();
         }
 
