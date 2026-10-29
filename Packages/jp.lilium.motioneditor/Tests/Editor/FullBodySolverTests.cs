@@ -735,12 +735,15 @@ namespace Lilium
             AssertLengths (lengths, 1e-4f, "骨の長さ");
         }
 
+        public enum ElbowState { Free, Pin, Lock }
+
         [Test]
-        public void DraggedLightPoint_PullsLightFreePoints_AndKeepsPins ([Values (false, true)] bool pinElbow)
+        public void DraggedLightPoint_PullsLightPoints_AndKeepsLocks ([Values] ElbowState elbowState)
         {
             // 手・肘・上腕を軽く（0）し、手をつかんで動かす（MarkGrabbed）。手は肘と肩を引っ張る。
-            // 肘が Free なら、引かれて付いてきて手は届く。肘が Pin なら、肘は置いた場所に留まり（軽い点でも Pin は動かない）、手は肘まわりにしか回れないので届かない。
-            // 重い胸・首・反対の腕は、どちらでも動かない
+            // 肘が Free でも Pin でも、軽い点なので引かれて付いてきて手は届く（10-30 ユーザー指示「Pin でも引く」）。
+            // 肘が Lock なら、肘は置いた場所に留まり、手は肘まわりにしか回れないので届かない。
+            // 重い胸・首・反対の腕は、どれでも動かない
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
             Setup s = Create ();
             Solve (s);
@@ -748,21 +751,23 @@ namespace Lilium
             Pose[] rest = Poses (bones);
             Transform elbow = Bone (s, HumanBodyBones.LeftLowerArm);
             Vector3 elbowRest = elbow.position;
-            if (pinElbow) Pin (s, HumanBodyBones.LeftLowerArm, Vector3.zero);
+            if (elbowState != ElbowState.Free) Pin (s, HumanBodyBones.LeftLowerArm, Vector3.zero);
+            if (elbowState == ElbowState.Lock) s.body.SetLocked (HumanBodyBones.LeftLowerArm, true);
             s.body.MarkGrabbed (HumanBodyBones.LeftHand);
             Pin (s, HumanBodyBones.LeftHand, s.forward * 0.15f - ArmDirection (s, false) * 0.15f);
             Solve (s);
-            if (pinElbow) {
-                Assert.LessOrEqual (Vector3.Distance (elbowRest, elbow.position), 1e-3f, "Pin の肘は留まる");
+            bool locked = elbowState == ElbowState.Lock;
+            if (locked) {
+                Assert.LessOrEqual (Vector3.Distance (elbowRest, elbow.position), 1e-3f, "Lock の肘は留まる");
                 Assert.Greater (s.body.GetResidual (HumanBodyBones.LeftHand), 0.01f, "手は届かない");
             }
             else {
-                Assert.Greater (Vector3.Distance (elbowRest, elbow.position), 0.01f, "Free の肘は引かれて動く");
+                Assert.Greater (Vector3.Distance (elbowRest, elbow.position), 0.01f, "Free・Pin の軽い肘は引かれて動く");
                 Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kReach, "手は届く");
             }
-            // 肘が Pin なら、肘の向こうの上腕も動かない（前腕だけが肘まわりに回る）
-            Transform moved = Bone (s, pinElbow ? HumanBodyBones.LeftLowerArm : HumanBodyBones.LeftUpperArm);
-            AssertUnchanged (bones, rest, 1e-4f, 0.01f, pinElbow ? "前腕のほか" : "左腕のほか", b => b == moved || b.IsChildOf (moved));
+            // 肘が Lock なら、肘の向こうの上腕も動かない（前腕だけが肘まわりに回る）
+            Transform moved = Bone (s, locked ? HumanBodyBones.LeftLowerArm : HumanBodyBones.LeftUpperArm);
+            AssertUnchanged (bones, rest, 1e-4f, 0.01f, locked ? "前腕のほか" : "左腕のほか", b => b == moved || b.IsChildOf (moved));
             s.body.ClearCarry ();
         }
 
