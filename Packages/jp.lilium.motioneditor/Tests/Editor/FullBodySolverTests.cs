@@ -940,6 +940,40 @@ namespace Lilium
         }
 
         [Test]
+        public void PullingHeavyHandFar_TiltsTheHipsAndStretchesTheSpine ()
+        {
+            // 腰（位置だけ）を Pin にして、重い左手を 2cm ずつ 1.5m 外へ引く。腰が引かれるほど引くと、腰の骨も手の方へ傾き、背骨は付け根で折れない。
+            // 鎖骨には動かせない点があり、軸まわりにしか回れない（S89）。腰の硬さ・背骨の硬さはデモの定義に合わせる
+            // （10-29 ユーザー報告「左手を+Xに引いたが体、腰あたりが伸びきらない」。腰の骨が元の向きのまま残り、背骨の付け根だけが 50° 曲がっていた）
+            foreach (EditRigDefinition.FkControl control in definition_.fkControls) {
+                if (control.bone == HumanBodyBones.Hips) control.stiffness = 0.95f;
+                if (control.bone == HumanBodyBones.Spine) control.stiffness = 0.8f;
+                if (control.bone == HumanBodyBones.Chest || control.bone == HumanBodyBones.UpperChest) control.stiffness = 0.6f;
+                if (control.bone == HumanBodyBones.LeftShoulder) control.stiffness = 0.5f;
+            }
+            AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
+            Setup s = Create (shoulders: true);
+            Pin (s, HumanBodyBones.Hips, Vector3.zero);
+            Pin (s, HumanBodyBones.LeftHand, Vector3.zero);
+            Solve (s);
+            Transform hips = Bone (s, HumanBodyBones.Hips), spine = Bone (s, HumanBodyBones.Spine), chest = Bone (s, HumanBodyBones.Chest);
+            Vector3 hipsRest = hips.position, handRest = Bone (s, HumanBodyBones.LeftHand).position;
+            Vector3 outward = ArmDirection (s, false);
+            s.body.MarkGrabbed (HumanBodyBones.LeftHand);
+            float bend = 0;
+            for (int i = 1; i <= 75; i++) {
+                s.body.SetPointPositionWorld (HumanBodyBones.LeftHand, handRest + outward * (0.02f * i));
+                Solve (s);
+                // 背骨の付け根の曲がり（腰の骨の中の、腰から背骨の付け根までと、背骨との角度）。直す前は 45〜53°
+                bend = Mathf.Max (bend, Vector3.Angle (spine.position - hips.position, chest.position - spine.position));
+            }
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), 3e-3f, "左手は届く");
+            Assert.Greater (Vector3.Distance (hipsRest, hips.position), 1f, "腰は引かれる");
+            Assert.LessOrEqual (bend, 15f, "背骨は付け根で折れない");
+            s.body.ClearCarry ();
+        }
+
+        [Test]
         public void LiftingHeavyNeck_MovesHandsOnlyWithStraightArms ()
         {
             // 腰と両手（肘を曲げた所）を Pin にして、重い首を 2cm ずつ 60cm 持ち上げる。腕が伸びきるまでは手は動かず、手が運ばれている間は腕が伸びきっている

@@ -132,8 +132,10 @@ namespace Lilium
         const float kReachTolerance = 1e-3f;
         /// <summary>Pin の点の目標を運ぶと Lock の点が動くときに、運ぶ割合を半分ずつ絞って探す回数（1/2^回数 の細かさ）</summary>
         const int kShiftSearches = 4;
-        /// <summary>道の上の Pin の点を運ぶ量を、道の外の Pin の点を外して詰め直す回数</summary>
-        const int kPathRefines = 2;
+        /// <summary>PathStretch で、道の上の骨（背骨など）を伸ばす長さの上限（伸ばしきった長さに対する割合）</summary>
+        const float kPathStretch = 0.95f;
+        /// <summary>保持解きでつかんだ点が届かなかった分がこの長さ（× humanScale）に達するまでに、根（腰）の向きを留める硬さを 0 まで緩める（ReleaseRoot）</summary>
+        const float kRootRelease = 0.2f;
         /// <summary>
         /// 軽い点をつかんでいる間の反復の回数（定義の iterations の何倍か）。重い点を留めたまま軽い点を引くと、関節のずれが詰まりにくい（10-27 実測で、1 倍では首が 1.45mm、4 倍で 0.5mm）。
         /// 残りは SnapHeld で合わせる
@@ -1184,8 +1186,8 @@ namespace Lilium
             // 届かなければ、まず根への道の上の Pin の点だけを外し、それでも届かなければ残りも外す
             // 届かないか Lock の点が動いたら、届かなかった分だけ Pin の点の目標を運んで解き直す（10-28。Fable の見立てを受けて、段に分けて外す形から換えた）:
             // 1. 保持解き: Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き、つかんだ点が届かなかった分 shift を測る。
-            // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、shift だけ運ぶ。運ぶ量は、道の外の Pin の点（両手・両足）を外して解き、
-            //    腰だけで届く所まで詰め直す（両手を残して測ると、両手に引き止められた分だけ小さく出た）。
+            // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、間の骨（背骨）がほぼ伸びきるまでは運ばず、超えた分だけ運ぶ（PathStretch）。
+            //    Lock の点（足）が届く所まで（LockLimit）。届かないほど、根（腰）の向きを元の向きに留める硬さを緩める（ReleaseRoot）。
             // 3. 道の外の Pin の点は、その姿勢で、手足の付け根（肩・股）から目標までが手足の長さ（伸びきった長さ）を超えた分だけ、付け根の方へ運ぶ（BranchShifts）。
             //    腕が伸びきるまでは動かず、伸びきったらその先だけ付いてくる（10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」、
             //    10-29「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を両手に運ぶと、体が傾くと肩の動きと合わず、運びすぎて腕が曲がった）。
@@ -1203,27 +1205,33 @@ namespace Lilium
                     // 運んだあと Lock の点が動いたかは、保持解き（運ぶ前）のずれと比べる。同じ足に Lock の点が 3 つ以上あると、首に引かれて足が少し回るだけで
                     // どれかの点のずれが元の姿勢より増え、どれだけ少なく運んでも動いたとみなした（10-29 実測で、両足が Lock のキーで腰が上がらなかった）
                     for (int k = 0; k < lockedEffectors_.Count; k++) lockBases_[k] = Mathf.Max (lockBases_[k], data_.residuals[lockedEffectors_[k]]);
-                    for (int k = 0; k < kPathRefines; k++) {
-                        count = HeavyEffectors (path, shift, null, 0, true, pull, scale, rootInverse, rootPosition, false);
-                        RunSolver (count, solvePositions_, solveRotations_);
-                        Vector3 more = GrabbedShift ();
-                        if (more.sqrMagnitude <= kReachTolerance * kReachTolerance) break;
-                        shift += more;
-                    }
+                    // 道の上の Pin の点（腰）を運ぶ量は、長さから決める（PathStretch）: つかんだ点の一番近くの道の上の Pin の点から、つかんだ点の目標までが、
+                    // 間の骨を伸ばしきった長さを超えた分だけ。体が伸びきるまで腰は動かず、伸びきったらその先だけ付いてくる。
+                    // 譲らせて解いた答えの届かなかった分で決めると、譲らせた首が関節の硬さのばねに負けて背骨を伸ばしきれず、背骨が曲がったまま腰が運ばれた
+                    // （10-29 ユーザー報告「首をひっぱっても体が伸び切らない」。腰から首までが、伸びきった長さの 90% で止まっていた）
+                    // 根（腰）の向きを元の姿勢に留める硬さを、届かなかった分に応じて緩める（ReleaseRoot）。留めたままだと、腰の点は向きを留めていなくても
+                    // 腰の骨が元の向きのまま残り、手を横へ引くと背骨の付け根だけが 50° 曲がった（10-29 ユーザー報告「左手を+Xに引いたが体、腰あたりが伸びきらない」）。
+                    // 届く所では 0 なので、境目で姿勢は跳ねない
+                    int releasedRoot;
+                    float rootStiffness = ReleaseRoot (path, Mathf.Clamp01 (shift.magnitude / (kRootRelease * scale)), out releasedRoot);
+                    shift = PathStretch (path, shift, scale);
                     // Lock の点（足）は、手足の付け根（股）から目標までが手足の長さを超えない所までしか、道の上の Pin の点（腰）を運ばない（LockLimit）。
                     // 運んでから Lock の点が動いたかで割合を絞ると、遠くへ引いたとき絞る細かさが足りず、運べる所でも運ばなかった（10-29 実測で、腰が 5.8cm 上がってから 0 に戻った）
-                    float limit = LockLimit (path, shift, pull, scale);
-                    if (limit < 1) {
-                        shift *= limit;
-                        count = HeavyEffectors (path, shift, null, 0, true, pull, scale, rootInverse, rootPosition, false);
-                        RunSolver (count, solvePositions_, solveRotations_);
-                    }
+                    shift *= LockLimit (path, shift, pull, scale);
+                    // 道の外の Pin の点を運ぶ量は、腰を運んで道の外の Pin の点を外して解いた姿勢で決める（BranchShifts）
+                    count = HeavyEffectors (path, shift, null, 0, locks, pull, scale, rootInverse, rootPosition, false);
+                    RunSolver (count, solvePositions_, solveRotations_);
                     BranchShifts (path, pull, scale);
                     RestoreYielded ();
                     float fraction = CarryPins (path, shift, pull, scale, rootInverse, rootPosition);
                     if (!locks) {
                         count = HeavyEffectors (path, shift * fraction, branchShifts_, fraction, false, pull, scale, rootInverse, rootPosition);
                         RunSolver (count, solvePositions_, solveRotations_);
+                    }
+                    if (releasedRoot >= 0) {
+                        FullBodyIkBone bone = data_.bones[releasedRoot];
+                        bone.stiffness = rootStiffness;
+                        data_.bones[releasedRoot] = bone;
                     }
                 }
             }
@@ -1427,6 +1435,86 @@ namespace Lilium
                 float over = toRoot.magnitude - length;
                 if (over > 0) branchShifts_[i] = toRoot.normalized * over;
             }
+        }
+
+        /// <summary>
+        /// 道の上の Lock でない重さ 1 の Pin の点（腰）を運ぶ量（ルート空間）。つかんだ点の骨から根へたどって最初に当たる、そうした Pin の点から、
+        /// つかんだ点の目標までが、間の骨を伸ばしきった長さを超えた分だけ、つかんだ点の方へ。超えなければ 0。道の上にそうした Pin の点が無ければ 0。
+        /// heldShift は保持解きでつかんだ点が届かなかった分（GrabbedShift）
+        /// </summary>
+        Vector3 PathStretch (bool[] path, Vector3 heldShift, float scale)
+        {
+            if (grabbedEffectors_.Count == 0) return Vector3.zero;
+            FullBodyIkEffector grabbed = data_.effectors[grabbedEffectors_[0]];
+            Vector3 target = Vector3.zero;
+            foreach (int e in grabbedEffectors_) target += (Vector3)data_.effectors[e].position;
+            target /= grabbedEffectors_.Count;
+            // length は、つかんだ点から骨 b の付け根までの、骨を伸ばしきった長さ
+            float length = ((Vector3)grabbed.offset).magnitude;
+            int child = -1;
+            for (int b = grabbed.bone; bodyParents_[b] >= 0; child = b, b = bodyParents_[b]) {
+                int parent = bodyParents_[b];
+                foreach (Point point in points_) {
+                    float positionWeight, rotationWeight;
+                    if (point.body != parent || point.aim || grabbed_.Contains (point) || !PullsPin (point)) continue;
+                    if (!GetWeights (point, Mathf.Clamp01 (settings_.pull), out positionWeight, out rotationWeight) || positionWeight < 1) continue;
+                    Vector3 pin = (Vector3)PointEffector (point, 1, 0, scale).position;
+                    Vector3 pinPoint = solvePositions_[parent] + solveRotations_[parent] * point.offset;
+                    // 向きも留めた Pin の点なら、その骨は回れないので、鎖は骨 b の付け根から始まる（Pin の点と一緒に動く）。
+                    // 向きを留めていなければ、骨はその点まわりに回れるので、鎖は Pin の点から始まり、点から骨 b の付け根までは骨の中の決まった距離
+                    // （腰の向きまで Pin のとき、腰の点から数えると届く距離を長めに見て、背骨が伸びきらないまま首が 1cm 届かなかった）
+                    Vector3 anchor = rotationWeight > 0 ? solvePositions_[b] + (pin - pinPoint) : pin;
+                    // 骨を伸ばしきった長さの kPathStretch 倍までにする（まっすぐ伸びきる手前は、反復で解くソルバーが詰めきれず、首が 1cm 届かなかった。
+                    // 腕・脚は蝶番を円の上へ寄せる手助けで伸びきるが、背骨には無い）。
+                    // ただし保持解きでそれより遠くまで届いていたら、そこまでは伸ばす（もとからまっすぐな背骨は 95% へ縮められず、首が届かなかった）
+                    float reach = (rotationWeight > 0 ? length : length + Vector3.Distance (pinPoint, solvePositions_[b])) * kPathStretch;
+                    Vector3 toGrabbed = target - anchor;
+                    reach = Mathf.Max (reach, Vector3.Distance (target - heldShift, anchor));
+                    float over = toGrabbed.magnitude - reach;
+                    return over > 0 ? toGrabbed.normalized * over : Vector3.zero;
+                }
+                // 動かせない点で軸まわりにしか回れない骨（S89 の axisLock。鎖骨など）は、親と一緒の 1 つの塊として、子の付け根から親の付け根までを数える
+                // （骨ごとに足すと、曲がったまま回れない鎖骨の所を伸ばしきれる長さに数え、届かない所まで背骨を伸ばそうとして背骨が曲がり、手も 2.5cm 届かなかった）
+                // 軸まわりには回れるので、子の付け根は軸まわりの円の上を動く。親の付け根から一番遠い所までを数える
+                if (child >= 0 && data_.bones[b].axisLock != 0) length += AxisLockedReach (b, child, parent) - Vector3.Distance (solvePositions_[child], solvePositions_[b]);
+                else length += Vector3.Distance (solvePositions_[b], solvePositions_[parent]);
+            }
+            return Vector3.zero;
+        }
+
+        /// <summary>
+        /// 軸まわりにだけ回れる骨 b（axisLock）の子 child の付け根が、親 parent の付け根から一番離れられる距離（今の姿勢 solvePositions_ で）。
+        /// 子の付け根は、b の付け根を通る軸まわりの円の上を動く
+        /// </summary>
+        float AxisLockedReach (int b, int child, int parent)
+        {
+            Vector3 origin = solvePositions_[b];
+            Vector3 axis = (solveRotations_[b] * (Vector3)data_.bones[b].lockAxis).normalized;
+            Vector3 toChild = solvePositions_[child] - origin;
+            float along = Vector3.Dot (toChild, axis);
+            float radius = (toChild - axis * along).magnitude;
+            Vector3 center = origin + axis * along - solvePositions_[parent];
+            Vector3 across = center - axis * Vector3.Dot (center, axis);
+            return Mathf.Sqrt (center.sqrMagnitude + radius * radius + 2 * radius * across.magnitude);
+        }
+
+        /// <summary>
+        /// 道の上の根（腰）の、元の向きに留める硬さ（data_.bones の stiffness）を release（0〜1）の割合だけ緩める。緩める前の硬さを返し、根を root に入れる
+        /// （道の上に根が無ければ -1）。呼ぶ側が解き終えたら戻す
+        /// </summary>
+        float ReleaseRoot (bool[] path, float release, out int root)
+        {
+            root = -1;
+            for (int b = 0; b < bodies_.Count; b++) {
+                if (!path[b] || bodyParents_[b] >= 0) continue;
+                root = b;
+                FullBodyIkBone bone = data_.bones[b];
+                float stiffness = bone.stiffness;
+                bone.stiffness *= 1 - release;
+                data_.bones[b] = bone;
+                return stiffness;
+            }
+            return 0;
         }
 
         /// <summary>
