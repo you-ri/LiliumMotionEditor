@@ -3678,6 +3678,26 @@ S28 の 0 の点は「乗る骨を付け根まわりに回して向けるだけ�
 
 対象: `Packages/jp.lilium.motioneditor`（Runtime/FullBodyIk・Editor/Rig・Editor/Targets・Editor/Preview・Tests）とデモの定義。
 
+### S90: 全身 IK の制御層のリファクタリング（2026-10-30）
+
+**`FullBodyRig` を、挙動を変えずに、S88・S89 の決まりをコードから読める形にする。** ソルバー（`FullBodyIk`）・保存データ・定義のハッシュは変えない。
+
+決めたこと:
+- 点の扱いは `PointRole`（Follow / Target / Grabbed / Lock / CarriedPin / Held）で表し、S88 の表は `HeavyRole`・`LightRole` の 2 か所だけで決める。目標を作るループ・Pin の点を探す処理・運ぶ量の計算は、この答えに従う
+- 解く手順は `SolveBodies` を入口に、1 回目の共通部分・`ResolveHeavyGrab`（重い点の解き直し）・`SolveLightGrab`（軽い点の 2 回目）に分ける
+- ファイルは partial で分ける: 本体（定義の読み込み・入力の控え）・`.Points`・`.Grab`・`.Floor`・`.Roles`・`.Solve`・`.HeavyGrab`・`.LightGrab`
+- 解き直しで解き始める姿勢は `startPositions_` / `startRotations_` に持ち、元の姿勢（`solvePositions_` / `solveRotations_`）を書き換えない。根の硬さは try / finally で戻す
+- 解くたびの配列は確保せず、持ち越す
+- 名前: `Point.aim` → `weightless`（目標の `aim` は「向けるだけ」のまま）、`ClearCarry` → `EndGrab`、`IsLight` は `Point.light` に。仕様書のこれより前の記述は旧名のまま
+- 作業中の確かめ方: つかみ方 17 通りのドラッグの全部の骨と点の値を記録し、段階ごとに許容差 1e-5 で比べた（作業が終わって消した）。計測で、解く処理の全経路を通ることを確かめた
+- 計画から変えたこと: 解き方ごとの private クラスと `BodyTree` は作らなかった。ファイルと関数の分離で目的が足り、クラスにするとどの行にも `rig_.` が付いて読みにくくなるため
+
+機能（受け入れ条件）:
+- S88 の表の全マスを `FullBodyWeightRuleTests` で確かめる（自動）
+- これまでのテストを変えずに通る（名前を変えた `EndGrab` の呼び出しを除く。自動）
+
+評価指標: コンパイルエラー 0 / モーションエディタのテスト失敗 0 / 姿勢の記録との差 1e-5 以下（作業中）。
+
 ## スプリント計画（1スプリント = 1機能）
 
 | # | 機能 | ゴール | 完了基準 |
@@ -3776,6 +3796,7 @@ S28 の 0 の点は「乗る骨を付け根まわりに回して向けるだけ�
 | S87 | 引く強さで点の丸の大きさを変える（10-26 追加） | 0 の点の丸は半分の大きさ（リグエディタも） | S87 の受け入れ条件 |
 | S88 | 点の重さ（10-27 追加） | 軽い点（0）をつかんで動かすと軽い点は Free でも Pin でも引かれ、重い点（1）・Lock の点とその向こうは動かない。重い点をつかむと、軽い Pin の点は Free と同じに引かれ、重い Pin の点は届く間は留まり、届かなければ外れて付いて動く | S88 の受け入れ条件 |
 | S89 | 動かせない点（10-28 追加） | 選べるが動かせず、キーもトラックも持たない灰色の点。骨の上でも親から見ても動かず、骨は付け根と点を結ぶ軸まわりにだけ回る。軽い点をつかんでいる間は Pin の点と同じ壁にもなる | S89 の受け入れ条件 |
+| S90 | 全身 IK の制御層のリファクタリング（10-30 追加） | 挙動を変えずに、点の扱いの決まりと解く手順をコードから読める形にする | S90 の受け入れ条件 |
 
 ## 評価指標と閾値
 - 共通: コンパイルエラー0 / エディタ上の例外0 / **Console 警告 0**（Rigging は拘束が invalid だと警告を出す）/ テスト失敗0。
@@ -4140,3 +4161,4 @@ S28 の 0 の点は「乗る骨を付け根まわりに回して向けるだけ�
 - [ ] S63 点に床との当たりの球の半径を持たせる: 実装済み・テスト通過（10-22）。`EditRigDefinition.BodyPoint.radius`（humanScale に対する割合）・`kSoleRadius`（0.02。足裏の 8 点）・全身 IK のハッシュ（半径のある点だけ足す）、`EditingRig.GetAnchorRestOffset`（地面へ落とす点を半径だけ上に置く）、`FullBodyRig.GetRadius`・`ClampToFloor`/`FloorTurn` の高さを球の下の端に、`BodyPointTarget.floorRadius`・`ClampToFloor`、`PreviewWindow.MoveSelectedPoints`、`MotionLint`（床・接地）、`PoseSession.LockFeet`、操作口の `contact`、`PoseDocument` の接地の Heel の支点を球の中心に（真下の床だと踵が 1.3mm 下がった）。モーションエディタ・リグエディタで球の輪を描く。パッケージの既定の定義アセットを作り直した（足裏の 8 点に `radius: 0.02`）。調べたこと: 半径を入れる前の足裏の点は基準姿勢でちょうど地面（Y=0）にあり、浮いていたのは足首の点（関節の高さ。窓のキャラで 8.65cm）。テスト 2 件追加（`SolePoints_HaveCollisionRadius_AndRestOnTheGround`・`FloorClamp_StopsMovedSolePointAtItsRadius`）、床の高さを前提にしたテスト 3 件を球の下の端・半径の高さに直した。10-22 追加: 足首を下げると足が起きて下がらなかった・つま先から接地して足裏全体が着くようにしてほしい（ユーザー報告 2 回）。止める高さを今の足の形を前後に傾けて決め（平らを越えない。`GetFloorLimit`・`FloorSlope`・`IsTiltAllowed`）、向きを固定した足は動かすときに向きの値を、床の上に乗るいちばん近い向きへ回し（`TryGetFloorRoll`）、同じ足の Pin の点はつかんで動かす間は足と一緒に動かす（`CarryFootPins`）。開いている窓のキャラ（左足首 Locked・向きも固定・足裏 4 点 Pin・つま先が下がった姿勢）で 1cm ずつ下げると、つま先が床に着いたまま踵が 12.1cm → 0 に下り、足首 8.8cm で踵とつま先が両方着いて止まる（このフレームはつま先の骨が曲がり足が横に傾いているので、足裏の中心は 2.2cm 浮く）。前に「足首の向きを回すとつま先の骨が約 3 倍曲がる」と書いたのは、足裏の点が Pin で留まっていたため（全身 IK の不具合ではなかった）。テスト `FloorClamp_LowersAnkleWithTheWholeFoot` 2 件・`FloorClamp_RollsRotationLockedFootFlat` 2 件（足裏の点が Pin のときも）。10-22 追加: 足首を持ち上げても踵が付いてこなかった（ユーザー報告。足首の向きを固定・足裏の中心を Locked）。`TryGetPivotTurn` で Locked の点を中心に向きの値を回すようにし、開いている窓のキャラで足首を 10cm 上げると踵が 0 → 6.7cm 上がり、足裏の中心・つま先は床に留まる。テスト `FloorClamp_LiftingAnkle_TurnsFootAboutLockedSoleBall`。6.0 でテスト 422 件すべて通過。残り: 窓での目視・デモの定義（`Superhero_Male_FullBody Rig Definition.asset`。未追跡）への反映・6.6（extrival）での確認
 - [ ] S69 床を全身 IK の当たりで解く: 実装済み・テスト通過（10-22）。`FullBodyIkContact`・`FullBodyIkData.contacts`/`contactCount`/`floorNormal`/`floorHeight`、`FullBodyIk.Solve`（当たりなしで解いて潜ったときだけ、その姿勢から必ず満たす拘束と床だけを詰める）・`PrepareContacts`・`SolveContact`・`SnapContacts`（固定した点まわりに、潜った点ごとの回転を平均して回す。一番深い点だけだと反対側の点と押し合って 3mm 残った）、仕上げで床に当たった骨の向きを保つ。`FullBodyRig.SetContacts`（つま先の点は足の上の点として渡す）・`HasOtherPositionPin`。消した: `ClampToFloor`・`FloorTurn`・`TryGetFloorRoll`・`TryGetPivotTurn`・`IsFloorTurnFixed`。`GetFloorLimit` は平らに近づく向きにだけ傾ける（踵だけで立った足をさらに反らせて足首が床まで下がった）。設計は Fable に見てもらった。開いている窓のキャラで、腰を 3mm 刻みで 7 方向へ 36cm 動かして 1 歩の最大の回り 2.8° 以下・足裏の球は床の上、足首を持ち上げると踵が付いてくる。テストは前提の変わった 1 件（足首を横へ滑らせると足は上から見て回る）を直し、6.0 でテスト 422 件すべて通過（Burst）。途中で PC が落ちて `FullBodyIk.cs` が 0 で埋まり（git の控えにも壊れた版が入っていた）、最後のコミットの版へ戻してから作った。落ちる前にこのファイルに入っていた約 4KB の変更は失われた（どの作業のものかは見つからなかった）。10-22 追加（ユーザー指示「制御点を面の頂点としたボックスを、制御点をつかんで面に押し当てたとき、現実ではどういった挙動になるかをシミュレーションした動きにしてほしい」）: 足の点をつかんで動かすときは、足を接地の点を頂点にした硬い箱として動かす（`FootBox`・`FullBodyRig.TryMoveFoot`。下の S70 の記述）。全身 IK の床の当たりは、足をつかんでいないとき（腰を動かしたなど）に足を床の上に保つ役。残り: 窓での目視・6.6（extrival）での確認
 - [ ] S70 足を硬い箱として床に押し当てる: 実装済み・テスト通過（10-22）。`FootBox`（足の点を頂点にした箱。外形で倒れるか決める・Locked の点は動かない支点・つま先の付け根で曲がる・内側の縁を折り返して足す）、`FullBodyRig.TryMoveFoot`・`IsFootBoxed`・`AddInnerEdge`（箱の足は骨を箱の位置と向きに留め、その足の点と全身 IK の床の当たりは使わない）、`BodyPointTarget.MoveFoot`（つかむ・ギズモ・MoveBy・MoveTo で通す）。テスト `FootBoxTests` 4 件、`FullBodyTests` の床のテストは箱の決まりに合わせて 2 件の前提を直した（持ち上げた後は離してから回す・足首を上げてから下げたときの横の動きは見ない）。開いている窓のキャラで、右足（足首と踵が Locked）の足首を下ろすと踵を支点に足が平らに倒れて足首 8.8cm で止まり、持ち上げると踵を支点につま先側が上がる。左足は前の作りで外側へ約 70° 横倒しになった姿勢がキーに残っていて、押すと外へ倒れきる（箱としては正しい。Reset してから確かめる）。10-22 追加: つま先を下にして足を下げても地面に密着しなかった（ユーザー報告）。原因は 3 つ: 2 点以上で支えるときに角を支点にしていた（いちばん近い辺を軸に転がす。辺の延長の上なら端を支点に）・内側の頂点を真上を向いた面で折り返していた（足裏の面の中で、踵から足裏の前への線で折り返す）・姿勢のつま先が反っていた（足裏が面で着いたらつま先も下ろす）。開いている窓のキャラで、つま先を下にした左足の足首を 1cm ずつ下げると、つま先 → 内側と小指側 → 踵の順に着き、踵・足裏の中心・小指側・内側・つま先の先がすべて床から 2mm 以内に密着する。床に触れているとみなす高さを 1mm → 2mm（1mm ちょうどの頂点が当たりに数えられなかった）。テスト `LandingFlat_RestsRaisedToeOnFloor` を足した。6.0 でテスト 427 件すべて通過。10-23 ユーザーが窓で試し、つま先を下にして足を下げると自然に密着することを確かめた。残り: 6.6（extrival）での確認
+- [ ] S90 全身 IK の制御層のリファクタリング: 実装済み・テスト通過（10-30）。`FullBodyRig` を partial で分け、点の扱いを `PointRole`（`HeavyRole`・`LightRole`）に、解く手順を `SolveBodies`・`ResolveHeavyGrab`・`SolveLightGrab` にまとめた。つかみ方 17 通りの姿勢の記録と段階ごとに一致（1e-5 以下）。S88 の表のテスト 12 件を追加（`FullBodyWeightRuleTests`）。6.0 でテスト 549 件すべて通過。残り: 6.6（extrival）でのコンパイルとテスト
