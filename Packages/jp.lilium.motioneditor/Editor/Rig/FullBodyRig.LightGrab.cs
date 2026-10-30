@@ -74,12 +74,12 @@ namespace Lilium
                 else if (GetWeights (point, pull, out positionWeight, out rotationWeight)) {
                     if (positionWeight < 1 || point.blendBody >= 0) continue;
                     // 重さ 0 の Pin の点は、Free の軽い点と同じに引かれる（10-30 ユーザー指示「Pin でも引く」）
-                    if (point.aim && PullsPin (point)) continue;
+                    if (point.weightless && PullsPin (point)) continue;
                     orientedPoint = rotationWeight > 0;
                 }
                 else {
                     // Free の軽い点は引かれる
-                    if (point.aim) continue;
+                    if (point.weightless) continue;
                     orientedPoint = point.hasRotation;
                 }
                 held_.Add (point);

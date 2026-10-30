@@ -151,8 +151,8 @@ namespace Lilium
             public BodyPoint values;
             public Transform bone;
             public bool hasRotation;
-            /// <summary>重さ 0 の点か（定義の重さが 0）。軽い点（light）でなければ、骨を回して点を目標の方へ向けるだけの点（S28）</summary>
-            public bool aim;
+            /// <summary>重さ 0 の点か（定義の重さが 0）。軽い点（light）でなければ、骨を回して点を目標の方へ向けるだけの点（S28。目標の aim）</summary>
+            public bool weightless;
             /// <summary>
             /// 軽い点か（S88）。重さ 0 で、向きを混ぜず、乗る骨に重さ 1 の点が無い点。ふつうの点として解き、つかんで動かすと、Free の重い点を引かない。
             /// 乗る骨に重い点があれば、その骨は引けないので、今までどおり骨を付け根まわりに回して向けるだけ（既定の向きの点）
@@ -220,7 +220,7 @@ namespace Lilium
                         values = values,
                         bone = bone,
                         hasRotation = point.hasRotation,
-                        aim = point.definition != null && point.definition.weight <= 0,
+                        weightless = point.definition != null && point.definition.weight <= 0,
                         contact = point.definition != null && point.definition.contact,
                         passive = point.definition != null && point.definition.passive,
                         radius = point.definition != null ? Mathf.Max (0, point.definition.radius) * rig.humanScale : 0,
@@ -316,7 +316,7 @@ namespace Lilium
             }
             foreach (Point point in points_) {
                 // 動かせない点は重さを使わないので、重い点に数えない
-                point.light = point.aim && point.blendBone == null && point.body >= 0 && !points_.Any (p => !p.aim && !p.passive && p.body == point.body);
+                point.light = point.weightless && point.blendBone == null && point.body >= 0 && !points_.Any (p => !p.weightless && !p.passive && p.body == point.body);
             }
             HashSet<int> contactBodies = new HashSet<int> ();
             foreach (Point point in points_) {

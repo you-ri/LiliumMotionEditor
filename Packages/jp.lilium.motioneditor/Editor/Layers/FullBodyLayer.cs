@@ -74,7 +74,7 @@ namespace Lilium
             FullBodyRig body = rig;
             if (body == null) return;
             // クリップから姿勢を当て直したら、足と一緒に動かしていた Pin の点も置いた場所の固定に戻す（Floor Clamp。FullBodyRig.CarryFootPins）
-            body.ClearCarry ();
+            body.EndGrab ();
             // 前のキーフレームから状態だけ引き継いだ点は、このフレームの骨の位置に置く
             stage_.SnapCarriedPoints ();
             body.CaptureInput ();

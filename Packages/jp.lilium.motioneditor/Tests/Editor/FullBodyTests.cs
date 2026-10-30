@@ -1068,7 +1068,7 @@ namespace Lilium
             s.body.floorClamp = true;
             foreach (BodyPointTarget target in targets.OfType<BodyPointTarget> ()) target.floorClamp = true;
             PointTarget (targets, HumanBodyBones.Hips).SetState (BodyPointState.Pin);
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
             s.body.CaptureInput ();
             s.body.Solve ();
             s.body.CaptureInput ();
@@ -1084,7 +1084,7 @@ namespace Lilium
             }
             Assert.LessOrEqual (Vector3.Distance (footStart + forward * 0.8f, footBone.position), 0.01f, "足は引いた所へ届く");
             Assert.Greater (Vector3.Dot (hips.position - hipsStart, forward), 0.1f, "Pin の腰は引かれて付いてくる");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1189,7 +1189,7 @@ namespace Lilium
             s.body.CaptureInput ();
             ankle.MoveBy (new Vector3 (0, 0.15f, 0));
             // 持ち上げたら一度離す（窓では、離したときに足の箱を捨てる）
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
             ankle.SpinRotateWorld (Quaternion.AngleAxis (30, s.rig.root.transform.rotation * s.rig.bodyRight));
             Assert.IsTrue (ankle.rotationPinned, "向きを固定した");
             s.body.RestoreInput ();
@@ -1224,7 +1224,7 @@ namespace Lilium
             if (pinSoles) {
                 // 離したとき（キーを打つ前に骨の場所へ付け直す）
                 foreach (BodyPointTarget sole in solePoints) sole.SyncToBone ();
-                s.body.ClearCarry ();
+                s.body.EndGrab ();
                 foreach (BodyPointTarget sole in solePoints) {
                     Assert.AreEqual (BodyPointState.Pin, sole.state, "Pin のまま: " + sole.id.name);
                     Vector3 bone;

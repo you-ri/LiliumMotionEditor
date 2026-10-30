@@ -772,7 +772,7 @@ namespace Lilium
             Assert.LessOrEqual (Vector3.Distance (middle.position, ideal), 0.005f, "円の上で目標に一番近い所まで付いてくる");
             Assert.LessOrEqual (Vector3.Distance (bottom, Bone (s, end).position), 1e-4f, "足首・手首は動かない");
             AssertLengths (lengths, 1e-4f, "骨の長さ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         public enum ElbowState { Free, Pin, Lock }
@@ -808,7 +808,7 @@ namespace Lilium
             // 肘が Lock なら、肘の向こうの上腕も動かない（前腕だけが肘まわりに回る）
             Transform moved = Bone (s, locked ? HumanBodyBones.LeftLowerArm : HumanBodyBones.LeftUpperArm);
             AssertUnchanged (bones, rest, 1e-4f, 0.01f, locked ? "前腕のほか" : "左腕のほか", b => b == moved || b.IsChildOf (moved));
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -828,7 +828,7 @@ namespace Lilium
             Assert.Greater (Vector3.Distance (handRest, hand.position), 0.02f, "手は動く");
             Transform lowerArm = Bone (s, HumanBodyBones.LeftLowerArm);
             AssertUnchanged (bones, rest, 1e-4f, 0.01f, "前腕のほか", b => b == lowerArm || b.IsChildOf (lowerArm));
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -860,7 +860,7 @@ namespace Lilium
                 // Lock の点は、元の姿勢でのずれから 1mm より大きくは動かさない（FullBodyRig.LocksHeld）
                 Assert.LessOrEqual (Vector3.Distance (footRest, foot.position), 1e-3f, "Lock の足は動かない");
                 Assert.Greater (s.body.GetResidual (HumanBodyBones.Hips), 0.05f, "腰は Lock の足に阻まれて届かない");
-                s.body.ClearCarry ();
+                s.body.EndGrab ();
                 return;
             }
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Hips), kReach, "腰は届く");
@@ -873,7 +873,7 @@ namespace Lilium
                 Assert.LessOrEqual (Vector3.Distance (handRest, hand.position), 5e-3f, "届く間は、Pin の重い手はその場に留まる");
                 Assert.Greater (Vector3.Distance (elbowRest, elbow.position), 0.02f, "Pin の軽い肘は、Free の点と同じに引かれる");
             }
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -889,7 +889,7 @@ namespace Lilium
             Pin (free, HumanBodyBones.Hips, free.forward * 0.15f - free.up * 0.1f);
             Solve (free);
             Pose[] expected = Poses (free.rig.editingBones.ToArray ());
-            free.body.ClearCarry ();
+            free.body.EndGrab ();
 
             Setup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
@@ -901,7 +901,7 @@ namespace Lilium
             Pin (s, HumanBodyBones.Hips, s.forward * 0.15f - s.up * 0.1f);
             Solve (s);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "肘・上腕を Free にしたときと同じ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -920,7 +920,7 @@ namespace Lilium
             Solve (s);
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Neck), kReach, "首は届く");
             Assert.Greater (hips.position.y - hipsRest.y, 0.05f, "Pin の腰は引かれて上がる");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -946,7 +946,7 @@ namespace Lilium
             Assert.Greater (lift, 0.05f, "道の上の Pin の腰は引かれて上がる");
             Assert.LessOrEqual (lift, 0.1f + kReach, "首を上げた量より先へは運ばない");
             Assert.LessOrEqual (Vector3.Distance (handRest, hand.position), 5e-3f, "腕の伸びに余裕のある左手の Pin は留まる");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -981,7 +981,7 @@ namespace Lilium
                 if (bone == null) continue;
                 Assert.LessOrEqual (Quaternion.Angle (rest[k], bone.localRotation), 15f, spine[k] + " は折れない");
             }
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1025,7 +1025,7 @@ namespace Lilium
             for (int k = 1; k + 1 < joints.Length; k++) {
                 Assert.LessOrEqual (Vector3.Angle (joints[k] - joints[k - 1], joints[k + 1] - joints[k]), 3f, "背骨はまっすぐ: " + k);
             }
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1059,7 +1059,7 @@ namespace Lilium
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), 3e-3f, "左手は届く");
             Assert.Greater (Vector3.Distance (hipsRest, hips.position), 1f, "腰は引かれる");
             Assert.LessOrEqual (bend, 15f, "背骨は付け根で折れない");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1087,7 +1087,7 @@ namespace Lilium
                 Assert.GreaterOrEqual (Vector3.Distance (upper.position, hand.position) / length, 0.99f, "手が運ばれている間は腕が伸びきっている: " + i * 2 + "cm");
             }
             Assert.IsTrue (moved, "腕が伸びきった先では手も運ばれる");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1102,7 +1102,7 @@ namespace Lilium
             s.body.MarkGrabbed (HumanBodyBones.Hips);
             Pin (s, HumanBodyBones.Hips, s.forward * 0.15f - s.up * 0.1f);
             AssertBurstMatchesManaged (s);
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1117,7 +1117,7 @@ namespace Lilium
             Pin (expected, HumanBodyBones.LeftHand, expected.forward * 1f);
             Solve (expected);
             Pose[] pose = Poses (expected.rig.editingBones.ToArray ());
-            expected.body.ClearCarry ();
+            expected.body.EndGrab ();
 
             definition_ = CreateDefinition ();
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
@@ -1128,7 +1128,7 @@ namespace Lilium
             Pin (s, HumanBodyBones.LeftHand, s.forward * 1f);
             Solve (s);
             AssertUnchanged (s.rig.editingBones.ToArray (), pose, 1e-4f, 0.01f, "手も重い定義と同じ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1202,7 +1202,7 @@ namespace Lilium
             if (passive) AssertUnchanged (bones, rest, 1e-4f, 0.01f, "左の鎖骨から先のほか", LeftArm (s));
             else Assert.Greater (Quaternion.Angle (chestRest, chest.rotation), 0.5f, "動かせない点が無ければ、胸は引かれて回る");
             AssertLengths (lengths, 1e-4f, "骨の長さ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1241,7 +1241,7 @@ namespace Lilium
             Assert.LessOrEqual (Vector3.Distance (point, pointNow), 1e-3f, "動かせない点は動かない");
             AssertUnchanged (bones, rest, 1e-4f, 0.01f, "左の鎖骨から先のほか", LeftArm (s));
             AssertLengths (lengths, 1e-4f, "骨の長さ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1251,14 +1251,14 @@ namespace Lilium
             Setup plain = Create (shoulders: true);
             PullForPassive (plain, grab);
             Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
-            plain.body.ClearCarry ();
+            plain.body.EndGrab ();
 
             definition_ = CreateDefinition ();
             AddPassiveShoulders ();
             Setup s = Create (shoulders: true);
             PullForPassive (s, grab);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         /// <summary>grab なら重い腰をつかんで前へ、そうでなければ手を固定して解く（キーから解き直すのと同じ）</summary>
@@ -1303,7 +1303,7 @@ namespace Lilium
             Assert.Greater (angle, 1f, "鎖骨は回る");
             Assert.Greater (Mathf.Abs (Vector3.Dot (turnAxis, axis)), 0.99f, "付け根と点を結ぶ軸まわりにだけ回る");
             AssertLengths (lengths, 1e-4f, "骨の長さ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         [Test]
@@ -1327,7 +1327,7 @@ namespace Lilium
             Setup plain = Create (shoulders: true);
             GrabTorso (plain, withHand);
             Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
-            plain.body.ClearCarry ();
+            plain.body.EndGrab ();
 
             definition_ = CreateDefinition ();
             SetLight ("Chest", "Stomach");
@@ -1335,7 +1335,7 @@ namespace Lilium
             Setup s = Create (shoulders: true);
             GrabTorso (s, withHand);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
-            s.body.ClearCarry ();
+            s.body.EndGrab ();
         }
 
         /// <summary>胸の点（withHand なら左手も）をつかんで、前へ動かして解く（まとめて選んで動かすのと同じ）</summary>

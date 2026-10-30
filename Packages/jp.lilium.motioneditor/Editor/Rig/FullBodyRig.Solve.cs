@@ -126,8 +126,8 @@ namespace Lilium
                 // （数えないと、重い足を引いて脚が伸びきっても、Pin の腰を外して解き直さず、体が付いてこなかった。10-28 ユーザー報告）
                 float positionWeight, rotationWeight;
                 if (!GetWeights (point, pull, out positionWeight, out rotationWeight) && !IsFootBoxed (point)) continue;
-                if (IsLight (point)) lightGrab = true;
-                else if (!point.aim) heavyGrab = true;
+                if (point.light) lightGrab = true;
+                else if (!point.weightless) heavyGrab = true;
             }
             if (heavyGrab) lightGrab = false;
 
@@ -147,7 +147,7 @@ namespace Lilium
                 // その先の点の重さが0ならpinでも freeと同じように引かれるようにして」）。重さ 1 の Pin の点は強さ 1 のまま効かせる
                 // （重さ 0 の Pin の点（腹・胸など）とぶつかって答えが跳ねていたのは、これで起きない。10-28 実測で、強さを 0.99 に抑えて
                 // 仕上げでも効かせる形は、腕のように鎖が何本もつながる所で詰め切れず、腰を 20cm 動かすと Pin の手が 9cm 流れた）
-                if (heavyGrab && point.aim && PullsPin (point)) continue;
+                if (heavyGrab && point.weightless && PullsPin (point)) continue;
                 pins |= heavyGrab && PullsPin (point);
                 data_.effectors[count++] = PointEffector (point, positionWeight, rotationWeight, scale);
             }
@@ -170,7 +170,6 @@ namespace Lilium
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
             SetContacts (rootPosition.y, rootInverse * Vector3.up);
             if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
-            // 届かなければ、まず根への道の上の Pin の点だけを外し、それでも届かなければ残りも外す
             // 届かないか Lock の点が動いたら、届かなかった分だけ Pin の点の目標を運んで解き直す（10-28。Fable の見立てを受けて、段に分けて外す形から換えた）:
             // 1. 保持解き: Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き、つかんだ点が届かなかった分 shift を測る。
             // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、間の骨（背骨）が伸びきるまでは運ばず、超えた分だけ運ぶ（PathStretch）。
@@ -260,7 +259,7 @@ namespace Lilium
                     if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
                     // 留めた点・動かない骨の上の点は、自分の目標を使わない。重さ 0 の Pin の点は、Free の点と同じに目標を使わない（引かれる）
                     if (held_.Contains (point) || frozen_[point.body]) continue;
-                    if (point.aim && PullsPin (point)) continue;
+                    if (point.weightless && PullsPin (point)) continue;
                     // つかんでいる点は、Pin の点・留めた重い点とぶつかったら譲る（kLightPull）。強さ 1 のままだと、両方を満たそうとして関節が離れたまま反復が終わり、
                     // 仕上げで骨をつなぎ直したときに、留めた重い点の骨が親に付いて動いた（10-27 実測で、左肩を動かすと首と頭が 2.3mm 動いた）
                     if (grabbed_.Contains (point)) positionWeight = Mathf.Min (positionWeight, kLightPull);
@@ -289,15 +288,6 @@ namespace Lilium
                 bodies_[i].rotation = rootRotation * Quaternion.Normalize ((Quaternion)data_.rotations[i]);
             }
             return true;
-        }
-
-        /// <summary>
-        /// 軽い点か（Point.light。S88）。つかんで動かすと、Free の重い点を引かない。
-        /// 向けるだけの点（向きを混ぜる膝の Pole・重い点のある骨の向きの点）は、今までどおり骨を回して向けるだけ
-        /// </summary>
-        static bool IsLight (Point point)
-        {
-            return point.light;
         }
 
         /// <summary>
@@ -343,7 +333,7 @@ namespace Lilium
                 rotation = point.control.localRotation * point.restRootRotation,
                 positionWeight = positionWeight,
                 rotationWeight = rotationWeight,
-                aim = point.aim && !IsLight (point) ? 1 : 0,
+                aim = point.weightless && !point.light ? 1 : 0,
                 blendBone = point.blendBody,
                 blend = point.blendBody >= 0 ? point.blend : 0,
                 blendOffset = point.blendOffset,

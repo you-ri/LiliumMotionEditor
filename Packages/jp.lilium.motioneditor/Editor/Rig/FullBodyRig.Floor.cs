@@ -7,6 +7,12 @@ namespace Lilium
     // 床（Floor Clamp。点の止める高さ・足の箱・ソルバーへ渡す床との当たり）
     public sealed partial class FullBodyRig
     {
+        /// <summary>足が平らとみなす、踵とつま先の高さの差（メートル）。傾きを調べる刻み（0.25°）で足の長さ 25cm なら 1.1mm ずつ変わる</summary>
+        const float kFlatSlope = 2e-3f;
+        /// <summary>足の止める高さを探すとき、傾けて調べる刻み（度）と回数（左右合わせて。±90° まで）</summary>
+        const float kFloorRollStep = 0.25f;
+        const int kFloorRollSteps = 720;
+
         /// <summary>
         /// 点を動かすとき、床（ワールドの Y = 0）より下へ行かない点の高さの下限（Floor Clamp）。
         /// 接地の点（足首・足裏の点）は、今の足の形のまま前後に傾けて、足裏の球がどれも床の上に乗るいちばん低い高さ（踵とつま先が両方着く所。
@@ -17,9 +23,9 @@ namespace Lilium
         /// 足の向きを固定している足も、床との当たりが向きの固定に勝って回る。
         /// ほかの点は自分の球の半径
         /// </summary>
-        public float GetFloorLimit (BodyPointId bone)
+        public float GetFloorLimit (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null) return 0;
             if (point.floorGroup < 0) return point.radius;
             // 足の点の、今の場所（つま先の骨の今の曲がりも入る。向きを固定していれば、その向きの値の向き）を、今の向きから前後に傾けて、
@@ -60,9 +66,6 @@ namespace Lilium
             return now * tilted > 0 && Mathf.Abs (tilted) <= Mathf.Abs (now) + kFlatSlope;
         }
 
-        /// <summary>足が平らとみなす、踵とつま先の高さの差（メートル）。傾きを調べる刻み（0.25°）で足の長さ 25cm なら 1.1mm ずつ変わる</summary>
-        const float kFlatSlope = 2e-3f;
-
         /// <summary>
         /// 足の前後の傾き: tilt だけ傾けたときの、いちばん前の点といちばん後ろの点（forward の向きで）の球の下の端の高さの差（前が高ければ正）。
         /// 足が平らなら 0
@@ -78,15 +81,11 @@ namespace Lilium
             return ((tilt * arms[front].Key).y - arms[front].Value) - ((tilt * arms[back].Key).y - arms[back].Value);
         }
 
-        /// <summary>足の止める高さを探すとき、傾けて調べる刻み（度）と回数（左右合わせて。±90° まで）</summary>
-        const float kFloorRollStep = 0.25f;
-        const int kFloorRollSteps = 720;
-
         /// <summary>
         /// Floor Clamp で足の点（grabbed）をつかんで動かしている間、同じ足のほかの Pin の点（Locked でないもの）を固定に使わず、足と一緒に動かす（10-22 ユーザー指示）。
         /// 足裏の点が Pin のままだと、足首をつかんで下げても足裏の点がその場に留まり、足がひとかたまりで下がらずに、つま先の骨だけが曲がった。
         /// 一緒に動かした点は、離したときに骨の今の場所で Pin のまま付け直す（SyncToBone。Pin のいつもの決まり）。Locked の点は留めたまま。
-        /// キーを打ったとき・クリップから姿勢を当て直したときに止める（ClearCarry）
+        /// キーを打ったとき・クリップから姿勢を当て直したときに止める（EndGrab）
         /// </summary>
         public void CarryFootPins (BodyPointId grabbed)
         {
@@ -106,7 +105,7 @@ namespace Lilium
 
         /// <summary>
         /// Floor Clamp で足の点（grabbed）をつかんで hand（ワールド）へ動かす: 足を、接地の点を頂点にした硬い箱として床に押し当てたときのように動かし（FootBox）、
-        /// 点の置き場所（届かなければ手前）を placed に返す（10-22 ユーザー指示）。箱はドラッグの間持ち越し、キーを打つとき・クリップから当て直すときに捨てる（ClearCarry）。
+        /// 点の置き場所（届かなければ手前）を placed に返す（10-22 ユーザー指示）。箱はドラッグの間持ち越し、キーを打つとき・クリップから当て直すときに捨てる（EndGrab）。
         /// 解くときは、足の骨を箱の位置と向きに強さ 1 で留め、脚は全身 IK で届かせる（足のほかの点は使わない）。
         /// 向きを持つ点（足首の点）の向きの値は、向きを固定していれば箱の向きに合わせる（キーと姿勢が食い違わない）。足の点でなければ false
         /// </summary>
@@ -164,9 +163,9 @@ namespace Lilium
         }
 
         /// <summary>点が、ドラッグの間に持ち越している足の箱の頂点か（Floor Clamp の止める高さは箱が受け持つ）</summary>
-        public bool IsFootBoxed (BodyPointId bone)
+        public bool IsFootBoxed (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && IsFootBoxed (point);
         }
 

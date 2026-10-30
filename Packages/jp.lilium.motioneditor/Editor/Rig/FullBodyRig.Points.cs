@@ -7,6 +7,10 @@ namespace Lilium
     // 全身 IK の点の値（定義から読んだ点の情報・世界座標との行き来・固定の強さ）
     public sealed partial class FullBodyRig
     {
+        /// <summary>点を骨へ合わせ直す差の下限（これ以下は届いているとみなす）</summary>
+        const float kSyncDistance = 1e-4f;
+        const float kSyncAngle = 0.01f;
+
         public int pointCount
         {
             get { return points_.Count; }
@@ -59,24 +63,24 @@ namespace Lilium
             return null;
         }
 
-        public bool HasPoint (BodyPointId bone)
+        public bool HasPoint (BodyPointId id)
         {
-            return Find (bone) != null;
+            return Find (id) != null;
         }
 
         /// <summary>点のコントロール（無ければ null）</summary>
-        public Transform GetControl (BodyPointId bone)
+        public Transform GetControl (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null ? point.control : null;
         }
 
         /// <summary>
         /// 点が付いている「骨の上の点」の今のワールドの位置。付け根の点は骨の位置、離れた点は定義の場所
         /// </summary>
-        public bool TryGetBonePointWorld (BodyPointId bone, out Vector3 position)
+        public bool TryGetBonePointWorld (BodyPointId id, out Vector3 position)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             position = point != null ? BonePointWorld (point) : Vector3.zero;
             return point != null;
         }
@@ -99,44 +103,44 @@ namespace Lilium
         }
 
         /// <summary>接地の点か（定義の contact。床に留める・床と滑りを見る点）</summary>
-        public bool IsContact (BodyPointId bone)
+        public bool IsContact (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && point.contact;
         }
 
         /// <summary>動かせない点か（定義の passive。S89。選べるが動かせず、キーを持たない）</summary>
-        public bool IsPassive (BodyPointId bone)
+        public bool IsPassive (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && point.passive;
         }
 
         /// <summary>床との当たりの球の半径（メートル。定義の radius。無ければ 0）</summary>
-        public float GetRadius (BodyPointId bone)
+        public float GetRadius (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null ? point.radius : 0;
         }
 
-        public Transform GetBone (BodyPointId bone)
+        public Transform GetBone (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null ? point.bone : null;
         }
 
-        public bool PointHasRotation (BodyPointId bone)
+        public bool PointHasRotation (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && point.hasRotation;
         }
 
         // ---- 点の値 ----
 
         /// <summary>点のワールドの位置と向き（コントロールは正規化した値を持つので、GameObject の位置そのものではない）</summary>
-        public bool TryGetPointWorld (BodyPointId bone, out Vector3 position, out Quaternion rotation)
+        public bool TryGetPointWorld (BodyPointId id, out Vector3 position, out Quaternion rotation)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null) {
                 position = Vector3.zero;
                 rotation = Quaternion.identity;
@@ -157,17 +161,17 @@ namespace Lilium
             return rootTransform.rotation * point.control.localRotation * point.restRootRotation;
         }
 
-        public bool SetPointPositionWorld (BodyPointId bone, Vector3 position)
+        public bool SetPointPositionWorld (BodyPointId id, Vector3 position)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null) return false;
             point.control.localPosition = rootTransform.InverseTransformPoint (position) / humanScale;
             return true;
         }
 
-        public bool SetPointRotationWorld (BodyPointId bone, Quaternion rotation)
+        public bool SetPointRotationWorld (BodyPointId id, Quaternion rotation)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null || !point.hasRotation) return false;
             point.control.localRotation = EditingRigSolver.Normalize (Quaternion.Inverse (rootTransform.rotation) * rotation * Quaternion.Inverse (point.restRootRotation));
             return true;
@@ -176,9 +180,9 @@ namespace Lilium
         /// <summary>
         /// 点の位置と向きを、今の骨の見た目に合わせる（固定の強さは変えない）。固定していない点をつかむ前に呼ぶと、今の場所から動かせる
         /// </summary>
-        public bool CapturePoint (BodyPointId bone)
+        public bool CapturePoint (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null) return false;
             CapturePoint (point);
             return true;
@@ -231,40 +235,40 @@ namespace Lilium
             }
         }
 
-        public float GetPositionWeight (BodyPointId bone)
+        public float GetPositionWeight (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && !point.passive ? point.values.positionWeight : 0;
         }
 
-        public float GetRotationWeight (BodyPointId bone)
+        public float GetRotationWeight (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && !point.passive && point.hasRotation ? point.values.rotationWeight : 0;
         }
 
-        public void SetPositionWeight (BodyPointId bone, float weight)
+        public void SetPositionWeight (BodyPointId id, float weight)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point != null) point.values.positionWeight = Mathf.Clamp01 (weight);
         }
 
-        public void SetRotationWeight (BodyPointId bone, float weight)
+        public void SetRotationWeight (BodyPointId id, float weight)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point != null && point.hasRotation) point.values.rotationWeight = Mathf.Clamp01 (weight);
         }
 
         /// <summary>完全固定か（置いた場所から動かさない点。そうでない点は、編集のたびに骨の位置へ合わせ直す）</summary>
-        public bool GetLocked (BodyPointId bone)
+        public bool GetLocked (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null && !point.passive && point.values.locked > 0.5f;
         }
 
-        public void SetLocked (BodyPointId bone, bool locked)
+        public void SetLocked (BodyPointId id, bool locked)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point != null) point.values.locked = locked ? 1 : 0;
         }
 
@@ -273,11 +277,11 @@ namespace Lilium
         /// 体が届かない所へ置いた点・ほかの点を動かして届かなくなった点が、体の形から離れたまま残らないようにする。
         /// 位置を直したら position、向きを直したら rotation が true
         /// </summary>
-        public void SyncPointToBone (BodyPointId bone, out bool position, out bool rotation)
+        public void SyncPointToBone (BodyPointId id, out bool position, out bool rotation)
         {
             position = false;
             rotation = false;
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null || point.passive || point.values.locked > 0.5f) return;
             if (point.values.positionWeight >= 1 && Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) > kSyncDistance) {
                 point.control.localPosition = BoneLocalPosition (point);
@@ -289,16 +293,12 @@ namespace Lilium
             }
         }
 
-        /// <summary>点を骨へ合わせ直す差の下限（これ以下は届いているとみなす）</summary>
-        const float kSyncDistance = 1e-4f;
-        const float kSyncAngle = 0.01f;
-
         /// <summary>
         /// 点の基準の値（基準姿勢の骨の位置・向きの差なし）。ルートから見た値（＝保存する値）
         /// </summary>
-        public bool TryGetPointRestValues (BodyPointId bone, out Vector3 position, out Quaternion rotation)
+        public bool TryGetPointRestValues (BodyPointId id, out Vector3 position, out Quaternion rotation)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             position = point != null ? point.restRootPosition / humanScale : Vector3.zero;
             rotation = Quaternion.identity;
             return point != null;
@@ -313,11 +313,11 @@ namespace Lilium
         /// FK で根から順に戻したのと同じく、戻した祖先に付いて動いた所で求める（無ければ点の骨だけ戻す）。
         /// 祖先を戻さずに点ごとに求めると、脚の点をまとめて戻したとき、足首は曲がったままの脛に、膝の Pole はまっすぐにした太ももに乗り、食い違う
         /// </summary>
-        public bool TryGetPointLocalRestWorld (BodyPointId bone, ICollection<Transform> resetBones, out Vector3 position, out Quaternion rotation)
+        public bool TryGetPointLocalRestWorld (BodyPointId id, ICollection<Transform> resetBones, out Vector3 position, out Quaternion rotation)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
-            Point point = Find (bone);
+            Point point = Find (id);
             if (point == null || point.bone.parent == null) return false;
             if (resetBones == null) resetBones = new[] { point.bone };
             else if (!resetBones.Contains (point.bone)) resetBones = new List<Transform> (resetBones) { point.bone };
@@ -359,17 +359,17 @@ namespace Lilium
         /// <summary>
         /// 点が乗る骨の、基準姿勢からの今の向きの差（ルートから見た値）。向きを持たない点（胸など）でも出す（S60。点を座標の基準にするとき）
         /// </summary>
-        internal bool TryGetBoneRotation (BodyPointId bone, out Quaternion rotation)
+        internal bool TryGetBoneRotation (BodyPointId id, out Quaternion rotation)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             rotation = point != null ? BoneLocalRotation (point) : Quaternion.identity;
             return point != null;
         }
 
         /// <summary>届かなかった差（メートル）。固定の強さが 1 の点が、解いた後にどれだけ離れているか</summary>
-        internal float GetResidual (BodyPointId bone)
+        internal float GetResidual (BodyPointId id)
         {
-            Point point = Find (bone);
+            Point point = Find (id);
             return point != null ? Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) : 0;
         }
     }

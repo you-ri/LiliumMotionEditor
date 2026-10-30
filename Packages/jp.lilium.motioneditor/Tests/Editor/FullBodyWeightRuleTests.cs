@@ -87,7 +87,7 @@ namespace Lilium
             body.SetPointPositionWorld (HumanBodyBones.LeftHand, target);
             solve ();
             float moved = Vector3.Distance (elbowRest, elbow.position);
-            body.ClearCarry ();
+            body.EndGrab ();
             return moved;
         }
     }

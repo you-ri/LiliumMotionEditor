@@ -109,8 +109,8 @@ namespace Lilium
                 float positionWeight, rotationWeight;
                 if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
                 bool grabbed = grabbed_.Contains (point);
-                bool pulled = !grabbed && PullsPin (point);
-                if (pulled && point.aim) continue;
+                bool pulled = PullsPin (point);
+                if (pulled && point.weightless) continue;
                 if (pulled && !branches && !path[point.body]) continue;
                 if (grabbed) grabbedEffectors_.Add (count);
                 else if (point.values.locked > 0.5f && positionWeight >= 1) lockedEffectors_.Add (count);
@@ -172,7 +172,7 @@ namespace Lilium
                 branchShifts_[i] = Vector3.zero;
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
-                if (point.body < 0 || path[point.body] || point.aim || grabbed_.Contains (point) || !PullsPin (point)) continue;
+                if (point.body < 0 || path[point.body] || point.weightless || !PullsPin (point)) continue;
                 if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
                 float length;
                 int root = LimbRoot (point, path, out length);
@@ -201,7 +201,7 @@ namespace Lilium
                 int parent = bodyParents_[b];
                 foreach (Point point in points_) {
                     float positionWeight, rotationWeight;
-                    if (point.body != parent || point.aim || grabbed_.Contains (point) || !PullsPin (point)) continue;
+                    if (point.body != parent || point.weightless || !PullsPin (point)) continue;
                     if (!GetWeights (point, Mathf.Clamp01 (settings_.pull), out positionWeight, out rotationWeight) || positionWeight < 1) continue;
                     Vector3 pin = (Vector3)PointEffector (point, 1, 0, scale).position;
                     Vector3 pinPoint = solvePositions_[parent] + solveRotations_[parent] * point.offset;
@@ -242,7 +242,7 @@ namespace Lilium
             for (int b = bodyParents_[grabbed.bone]; b >= 0 && pinBody < 0; b = bodyParents_[b]) {
                 foreach (Point point in points_) {
                     float positionWeight, rotationWeight;
-                    if (point.body != b || point.aim || grabbed_.Contains (point) || !PullsPin (point)) continue;
+                    if (point.body != b || point.weightless || !PullsPin (point)) continue;
                     if (!GetWeights (point, pull, out positionWeight, out rotationWeight) || positionWeight < 1) continue;
                     pinBody = b;
                     turnsRoot = bodyParents_[b] < 0 && rotationWeight <= 0;
