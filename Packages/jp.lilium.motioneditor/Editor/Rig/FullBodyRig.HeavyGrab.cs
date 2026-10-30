@@ -34,6 +34,85 @@ namespace Lilium
         Vector3[] yieldedPositions_;
         Quaternion[] yieldedRotations_;
 
+        // 重い点をつかんで解いた答えが届かないか Lock の点が動いたときの解き直し
+        // 届かないか Lock の点が動いたら、届かなかった分だけ Pin の点の目標を運んで解き直す（10-28。Fable の見立てを受けて、段に分けて外す形から換えた）:
+        // 1. 保持解き: Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き、つかんだ点が届かなかった分 shift を測る。
+        // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、間の骨（背骨）が伸びきるまでは運ばず、超えた分だけ運ぶ（PathStretch）。
+        //    Lock の点（足）が届く所まで（LockLimit）。届かないほど、根（腰）の向きを元の向きに留める硬さを緩める（ReleaseRoot）。
+        // 3. 道の外の Pin の点は、その姿勢で、手足の付け根（肩・股）から目標までが手足の長さ（伸びきった長さ）を超えた分だけ、付け根の方へ運ぶ（BranchShifts）。
+        //    腕が伸びきるまでは動かず、伸びきったらその先だけ付いてくる（10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」、
+        //    10-29「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を両手に運ぶと、体が傾くと肩の動きと合わず、運びすぎて腕が曲がった）。
+        // 4. Lock の点が動いたら、運ぶ割合を絞る（CarryPins）。Lock の点が無ければ、つかんだ点を強さ 1 にして、運んだ目標のまま解く。
+        //    それでもつかんだ点が届かなければ、届かなかった分を道の上の Pin の点（腰）へ運び足して解き直す（kCarryRefines 回まで）。
+        // どの量も前の答えから連続に決まり、届く所では 0 なので、境目で姿勢が跳ねず、元の姿勢（キーの形）へ戻すこともない
+        // （10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）
+        void ResolveHeavyGrab ()
+        {
+            int count;
+            bool locks = lockedEffectors_.Count > 0;
+            bool[] path = PathToRoot ();
+            count = HeavyEffectors (path, Vector3.zero, null, 0, true);
+            RunSolver (count, solvePositions_, solveRotations_);
+            Vector3 shift = GrabbedShift ();
+            if (shift.sqrMagnitude > kReachTolerance * kReachTolerance) {
+                KeepYielded ();
+                // 運んだあと Lock の点が動いたかは、保持解き（運ぶ前）のずれと比べる。同じ足に Lock の点が 3 つ以上あると、首に引かれて足が少し回るだけで
+                // どれかの点のずれが元の姿勢より増え、どれだけ少なく運んでも動いたとみなした（10-29 実測で、両足が Lock のキーで腰が上がらなかった）
+                for (int k = 0; k < lockedEffectors_.Count; k++) lockBases_[k] = Mathf.Max (lockBases_[k], data_.residuals[lockedEffectors_[k]]);
+                // 道の上の Pin の点（腰）を運ぶ量は、長さから決める（PathStretch）: つかんだ点の一番近くの道の上の Pin の点から、つかんだ点の目標までが、
+                // 間の骨を伸ばしきった長さを超えた分だけ。体が伸びきるまで腰は動かず、伸びきったらその先だけ付いてくる。
+                // 譲らせて解いた答えの届かなかった分で決めると、譲らせた首が関節の硬さのばねに負けて背骨を伸ばしきれず、背骨が曲がったまま腰が運ばれた
+                // （10-29 ユーザー報告「首をひっぱっても体が伸び切らない」。腰から首までが、伸びきった長さの 90% で止まっていた）
+                // 根（腰）の向きを元の姿勢に留める硬さを、届かなかった分に応じて緩める（ReleaseRoot）。留めたままだと、腰の点は向きを留めていなくても
+                // 腰の骨が元の向きのまま残り、手を横へ引くと背骨の付け根だけが 50° 曲がった（10-29 ユーザー報告「左手を+Xに引いたが体、腰あたりが伸びきらない」）。
+                // 届く所では 0 なので、境目で姿勢は跳ねない
+                int releasedRoot;
+                float rootStiffness = ReleaseRoot (path, Mathf.Clamp01 (shift.magnitude / (kRootRelease * humanScale)), out releasedRoot);
+                shift = PathStretch ();
+                // Lock の点（足）は、手足の付け根（股）から目標までが手足の長さを超えない所までしか、道の上の Pin の点（腰）を運ばない（LockLimit）。
+                // 運んでから Lock の点が動いたかで割合を絞ると、遠くへ引いたとき絞る細かさが足りず、運べる所でも運ばなかった（10-29 実測で、腰が 5.8cm 上がってから 0 に戻った）
+                shift *= LockLimit (path, shift);
+                // 背骨を伸ばした姿勢から解き始める（StraightenPath）。ソルバーは伸びきる手前を詰めるのが苦手で、反復を 4 倍にしても腰から首までが 98.6% で止まり、
+                // 胸・上胸に 20〜25° ずつ曲がりが残った（10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。解き終えたら元の姿勢へ戻す
+                System.Array.Copy (solvePositions_, keptPositions_, bodies_.Count);
+                System.Array.Copy (solveRotations_, keptRotations_, bodies_.Count);
+                StraightenPath (shift);
+                // 道の外の Pin の点を運ぶ量は、腰を運んで道の外の Pin の点を外して解いた姿勢で決める（BranchShifts）
+                count = HeavyEffectors (path, shift, null, 0, locks, false);
+                RunSolver (count, solvePositions_, solveRotations_);
+                BranchShifts (path);
+                RestoreYielded ();
+                float fraction = CarryPins (path, shift);
+                if (!locks) {
+                    count = HeavyEffectors (path, shift * fraction, branchShifts_, fraction, false);
+                    RunSolver (count, solvePositions_, solveRotations_);
+                    // 背骨を伸ばしきる手前は、反復で解くソルバーが詰めきれず、つかんだ点（首）が届かない（10-29 実測で 1cm）。届かなかった分を腰へ運び足す。
+                    // 10-29 までは、運ぶ量を伸ばしきった長さの 95% から数えて届かせていたが、元の背骨が丸い姿勢では 95% でも胸・上胸に 35° ずつ曲がりが残った
+                    // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。届く所では足す量は 0 なので、境目で姿勢は跳ねない
+                    for (int k = 0; k < kCarryRefines; k++) {
+                        Vector3 more = GrabbedShift ();
+                        if (more.sqrMagnitude <= kReachTolerance * kReachTolerance) break;
+                        shift = shift * fraction + more;
+                        fraction = 1;
+                        // 前の答えから続けて解く（元の姿勢から解き直すと、詰まった分がまた初めからになる）
+                        for (int i = 0; i < bodies_.Count; i++) {
+                            solvePositions_[i] = data_.positions[i];
+                            solveRotations_[i] = data_.rotations[i];
+                        }
+                        count = HeavyEffectors (path, shift, branchShifts_, 1, false);
+                        RunSolver (count, solvePositions_, solveRotations_);
+                    }
+                }
+                if (releasedRoot >= 0) {
+                    FullBodyIkBone bone = data_.bones[releasedRoot];
+                    bone.stiffness = rootStiffness;
+                    data_.bones[releasedRoot] = bone;
+                }
+                System.Array.Copy (keptPositions_, solvePositions_, bodies_.Count);
+                System.Array.Copy (keptRotations_, solveRotations_, bodies_.Count);
+            }
+        }
+
         /// <summary>つかんだ点を譲らせて解いた姿勢（保持解き）を控える（Pin の点を運んで解き直したら Lock の点が動いたときに戻す）</summary>
         void KeepYielded ()
         {

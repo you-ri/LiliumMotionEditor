@@ -220,7 +220,7 @@ namespace Lilium
         /// 床との当たりをソルバーへ渡す（Floor Clamp。姿勢を作るときだけ。前後のキーで Locked の点だけを留めるとき（SolveOnly）は渡さない）。
         /// 10-22 まではエディタ側で、解いた後に足を持ち上げる・回す・点の向きの値を回すなどを重ねていて、床に当たると足の転がり方が不自然だった（ユーザー報告）
         /// </summary>
-        void SetContacts (float floorHeight, Vector3 up)
+        void SetContacts ()
         {
             int count = 0;
             if (floorClamp && solveOnly_ == null) {
@@ -240,8 +240,8 @@ namespace Lilium
                 }
             }
             data_.contactCount = count;
-            data_.floorNormal = up;
-            data_.floorHeight = floorHeight;
+            data_.floorNormal = Quaternion.Inverse (rootTransform.rotation) * Vector3.up;
+            data_.floorHeight = rootTransform.position.y;
         }
 
         /// <summary>

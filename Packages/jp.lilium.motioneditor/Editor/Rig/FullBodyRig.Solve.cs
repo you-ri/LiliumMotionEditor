@@ -99,156 +99,51 @@ namespace Lilium
         bool SolveBodies ()
         {
             if (!data_.isCreated) return false;
-            Transform root = rootTransform;
-            Quaternion rootRotation = root.rotation;
-            Quaternion rootInverse = Quaternion.Inverse (rootRotation);
-            Vector3 rootPosition = root.position;
-
-            for (int i = 0; i < bodies_.Count; i++) {
-                solvePositions_[i] = rootInverse * (bodies_[i].position - rootPosition);
-                solveRotations_[i] = rootInverse * bodies_[i].rotation;
-                data_.positions[i] = solvePositions_[i];
-                data_.rotations[i] = solveRotations_[i];
-            }
-            // 軽い点（重さ 0。S88）をつかんで動かしているか。つかんでいれば、つかんだ点が引き、引かれる点は状態と重さで決まる:
-            // 軽い点は Free でも Pin でも引かれ、重い点は Free でも Pin でも今の場所に留まる。Lock の点は重さに関係なく留まる（10-27 ユーザー指示。
-            // 軽い Pin の点は、10-27 には留めていたが、10-30 ユーザー指示「weight0を動かすと同じweight0 の肘は動くはず」「Pin でも引く」で引くようにした）。
-            // まとめてつかんだ点に重い点が混ざれば、一番重い点で決める（重い点をつかんだときと同じ。10-27 ユーザー決定）。
-            // 重い点をつかんでいれば、重さ 0 の Pin の点は Free の点と同じに引かれ、重さ 1 の Pin の点は、届く間はその場に留まり、つかんだ点が届かなければ外れて付いて動く
-            // （PullsPin。10-27 ユーザー指示「ウェイト１がウェイト１をひっぱる場合、pin でも動くようにする」「pinの場合はその場を維持するように。ただし引っ張ることはできる」）。
-            // つかんでいなければ（キーから解き直す）、今までどおり Pin の点を全部効かせ、Free の点は重さに関係なく引かれる
-            bool lightGrab = false, heavyGrab = false;
-            foreach (Point point in points_) {
-                if (!grabbed_.Contains (point)) continue;
-                // Floor Clamp の足の箱で動かしている足の点は、点としては解かない（箱の目標で動かす）が、つかんだ点として数える
-                // （数えないと、重い足を引いて脚が伸びきっても、Pin の腰を外して解き直さず、体が付いてこなかった。10-28 ユーザー報告）
-                float positionWeight, rotationWeight;
-                if (!GetWeights (point, out positionWeight, out rotationWeight) && !IsFootBoxed (point)) continue;
-                if (point.light) lightGrab = true;
-                else if (!point.weightless) heavyGrab = true;
-            }
-            if (heavyGrab) lightGrab = false;
+            LoadInput ();
+            GrabKind grab = DetectGrab ();
 
             // 1 回目: つかんでいる軽い点を除いて、ほかの点を全部いつもどおり解く（軽い点をつかんでいなければ、これだけ）。
             // 解き直すたびに元の姿勢（キーの姿勢）から解くので、動かない点の「今の場所」は、つかんだ点が無いときに点が居る場所
             grabbedEffectors_.Clear ();
             lockedEffectors_.Clear ();
-            int count = heavyGrab ? HeavyEffectors (null, Vector3.zero, null, 0, false) : KeyedEffectors (lightGrab);
-            if (count == 0 && !lightGrab) return false;
+            int count = grab == GrabKind.Heavy ? HeavyEffectors (null, Vector3.zero, null, 0, false) : KeyedEffectors (grab == GrabKind.Light);
+            if (count == 0 && grab != GrabKind.Light) return false;
             MarkFixedBones ();
             // 重い点をつかんで Pin の点を効かせている間は、反復を増やす（kLightIterations 倍）。Pin の点に挟まれた背骨が詰め切れず、
             // 届く所でも届かないとみなして腰の Pin を外していた（10-28 実測で、腹・胸を硬さ 0.6〜0.8 にした定義で首を前へ 5mm 動かすと、1 倍では 1.9mm 残った）
-            bool pins = heavyGrab && (lockedEffectors_.Count > 0 || HasCarriedPin ());
+            bool pins = grab == GrabKind.Heavy && (lockedEffectors_.Count > 0 || HasCarriedPin ());
             // Lock の点が動いたかは、点ごとに元の姿勢でのずれと比べる（同じ足に Lock の点が 3 つ以上あると、元の姿勢でも数 mm ずれている。
             // 一番大きいずれを全部の点に使うと、ずれの小さい足首の点がその差だけ動けた。10-28 実測で 1cm）
             lockBases_.Clear ();
             foreach (int e in lockedEffectors_) lockBases_.Add (InputResidual (e));
             data_.iterations = Mathf.Max (1, settings_.iterations) * (pins ? kLightIterations : 1);
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
-            SetContacts (rootPosition.y, rootInverse * Vector3.up);
+            SetContacts ();
             if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
-            // 届かないか Lock の点が動いたら、届かなかった分だけ Pin の点の目標を運んで解き直す（10-28。Fable の見立てを受けて、段に分けて外す形から換えた）:
-            // 1. 保持解き: Pin の点・Lock の点を強さ 1、つかんだ点を譲らせて（kLightPull）解き、つかんだ点が届かなかった分 shift を測る。
-            // 2. つかんだ点の骨から根（腰）へたどる道の上の Pin の点（首なら腰）の目標を、間の骨（背骨）が伸びきるまでは運ばず、超えた分だけ運ぶ（PathStretch）。
-            //    Lock の点（足）が届く所まで（LockLimit）。届かないほど、根（腰）の向きを元の向きに留める硬さを緩める（ReleaseRoot）。
-            // 3. 道の外の Pin の点は、その姿勢で、手足の付け根（肩・股）から目標までが手足の長さ（伸びきった長さ）を超えた分だけ、付け根の方へ運ぶ（BranchShifts）。
-            //    腕が伸びきるまでは動かず、伸びきったらその先だけ付いてくる（10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」、
-            //    10-29「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を両手に運ぶと、体が傾くと肩の動きと合わず、運びすぎて腕が曲がった）。
-            // 4. Lock の点が動いたら、運ぶ割合を絞る（CarryPins）。Lock の点が無ければ、つかんだ点を強さ 1 にして、運んだ目標のまま解く。
-            //    それでもつかんだ点が届かなければ、届かなかった分を道の上の Pin の点（腰）へ運び足して解き直す（kCarryRefines 回まで）。
-            // どの量も前の答えから連続に決まり、届く所では 0 なので、境目で姿勢が跳ねず、元の姿勢（キーの形）へ戻すこともない
-            // （10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）
-            if (pins && !Solved ()) {
-                bool locks = lockedEffectors_.Count > 0;
-                bool[] path = PathToRoot ();
-                count = HeavyEffectors (path, Vector3.zero, null, 0, true);
-                RunSolver (count, solvePositions_, solveRotations_);
-                Vector3 shift = GrabbedShift ();
-                if (shift.sqrMagnitude > kReachTolerance * kReachTolerance) {
-                    KeepYielded ();
-                    // 運んだあと Lock の点が動いたかは、保持解き（運ぶ前）のずれと比べる。同じ足に Lock の点が 3 つ以上あると、首に引かれて足が少し回るだけで
-                    // どれかの点のずれが元の姿勢より増え、どれだけ少なく運んでも動いたとみなした（10-29 実測で、両足が Lock のキーで腰が上がらなかった）
-                    for (int k = 0; k < lockedEffectors_.Count; k++) lockBases_[k] = Mathf.Max (lockBases_[k], data_.residuals[lockedEffectors_[k]]);
-                    // 道の上の Pin の点（腰）を運ぶ量は、長さから決める（PathStretch）: つかんだ点の一番近くの道の上の Pin の点から、つかんだ点の目標までが、
-                    // 間の骨を伸ばしきった長さを超えた分だけ。体が伸びきるまで腰は動かず、伸びきったらその先だけ付いてくる。
-                    // 譲らせて解いた答えの届かなかった分で決めると、譲らせた首が関節の硬さのばねに負けて背骨を伸ばしきれず、背骨が曲がったまま腰が運ばれた
-                    // （10-29 ユーザー報告「首をひっぱっても体が伸び切らない」。腰から首までが、伸びきった長さの 90% で止まっていた）
-                    // 根（腰）の向きを元の姿勢に留める硬さを、届かなかった分に応じて緩める（ReleaseRoot）。留めたままだと、腰の点は向きを留めていなくても
-                    // 腰の骨が元の向きのまま残り、手を横へ引くと背骨の付け根だけが 50° 曲がった（10-29 ユーザー報告「左手を+Xに引いたが体、腰あたりが伸びきらない」）。
-                    // 届く所では 0 なので、境目で姿勢は跳ねない
-                    int releasedRoot;
-                    float rootStiffness = ReleaseRoot (path, Mathf.Clamp01 (shift.magnitude / (kRootRelease * humanScale)), out releasedRoot);
-                    shift = PathStretch ();
-                    // Lock の点（足）は、手足の付け根（股）から目標までが手足の長さを超えない所までしか、道の上の Pin の点（腰）を運ばない（LockLimit）。
-                    // 運んでから Lock の点が動いたかで割合を絞ると、遠くへ引いたとき絞る細かさが足りず、運べる所でも運ばなかった（10-29 実測で、腰が 5.8cm 上がってから 0 に戻った）
-                    shift *= LockLimit (path, shift);
-                    // 背骨を伸ばした姿勢から解き始める（StraightenPath）。ソルバーは伸びきる手前を詰めるのが苦手で、反復を 4 倍にしても腰から首までが 98.6% で止まり、
-                    // 胸・上胸に 20〜25° ずつ曲がりが残った（10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。解き終えたら元の姿勢へ戻す
-                    System.Array.Copy (solvePositions_, keptPositions_, bodies_.Count);
-                    System.Array.Copy (solveRotations_, keptRotations_, bodies_.Count);
-                    StraightenPath (shift);
-                    // 道の外の Pin の点を運ぶ量は、腰を運んで道の外の Pin の点を外して解いた姿勢で決める（BranchShifts）
-                    count = HeavyEffectors (path, shift, null, 0, locks, false);
-                    RunSolver (count, solvePositions_, solveRotations_);
-                    BranchShifts (path);
-                    RestoreYielded ();
-                    float fraction = CarryPins (path, shift);
-                    if (!locks) {
-                        count = HeavyEffectors (path, shift * fraction, branchShifts_, fraction, false);
-                        RunSolver (count, solvePositions_, solveRotations_);
-                        // 背骨を伸ばしきる手前は、反復で解くソルバーが詰めきれず、つかんだ点（首）が届かない（10-29 実測で 1cm）。届かなかった分を腰へ運び足す。
-                        // 10-29 までは、運ぶ量を伸ばしきった長さの 95% から数えて届かせていたが、元の背骨が丸い姿勢では 95% でも胸・上胸に 35° ずつ曲がりが残った
-                        // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。届く所では足す量は 0 なので、境目で姿勢は跳ねない
-                        for (int k = 0; k < kCarryRefines; k++) {
-                            Vector3 more = GrabbedShift ();
-                            if (more.sqrMagnitude <= kReachTolerance * kReachTolerance) break;
-                            shift = shift * fraction + more;
-                            fraction = 1;
-                            // 前の答えから続けて解く（元の姿勢から解き直すと、詰まった分がまた初めからになる）
-                            for (int i = 0; i < bodies_.Count; i++) {
-                                solvePositions_[i] = data_.positions[i];
-                                solveRotations_[i] = data_.rotations[i];
-                            }
-                            count = HeavyEffectors (path, shift, branchShifts_, 1, false);
-                            RunSolver (count, solvePositions_, solveRotations_);
-                        }
-                    }
-                    if (releasedRoot >= 0) {
-                        FullBodyIkBone bone = data_.bones[releasedRoot];
-                        bone.stiffness = rootStiffness;
-                        data_.bones[releasedRoot] = bone;
-                    }
-                    System.Array.Copy (keptPositions_, solvePositions_, bodies_.Count);
-                    System.Array.Copy (keptRotations_, solveRotations_, bodies_.Count);
-                }
-            }
 
-            // 2 回目: 1 回目の姿勢から、動かない点（Free の重い点・Pin の点）とその向こうを留めて、つかんだ点で引く
-            if (lightGrab) {
-                for (int i = 0; i < bodies_.Count; i++) {
-                    heavyPositions_[i] = count > 0 ? (Vector3)data_.positions[i] : solvePositions_[i];
-                    heavyRotations_[i] = count > 0 ? (Quaternion)data_.rotations[i] : solveRotations_[i];
-                }
-                // 留める動かない点を先に並べる（同じ骨にほかの点があっても、動かない点を先に満たす）
-                count = AddHeldEffectors ();
-                foreach (Point point in points_) {
-                    float positionWeight, rotationWeight;
-                    PointRole role = LightRole (point, out positionWeight, out rotationWeight);
-                    // 留めた点・動かない骨の上の点は、自分の目標を使わない。重さ 0 の Pin の点は、Free の点と同じに目標を使わない（引かれる）
-                    if (role != PointRole.Grabbed && (role != PointRole.Target || frozen_[point.body])) continue;
-                    // つかんでいる点は、Pin の点・留めた重い点とぶつかったら譲る（kLightPull）。強さ 1 のままだと、両方を満たそうとして関節が離れたまま反復が終わり、
-                    // 仕上げで骨をつなぎ直したときに、留めた重い点の骨が親に付いて動いた（10-27 実測で、左肩を動かすと首と頭が 2.3mm 動いた）
-                    if (role == PointRole.Grabbed) positionWeight = Mathf.Min (positionWeight, kLightPull);
-                    data_.effectors[count++] = PointEffector (point, positionWeight, rotationWeight);
-                }
-                count = AddFootBoxes (count);
-                MarkFixedBones ();
-                LockHeld ();
-                data_.iterations = Mathf.Max (1, settings_.iterations) * kLightIterations;
-                RunSolver (count, heavyPositions_, heavyRotations_);
-                SnapHeld ();
-            }
+            if (pins && !Solved ()) ResolveHeavyGrab ();
+            if (grab == GrabKind.Light) SolveLightGrab (count > 0);
+            return WriteBack ();
+        }
 
+        /// <summary>元の姿勢（今の編集用の骨）をルート空間の値にして控え、ソルバーへ渡す</summary>
+        void LoadInput ()
+        {
+            Quaternion rootInverse = Quaternion.Inverse (rootTransform.rotation);
+            Vector3 rootPosition = rootTransform.position;
+            for (int i = 0; i < bodies_.Count; i++) {
+                solvePositions_[i] = rootInverse * (bodies_[i].position - rootPosition);
+                solveRotations_[i] = rootInverse * bodies_[i].rotation;
+                data_.positions[i] = solvePositions_[i];
+                data_.rotations[i] = solveRotations_[i];
+            }
+        }
+
+        /// <summary>解いた姿勢を骨へ書き戻す。何も変わらなければ骨に触らず false</summary>
+        bool WriteBack ()
+        {
+            Quaternion rootRotation = rootTransform.rotation;
+            Vector3 rootPosition = rootTransform.position;
             // 変わらなかった骨は元の値がそのまま返る。全部そうなら触らない（固定した点が今の姿勢の上にあるとき、姿勢をまったく変えない）
             bool changed = false;
             for (int i = 0; i < bodies_.Count && !changed; i++) {

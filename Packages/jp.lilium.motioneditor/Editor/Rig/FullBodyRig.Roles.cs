@@ -29,6 +29,31 @@ namespace Lilium
             get { return Mathf.Clamp01 (settings_.pull); }
         }
 
+        /// <summary>今のつかみ方（S88）</summary>
+        enum GrabKind { None, Light, Heavy }
+
+        // 軽い点（重さ 0。S88）をつかんで動かしているか。つかんでいれば、つかんだ点が引き、引かれる点は状態と重さで決まる:
+        // 軽い点は Free でも Pin でも引かれ、重い点は Free でも Pin でも今の場所に留まる。Lock の点は重さに関係なく留まる（10-27 ユーザー指示。
+        // 軽い Pin の点は、10-27 には留めていたが、10-30 ユーザー指示「weight0を動かすと同じweight0 の肘は動くはず」「Pin でも引く」で引くようにした）。
+        // まとめてつかんだ点に重い点が混ざれば、一番重い点で決める（重い点をつかんだときと同じ。10-27 ユーザー決定）。
+        // 重い点をつかんでいれば、重さ 0 の Pin の点は Free の点と同じに引かれ、重さ 1 の Pin の点は、届く間はその場に留まり、つかんだ点が届かなければ外れて付いて動く
+        // （PullsPin。10-27 ユーザー指示「ウェイト１がウェイト１をひっぱる場合、pin でも動くようにする」「pinの場合はその場を維持するように。ただし引っ張ることはできる」）。
+        // つかんでいなければ（キーから解き直す）、今までどおり Pin の点を全部効かせ、Free の点は重さに関係なく引かれる
+        GrabKind DetectGrab ()
+        {
+            bool light = false;
+            foreach (Point point in points_) {
+                if (!grabbed_.Contains (point)) continue;
+                // Floor Clamp の足の箱で動かしている足の点は、点としては解かない（箱の目標で動かす）が、つかんだ点として数える
+                // （数えないと、重い足を引いて脚が伸びきっても、Pin の腰を外して解き直さず、体が付いてこなかった。10-28 ユーザー報告）
+                float positionWeight, rotationWeight;
+                if (!GetWeights (point, out positionWeight, out rotationWeight) && !IsFootBoxed (point)) continue;
+                if (point.light) light = true;
+                else if (!point.weightless) return GrabKind.Heavy;
+            }
+            return light ? GrabKind.Light : GrabKind.None;
+        }
+
         /// <summary>
         /// 重い点をつかんでいるときの点の扱い。
         /// 重さ 0 の Pin の点は、Free の点と同じに引かれる（目標に使わない。10-28 ユーザー指示「自分（つかんだ点）が重さ 1 のとき

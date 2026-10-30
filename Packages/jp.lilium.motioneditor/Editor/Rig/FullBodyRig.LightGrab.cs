@@ -20,6 +20,33 @@ namespace Lilium
         // 軽い点をつかんでいる間の、つかんだ点の骨（ここから骨の木をたどる。LightRole）
         bool[] grabbedBodies_;
 
+        /// <summary>2 回目: 1 回目の姿勢（hasFirstPass が false なら元の姿勢）から、動かない点（Free の重い点・Pin の点）とその向こうを留めて、つかんだ点で引く</summary>
+        void SolveLightGrab (bool hasFirstPass)
+        {
+            for (int i = 0; i < bodies_.Count; i++) {
+                heavyPositions_[i] = hasFirstPass ? (Vector3)data_.positions[i] : solvePositions_[i];
+                heavyRotations_[i] = hasFirstPass ? (Quaternion)data_.rotations[i] : solveRotations_[i];
+            }
+            // 留める動かない点を先に並べる（同じ骨にほかの点があっても、動かない点を先に満たす）
+            int count = AddHeldEffectors ();
+            foreach (Point point in points_) {
+                float positionWeight, rotationWeight;
+                PointRole role = LightRole (point, out positionWeight, out rotationWeight);
+                // 留めた点・動かない骨の上の点は、自分の目標を使わない。重さ 0 の Pin の点は、Free の点と同じに目標を使わない（引かれる）
+                if (role != PointRole.Grabbed && (role != PointRole.Target || frozen_[point.body])) continue;
+                // つかんでいる点は、Pin の点・留めた重い点とぶつかったら譲る（kLightPull）。強さ 1 のままだと、両方を満たそうとして関節が離れたまま反復が終わり、
+                // 仕上げで骨をつなぎ直したときに、留めた重い点の骨が親に付いて動いた（10-27 実測で、左肩を動かすと首と頭が 2.3mm 動いた）
+                if (role == PointRole.Grabbed) positionWeight = Mathf.Min (positionWeight, kLightPull);
+                data_.effectors[count++] = PointEffector (point, positionWeight, rotationWeight);
+            }
+            count = AddFootBoxes (count);
+            MarkFixedBones ();
+            LockHeld ();
+            data_.iterations = Mathf.Max (1, settings_.iterations) * kLightIterations;
+            RunSolver (count, heavyPositions_, heavyRotations_);
+            SnapHeld ();
+        }
+
         /// <summary>
         /// 軽い点をつかんでいる間、動かせない点を壁にするか（S89）。つかんだ点がどれも、動かせない点の骨か、その先の骨にあるとき（力が先から伝わってくるとき）だけ。
         /// 根の側（胸など）や、ほかの枝（反対の手）もつかんでいれば壁にしない: 胸だけをつかむと、両肩の点が壁になって胸が動けなかった
