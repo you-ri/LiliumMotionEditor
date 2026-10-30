@@ -19,6 +19,19 @@ namespace Lilium
         bool[] frozen_;
         // 軽い点をつかんでいる間の、つかんだ点の骨（ここから骨の木をたどる。LightRole）
         bool[] grabbedBodies_;
+        // AddHeldEffectors の作業用: 動かない点のある骨・向きも動かない骨・付け根から離れた点のある骨・動かない点の数・たどり着いた骨・入ってきた隣の骨
+        bool[] walls_;
+        bool[] oriented_;
+        bool[] offAxis_;
+        int[] heldCount_;
+        bool[] reached_;
+        int[] entry_;
+        readonly Stack<int> open_ = new Stack<int> ();
+        // LockHeld の作業用: 動けない骨
+        bool[] locked_;
+        // SnapHeld の作業用の姿勢
+        Vector3[] snapPositions_;
+        Quaternion[] snapRotations_;
 
         /// <summary>2 回目: 1 回目の姿勢（hasFirstPass が false なら元の姿勢）から、動かない点（Free の重い点・Pin の点）とその向こうを留めて、つかんだ点で引く</summary>
         void SolveLightGrab (bool hasFirstPass)
@@ -78,12 +91,10 @@ namespace Lilium
         int AddHeldEffectors ()
         {
             int n = bodies_.Count;
-            bool[] walls = new bool[n];
-            bool[] oriented = new bool[n];
-            bool[] offAxis = new bool[n];
-            int[] heldCount = new int[n];
             for (int i = 0; i < n; i++) {
                 heldOrigin_[i] = heldRotation_[i] = frozen_[i] = grabbedBodies_[i] = false;
+                walls_[i] = oriented_[i] = offAxis_[i] = reached_[i] = false;
+                heldCount_[i] = 0;
             }
             foreach (Point point in points_) {
                 float positionWeight, rotationWeight;
@@ -93,38 +104,35 @@ namespace Lilium
                 float positionWeight, rotationWeight;
                 if (LightRole (point, out positionWeight, out rotationWeight) != PointRole.Held) continue;
                 bool weighted = positionWeight > 0 || rotationWeight > 0;
-                heldCount[point.body]++;
-                walls[point.body] = true;
-                if (!point.passive && (weighted ? rotationWeight > 0 : point.hasRotation)) oriented[point.body] = true;
-                if (point.offset.sqrMagnitude > kEpsilon * kEpsilon) offAxis[point.body] = true;
+                heldCount_[point.body]++;
+                walls_[point.body] = true;
+                if (!point.passive && (weighted ? rotationWeight > 0 : point.hasRotation)) oriented_[point.body] = true;
+                if (point.offset.sqrMagnitude > kEpsilon * kEpsilon) offAxis_[point.body] = true;
             }
 
             // つかんだ点の骨から、動かない点のある骨で止まりながらたどる。entry は動かない点のある骨へ入ってきた隣の骨（2 つ以上の側から入れば -2）
-            bool[] reached = new bool[n];
-            int[] entry = new int[n];
-            Stack<int> open = new Stack<int> ();
             for (int i = 0; i < n; i++) {
-                entry[i] = -1;
+                entry_[i] = -1;
                 if (!grabbedBodies_[i]) continue;
-                reached[i] = true;
-                open.Push (i);
+                reached_[i] = true;
+                open_.Push (i);
             }
-            while (open.Count > 0) {
-                int b = open.Pop ();
+            while (open_.Count > 0) {
+                int b = open_.Pop ();
                 for (int m = 0; m < n; m++) {
                     if (m != bodyParents_[b] && bodyParents_[m] != b) continue;
-                    if (walls[m] && !grabbedBodies_[m]) {
-                        reached[m] = true;
-                        entry[m] = entry[m] == -1 || entry[m] == b ? b : -2;
+                    if (walls_[m] && !grabbedBodies_[m]) {
+                        reached_[m] = true;
+                        entry_[m] = entry_[m] == -1 || entry_[m] == b ? b : -2;
                         continue;
                     }
-                    if (reached[m]) continue;
-                    reached[m] = true;
-                    open.Push (m);
+                    if (reached_[m]) continue;
+                    reached_[m] = true;
+                    open_.Push (m);
                 }
             }
             for (int i = 0; i < n; i++) {
-                if (reached[i]) continue;
+                if (reached_[i]) continue;
                 frozen_[i] = heldOrigin_[i] = heldRotation_[i] = true;
             }
 
@@ -135,8 +143,8 @@ namespace Lilium
                 int body = point.body;
                 if (frozen_[body]) continue;
                 // 付け根から離れた点を 1 つだけ留めた骨は、付け根と点を結ぶ軸まわりに回せる（AxisTurns。骨は留めた点を中心に回る、の基盤どおり）
-                bool axisTurn = heldCount[body] == 1 && !oriented[body] && AxisTurns (body, entry[body]);
-                bool rotation = !heldRotation_[body] && !axisTurn && !Turns (body, entry[body], oriented[body], offAxis[body]);
+                bool axisTurn = heldCount_[body] == 1 && !oriented_[body] && AxisTurns (body, entry_[body]);
+                bool rotation = !heldRotation_[body] && !axisTurn && !Turns (body, entry_[body], oriented_[body], offAxis_[body]);
                 if (rotation) heldRotation_[body] = true;
                 // 向きも留めた骨は、付け根の場所も決まる。向きを留めない骨は、付け根の点を留めたときと、軸まわりに回すとき（付け根は動かない親に付いている）
                 if (rotation || axisTurn || point.offset.sqrMagnitude <= kEpsilon * kEpsilon) heldOrigin_[body] = true;
@@ -197,7 +205,7 @@ namespace Lilium
         void LockHeld ()
         {
             int n = bodies_.Count;
-            bool[] locked = new bool[n];
+            bool[] locked = locked_;
             for (int i = 0; i < n; i++) locked[i] = heldOrigin_[i] && heldRotation_[i];
             for (bool grew = true; grew;) {
                 grew = false;
@@ -230,8 +238,8 @@ namespace Lilium
         void SnapHeld ()
         {
             int n = bodies_.Count;
-            Vector3[] positions = new Vector3[n];
-            Quaternion[] rotations = new Quaternion[n];
+            Vector3[] positions = snapPositions_;
+            Quaternion[] rotations = snapRotations_;
             for (int i = 0; i < n; i++) {
                 positions[i] = data_.positions[i];
                 rotations[i] = data_.rotations[i];

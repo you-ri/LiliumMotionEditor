@@ -40,15 +40,11 @@ namespace Lilium
             int n = bodies_.Count;
             for (int i = 0; i < n; i++) data_.fixedBones[i] = limbsOnly_ ? 1 : 0;
             if (!limbsOnly_) return;
-            int[] children = new int[n];
-            for (int i = 0; i < n; i++) {
-                if (bodyParents_[i] >= 0) children[bodyParents_[i]]++;
-            }
             foreach (Point point in points_) {
                 if (point.body < 0 || !IsActive (point)) continue;
                 int body = point.body;
                 data_.fixedBones[body] = 0;
-                for (int p = bodyParents_[body]; p >= 0 && children[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
+                for (int p = bodyParents_[body]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
             }
         }
 
@@ -60,13 +56,9 @@ namespace Lilium
         {
             if (rig_ == null || rig_.root == null || weight <= 0 || !hasActivePoint) return;
 
-            Vector3[] beforePositions = null;
-            Quaternion[] beforeRotations = null;
             if (weight < 1) {
-                beforePositions = new Vector3[bones_.Length];
-                beforeRotations = new Quaternion[bones_.Length];
                 for (int i = 0; i < bones_.Length; i++) {
-                    if (bones_[i] != null) bones_[i].GetLocalPositionAndRotation (out beforePositions[i], out beforeRotations[i]);
+                    if (bones_[i] != null) bones_[i].GetLocalPositionAndRotation (out beforePositions_[i], out beforeRotations_[i]);
                 }
             }
 
@@ -77,7 +69,7 @@ namespace Lilium
             for (int i = 0; i < bones_.Length; i++) {
                 if (bones_[i] == null) continue;
                 bones_[i].GetLocalPositionAndRotation (out Vector3 position, out Quaternion rotation);
-                bones_[i].SetLocalPositionAndRotation (Vector3.Lerp (beforePositions[i], position, weight), Quaternion.Slerp (beforeRotations[i], rotation, weight));
+                bones_[i].SetLocalPositionAndRotation (Vector3.Lerp (beforePositions_[i], position, weight), Quaternion.Slerp (beforeRotations_[i], rotation, weight));
             }
         }
 
@@ -106,7 +98,7 @@ namespace Lilium
             // 解き直すたびに元の姿勢（キーの姿勢）から解くので、動かない点の「今の場所」は、つかんだ点が無いときに点が居る場所
             grabbedEffectors_.Clear ();
             lockedEffectors_.Clear ();
-            int count = grab == GrabKind.Heavy ? HeavyEffectors (null, Vector3.zero, null, 0, false) : KeyedEffectors (grab == GrabKind.Light);
+            int count = grab == GrabKind.Heavy ? HeavyEffectors (null, Vector3.zero, 0, false) : KeyedEffectors (grab == GrabKind.Light);
             if (count == 0 && grab != GrabKind.Light) return false;
             MarkFixedBones ();
             // 重い点をつかんで Pin の点を効かせている間は、反復を増やす（kLightIterations 倍）。Pin の点に挟まれた背骨が詰め切れず、

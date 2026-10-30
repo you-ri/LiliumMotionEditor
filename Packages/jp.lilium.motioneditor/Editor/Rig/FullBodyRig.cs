@@ -181,12 +181,17 @@ namespace Lilium
         readonly Transform[] bones_;
         readonly Vector3[] inputPositions_;
         readonly Quaternion[] inputRotations_;
+        // 段の重みで混ぜるときの、解く前の姿勢（Solve）
+        readonly Vector3[] beforePositions_;
+        readonly Quaternion[] beforeRotations_;
         bool hasInput_;
         // 編集用の骨が、控えた元の姿勢から解いた後の姿勢になっているか
         bool solved_;
         // 解く骨（剛体）。親が子より先に来る順
         readonly List<Transform> bodies_ = new List<Transform> ();
         readonly List<int> bodyParents_ = new List<int> ();
+        // 解く骨ごとの、子の解く骨の数
+        int[] childCounts_;
         FullBodyIkData data_;
         Quaternion[] solveRotations_;
         Vector3[] solvePositions_;
@@ -237,6 +242,8 @@ namespace Lilium
             bones_ = bones.ToArray ();
             inputPositions_ = new Vector3[bones_.Length];
             inputRotations_ = new Quaternion[bones_.Length];
+            beforePositions_ = new Vector3[bones_.Length];
+            beforeRotations_ = new Quaternion[bones_.Length];
         }
 
         /// <summary>
@@ -269,8 +276,21 @@ namespace Lilium
             data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Allocator.Persistent);
             solveRotations_ = new Quaternion[bodies_.Count];
             solvePositions_ = new Vector3[bodies_.Count];
-            keptPositions_ = new Vector3[bodies_.Count];
-            keptRotations_ = new Quaternion[bodies_.Count];
+            startPositions_ = new Vector3[bodies_.Count];
+            startRotations_ = new Quaternion[bodies_.Count];
+            onPath_ = new bool[bodies_.Count];
+            pathSegments_ = new Vector3[bodies_.Count];
+            segmentTurns_ = new Quaternion[bodies_.Count];
+            walls_ = new bool[bodies_.Count];
+            oriented_ = new bool[bodies_.Count];
+            offAxis_ = new bool[bodies_.Count];
+            heldCount_ = new int[bodies_.Count];
+            reached_ = new bool[bodies_.Count];
+            entry_ = new int[bodies_.Count];
+            locked_ = new bool[bodies_.Count];
+            snapPositions_ = new Vector3[bodies_.Count];
+            snapRotations_ = new Quaternion[bodies_.Count];
+            childCounts_ = new int[bodies_.Count];
             pathTurns_ = new Quaternion[bodies_.Count];
             heavyRotations_ = new Quaternion[bodies_.Count];
             heavyPositions_ = new Vector3[bodies_.Count];
@@ -286,6 +306,7 @@ namespace Lilium
                 int parent = -1;
                 for (Transform t = bodies_[i].parent; t != null && t != root && parent < 0; t = t.parent) parent = bodies_.IndexOf (t);
                 bodyParents_.Add (parent);
+                if (parent >= 0) childCounts_[parent]++;
                 // 蝶番の軸は基準姿勢で決める: 親の骨の向きと、関節が出る向き（定義の bendDirection）の両方に直交する向き。親の骨の枠で持つ
                 bool hinge = fk.control.hinge && parent >= 0;
                 Vector3 axis = Vector3.zero;
