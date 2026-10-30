@@ -13,7 +13,7 @@ Background and the reasons behind the rules: `Docs/Specs/motion-editor.md`, sect
 
 ## Prerequisites
 
-- The project is open in the Editor and the Pipeline server is reachable (`unity pipeline list` shows reachable = true).
+- The project is open in the Editor and the Pipeline server is reachable (`unity pipeline editors` shows serverReachable = true).
   If not, ask the user to press Ctrl+R in the Editor. General CLI usage: skill `unity-pipeline`
 - Characters whose rig definition has no full-body IK points cannot be written (the reason is returned). The default rig definition has them
 - Always pass `--project-path`, take results with `--json`, and read `data.result` (failures: `success:false` and `errors`)
@@ -23,7 +23,7 @@ P="C:/Work/Lilium/LiliumMotionEditor"
 unity cmd motion_describe --project-path "$P" --json
 ```
 
-- Do not use `eval` for the work (it times out after 5 s). `motion_*` commands have no time limit
+- Do not use `script eval` for the work. `motion_*` commands wait up to 60 s by default; pass `--timeout <seconds>` for long ones (a bake of a long clip). A command that times out may still be running in the Editor: check before running it again
 - Temporary files (pose JSON, scripts, images) go to the scratchpad. The only assets created are the editing clip and the baked clip
 - Write helper scripts with the Write tool, not shell heredocs (quotes inside heredocs break the shell call).
   On Windows, Python text files default to CRLF: open files with `newline="\n"` when a shell loop reads them (otherwise arguments end in `\r`)
