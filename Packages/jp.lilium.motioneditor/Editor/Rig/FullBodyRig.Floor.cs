@@ -176,9 +176,11 @@ namespace Lilium
         }
 
         /// <summary>足の箱（Floor Clamp で動かしている足）の目標を足す。足す前の数を受け取り、足した後の数を返す</summary>
-        int AddFootBoxes (int count, Quaternion rootInverse, Vector3 rootPosition)
+        int AddFootBoxes (int count)
         {
             if (solveOnly_ != null) return count;
+            Quaternion rootInverse = Quaternion.Inverse (rootTransform.rotation);
+            Vector3 rootPosition = rootTransform.position;
             foreach (KeyValuePair<int, FootBox> pair in footBoxes_) {
                 if (count >= data_.effectors.Length) break;
                 FootBox box = pair.Value;
@@ -246,7 +248,7 @@ namespace Lilium
         /// 向きを固定した点の骨に、ほかにも位置を強さ 1 で固定した点があるか（Floor Clamp の間は、向きを点の位置で決める）。
         /// 足首の向きを固定し、足裏の中心を Locked にして足首を持ち上げると、足が回れずに踵が付いてこなかった（10-22 ユーザー指示）
         /// </summary>
-        bool HasOtherPositionPin (Point point, float pull)
+        bool HasOtherPositionPin (Point point)
         {
             foreach (Point other in points_) {
                 if (other != point && !other.passive && other.body == point.body && !carried_.Contains (other) && Mathf.Clamp01 (other.values.positionWeight) * pull >= 1) return true;

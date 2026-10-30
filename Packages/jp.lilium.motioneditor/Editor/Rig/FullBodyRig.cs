@@ -277,6 +277,7 @@ namespace Lilium
             heldOrigin_ = new bool[bodies_.Count];
             heldRotation_ = new bool[bodies_.Count];
             frozen_ = new bool[bodies_.Count];
+            grabbedBodies_ = new bool[bodies_.Count];
             branchShifts_ = new Vector3[points_.Count];
             yieldedPositions_ = new Vector3[bodies_.Count];
             yieldedRotations_ = new Quaternion[bodies_.Count];

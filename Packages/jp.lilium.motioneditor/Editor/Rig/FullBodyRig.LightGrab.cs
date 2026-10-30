@@ -17,8 +17,8 @@ namespace Lilium
         bool[] heldOrigin_;
         bool[] heldRotation_;
         bool[] frozen_;
-        // 軽い点をつかんでいる間に、動かない点として留めた点（自分の目標の代わりに、1 回目の場所へ留める）
-        readonly HashSet<Point> held_ = new HashSet<Point> ();
+        // 軽い点をつかんでいる間の、つかんだ点の骨（ここから骨の木をたどる。LightRole）
+        bool[] grabbedBodies_;
 
         /// <summary>
         /// 軽い点をつかんでいる間、動かせない点を壁にするか（S89）。つかんだ点がどれも、動かせない点の骨か、その先の骨にあるとき（力が先から伝わってくるとき）だけ。
@@ -30,7 +30,7 @@ namespace Lilium
             bool any = false;
             foreach (Point grabbed in grabbed_) {
                 float positionWeight, rotationWeight;
-                if (!GetWeights (grabbed, Mathf.Clamp01 (settings_.pull), out positionWeight, out rotationWeight) && !IsFootBoxed (grabbed)) continue;
+                if (!GetWeights (grabbed, out positionWeight, out rotationWeight) && !IsFootBoxed (grabbed)) continue;
                 int body = IsFootBoxed (grabbed) ? grabbed.floorGroup : grabbed.body;
                 if (body < 0) continue;
                 if (body != point.body && !IsBelow (body, point.body)) return false;
@@ -48,44 +48,27 @@ namespace Lilium
         /// - 動かない点のある骨は、点のまわりに回っても向こう側が動かないときだけ回れる（Turns）。回れなければ向きも留める
         ///   （首が重く頭が軽いとき、頭の点を動かすと首が回る。腰が重いとき、膝を動かしても腰は回らない。背骨と反対の脚が付いて動くため）
         /// </summary>
-        int AddHeldEffectors (float pull)
+        int AddHeldEffectors ()
         {
             int n = bodies_.Count;
-            held_.Clear ();
-            bool[] seeds = new bool[n];
             bool[] walls = new bool[n];
             bool[] oriented = new bool[n];
             bool[] offAxis = new bool[n];
             int[] heldCount = new int[n];
-            for (int i = 0; i < n; i++) heldOrigin_[i] = heldRotation_[i] = frozen_[i] = false;
-            foreach (Point point in points_) {
-                float positionWeight, rotationWeight;
-                if (grabbed_.Contains (point) && GetWeights (point, pull, out positionWeight, out rotationWeight)) seeds[point.body] = true;
+            for (int i = 0; i < n; i++) {
+                heldOrigin_[i] = heldRotation_[i] = frozen_[i] = grabbedBodies_[i] = false;
             }
             foreach (Point point in points_) {
-                if (!IsUsable (point) || grabbed_.Contains (point) || seeds[point.body]) continue;
                 float positionWeight, rotationWeight;
-                bool orientedPoint;
-                if (point.passive) {
-                    // 動かせない点（S89）は、重さに関係なく Pin の点と同じに留まる（向きは持たない）。力が先から伝わってこなければ、Free の軽い点と同じに引かれる
-                    if (!PassiveApplies (point)) continue;
-                    orientedPoint = false;
-                }
-                else if (GetWeights (point, pull, out positionWeight, out rotationWeight)) {
-                    if (positionWeight < 1 || point.blendBody >= 0) continue;
-                    // 重さ 0 の Pin の点は、Free の軽い点と同じに引かれる（10-30 ユーザー指示「Pin でも引く」）
-                    if (point.weightless && PullsPin (point)) continue;
-                    orientedPoint = rotationWeight > 0;
-                }
-                else {
-                    // Free の軽い点は引かれる
-                    if (point.weightless) continue;
-                    orientedPoint = point.hasRotation;
-                }
-                held_.Add (point);
+                if (grabbed_.Contains (point) && GetWeights (point, out positionWeight, out rotationWeight)) grabbedBodies_[point.body] = true;
+            }
+            foreach (Point point in points_) {
+                float positionWeight, rotationWeight;
+                if (LightRole (point, out positionWeight, out rotationWeight) != PointRole.Held) continue;
+                bool weighted = positionWeight > 0 || rotationWeight > 0;
                 heldCount[point.body]++;
                 walls[point.body] = true;
-                if (orientedPoint) oriented[point.body] = true;
+                if (!point.passive && (weighted ? rotationWeight > 0 : point.hasRotation)) oriented[point.body] = true;
                 if (point.offset.sqrMagnitude > kEpsilon * kEpsilon) offAxis[point.body] = true;
             }
 
@@ -95,7 +78,7 @@ namespace Lilium
             Stack<int> open = new Stack<int> ();
             for (int i = 0; i < n; i++) {
                 entry[i] = -1;
-                if (!seeds[i]) continue;
+                if (!grabbedBodies_[i]) continue;
                 reached[i] = true;
                 open.Push (i);
             }
@@ -103,7 +86,7 @@ namespace Lilium
                 int b = open.Pop ();
                 for (int m = 0; m < n; m++) {
                     if (m != bodyParents_[b] && bodyParents_[m] != b) continue;
-                    if (walls[m] && !seeds[m]) {
+                    if (walls[m] && !grabbedBodies_[m]) {
                         reached[m] = true;
                         entry[m] = entry[m] == -1 || entry[m] == b ? b : -2;
                         continue;
@@ -120,7 +103,8 @@ namespace Lilium
 
             int count = 0;
             foreach (Point point in points_) {
-                if (!held_.Contains (point)) continue;
+                float positionWeight, rotationWeight;
+                if (LightRole (point, out positionWeight, out rotationWeight) != PointRole.Held) continue;
                 int body = point.body;
                 if (frozen_[body]) continue;
                 // 付け根から離れた点を 1 つだけ留めた骨は、付け根と点を結ぶ軸まわりに回せる（AxisTurns。骨は留めた点を中心に回る、の基盤どおり）

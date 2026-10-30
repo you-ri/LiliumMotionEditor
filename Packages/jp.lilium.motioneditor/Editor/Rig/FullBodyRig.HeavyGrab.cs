@@ -99,7 +99,7 @@ namespace Lilium
         /// 道の外なら branchShifts（points_ と同じ並び。null なら 0）× branchScale（ルート空間）だけずらす。branches が false なら、道の外の Pin の点は入れない。
         /// yield なら、つかんだ点（足の箱を含む）を譲らせる（kLightPull）。入れた数を返す
         /// </summary>
-        int HeavyEffectors (bool[] path, Vector3 pathShift, Vector3[] branchShifts, float branchScale, bool yield, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition, bool branches = true)
+        int HeavyEffectors (bool[] path, Vector3 pathShift, Vector3[] branchShifts, float branchScale, bool yield, bool branches = true)
         {
             int count = 0;
             grabbedEffectors_.Clear ();
@@ -107,20 +107,18 @@ namespace Lilium
             for (int i = 0; i < points_.Count; i++) {
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
-                if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
-                bool grabbed = grabbed_.Contains (point);
-                bool pulled = PullsPin (point);
-                if (pulled && point.weightless) continue;
-                if (pulled && !branches && !path[point.body]) continue;
-                if (grabbed) grabbedEffectors_.Add (count);
-                else if (point.values.locked > 0.5f && positionWeight >= 1) lockedEffectors_.Add (count);
-                if (grabbed && yield) positionWeight = Mathf.Min (positionWeight, kLightPull);
-                FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight, scale);
-                if (pulled) effector.position += (float3)(path[point.body] ? pathShift : branchShifts != null ? branchShifts[i] * branchScale : Vector3.zero);
+                PointRole role = HeavyRole (point, out positionWeight, out rotationWeight);
+                if (role == PointRole.Follow) continue;
+                if (role == PointRole.CarriedPin && !branches && !path[point.body]) continue;
+                if (role == PointRole.Grabbed) grabbedEffectors_.Add (count);
+                else if (role == PointRole.Lock) lockedEffectors_.Add (count);
+                if (role == PointRole.Grabbed && yield) positionWeight = Mathf.Min (positionWeight, kLightPull);
+                FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight);
+                if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] ? pathShift : branchShifts != null ? branchShifts[i] * branchScale : Vector3.zero);
                 data_.effectors[count++] = effector;
             }
             int boxes = count;
-            count = AddFootBoxes (count, rootInverse, rootPosition);
+            count = AddFootBoxes (count);
             for (int e = boxes; e < count; e++) {
                 grabbedEffectors_.Add (e);
                 if (!yield) continue;
@@ -131,14 +129,36 @@ namespace Lilium
             return count;
         }
 
+        /// <summary>重い点をつかんでいる間に、運ぶ Pin の点があるか</summary>
+        bool HasCarriedPin ()
+        {
+            foreach (Point point in points_) {
+                float positionWeight, rotationWeight;
+                if (HeavyRole (point, out positionWeight, out rotationWeight) == PointRole.CarriedPin) return true;
+            }
+            return false;
+        }
+
+        /// <summary>骨 body の上の、運ぶ強さ 1 の Pin の点（無ければ null）</summary>
+        Point FullPinOn (int body, out float rotationWeight)
+        {
+            rotationWeight = 0;
+            foreach (Point point in points_) {
+                float positionWeight;
+                if (point.body == body && HeavyRole (point, out positionWeight, out rotationWeight) == PointRole.CarriedPin && positionWeight >= 1) return point;
+            }
+            rotationWeight = 0;
+            return null;
+        }
+
         /// <summary>
         /// つかんだ点を譲らせて、Pin の点の目標を、道の上は pathShift、道の外は branchShifts_ だけ運んで解く（HeavyEffectors）。運べた割合を返し、その答えを data_ に残す。
         /// Lock の点が動いたら、Lock の点が動かない範囲で一番遠くまで運ぶ（運ぶ割合を半分ずつ kShiftSearches 回絞る。全部運ぶか運ばないかで切り替えると、
         /// Lock の足から届かなくなった所で姿勢が跳ねた。10-28 実測で頭が 1 回 9.6cm）。どこまでも運べなければ 0 で、呼ぶ前に KeepYielded で控えた答え
         /// </summary>
-        float CarryPins (bool[] path, Vector3 pathShift, float pull, float scale, Quaternion rootInverse, Vector3 rootPosition)
+        float CarryPins (bool[] path, Vector3 pathShift)
         {
-            int count = HeavyEffectors (path, pathShift, branchShifts_, 1, true, pull, scale, rootInverse, rootPosition);
+            int count = HeavyEffectors (path, pathShift, branchShifts_, 1, true);
             RunSolver (count, solvePositions_, solveRotations_);
             if (LocksHeld ()) {
                 KeepYielded ();
@@ -147,7 +167,7 @@ namespace Lilium
             float valid = 0, invalid = 1;
             for (int k = 0; k < kShiftSearches; k++) {
                 float fraction = (valid + invalid) * 0.5f;
-                count = HeavyEffectors (path, pathShift * fraction, branchShifts_, fraction, true, pull, scale, rootInverse, rootPosition);
+                count = HeavyEffectors (path, pathShift * fraction, branchShifts_, fraction, true);
                 RunSolver (count, solvePositions_, solveRotations_);
                 if (LocksHeld ()) {
                     valid = fraction;
@@ -166,17 +186,16 @@ namespace Lilium
         /// 手足の付け根（つかんだ点から根への道から分かれた最初の骨の付け根。肩・股）から目標までが、手足の長さ（付け根から点まで、骨を伸ばしきった長さ）を超えた分だけ、
         /// 付け根の方へ運ぶ。超えなければ 0（腕が伸びきるまでは手は動かない）
         /// </summary>
-        void BranchShifts (bool[] path, float pull, float scale)
+        void BranchShifts (bool[] path)
         {
             for (int i = 0; i < points_.Count; i++) {
                 branchShifts_[i] = Vector3.zero;
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
-                if (point.body < 0 || path[point.body] || point.weightless || !PullsPin (point)) continue;
-                if (!GetWeights (point, pull, out positionWeight, out rotationWeight)) continue;
+                if (HeavyRole (point, out positionWeight, out rotationWeight) != PointRole.CarriedPin || path[point.body]) continue;
                 float length;
                 int root = LimbRoot (point, path, out length);
-                Vector3 target = (Vector3)PointEffector (point, 1, 0, scale).position;
+                Vector3 target = TargetPosition (point);
                 Vector3 toRoot = (Vector3)data_.positions[root] - target;
                 float over = toRoot.magnitude - length;
                 if (over > 0) branchShifts_[i] = toRoot.normalized * over;
@@ -187,7 +206,7 @@ namespace Lilium
         /// 道の上の Lock でない重さ 1 の Pin の点（腰）を運ぶ量（ルート空間）。つかんだ点の骨から根へたどって最初に当たる、そうした Pin の点から、
         /// つかんだ点の目標までが、間の骨を伸ばしきった長さを超えた分だけ、つかんだ点の方へ。超えなければ 0。道の上にそうした Pin の点が無ければ 0。
         /// </summary>
-        Vector3 PathStretch (bool[] path, float scale)
+        Vector3 PathStretch ()
         {
             if (grabbedEffectors_.Count == 0) return Vector3.zero;
             FullBodyIkEffector grabbed = data_.effectors[grabbedEffectors_[0]];
@@ -199,11 +218,10 @@ namespace Lilium
             int child = -1;
             for (int b = grabbed.bone; bodyParents_[b] >= 0; child = b, b = bodyParents_[b]) {
                 int parent = bodyParents_[b];
-                foreach (Point point in points_) {
-                    float positionWeight, rotationWeight;
-                    if (point.body != parent || point.weightless || !PullsPin (point)) continue;
-                    if (!GetWeights (point, Mathf.Clamp01 (settings_.pull), out positionWeight, out rotationWeight) || positionWeight < 1) continue;
-                    Vector3 pin = (Vector3)PointEffector (point, 1, 0, scale).position;
+                float rotationWeight;
+                Point point = FullPinOn (parent, out rotationWeight);
+                if (point != null) {
+                    Vector3 pin = TargetPosition (point);
                     Vector3 pinPoint = solvePositions_[parent] + solveRotations_[parent] * point.offset;
                     // 向きも留めた Pin の点なら、その骨は回れないので、鎖は骨 b の付け根から始まる（Pin の点と一緒に動く）。
                     // 向きを留めていなければ、骨はその点まわりに回れるので、鎖は Pin の点から始まり、点から骨 b の付け根までは骨の中の決まった距離
@@ -230,25 +248,21 @@ namespace Lilium
         /// Pin の点が向きを留めていない根（腰）なら、根の骨も、運んだ距離に応じて（kRootRelease まで）点まわりに目標の方へ回す。
         /// 蝶番（伸ばす手助けがソルバーにある）・軸まわりにだけ回る骨を含むとき（手を引くときの腕）と、つかんだ点が 2 つ以上のときは何もしない
         /// </summary>
-        void StraightenPath (Vector3 pathShift, float scale)
+        void StraightenPath (Vector3 pathShift)
         {
             if (grabbedEffectors_.Count != 1) return;
             FullBodyIkEffector grabbed = data_.effectors[grabbedEffectors_[0]];
             // 道の上で一番近い Pin の点を探す
-            float pull = Mathf.Clamp01 (settings_.pull);
             int pinBody = -1;
             bool turnsRoot = false;
             Vector3 pinPoint = Vector3.zero;
             for (int b = bodyParents_[grabbed.bone]; b >= 0 && pinBody < 0; b = bodyParents_[b]) {
-                foreach (Point point in points_) {
-                    float positionWeight, rotationWeight;
-                    if (point.body != b || point.weightless || !PullsPin (point)) continue;
-                    if (!GetWeights (point, pull, out positionWeight, out rotationWeight) || positionWeight < 1) continue;
-                    pinBody = b;
-                    turnsRoot = bodyParents_[b] < 0 && rotationWeight <= 0;
-                    pinPoint = solvePositions_[b] + solveRotations_[b] * point.offset;
-                    break;
-                }
+                float rotationWeight;
+                Point point = FullPinOn (b, out rotationWeight);
+                if (point == null) continue;
+                pinBody = b;
+                turnsRoot = bodyParents_[b] < 0 && rotationWeight <= 0;
+                pinPoint = solvePositions_[b] + solveRotations_[b] * point.offset;
             }
             if (pinBody < 0) return;
             pathChain_.Clear ();
@@ -261,7 +275,7 @@ namespace Lilium
             Vector3 rootSegment = solvePositions_[pathChain_[0]] - pinPoint;
             Vector3 pinTarget = pinPoint + pathShift;
             Quaternion rootTurn = turnsRoot
-                ? Quaternion.Slerp (Quaternion.identity, Quaternion.FromToRotation (rootSegment, (Vector3)grabbed.position - pinTarget), Mathf.Clamp01 (pathShift.magnitude / (kRootRelease * scale)))
+                ? Quaternion.Slerp (Quaternion.identity, Quaternion.FromToRotation (rootSegment, (Vector3)grabbed.position - pinTarget), Mathf.Clamp01 (pathShift.magnitude / (kRootRelease * humanScale)))
                 : Quaternion.identity;
             Vector3 start = pinTarget + rootTurn * rootSegment;
             // 骨ごとの、付け根から次の骨の付け根（最後はつかんだ点）までのベクトル
@@ -355,18 +369,17 @@ namespace Lilium
         /// 道の上の Pin の点を pathShift の何割まで運べるか（0〜1）。道の外の Lock の点（足）ごとに、手足の付け根（股）を pathShift と一緒に動かしたとき、
         /// 付け根から Lock の点の目標までが手足の長さを超えない一番大きい割合（2 次方程式）。付け根の場所は、控えた保持解きの姿勢（yieldedPositions_）で見る
         /// </summary>
-        float LockLimit (bool[] path, Vector3 pathShift, float pull, float scale)
+        float LockLimit (bool[] path, Vector3 pathShift)
         {
             float limit = 1;
             float ss = pathShift.sqrMagnitude;
             if (ss <= 0) return limit;
             foreach (Point point in points_) {
                 float positionWeight, rotationWeight;
-                if (point.body < 0 || path[point.body] || grabbed_.Contains (point) || point.values.locked <= 0.5f) continue;
-                if (!GetWeights (point, pull, out positionWeight, out rotationWeight) || positionWeight < 1) continue;
+                if (HeavyRole (point, out positionWeight, out rotationWeight) != PointRole.Lock || path[point.body]) continue;
                 float length;
                 int root = LimbRoot (point, path, out length);
-                Vector3 a = yieldedPositions_[root] - (Vector3)PointEffector (point, 1, 0, scale).position;
+                Vector3 a = yieldedPositions_[root] - TargetPosition (point);
                 // |a + t s| = length を満たす t のうち大きい方。今でも届かなければ 0
                 float c = a.sqrMagnitude - length * length;
                 if (c > 0) return 0;
