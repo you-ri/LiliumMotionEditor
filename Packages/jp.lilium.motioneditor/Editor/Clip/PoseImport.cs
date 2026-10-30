@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -42,6 +43,14 @@ namespace Lilium
 
         public static Result Run (Options options)
         {
+            Result result = default;
+            Stepper.Run (RunSteps (options, r => result = r));
+            return result;
+        }
+
+        /// <summary>Run を 1 フレームずつ区切ったもの（Stepper で少しずつ回す）。終わったら done に結果を渡す</summary>
+        public static IEnumerator RunSteps (Options options, System.Action<Result> done)
+        {
             AnimationClip destination = options.destination;
             EditingRig rig = options.rig;
             EditingRigSolver solver = options.solver;
@@ -79,6 +88,7 @@ namespace Lilium
                     for (int b = 0; b < bones.Count; b++) {
                         result.maxError = Mathf.Max (result.maxError, Vector3.Distance (expected[b], root.InverseTransformPoint (bones[b].position)));
                     }
+                    yield return null;
                 }
             }
             finally {
@@ -86,11 +96,11 @@ namespace Lilium
                 root.localScale = rootScale;
             }
 
-            values.Write (destination, rate);
+            yield return values.WriteSteps (destination, rate);
             result.frameCount = frameCount;
             result.curveCount = values.curveCount;
             result.milliseconds = watch.Elapsed.TotalMilliseconds;
-            return result;
+            done (result);
         }
 
         /// <summary>
@@ -135,6 +145,18 @@ namespace Lilium
             {
                 WriteCollected (destination, values_, rotationPaths_, frameCount_, rate);
             }
+
+            /// <summary>Write をカーブ 1 本ずつ区切ったもの（Stepper で少しずつ回す。書くのは最後に 1 回）</summary>
+            public IEnumerator WriteSteps (AnimationClip destination, float rate)
+            {
+                AlignRotationSigns (values_, rotationPaths_, frameCount_);
+                Dictionary<EditorCurveBinding, AnimationCurve> curves = new Dictionary<EditorCurveBinding, AnimationCurve> ();
+                foreach (KeyValuePair<EditorCurveBinding, float[]> pair in values_) {
+                    curves.Add (pair.Key, BuildCurve (pair.Value, rate));
+                    yield return null;
+                }
+                WriteCurves (destination, curves);
+            }
         }
 
         /// <summary>
@@ -150,7 +172,7 @@ namespace Lilium
         /// <summary>
         /// 補間で遠回りしないよう、回転は前のフレームと同じ側の四元数にそろえる
         /// </summary>
-        static void AlignRotationSigns (Dictionary<EditorCurveBinding, float[]> values, IEnumerable<string> rotationPaths, int frameCount)
+        internal static void AlignRotationSigns (Dictionary<EditorCurveBinding, float[]> values, IEnumerable<string> rotationPaths, int frameCount)
         {
             foreach (string path in rotationPaths) {
                 float[][] q = new float[4][];
@@ -173,24 +195,47 @@ namespace Lilium
         /// </summary>
         static void Write (AnimationClip destination, Dictionary<EditorCurveBinding, float[]> values, float rate)
         {
+            Dictionary<EditorCurveBinding, AnimationCurve> curves = new Dictionary<EditorCurveBinding, AnimationCurve> ();
+            foreach (KeyValuePair<EditorCurveBinding, float[]> pair in values) curves.Add (pair.Key, BuildCurve (pair.Value, rate));
+            WriteCurves (destination, curves);
+        }
+
+        /// <summary>フレームごとの値を、毎フレームにキーのあるカーブにする（接線は ClampedAuto）</summary>
+        internal static AnimationCurve BuildCurve (float[] values, float rate)
+        {
+            Keyframe[] keys = new Keyframe[values.Length];
+            for (int f = 0; f < keys.Length; f++) {
+                keys[f] = new Keyframe (f / rate, values[f]);
+                keys[f].inTangent = 0;
+                keys[f].outTangent = 0;
+            }
+            AnimationCurve curve = new AnimationCurve (keys);
+            for (int f = 0; f < keys.Length; f++) {
+                AnimationUtility.SetKeyLeftTangentMode (curve, f, AnimationUtility.TangentMode.ClampedAuto);
+                AnimationUtility.SetKeyRightTangentMode (curve, f, AnimationUtility.TangentMode.ClampedAuto);
+            }
+            return curve;
+        }
+
+        /// <summary>
+        /// カーブを編集用リグのカーブとして書く（元からある編集用リグのカーブは置き換える）。
+        /// まとめて書く（1 本ずつ SetEditorCurve すると、そのたびにクリップが作り直され、10 秒の取り込みで 0.2 秒ほどかかる）
+        /// </summary>
+        internal static void WriteCurves (AnimationClip destination, Dictionary<EditorCurveBinding, AnimationCurve> values)
+        {
             ClipUndo.Record (destination, "Import Motion");
+            List<EditorCurveBinding> bindings = new List<EditorCurveBinding> ();
+            List<AnimationCurve> curves = new List<AnimationCurve> ();
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (destination)) {
-                if (EditingClip.IsRigBinding (binding)) AnimationUtility.SetEditorCurve (destination, binding, null);
+                if (!EditingClip.IsRigBinding (binding) || values.ContainsKey (binding)) continue;
+                bindings.Add (binding);
+                curves.Add (null);
             }
-            foreach (KeyValuePair<EditorCurveBinding, float[]> pair in values) {
-                Keyframe[] keys = new Keyframe[pair.Value.Length];
-                for (int f = 0; f < keys.Length; f++) {
-                    keys[f] = new Keyframe (f / rate, pair.Value[f]);
-                    keys[f].inTangent = 0;
-                    keys[f].outTangent = 0;
-                }
-                AnimationCurve curve = new AnimationCurve (keys);
-                for (int f = 0; f < keys.Length; f++) {
-                    AnimationUtility.SetKeyLeftTangentMode (curve, f, AnimationUtility.TangentMode.ClampedAuto);
-                    AnimationUtility.SetKeyRightTangentMode (curve, f, AnimationUtility.TangentMode.ClampedAuto);
-                }
-                AnimationUtility.SetEditorCurve (destination, pair.Key, curve);
+            foreach (KeyValuePair<EditorCurveBinding, AnimationCurve> pair in values) {
+                bindings.Add (pair.Key);
+                curves.Add (pair.Value);
             }
+            if (bindings.Count > 0) AnimationUtility.SetEditorCurves (destination, bindings.ToArray (), curves.ToArray ());
             EditorUtility.SetDirty (destination);
         }
     }

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -32,6 +33,15 @@ namespace Lilium
         public static PoseImport.Result Import (AnimationClip source, AnimationClip destination, EditingRig rig, EditingRigSolver solver,
             System.Action<float> evaluate, IList<PoseTarget> targets)
         {
+            PoseImport.Result result = default;
+            Stepper.Run (ImportSteps (source, destination, rig, solver, evaluate, targets, r => result = r));
+            return result;
+        }
+
+        /// <summary>Import をフレームごとに区切ったもの（Stepper で少しずつ回す）。終わったら done に結果を渡す</summary>
+        public static IEnumerator ImportSteps (AnimationClip source, AnimationClip destination, EditingRig rig, EditingRigSolver solver,
+            System.Action<float> evaluate, IList<PoseTarget> targets, System.Action<PoseImport.Result> done)
+        {
             string problem = GetProblem (source);
             if (problem != null) throw new System.InvalidOperationException (problem);
             if (rig == null || rig.root == null) throw new System.InvalidOperationException (Tr ("GENERIC_IMPORT_NO_EDITING_RIG"));
@@ -49,6 +59,7 @@ namespace Lilium
             // 元のクリップの範囲だけ測る（後ろは最後の置き場所のまま）
             int sourceFrames = Mathf.Clamp (Mathf.RoundToInt ((source.empty ? 0 : source.length) * rate) + 1, 1, frameCount);
             RootMotion.Sample (rig.displayAnimator, source, rate, sourceFrames, out Vector3[] rootPositions, out Quaternion[] rootRotations);
+            yield return null;
             AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings (source);
             // 最初の体の向きと水平の場所を、クリップに焼いた値（RootT・RootQ）へ戻す。足し戻すルートの移動ごと回す
             if (GetStartOffset (source, rig.displayAnimator, evaluate, out Vector3 startPosition, out Quaternion startRotation)) {
@@ -58,7 +69,8 @@ namespace Lilium
                 }
             }
 
-            PoseImport.Result result = PoseImport.Run (new PoseImport.Options {
+            PoseImport.Result result = default;
+            yield return PoseImport.RunSteps (new PoseImport.Options {
                 destination = destination,
                 rig = rig,
                 solver = solver,
@@ -73,7 +85,7 @@ namespace Lilium
                 checkBones = bones,
                 length = length,
                 notes = notes,
-            });
+            }, r => result = r);
 
             if (destination != null) CarryCurves (source, destination, rig, notes);
 
@@ -86,7 +98,7 @@ namespace Lilium
             if (!Mathf.Approximately (settings.level, 0) || !Mathf.Approximately (settings.orientationOffsetY, 0)) {
                 notes.Add (Tr ("HUMANOID_IMPORT_OFFSETS_BAKED"));
             }
-            return result;
+            done (result);
         }
 
         /// <summary>

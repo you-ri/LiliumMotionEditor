@@ -45,7 +45,7 @@ namespace Lilium
         internal static readonly Color kLinkColor = new Color (0.8f, 0.85f, 0.9f, 0.55f);
         /// <summary>線を押す当たりで、丸より後に当たるよう足す距離（ピクセル）。線の端と丸が近いとき、丸を優先する</summary>
         internal const float kLinkPickBias = 2;
-        /// <summary>マウスが乗っている・線に当たる骨（FK）を選んでいる線の太さ（線の太さの何倍か）</summary>
+        /// <summary>マウスが乗っている線の太さ（線の太さの何倍か）</summary>
         internal const float kLinkHighlightWidth = 1.8f;
         /// <summary>点をつかまない間に出す、固定した点の印の大きさ（ハンドルの大きさの何倍か）</summary>
         const float kMarkScale = 0.6f;
@@ -312,9 +312,6 @@ namespace Lilium
 
         /// <summary>線を押せるか（線に当たる骨の FK を今動かせるか。窓が描く前に入れる）</summary>
         public bool linkPickable;
-
-        /// <summary>線に当たる骨の FK を選んでいるか（線を選んだ色で描く。窓が描く前に入れる）</summary>
-        public bool linkSelected;
 
         /// <summary>線に当たる骨がメッシュでマウスの下にあるか（マウスが乗ったのと同じに描く。窓が描く前に入れる）</summary>
         public bool linkHovered;
@@ -918,7 +915,7 @@ namespace Lilium
 
         /// <summary>
         /// 点をつかむ間の線。押すと、線に当たる骨の FK を選ぶ（窓が ConsumeLinkClick で読む）。
-        /// マウスが乗っている間と、その骨の FK を選んでいる間は、太く選びの色で描く
+        /// マウスが乗っている間は、太く乗った色で描く。その骨の FK を選んでいても強調しない
         /// </summary>
         void DoLink (Vector3 position)
         {
@@ -959,8 +956,8 @@ namespace Lilium
         void DrawLinkLine (Vector3 start, Vector3 end, bool hover)
         {
             Color saved = Handles.color;
-            Handles.color = PoseHandles.Fade (linkSelected ? kRingSelectedColor : hover ? kRingHoverColor : kLinkColor);
-            Handles.DrawAAPolyLine (linkSelected || hover ? kLinkWidth * kLinkHighlightWidth : kLinkWidth, start, end);
+            Handles.color = PoseHandles.Fade (hover ? kRingHoverColor : kLinkColor);
+            Handles.DrawAAPolyLine (hover ? kLinkWidth * kLinkHighlightWidth : kLinkWidth, start, end);
             Handles.color = saved;
         }
 

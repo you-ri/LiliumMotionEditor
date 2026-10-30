@@ -735,6 +735,46 @@ namespace Lilium
             AssertLengths (lengths, 1e-4f, "骨の長さ");
         }
 
+        [Test]
+        public void LightHinge_FollowsSideways_WithEndPinnedByPosition ([Values] bool knee)
+        {
+            // 足首・手首を位置だけで固定し、軽い（0）膝・肘をつかんで、脚・腕の面を回す向き（付け根と先を結ぶ軸まわり）へ 5cm 引く。
+            // 膝・肘は、付け根と先から骨の長さで決まる円の上で、目標に一番近い所まで付いてくる（10-30。蝶番の軸で曲がる面を決めていたときは、5cm 引いて 3mm しか付いてこなかった）
+            HumanBodyBones upper = knee ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.LeftUpperArm;
+            HumanBodyBones hinge = knee ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.LeftLowerArm;
+            HumanBodyBones end = knee ? HumanBodyBones.LeftFoot : HumanBodyBones.LeftHand;
+            SetLight (knee ? "LeftLowerLeg" : "LeftLowerArm");
+            Setup s = Create ();
+            Dictionary<Transform, float> lengths = Lengths (s);
+            if (knee) {
+                Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
+                Pin (s, HumanBodyBones.RightFoot, Vector3.zero);
+                Pin (s, HumanBodyBones.Hips, -s.up * 0.15f);
+            }
+            else {
+                Pin (s, HumanBodyBones.LeftHand, s.forward * 0.15f - ArmDirection (s, false) * 0.15f);
+                Pin (s, HumanBodyBones.Hips, Vector3.zero);
+                Pin (s, HumanBodyBones.Neck, Vector3.zero);
+            }
+            Solve (s);
+            Transform middle = Bone (s, hinge);
+            Vector3 top = Bone (s, upper).position, bottom = Bone (s, end).position, bent = middle.position;
+            Vector3 axis = (bottom - top).normalized;
+            Vector3 center = top + axis * Vector3.Dot (bent - top, axis);
+            float radius = Vector3.Distance (bent, center);
+            Assert.Greater (radius, 0.03f, "曲がっている");
+            Vector3 target = bent + Vector3.Cross (axis, (bent - center) / radius) * 0.05f;
+            Vector3 ideal = center + Vector3.ProjectOnPlane (target - center, axis).normalized * radius;
+
+            s.body.MarkGrabbed (hinge);
+            Pin (s, hinge, target - bent);
+            Solve (s);
+            Assert.LessOrEqual (Vector3.Distance (middle.position, ideal), 0.005f, "円の上で目標に一番近い所まで付いてくる");
+            Assert.LessOrEqual (Vector3.Distance (bottom, Bone (s, end).position), 1e-4f, "足首・手首は動かない");
+            AssertLengths (lengths, 1e-4f, "骨の長さ");
+            s.body.ClearCarry ();
+        }
+
         public enum ElbowState { Free, Pin, Lock }
 
         [Test]
@@ -940,6 +980,50 @@ namespace Lilium
                 Transform bone = Bone (s, spine[k]);
                 if (bone == null) continue;
                 Assert.LessOrEqual (Quaternion.Angle (rest[k], bone.localRotation), 15f, spine[k] + " は折れない");
+            }
+            s.body.ClearCarry ();
+        }
+
+        [Test]
+        public void LiftingHeavyNeckFar_StraightensABentSpine ([Values] bool hands)
+        {
+            // 背骨を丸めたキーで、腰（位置だけ）を Pin にして、重い首を 1cm ずつ 80cm 持ち上げる。腰が運ばれ、背骨はまっすぐになり、首は届く。途中で体は跳ねない
+            // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」。腰を運ぶ量を伸ばしきった長さの 95% から数えていて、胸・上胸に 35° ずつ曲がりが残った）。
+            // 両手を Pin にして鎖骨に動かせない点があっても同じ（鎖骨まで伸ばせる長さに数えると、手に引かれて上胸が 21° 曲がったまま残った）
+            if (hands) AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
+            Setup s = Create (shoulders: hands);
+            Transform[] curled = new[] { HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest }.Select (b => Bone (s, b)).Where (b => b != null).ToArray ();
+            System.Action solve = () => {
+                s.body.Unsolve ();
+                s.rig.ResetBonesToRest ();
+                s.solver.Solve ();
+                foreach (Transform bone in curled) bone.rotation = Quaternion.AngleAxis (30f, Vector3.Cross (s.up, s.forward)) * bone.rotation;
+                s.body.CaptureInput ();
+                s.body.Solve ();
+            };
+            solve ();
+            Pin (s, HumanBodyBones.Hips, Vector3.zero);
+            if (hands) {
+                Pin (s, HumanBodyBones.LeftHand, Vector3.zero);
+                Pin (s, HumanBodyBones.RightHand, Vector3.zero);
+            }
+            Pin (s, HumanBodyBones.Neck, Vector3.zero);
+            solve ();
+            Transform hips = Bone (s, HumanBodyBones.Hips), neck = Bone (s, HumanBodyBones.Neck), head = Bone (s, HumanBodyBones.Head);
+            Vector3 hipsRest = hips.position, neckRest = neck.position, headLast = head.position;
+            Assert.Greater (Vector3.Angle (curled[1].position - curled[0].position, neck.position - curled[1].position), 20f, "背骨は丸まっている");
+            s.body.MarkGrabbed (HumanBodyBones.Neck);
+            for (int i = 1; i <= 80; i++) {
+                s.body.SetPointPositionWorld (HumanBodyBones.Neck, neckRest + s.up * (0.01f * i));
+                solve ();
+                Assert.LessOrEqual (Vector3.Distance (head.position, headLast), 0.06f, "頭は跳ねない: " + i + "cm");
+                headLast = head.position;
+            }
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.Neck), 3e-3f, "首は届く");
+            Assert.Greater (hips.position.y - hipsRest.y, 0.3f, "腰は引かれて上がる");
+            Vector3[] joints = curled.Select (b => b.position).Append (neck.position).ToArray ();
+            for (int k = 1; k + 1 < joints.Length; k++) {
+                Assert.LessOrEqual (Vector3.Angle (joints[k] - joints[k - 1], joints[k + 1] - joints[k]), 3f, "背骨はまっすぐ: " + k);
             }
             s.body.ClearCarry ();
         }

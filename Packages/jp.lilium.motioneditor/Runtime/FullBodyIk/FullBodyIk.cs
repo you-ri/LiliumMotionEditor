@@ -403,7 +403,7 @@ namespace Lilium
                 for (int iteration = 0; iteration < iterations; iteration++) {
                     SolveRoots (ref d, n);
                     for (int e = 0; e < effectorCount; e++) SolveReach (ref d, e);
-                    SolveBends (ref d, n);
+                    SolveBends (ref d, n, effectorCount);
                     if ((iteration & 1) == 0) {
                         for (int i = 0; i < n; i++) SolveJoint (ref d, i, false);
                     }
@@ -419,7 +419,7 @@ namespace Lilium
             for (int iteration = 0; iteration < iterations; iteration++) {
                 SolveRoots (ref d, n);
                 for (int e = 0; e < effectorCount; e++) SolveReach (ref d, e);
-                SolveBends (ref d, n);
+                SolveBends (ref d, n, effectorCount);
                 // 関節は、奇数回と偶数回で並びを逆にたどる（根からと先からの両方から寄せる）。並びは固定
                 if ((iteration & 1) == 0) {
                     for (int i = 0; i < n; i++) SolveJoint (ref d, i, true);
@@ -435,7 +435,7 @@ namespace Lilium
             int polish = math.max (kMinPolish, iterations / 2);
             for (int iteration = 0; iteration < polish; iteration++) {
                 for (int e = 0; e < effectorCount; e++) SolveReach (ref d, e);
-                SolveBends (ref d, n);
+                SolveBends (ref d, n, effectorCount);
                 if ((iteration & 1) == 0) {
                     for (int i = 0; i < n; i++) SolveJoint (ref d, i, false);
                 }
@@ -908,24 +908,27 @@ namespace Lilium
         /// 関節を 1 つずつ満たすだけだと、まっすぐな脚の足を真上に上げたとき、膝のずれが骨の向きに沿うので回す腕が無く、膝が曲がり始めない。
         /// ずれが股と膝の間を行き来し続け、その取り分で、点まわりに回れる腰が少しずつ回る（腰を位置で固定していても上半身が傾く）
         /// </summary>
-        static void SolveBends (ref FullBodyIkData d, int n)
+        static void SolveBends (ref FullBodyIkData d, int n, int effectorCount)
         {
             for (int c = 0; c < n; c++) {
                 if (d.inverseMass[c] > 0 || d.active[c] == 0) continue;
                 // 骨そのものが蝶番: 膝（付け根）から、動かない点（重心を移した所）までの距離が決まる
-                if (d.hingeOn[c] != 0) SolveBend (ref d, c, d.centers[c], math.length (d.centerLocal[c]));
+                if (d.hingeOn[c] != 0) SolveBend (ref d, c, d.centers[c], math.length (d.centerLocal[c]), effectorCount);
                 // 親が蝶番で、この骨の付け根が動かない（付け根で固定した・回らない）: 膝からこの骨の付け根までの距離が決まる
                 int p = d.bones[c].parent;
                 if (p >= 0 && d.hingeOn[p] != 0 && (d.inverseInertia[c] <= 0 || math.lengthsq (d.centerLocal[c]) <= 1e-12f)) {
-                    SolveBend (ref d, p, d.centers[c] - math.rotate (d.rotations[c], d.centerLocal[c]), math.length (d.anchorLocal[c]));
+                    SolveBend (ref d, p, d.centers[c] - math.rotate (d.rotations[c], d.centerLocal[c]), math.length (d.anchorLocal[c]), effectorCount);
                 }
             }
         }
 
         /// <summary>
-        /// 蝶番の骨 i の付け根（膝）を、手前の関節（股）から上の骨の長さ、target から lower だけ離れた円の上の、蝶番が曲がる側の点へ寄せる
+        /// 蝶番の骨 i の付け根（膝）を、手前の関節（股）から上の骨の長さ、target から lower だけ離れた円の上の、蝶番が曲がる側の点へ寄せる。
+        /// 膝そのものに位置の目標があるときは、円の上のどの点にするか（股と target を結ぶ軸まわりに、脚の面をどれだけ回すか）を、その目標の側で決める。
+        /// 蝶番の軸から決めると、膝の点を横へ引いても、反復のたびに今の面の上へ戻され、手前の骨がほとんど回らない
+        /// （10-30。足首・手首を位置だけで固定すると、脛・前腕は足首・手首まわりに回るだけの物になり、戻しがほぼ丸ごと効く。肘を 5cm 引いて 3mm しか付いてこなかった）
         /// </summary>
-        static void SolveBend (ref FullBodyIkData d, int i, float3 target, float lower)
+        static void SolveBend (ref FullBodyIkData d, int i, float3 target, float lower, int effectorCount)
         {
             int p = d.bones[i].parent;
             int g = p >= 0 ? d.bones[p].parent : -1;
@@ -944,9 +947,30 @@ namespace Lilium
             float3 axis = math.rotate (d.rotations[p], d.hingeAxisParent[i]);
             float3 side = math.normalizesafe (math.cross (u, axis));
             if (math.lengthsq (side) < 0.5f) return;
+            side = TargetSide (ref d, i, top, u, side, height, effectorCount);
             float3 wanted = top + u * along + side * height;
             MovePoint (ref d, p, math.rotate (d.rotations[p], d.anchorLocal[i] - d.centerLocal[p]), wanted);
             MovePoint (ref d, i, math.rotate (d.rotations[i], -d.centerLocal[i]), wanted);
+        }
+
+        /// <summary>
+        /// 蝶番の骨 i の付け根に位置の目標があれば、膝を寄せる側（u に垂直な向き）を、目標の側へ位置の強さだけ寄せて返す。
+        /// 目標が股と target を結ぶ軸の上に近く、側が決まらないときは side のまま
+        /// </summary>
+        static float3 TargetSide (ref FullBodyIkData d, int i, float3 top, float3 u, float3 side, float height, int effectorCount)
+        {
+            int n = d.bones.Length;
+            for (int e = 0; e < effectorCount; e++) {
+                FullBodyIkEffector effector = d.effectors[e];
+                if (effector.bone != i || !IsUsed (ref d, e, n) || IsOffset (ref d, e) || effector.positionWeight <= 0) continue;
+                float3 toPoint = effector.position - top;
+                float3 across = toPoint - u * math.dot (toPoint, u);
+                float weight = math.saturate (effector.positionWeight);
+                float3 blended = math.lerp (side * height, across, weight);
+                if (math.lengthsq (blended) > 1e-10f) return math.normalize (blended);
+                return side;
+            }
+            return side;
         }
 
         /// <summary>骨 body の上の点（重心から arm）を wanted へ寄せる</summary>

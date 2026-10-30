@@ -61,7 +61,6 @@ namespace Lilium
                         Transform linkBone = point.linkBone;
                         if (fkByBone != null && linkBone != null) fkByBone.TryGetValue (linkBone, out linkFk);
                         point.linkPickable = linkFk != null && CanEditTarget (linkFk);
-                        point.linkSelected = linkFk != null && IsSelected (linkFk.gameObject);
                         point.linkHovered = linkFk != null && meshHover_ != null && linkFk.gameObject == meshHover_;
                         // 点は View の IK で出し入れする。切っている間も選んでいる点は出す（骨を隠しているときと同じく、そのまま動かせるように）
                         if (pointGrab && !displayGrab && (showIk_ || selected)) {

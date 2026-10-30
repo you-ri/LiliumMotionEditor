@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -559,19 +560,60 @@ namespace Lilium
         {
             result = new OverrideImportResult ();
             if (options == null) options = new OverrideImportOptions ();
-            bool lockFeet = options.lockFeet;
+            string problem = GetOverrideImportProblem (source, options);
+            if (problem != null) return problem;
+            if (destination == null || destination == clip_ || destination == source) return Tr ("POSE_SESSION_BAD_IMPORT_DESTINATION");
+            ComputedOverride computed = new ComputedOverride { result = result };
+            try {
+                Stepper.Run (ComputeOverride (source, mode, options, computed));
+                WriteOverride (destination, computed);
+                return null;
+            }
+            catch (System.Exception e) {
+                return e.Message;
+            }
+            finally {
+                RestoreFrame ();
+            }
+        }
+
+        /// <summary>外の Humanoid のクリップを取り込めない理由（書き込み先は見ない）</summary>
+        string GetOverrideImportProblem (AnimationClip source, OverrideImportOptions options)
+        {
             string character = characterProblem;
             if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
             string problem = HumanoidImport.GetProblem (source);
             if (problem != null) return problem;
-            if (destination == null || destination == clip_ || destination == source) return Tr ("POSE_SESSION_BAD_IMPORT_DESTINATION");
-            if (lockFeet && stage.fullBody == null) return Tr ("POSE_DOCUMENT_NO_POINTS");
+            if (options.lockFeet && stage.fullBody == null) return Tr ("POSE_DOCUMENT_NO_POINTS");
+            return null;
+        }
 
+        /// <summary>取り込みで計算した、書く前の値（フレームごと）。計算（ComputeOverride）と書く所（WriteOverride）を分けるため</summary>
+        internal sealed class ComputedOverride
+        {
+            public OverrideImportResult result;
+            public Dictionary<EditorCurveBinding, float[]> stored;
+            public HashSet<string> rotationPaths;
+            public float rate;
+            /// <summary>書くカーブ（間引いた後。PrepareCurves で作ったときだけ）</summary>
+            public Dictionary<EditorCurveBinding, AnimationCurve> curves;
+            /// <summary>計算できなかった理由</summary>
+            public string error;
+        }
+
+        /// <summary>
+        /// ImportOverride の計算（書く前まで。1〜3 の差分にするところまで）。フレームごとに区切ってあり、Stepper で少しずつ回せる。
+        /// このセッションの中の体を動かすだけで、アセットは書かない。終わると computed に書く値が入る
+        /// </summary>
+        IEnumerator ComputeOverride (AnimationClip source, OverrideMode mode, OverrideImportOptions options, ComputedOverride computed)
+        {
+            OverrideImportResult result = computed.result;
             EditingRig rig = stage.editingRig;
             Transform root = rig.root.transform;
             float rate = CurveEdit.FrameRateOf (clip_);
-            AnimationClip imported = new AnimationClip { frameRate = rate };
+            // 作業用のクリップ（使い終えたら消す。保存しない印を付けて、Undo にも控えない）
+            AnimationClip imported = new AnimationClip { frameRate = rate, hideFlags = HideFlags.HideAndDontSave };
             List<PoseTarget> importTargets = RigTargets.Create (rig, stage.editingRigSolver);
             try {
                 // 1. 外のクリップを編集用リグの値にする（表示モデルへ当てて、編集用の体へ写して捉える）。
@@ -579,29 +621,33 @@ namespace Lilium
                 Transform display = stage.animator.transform;
                 display.GetLocalPositionAndRotation (out Vector3 displayPosition, out Quaternion displayRotation);
                 using (ClipSampler sampler = new ClipSampler (stage.animator)) {
-                    PoseImport.Result imported1 = HumanoidImport.Import (source, imported, rig, stage.editingRigSolver, time => {
+                    PoseImport.Result imported1 = default;
+                    yield return HumanoidImport.ImportSteps (source, imported, rig, stage.editingRigSolver, time => {
                         sampler.Sample (source, time);
                         display.SetLocalPositionAndRotation (displayPosition, displayRotation);
-                    }, importTargets);
+                    }, importTargets, r => imported1 = r);
                     result.frameCount = imported1.frameCount;
                     if (imported1.notes != null) result.notes.AddRange (imported1.notes);
                 }
                 // 元のクリップのほうが長ければ、その長さまで書く（取り込み元より後ろは下で差 0 にする。書かないとカーブの最後の差が残る）
                 result.frameCount = Mathf.Max (result.frameCount, CurveEdit.FrameCount (clip_.empty ? 0 : clip_.length, rate));
+                yield return null;
                 Dictionary<EditorCurveBinding, float[]> target = ReadCurves (imported, result.frameCount, rate);
+                yield return null;
                 if (!options.fingers) {
                     HashSet<string> fingerPaths = new HashSet<string> (rig.binding.boneControls.Where (c => c.human.HasValue && IsFinger (c.human.Value)).Select (c => c.path));
                     foreach (EditorCurveBinding binding in target.Keys.Where (b => fingerPaths.Contains (b.path)).ToList ()) target.Remove (binding);
                 }
 
                 // 2. 足を床に付ける
-                if (lockFeet) result.lockedFrames = LockFeet (imported, target, result.frameCount, rate);
+                if (options.lockFeet) result.lockedFrames = LockFeet (imported, target, result.frameCount, rate);
 
                 // 3. 元のクリップとの差分にする。取り込み元より後ろのフレームは元のまま（差 0）にする（最後の姿勢の差を残さない）。
                 //    keepKeys なら、元のキーのフレームで差 0、前後でなめらかに差を戻す（重みは差分にする前の狙いの値に掛ける）
                 int sourceFrames = Mathf.Clamp (Mathf.RoundToInt ((source.empty ? 0 : source.length) * rate) + 1, 1, result.frameCount);
                 int[] baseKeys = ClipCycle.GetFrames (clip_).Where (k => k >= 0 && k < sourceFrames).ToArray ();
                 result.keyDeviations = MeasureKeyDeviations (imported, baseKeys, rate, options.fingers);
+                yield return null;
                 float[] weights = new float[result.frameCount];
                 for (int f = 0; f < result.frameCount; f++) {
                     weights[f] = f >= sourceFrames ? 0 : options.keepKeys ? KeepKeysWeight (f, baseKeys, options.keepKeysBlend * rate) : 1;
@@ -609,9 +655,13 @@ namespace Lilium
                 Dictionary<EditorCurveBinding, float[]> stored = new Dictionary<EditorCurveBinding, float[]> ();
                 foreach (EditorCurveBinding binding in target.Keys) stored[binding] = new float[result.frameCount];
                 List<IGrouping<string, EditorCurveBinding>> transforms = target.Keys.Where (b => b.type == typeof (Transform)).GroupBy (b => b.path + "|" + b.propertyName.Substring (0, b.propertyName.LastIndexOf ('.'))).ToList ();
+                // 置き換えで、どの組も成分がそろっていれば、重み 1 のフレームは元の値を使わない。元のクリップを当てずに済ませる
+                // （外部の補間の取り込みは全フレームこれで、10 秒で 0.1 秒ほど縮む）
+                bool complete = transforms.All (g => g.Count () == (g.First ().propertyName.StartsWith ("m_LocalRotation.") ? 4 : 3));
                 for (int f = 0; f < result.frameCount; f++) {
-                    stage.SampleBaseAsControls (clip_, useHumanoidBase, f / rate);
-                    foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode, weights[f]);
+                    bool useBase = mode != OverrideMode.Override || weights[f] < 1 || !complete;
+                    if (useBase) stage.SampleBaseAsControls (clip_, useHumanoidBase, f / rate);
+                    foreach (IGrouping<string, EditorCurveBinding> group in transforms) StoreTransform (group, root.gameObject, target, stored, f, mode, useBase ? weights[f] : 1, useBase);
                     // 数値（点の固定の強さ・Rig の代理の重み）は足し合わせず、Additive でも置き換える
                     foreach (EditorCurveBinding binding in target.Keys) {
                         if (binding.type == typeof (Transform)) continue;
@@ -619,24 +669,63 @@ namespace Lilium
                         if (weights[f] < 1 && AnimationUtility.GetFloatValue (root.gameObject, binding, out float baseValue)) value = Mathf.Lerp (baseValue, value, weights[f]);
                         stored[binding][f] = value;
                     }
+                    yield return null;
                 }
-                HashSet<string> rotationPaths = new HashSet<string> (target.Keys.Where (b => b.propertyName.StartsWith ("m_LocalRotation.")).Select (b => b.path));
-                PoseImport.WriteCollected (destination, stored, rotationPaths, result.frameCount, rate);
-                result.keyCountBeforeReduce = CountKeys (destination);
-                OverrideMerge.ReduceKeys (destination, kReduceTolerance);
-                result.keyCount = CountKeys (destination);
-                OverrideApplier.Invalidate (destination);
-                return null;
-            }
-            catch (System.Exception e) {
-                return e.Message;
+                computed.stored = stored;
+                computed.rotationPaths = new HashSet<string> (target.Keys.Where (b => b.propertyName.StartsWith ("m_LocalRotation.")).Select (b => b.path));
+                computed.rate = rate;
             }
             finally {
                 foreach (PoseTarget t in importTargets) t.Dispose ();
                 Object.DestroyImmediate (imported);
-                stage.InvalidateClipCurves ();
-                Evaluate (frame);
             }
+        }
+
+        /// <summary>計算した値を destination へ書き、変わらないキーを間引く</summary>
+        static void WriteOverride (AnimationClip destination, ComputedOverride computed)
+        {
+            OverrideImportResult result = computed.result;
+            PoseImport.WriteCollected (destination, computed.stored, computed.rotationPaths, result.frameCount, computed.rate);
+            result.keyCountBeforeReduce = CountKeys (destination);
+            OverrideMerge.ReduceKeys (destination, kReduceTolerance);
+            result.keyCount = CountKeys (destination);
+            OverrideApplier.Invalidate (destination);
+        }
+
+        /// <summary>
+        /// 書くカーブを作って間引いておく（1 本ずつ区切ってあり、Stepper で少しずつ回せる）。WriteOverride と同じカーブになるが、
+        /// 書いてから間引くと、書く所（分けられない）で 0.1 秒ほど止まるので先に済ませる。書き込み先のほかのカーブは間引かないので、
+        /// 書き込み先が編集用リグのカーブだけのとき（外部の補間の結果のファイル）に使う
+        /// </summary>
+        static IEnumerator PrepareCurves (ComputedOverride computed)
+        {
+            OverrideImportResult result = computed.result;
+            PoseImport.AlignRotationSigns (computed.stored, computed.rotationPaths, result.frameCount);
+            computed.curves = new Dictionary<EditorCurveBinding, AnimationCurve> ();
+            result.keyCountBeforeReduce = 0;
+            result.keyCount = 0;
+            foreach (KeyValuePair<EditorCurveBinding, float[]> pair in computed.stored) {
+                AnimationCurve curve = PoseImport.BuildCurve (pair.Value, computed.rate);
+                result.keyCountBeforeReduce += curve.length;
+                if (curve.length >= 3) curve = OverrideMerge.Reduce (curve, kReduceTolerance);
+                result.keyCount += curve.length;
+                computed.curves.Add (pair.Key, curve);
+                yield return null;
+            }
+        }
+
+        /// <summary>PrepareCurves で作ったカーブを destination へ書く</summary>
+        static void WritePrepared (AnimationClip destination, ComputedOverride computed)
+        {
+            PoseImport.WriteCurves (destination, computed.curves);
+            OverrideApplier.Invalidate (destination);
+        }
+
+        /// <summary>取り込みの計算で動かした体を、今のフレームの姿勢へ戻す</summary>
+        void RestoreFrame ()
+        {
+            stage.InvalidateClipCurves ();
+            Evaluate (frame);
         }
 
         /// <summary>
@@ -696,20 +785,133 @@ namespace Lilium
         /// <summary>
         /// 外部の骨格の BVH を、元のクリップの外部の補間の結果（BetweenClips。`<名前>.between.anim`）として書き、segments の区間に使う印を付ける（S81）。
         /// 結果は編集用リグの値そのもの（Override の置き換えと同じ値）。指は書かない（打った手の形を残す）。最初のフレームの体は元のクリップに合わせる（alignRoot）。
-        /// 区間は元のクリップの隣り合うキーの間であること。結果のファイルの書き換えは Undo で戻る（区間の印は .meta なので戻らない）
+        /// 区間は元のクリップの隣り合うキーの間であること。結果のファイルの書き換えは Undo で戻る（区間の印は .meta なので戻らない）。
+        /// 計算を少しずつ回すときは BeginImportBetween（結果は同じ）
         /// </summary>
         /// <returns>書けなかった理由（書けたら null）</returns>
         public string ImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out OverrideImportResult result)
         {
             result = null;
+            using (BetweenImport import = BeginImportBetween (bvh, skeleton, segments, out string problem)) {
+                if (problem != null) return problem;
+                return import.Commit (segments, out result);
+            }
+        }
+
+        /// <summary>
+        /// 少しずつ回す ImportBetween（BeginImportBetween）。Step をエディタの更新ごとに呼び、終わったら（true）Commit で結果のファイルへ書く。
+        /// 計算の間はこのセッションの中の体を動かすだけで、アセットは書かない（書くのは Commit の 1 回。Undo もそこで 1 回）。
+        /// 取り込みは 10 秒の動きで 0.5 秒ほどかかり、一度に回すとその間エディタが止まるので分けた（10-30）。やめるときは Dispose
+        /// </summary>
+        public sealed class BetweenImport : System.IDisposable
+        {
+            readonly PoseSession session_;
+            readonly Stepper stepper_;
+            readonly ComputedOverride computed_;
+
+            internal BetweenImport (PoseSession session, IEnumerator routine, ComputedOverride computed)
+            {
+                session_ = session;
+                stepper_ = new Stepper (routine);
+                computed_ = computed;
+            }
+
+            /// <summary>計算が終わったか（できなかったときも）</summary>
+            public bool done
+            {
+                get { return stepper_.done; }
+            }
+
+            /// <summary>seconds 秒ぶん計算を進める。終わった（できなかったときも）なら true</summary>
+            public bool Step (double seconds)
+            {
+                if (stepper_.done) return true;
+                try {
+                    return stepper_.Step (seconds);
+                }
+                catch (System.Exception e) {
+                    computed_.error = e.Message;
+                    return true;
+                }
+            }
+
+            /// <summary>
+            /// 計算した動きを結果のファイルへ書き、segments を外部の動きの区間にする。計算が残っていれば先に回し切る。
+            /// segments は始めたときと違ってよい（計算の間にキーが動いたら、呼ぶ側が使える区間に絞る）
+            /// </summary>
+            /// <returns>書けなかった理由（書けたら null）</returns>
+            public string Commit (IList<BetweenClips.Range> segments, out OverrideImportResult result)
+            {
+                result = null;
+                Step (double.PositiveInfinity);
+                if (computed_.error != null) {
+                    session_.RestoreFrame ();
+                    return computed_.error;
+                }
+                return session_.CommitBetween (computed_, segments, out result);
+            }
+
+            public void Dispose ()
+            {
+                stepper_.Dispose ();
+            }
+        }
+
+        /// <summary>ImportBetween の計算を始める（Step で少しずつ回し、Commit で書く）。始められなければ null と理由</summary>
+        public BetweenImport BeginImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out string problem)
+        {
+            problem = GetBetweenProblem (segments) ?? GetBvhImportProblem (bvh, skeleton);
+            if (problem != null) return null;
+            OverrideImportOptions options = new OverrideImportOptions { fingers = false, alignRoot = true };
+            ComputedOverride computed = new ComputedOverride { result = new OverrideImportResult () };
+            return new BetweenImport (this, ComputeBetween (bvh, skeleton, options, computed), computed);
+        }
+
+        string GetBetweenProblem (IList<BetweenClips.Range> segments)
+        {
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
-            string path = BetweenClips.PathFor (clip_);
-            if (path == null) return Tr ("BETWEEN_CLIPS_ONLY_SAVED_CLIP");
+            if (BetweenClips.PathFor (clip_) == null) return Tr ("BETWEEN_CLIPS_ONLY_SAVED_CLIP");
             if (segments == null || segments.Count == 0) return Tr ("BETWEEN_CLIPS_NO_SEGMENTS");
             foreach (BetweenClips.Range range in segments) {
                 string problem = BetweenClips.GetSegmentProblem (clip_, range);
                 if (problem != null) return problem;
             }
+            return null;
+        }
+
+        IEnumerator ComputeBetween (Bvh bvh, ExternalSkeleton skeleton, OverrideImportOptions options, ComputedOverride computed)
+        {
+            HumanoidFromBvh made = new HumanoidFromBvh ();
+            yield return MakeHumanoid (bvh, skeleton, options.alignRoot, made);
+            if (made.error != null) {
+                computed.error = made.error;
+                yield break;
+            }
+            try {
+                string problem = GetOverrideImportProblem (made.clip, options);
+                if (problem != null) {
+                    computed.error = problem;
+                    yield break;
+                }
+                yield return ComputeOverride (made.clip, OverrideMode.Override, options, computed);
+                yield return PrepareCurves (computed);
+            }
+            finally {
+                Object.DestroyImmediate (made.clip);
+            }
+        }
+
+        /// <summary>計算した動きを結果のファイルへ書き、区間の印を付ける（ImportBetween の書く所）</summary>
+        string CommitBetween (ComputedOverride computed, IList<BetweenClips.Range> segments, out OverrideImportResult result)
+        {
+            result = null;
+            // 計算している間にキーが動いて区間でなくなっていれば書かない
+            string problem = GetBetweenProblem (segments);
+            if (problem != null) {
+                RestoreFrame ();
+                return problem;
+            }
+            string path = BetweenClips.PathFor (clip_);
             AnimationClip between = AssetDatabase.LoadAssetAtPath<AnimationClip> (path);
             bool created = between == null;
             if (created) {
@@ -719,18 +921,20 @@ namespace Lilium
             else {
                 ClipUndo.Record (between, "Import Between");
             }
-            OverrideImportOptions options = new OverrideImportOptions { fingers = false, alignRoot = true };
-            string error = ImportOverride (bvh, skeleton, between, OverrideMode.Override, options, out result);
-            if (error != null) {
+            try {
+                WritePrepared (between, computed);
+            }
+            catch (System.Exception e) {
                 if (created) AssetDatabase.DeleteAsset (path);
-                return error;
+                RestoreFrame ();
+                return e.Message;
             }
             AssetDatabase.SaveAssetIfDirty (between);
             // 区間の指紋はキーを足した後で取る（下の補間を曲線に戻すと、端にキーの無いカーブにキーが足される）
             CurveUnderExternal (segments, "Import Between");
             BetweenClips.SaveSegments (between, clip_, segments, BetweenClips.MakeStamps (clip_));
-            stage.InvalidateClipCurves ();
-            Evaluate (frame);
+            RestoreFrame ();
+            result = computed.result;
             return null;
         }
 
@@ -751,7 +955,21 @@ namespace Lilium
         {
             result = new OverrideImportResult ();
             if (options == null) options = new OverrideImportOptions { fingers = false };
-            bool alignRoot = options.alignRoot;
+            string problem = GetBvhImportProblem (bvh, skeleton);
+            if (problem != null) return problem;
+            HumanoidFromBvh made = new HumanoidFromBvh ();
+            Stepper.Run (MakeHumanoid (bvh, skeleton, options.alignRoot, made));
+            if (made.error != null) return made.error;
+            try {
+                return ImportOverride (made.clip, destination, mode, options, out result);
+            }
+            finally {
+                Object.DestroyImmediate (made.clip);
+            }
+        }
+
+        string GetBvhImportProblem (Bvh bvh, ExternalSkeleton skeleton)
+        {
             string character = characterProblem;
             if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
@@ -760,17 +978,34 @@ namespace Lilium
             string mismatch = skeleton.GetMismatch (bvh);
             if (mismatch != null) return mismatch;
             if (!stage.canPreviewHumanoid) return Tr ("POSE_SESSION_NO_CHARACTER");
+            return null;
+        }
 
+        /// <summary>BVH から作った一時の Humanoid のクリップ（使い終えたら消す）か、作れなかった理由</summary>
+        sealed class HumanoidFromBvh
+        {
+            public AnimationClip clip;
+            public string error;
+        }
+
+        /// <summary>BVH の各フレームを外部の骨格の Avatar で Humanoid の姿勢にし、一時の Humanoid のクリップにする（フレームごとに区切ってある）</summary>
+        IEnumerator MakeHumanoid (Bvh bvh, ExternalSkeleton skeleton, bool alignRoot, HumanoidFromBvh made)
+        {
             ExternalSkeleton.Instance instance = skeleton.Instantiate (out string error);
-            if (instance == null) return error;
-            AnimationClip humanoid = null;
+            if (instance == null) {
+                made.error = error;
+                yield break;
+            }
             int current = frame;
             try {
                 // 元の最初のフレームの体の置き場所（焼いた後の姿勢。体の大きさで割った値）
                 HumanPose start = new HumanPose ();
                 if (alignRoot) {
                     Evaluate (0);
-                    if (!stage.ReadHumanPose (ref start)) return Tr ("POSE_SESSION_NO_CHARACTER");
+                    if (!stage.ReadHumanPose (ref start)) {
+                        made.error = Tr ("POSE_SESSION_NO_CHARACTER");
+                        yield break;
+                    }
                 }
                 HumanPose pose = new HumanPose ();
                 Vector3 offsetPosition = Vector3.zero;
@@ -798,9 +1033,12 @@ namespace Lilium
                     float[] values = { position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w };
                     for (int c = 0; c < 7; c++) keys[c].Add (new Keyframe (time, values[c]));
                     for (int m = 0; m < muscleCount; m++) keys[7 + m].Add (new Keyframe (time, pose.muscles[m]));
+                    yield return null;
                 }
-                humanoid = new AnimationClip { frameRate = 1 / bvh.frameTime, hideFlags = HideFlags.HideAndDontSave };
+                AnimationClip humanoid = new AnimationClip { frameRate = 1 / bvh.frameTime, hideFlags = HideFlags.HideAndDontSave };
                 string[] axes = { "x", "y", "z", "w" };
+                EditorCurveBinding[] bindings = new EditorCurveBinding[keys.Length];
+                AnimationCurve[] curves = new AnimationCurve[keys.Length];
                 for (int c = 0; c < keys.Length; c++) {
                     string name = c < 3 ? HumanoidBaker.kRootT + "." + axes[c] : c < 7 ? HumanoidBaker.kRootQ + "." + axes[c - 3] : HumanoidBaker.clipMuscleNames[c - 7];
                     AnimationCurve curve = new AnimationCurve (keys[c].ToArray ());
@@ -808,18 +1046,17 @@ namespace Lilium
                         AnimationUtility.SetKeyLeftTangentMode (curve, k, AnimationUtility.TangentMode.Linear);
                         AnimationUtility.SetKeyRightTangentMode (curve, k, AnimationUtility.TangentMode.Linear);
                     }
-                    AnimationUtility.SetEditorCurve (humanoid, EditorCurveBinding.FloatCurve ("", typeof (Animator), name), curve);
+                    bindings[c] = EditorCurveBinding.FloatCurve ("", typeof (Animator), name);
+                    curves[c] = curve;
+                    yield return null;
                 }
+                // まとめて書く（1 本ずつだと、そのたびにクリップが作り直される）
+                AnimationUtility.SetEditorCurves (humanoid, bindings, curves);
+                made.clip = humanoid;
             }
             finally {
                 instance.Dispose ();
                 Evaluate (current);
-            }
-            try {
-                return ImportOverride (humanoid, destination, mode, options, out result);
-            }
-            finally {
-                Object.DestroyImmediate (humanoid);
             }
         }
 
@@ -888,10 +1125,11 @@ namespace Lilium
 
         /// <summary>
         /// 位置・回転・大きさのどれか 1 組（x/y/z[/w]）を、今のコントロールの値（元）との差分にする。
-        /// weight は狙いの値の効き（0 なら元の値のまま＝差 0。回転は Slerp、位置と大きさは Lerp で元と混ぜてから差分にする）
+        /// weight は狙いの値の効き（0 なら元の値のまま＝差 0。回転は Slerp、位置と大きさは Lerp で元と混ぜてから差分にする）。
+        /// readSource が false なら元の値を読まない（置き換え・重み 1 で、元のクリップを当てていないとき）
         /// </summary>
         static void StoreTransform (IGrouping<string, EditorCurveBinding> group, GameObject root, Dictionary<EditorCurveBinding, float[]> target,
-            Dictionary<EditorCurveBinding, float[]> stored, int f, OverrideMode mode, float weight = 1)
+            Dictionary<EditorCurveBinding, float[]> stored, int f, OverrideMode mode, float weight = 1, bool readSource = true)
         {
             string[] axes = { "x", "y", "z", "w" };
             EditorCurveBinding first = group.First ();
@@ -902,7 +1140,7 @@ namespace Lilium
             float[] value = new float[4];
             for (int i = 0; i < count; i++) {
                 bindings[i] = EditorCurveBinding.FloatCurve (first.path, typeof (Transform), prefix + axes[i]);
-                if (!AnimationUtility.GetFloatValue (root, bindings[i], out source[i])) source[i] = 0;
+                if (!readSource || !AnimationUtility.GetFloatValue (root, bindings[i], out source[i])) source[i] = 0;
                 // 組の一部しかカーブが無いときは、無い成分を元の値のままにする
                 float[] array;
                 value[i] = weight > 0 && target.TryGetValue (bindings[i], out array) ? array[f] : source[i];

@@ -52,10 +52,10 @@ namespace Lilium
         }
 
         /// <summary>元のクリップ（0・30・60F に基準姿勢のキー）を開いたセッション</summary>
-        PoseSession Open ()
+        PoseSession Open (string name = "Walk")
         {
             AnimationClip clip = new AnimationClip { frameRate = kRate };
-            AssetDatabase.CreateAsset (clip, kFolder + "/Walk.rig.anim");
+            AssetDatabase.CreateAsset (clip, kFolder + "/" + name + ".rig.anim");
             PoseSession session = new PoseSession (prefab_, definition_);
             disposables_.Add (session);
             session.clip = clip;
@@ -120,6 +120,55 @@ namespace Lilium
                 max = Mathf.Max (max, Quaternion.Angle (CurveEdit.EvaluateRotation (between, path, time), t.localRotation));
             }
             return max;
+        }
+
+        /// <summary>
+        /// 取り込みを少しずつ回しても（BeginImportBetween・Step・Commit）、一度に回したとき（ImportBetween）と同じ結果のファイルになる。
+        /// 計算の間は結果のファイルを書かず、途中でやめれば何も残らない（10-30。一度に回すとエディタが 0.5 秒ほど止まった）
+        /// </summary>
+        [Test]
+        public void SteppedImport_WritesTheSameCurves_AndNothingUntilCommit ()
+        {
+            ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
+            PoseSession once = Open ("Once");
+            Assert.IsNull (once.ImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { kFirst }, out PoseSession.OverrideImportResult onceResult));
+            AnimationClip onceBetween = AssetDatabase.LoadAssetAtPath<AnimationClip> (BetweenClips.PathFor (once.clip));
+
+            PoseSession stopped = Open ("Stopped");
+            using (PoseSession.BetweenImport import = stopped.BeginImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { kFirst }, out string problem)) {
+                Assert.IsNull (problem);
+                for (int i = 0; i < 10; i++) import.Step (0);
+            }
+            Assert.IsNull (AssetDatabase.LoadAssetAtPath<AnimationClip> (BetweenClips.PathFor (stopped.clip)), "書く前にやめれば結果のファイルは無い");
+
+            PoseSession stepped = Open ("Stepped");
+            string path = BetweenClips.PathFor (stepped.clip);
+            int steps = 0;
+            using (PoseSession.BetweenImport import = stepped.BeginImportBetween (Generated (skeleton, 0.4f), skeleton, new[] { kFirst }, out string problem)) {
+                Assert.IsNull (problem);
+                while (!import.Step (0)) {
+                    steps++;
+                    Assert.IsNull (AssetDatabase.LoadAssetAtPath<AnimationClip> (path), "計算の間は結果のファイルを書かない");
+                }
+                Assert.IsNull (import.Commit (new[] { kFirst }, out PoseSession.OverrideImportResult result));
+                Assert.AreEqual (onceResult.keyCount, result.keyCount);
+                Assert.AreEqual (onceResult.keyCountBeforeReduce, result.keyCountBeforeReduce);
+            }
+            Assert.Greater (steps, 60, "フレームごとに区切って回す");
+
+            AnimationClip steppedBetween = AssetDatabase.LoadAssetAtPath<AnimationClip> (path);
+            EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings (onceBetween);
+            CollectionAssert.AreEquivalent (bindings, AnimationUtility.GetCurveBindings (steppedBetween));
+            foreach (EditorCurveBinding binding in bindings) {
+                Keyframe[] expected = AnimationUtility.GetEditorCurve (onceBetween, binding).keys;
+                Keyframe[] actual = AnimationUtility.GetEditorCurve (steppedBetween, binding).keys;
+                Assert.AreEqual (expected.Length, actual.Length, binding.path + " " + binding.propertyName);
+                for (int k = 0; k < expected.Length; k++) {
+                    Assert.AreEqual (expected[k].time, actual[k].time, binding.propertyName);
+                    Assert.AreEqual (expected[k].value, actual[k].value, binding.propertyName);
+                }
+            }
+            Assert.AreEqual (BetweenClips.State.Fresh, BetweenClips.GetSegmentState (stepped.clip, kFirst));
         }
 
         [Test]

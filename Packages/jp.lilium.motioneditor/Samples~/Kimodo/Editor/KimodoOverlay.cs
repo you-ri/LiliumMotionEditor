@@ -258,7 +258,8 @@ namespace Lilium
         void AutoGenerate (KimodoJob job)
         {
             if (autoAt_ < 0 || EditorApplication.timeSinceStartup < autoAt_) return;
-            if (job != null && job.running) return;
+            // 取り込みを待っている・少しずつ回している間も待つ（始めると仕事が置き換わり、作った動きが取り込まれない）
+            if (job != null && (job.running || job.importPending)) return;
             autoAt_ = -1;
             KimodoSettings settings = KimodoSettings.instance;
             if (!settings.auto || settings.target != KimodoJob.kBetween || !KimodoSetup.ready) return;

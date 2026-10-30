@@ -24,6 +24,9 @@ namespace Lilium
         public static void Record (AnimationClip clip, string name)
         {
             if (clip == null) return;
+            // 使い終えたら消す作業用のクリップ（保存しない印）は控えない。戻す先が無く、取り込みを分けて回すと、
+            // そのときの Undo のまとまり（直前の操作）に混ざる。丸ごと写すぶん重くもある
+            if ((clip.hideFlags & HideFlags.DontSaveInEditor) != 0) return;
             if (!hooked_) {
                 hooked_ = true;
                 // Undo / Redo の後は、同じ番号のまとまりでも控え直す

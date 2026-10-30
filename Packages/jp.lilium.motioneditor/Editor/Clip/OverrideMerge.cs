@@ -43,7 +43,7 @@ namespace Lilium
         /// 外した後の前後のキーの間にある元のキーの時刻を全部見直して、元の曲線から tolerance 以内かを確かめる
         /// （外したキーの時刻だけを見ると、前に外したキーの時刻でのずれが見直されず、外すたびに積み重なる。2026-10-10 に 2° ずれた）
         /// </summary>
-        static AnimationCurve Reduce (AnimationCurve curve, float tolerance)
+        internal static AnimationCurve Reduce (AnimationCurve curve, float tolerance)
         {
             Keyframe[] original = curve.keys;
             List<Keyframe> keys = new List<Keyframe> (original);

@@ -82,23 +82,102 @@ namespace Lilium
         public string ImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out PoseSession.OverrideImportResult result)
         {
             result = null;
-            AnimationClip source = baseClip;
-            if (stage_ == null || stage_.sourcePrefab == null || source == null) return Tr ("POSE_SESSION_NO_CLIP");
-            CommitHandleKeys ();
-            PoseSession.OverrideImportResult imported = null;
-            string error = InOwnUndoGroup ("Import Between", () => {
-                using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                    session.clip = source;
-                    string importError = session.ImportBetween (bvh, skeleton, segments, out imported);
-                    if (importError != null) return importError;
+            using (BetweenImportTask task = BeginImportBetween (bvh, skeleton, segments, out string problem)) {
+                if (problem != null) return problem;
+                return task.Finish (segments, out result);
+            }
+        }
+
+        /// <summary>
+        /// 少しずつ回す ImportBetween（BeginImportBetween）。計算は窓とは別の世界（PoseSession）で回すので、その間も窓はふだんどおり動く。
+        /// Step をエディタの更新ごとに呼び、終わったら（true）Finish で書く（Undo は 1 回）。やめるときは Dispose
+        /// </summary>
+        public sealed class BetweenImportTask : System.IDisposable
+        {
+            readonly PreviewWindow window_;
+            readonly AnimationClip source_;
+            PoseSession session_;
+            PoseSession.BetweenImport import_;
+
+            internal BetweenImportTask (PreviewWindow window, AnimationClip source, PoseSession session, PoseSession.BetweenImport import)
+            {
+                window_ = window;
+                source_ = source;
+                session_ = session;
+                import_ = import;
+            }
+
+            /// <summary>始めたときの元のクリップ</summary>
+            public AnimationClip source
+            {
+                get { return source_; }
+            }
+
+            /// <summary>窓が閉じたか、別のクリップを開いた（書けない）</summary>
+            public bool stale
+            {
+                get { return window_ == null || window_.baseClip != source_ || import_ == null; }
+            }
+
+            /// <summary>seconds 秒ぶん計算を進める。終わった（できなかったときも）なら true</summary>
+            public bool Step (double seconds)
+            {
+                return import_ == null || import_.Step (seconds);
+            }
+
+            /// <summary>計算した動きを結果のファイルへ書き、segments を外部の動きの区間にする（計算が残っていれば回し切る）。書いたらこのタスクは終わり</summary>
+            /// <returns>書けなかった理由（書けたら null）</returns>
+            public string Finish (IList<BetweenClips.Range> segments, out PoseSession.OverrideImportResult result)
+            {
+                result = null;
+                try {
+                    if (stale) return Tr ("POSE_SESSION_NO_CLIP");
+                    window_.CommitHandleKeys ();
+                    PoseSession.OverrideImportResult imported = null;
+                    string error = InOwnUndoGroup ("Import Between", () => {
+                        string importError = import_.Commit (segments, out imported);
+                        if (importError != null) return importError;
+                        window_.AfterClipEdit ();
+                        return null;
+                    });
+                    result = imported;
+                    if (error != null) return error;
+                    window_.RaiseStateChanged ();
+                    return null;
                 }
-                AfterClipEdit ();
+                finally {
+                    Dispose ();
+                }
+            }
+
+            public void Dispose ()
+            {
+                if (import_ != null) import_.Dispose ();
+                import_ = null;
+                if (session_ != null) session_.Dispose ();
+                session_ = null;
+            }
+        }
+
+        /// <summary>
+        /// ImportBetween の計算を始める（S81 の取り込みを少しずつ回す。10-30）。返したタスクの Step を更新ごとに呼び、終わったら Finish で書く。
+        /// 始められなければ null と理由
+        /// </summary>
+        public BetweenImportTask BeginImportBetween (Bvh bvh, ExternalSkeleton skeleton, IList<BetweenClips.Range> segments, out string problem)
+        {
+            AnimationClip source = baseClip;
+            problem = stage_ == null || stage_.sourcePrefab == null || source == null ? Tr ("POSE_SESSION_NO_CLIP") : null;
+            if (problem != null) return null;
+            // 計算は始めたときのクリップで回すので、つかんでいるハンドルのキーを先に打つ
+            CommitHandleKeys ();
+            PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition);
+            session.clip = source;
+            PoseSession.BetweenImport import = session.BeginImportBetween (bvh, skeleton, segments, out problem);
+            if (import == null) {
+                session.Dispose ();
                 return null;
-            });
-            result = imported;
-            if (error != null) return error;
-            RaiseStateChanged ();
-            return null;
+            }
+            return new BetweenImportTask (this, source, session, import);
         }
 
         /// <summary>

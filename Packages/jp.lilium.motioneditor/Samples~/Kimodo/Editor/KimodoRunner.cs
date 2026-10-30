@@ -52,6 +52,8 @@ namespace Lilium
         public float seconds;
         public string message;
         public List<PoseSession.KeyDeviation> keyDeviations = new List<PoseSession.KeyDeviation> ();
+        /// <summary>作り終えて、手が空くのを待って取り込む（取り込みはメインスレッドで 0.5 秒ほどかかり、ドラッグの途中だと引っかかる）</summary>
+        public bool importPending;
 
         public bool running { get { return state == kRunning; } }
         public string bvhPath { get { return Path.Combine (folder, "gen.bvh"); } }
@@ -71,12 +73,20 @@ namespace Lilium
         const string kSessionKey = "Lilium.Kimodo.Job";
         const double kPollSeconds = 1;
         const double kContainerCheckSeconds = 5;
+        /// <summary>操作から手を離して、これだけ経ってから取り込む</summary>
+        const double kIdleSeconds = 0.5;
+        /// <summary>取り込みの計算を 1 回の更新で回す時間（秒）</summary>
+        const double kStepSeconds = 0.008;
 
         static KimodoJob job_;
         static Process process_;
         static readonly StringBuilder processOutput_ = new StringBuilder ();
         static double nextPoll_;
         static double nextContainerCheck_;
+        static double busyAt_ = double.NegativeInfinity;
+        /// <summary>少しずつ回しているキーの間の動きの取り込み（スクリプトの再読み込みで失うが、job_.importPending からやり直す）</summary>
+        static PreviewWindow.BetweenImportTask importing_;
+        static ImportPlan importPlan_;
 
         public static event System.Action changed;
 
@@ -109,7 +119,9 @@ namespace Lilium
         public static string Start (PreviewWindow window, string prompt, string mode, string target = KimodoJob.kOverride, IList<BetweenClips.Range> segments = null, bool auto = false, int seed = -1)
         {
             if (job_ != null && job_.running) return Tr ("KIMODO_RUN_ALREADY_RUNNING");
-            string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton);
+            // 前の仕事の取り込みを回していれば、やめる（仕事を置き換えるので）
+            CancelImport ();
+            string problem = Check (window, prompt, mode, out ExternalSkeleton skeleton, auto);
             if (problem != null) return problem;
             if (target == KimodoJob.kBetween) {
                 if (segments == null || segments.Count == 0) return Tr ("KIMODO_RUN_NO_SEGMENTS");
@@ -236,7 +248,9 @@ namespace Lilium
         /// Docker を起動する前に、足りないものを確かめる（足りなければ理由。4 分待ってから失敗しないように）。
         /// Hugging Face のトークンは、ファイルがあるかだけを見る（中は読まない）
         /// </summary>
-        public static string Check (PreviewWindow window, string prompt, string mode, out ExternalSkeleton skeleton)
+        /// <param name="reusePassed">このセッションで環境の確かめが通っていて、設定を変えていなければ確かめ直さない（自動で作るとき。S85）。
+        /// 確かめは python や docker を起動して待つので、キーを打つたびの生成で毎回エディタが少し止まった（10-26）</param>
+        public static string Check (PreviewWindow window, string prompt, string mode, out ExternalSkeleton skeleton, bool reusePassed = false)
         {
             KimodoSettings settings = KimodoSettings.instance;
             skeleton = settings.skeleton;
@@ -245,6 +259,7 @@ namespace Lilium
             if (string.IsNullOrWhiteSpace (prompt)) return Tr ("KIMODO_RUN_NO_PROMPT");
             if (!KimodoSettings.kModes.Contains (mode)) return Tr ("KIMODO_RUN_UNKNOWN_MODE", mode);
             if (skeleton == null) return Tr ("KIMODO_RUN_NO_SKELETON");
+            if (reusePassed && SessionState.GetBool (kEnvironmentPassedKey, false)) return null;
             return CheckEnvironment ();
         }
 
@@ -267,10 +282,13 @@ namespace Lilium
         }
 
         const string kEnvironmentKey = "Lilium.Kimodo.EnvironmentProblem";
+        /// <summary>このセッションで環境の確かめが通ったか（設定を変えると忘れる）</summary>
+        const string kEnvironmentPassedKey = "Lilium.Kimodo.EnvironmentPassed";
 
         /// <summary>設定を変えたら、前の確かめの結果を忘れる（直したのに案内のままにならないように）</summary>
         public static void ForgetEnvironment ()
         {
+            SessionState.EraseBool (kEnvironmentPassedKey);
             if (environmentProblem != null) environmentProblem = null;
         }
 
@@ -280,6 +298,7 @@ namespace Lilium
         public static string CheckEnvironment ()
         {
             string problem = ProbeEnvironment ();
+            SessionState.SetBool (kEnvironmentPassedKey, problem == null);
             environmentProblem = problem;
             return problem;
         }
@@ -324,6 +343,7 @@ namespace Lilium
         public static void Clear ()
         {
             if (job_ != null && job_.running) return;
+            CancelImport ();
             job_ = null;
             Store ();
         }
@@ -338,8 +358,13 @@ namespace Lilium
 
         static void Poll ()
         {
-            if (job_ == null || !job_.running) return;
+            if (job_ == null) return;
             double now = EditorApplication.timeSinceStartup;
+            if (job_.importPending) {
+                ImportWhenIdle (now);
+                return;
+            }
+            if (!job_.running) return;
             if (now < nextPoll_) return;
             nextPoll_ = now + kPollSeconds;
             if (changed != null) changed ();
@@ -348,8 +373,9 @@ namespace Lilium
                 process_ = null;
                 string text = File.ReadAllText (job_.exitPath).Trim ();
                 if (text == "0" && File.Exists (job_.bvhPath)) {
+                    job_.importPending = true;
                     Finish (KimodoJob.kGenerated, Tr ("KIMODO_RUN_GENERATED"));
-                    TryImport (null);
+                    ImportWhenIdle (now);
                 }
                 else {
                     Finish (KimodoJob.kFailed, Diagnose (Tr ("KIMODO_RUN_EXIT_CODE", text), ReadLog ()));
@@ -380,12 +406,53 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 生成した動きを、元のクリップを開いている窓へ取り込む。window を省くと開いている窓から探す（無ければ後で取り込む）。
+        /// 作り終えた動きを取り込む。作るのは別のプロセスだが、取り込み（リグの値にしてアセットへ書く）はメインスレッドで、
+        /// 一度に回すと 10 秒の動きで 0.5 秒ほどエディタが止まる。キーの間の動き（kBetween）は計算を更新ごとに数ミリ秒ずつ回し（10-30）、
+        /// 最後の書き込みと保存（分けられない。0.2 秒ほど）は、ドラッグなどの操作の最中でなく、手を離してから少し経ったときにする
+        /// </summary>
+        static void ImportWhenIdle (double now)
+        {
+            if (GUIUtility.hotControl != 0) busyAt_ = now;
+            if (importing_ != null) {
+                // 窓が閉じた・別のクリップを開いた: やめて、次の更新で用意からやり直す（窓が無ければ、開いたら取り込むと知らせる）
+                if (importing_.stale) {
+                    CancelImport ();
+                    return;
+                }
+                if (!importing_.Step (kStepSeconds)) return;
+                if (now - busyAt_ < kIdleSeconds) return;
+                FinishImport ();
+                return;
+            }
+            if (job_.target == KimodoJob.kBetween) {
+                BeginImport ();
+                return;
+            }
+            if (now - busyAt_ < kIdleSeconds) return;
+            TryImport (null);
+        }
+
+        /// <summary>取り込みの用意（取り込む窓・区間・動き）。一度に取り込む（TryImport）のと少しずつ回すのとで同じ</summary>
+        sealed class ImportPlan
+        {
+            public PreviewWindow window;
+            /// <summary>書き出した後に元のキーが変わっていたか</summary>
+            public bool keysChanged;
+            public List<BetweenClips.Range> segments;
+            public Bvh bvh;
+            public ExternalSkeleton skeleton;
+        }
+
+        /// <summary>
+        /// 取り込みの用意をする。window を省くと開いている窓から探す（無ければ後で取り込む）。
         /// 書き出した後に元のキーが変わっていたら確かめる（寄せる先のキーと渡したキーが違うと、黙ってずれる）
         /// </summary>
-        public static string TryImport (PreviewWindow window)
+        /// <returns>取り込まない理由（取り込むなら null）。仕事の知らせにも書く</returns>
+        static string PrepareImport (PreviewWindow window, out ImportPlan plan)
         {
+            plan = null;
             if (job_ == null || job_.state != KimodoJob.kGenerated) return Tr ("KIMODO_RUN_NOTHING_TO_IMPORT");
+            job_.importPending = false;
             if (window == null) window = FindWindow (job_.baseClip);
             if (window == null) {
                 job_.message = Tr ("KIMODO_RUN_OPEN_TO_IMPORT", job_.baseClip);
@@ -394,11 +461,9 @@ namespace Lilium
             }
             AnimationClip clip = window.baseClip;
             bool keysChanged = Fingerprint (clip) != job_.fingerprint;
-            // 作っている間に外部の動きから手で外した区間（曲線・リニア・一定にした）は取り込まない（取り込むと外部の動きへ戻り、選んだ補間が消える）
-            List<BetweenClips.Range> segments = job_.segments.Where (r => !job_.externalAtStart.Contains (r) || IsExternal (clip, r)).ToList ();
+            List<BetweenClips.Range> segments = UsableSegments (clip, keysChanged && job_.auto);
             if (keysChanged && job_.auto) {
                 // 自動のときは確かめずに、まだ区間のままの所だけ取り込む（すぐ作り直すので、それまでの見た目に使う）
-                segments = segments.Where (r => BetweenClips.GetSegmentProblem (clip, r) == null).ToList ();
                 if (job_.target == KimodoJob.kBetween && segments.Count == 0) {
                     job_.message = Tr ("KIMODO_RUN_KEYS_CHANGED_AUTO");
                     Store ();
@@ -412,18 +477,37 @@ namespace Lilium
                     return job_.message;
                 }
             }
-            ExternalSkeleton skeleton = KimodoSettings.instance.skeleton;
             Bvh bvh = Bvh.Parse (File.ReadAllText (job_.bvhPath), out string error);
             if (bvh == null) return Fail (error);
+            plan = new ImportPlan { window = window, keysChanged = keysChanged, segments = segments, bvh = bvh, skeleton = KimodoSettings.instance.skeleton };
+            return null;
+        }
+
+        /// <summary>
+        /// 取り込む区間。作っている間に外部の動きから手で外した区間（曲線・リニア・一定にした）は取り込まない（取り込むと外部の動きへ戻り、選んだ補間が消える）。
+        /// onlySegments なら、まだキーの間の区間のままの所だけにする
+        /// </summary>
+        static List<BetweenClips.Range> UsableSegments (AnimationClip clip, bool onlySegments)
+        {
+            IEnumerable<BetweenClips.Range> segments = job_.segments.Where (r => !job_.externalAtStart.Contains (r) || IsExternal (clip, r));
+            if (onlySegments) segments = segments.Where (r => BetweenClips.GetSegmentProblem (clip, r) == null);
+            return segments.ToList ();
+        }
+
+        /// <summary>
+        /// 生成した動きを、元のクリップを開いている窓へ一度に取り込む（パネルの取り込みのボタン・Override として使うとき）。
+        /// window を省くと開いている窓から探す（無ければ後で取り込む）。少しずつ回している取り込みがあれば、やめてから取り込む
+        /// </summary>
+        public static string TryImport (PreviewWindow window)
+        {
+            CancelImport ();
+            string problem = PrepareImport (window, out ImportPlan plan);
+            if (problem != null) return problem;
+            AnimationClip clip = plan.window.baseClip;
             if (job_.target == KimodoJob.kBetween) {
                 // キーの間の補間として使う（S83）。結果のファイルは丸ごと置き換え、選んだ区間を外部の動きにする
-                error = window.ImportBetween (bvh, skeleton, segments, out PoseSession.OverrideImportResult between);
-                if (error != null) return Fail (error);
-                job_.segments = segments;
-                job_.keyDeviations = new List<PoseSession.KeyDeviation> ();
-                job_.importedFingerprint = keysChanged ? job_.fingerprint : Fingerprint (clip);
-                Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_BETWEEN", job_.segments.Count, BetweenClips.PathFor (clip)));
-                return null;
+                string error = plan.window.ImportBetween (plan.bvh, plan.skeleton, plan.segments, out PoseSession.OverrideImportResult between);
+                return AfterImportBetween (clip, plan.segments, plan.keysChanged, error);
             }
             AnimationClip destination = AssetDatabase.LoadAssetAtPath<AnimationClip> (job_.destination);
             if (destination == null) {
@@ -431,12 +515,67 @@ namespace Lilium
                 AssetDatabase.CreateAsset (destination, job_.destination);
             }
             PoseSession.OverrideImportOptions options = new PoseSession.OverrideImportOptions { fingers = false, keepKeys = true };
-            error = window.ImportOverride (bvh, skeleton, destination, OverrideMode.Additive, options, out PoseSession.OverrideImportResult result);
-            if (error != null) return Fail (error);
+            string importError = plan.window.ImportOverride (plan.bvh, plan.skeleton, destination, OverrideMode.Additive, options, out PoseSession.OverrideImportResult result);
+            if (importError != null) return Fail (importError);
             job_.keyDeviations = result.keyDeviations;
-            job_.importedFingerprint = keysChanged ? job_.fingerprint : Fingerprint (clip);
+            job_.importedFingerprint = plan.keysChanged ? job_.fingerprint : Fingerprint (clip);
             Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_OVERRIDE", job_.destination));
             return null;
+        }
+
+        /// <summary>キーの間の動きの取り込みを少しずつ回し始める（計算は窓とは別の世界で。書くのは FinishImport）</summary>
+        static void BeginImport ()
+        {
+            string problem = PrepareImport (null, out ImportPlan plan);
+            if (problem != null) return;
+            importing_ = plan.window.BeginImportBetween (plan.bvh, plan.skeleton, plan.segments, out problem);
+            if (importing_ == null) {
+                Fail (problem);
+                return;
+            }
+            importPlan_ = plan;
+            // 書き終えるまでは取り込み待ちのまま（スクリプトの再読み込みで計算を失ったら、やり直す）
+            job_.importPending = true;
+            Store ();
+        }
+
+        /// <summary>計算し終えた動きを書く。計算している間にキーが動いていれば、まだ使える区間だけにする</summary>
+        static void FinishImport ()
+        {
+            PreviewWindow.BetweenImportTask task = importing_;
+            ImportPlan plan = importPlan_;
+            importing_ = null;
+            importPlan_ = null;
+            job_.importPending = false;
+            AnimationClip clip = task.source;
+            bool keysChanged = plan.keysChanged || Fingerprint (clip) != job_.fingerprint;
+            List<BetweenClips.Range> segments = UsableSegments (clip, true).Where (r => plan.segments.Contains (r)).ToList ();
+            if (segments.Count == 0) {
+                task.Dispose ();
+                job_.message = Tr ("KIMODO_RUN_KEYS_CHANGED_AUTO");
+                Store ();
+                return;
+            }
+            string error = task.Finish (segments, out PoseSession.OverrideImportResult result);
+            AfterImportBetween (clip, segments, keysChanged, error);
+        }
+
+        static string AfterImportBetween (AnimationClip clip, List<BetweenClips.Range> segments, bool keysChanged, string error)
+        {
+            if (error != null) return Fail (error);
+            job_.segments = segments;
+            job_.keyDeviations = new List<PoseSession.KeyDeviation> ();
+            job_.importedFingerprint = keysChanged ? job_.fingerprint : Fingerprint (clip);
+            Finish (KimodoJob.kImported, Tr ("KIMODO_RUN_IMPORTED_BETWEEN", job_.segments.Count, BetweenClips.PathFor (clip)));
+            return null;
+        }
+
+        /// <summary>少しずつ回している取り込みをやめる（書かない）</summary>
+        static void CancelImport ()
+        {
+            if (importing_ != null) importing_.Dispose ();
+            importing_ = null;
+            importPlan_ = null;
         }
 
         static string Fail (string error)
