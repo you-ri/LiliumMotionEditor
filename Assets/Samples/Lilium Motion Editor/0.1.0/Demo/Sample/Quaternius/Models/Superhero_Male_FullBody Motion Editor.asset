@@ -81,3 +81,10 @@ MonoBehaviour:
       position: {x: 0, y: 1.128, z: 0}
       weight: 0
       rotation: 0
+    sockets:
+    - name: Hip
+      bone: 0
+      position: {x: -0.13, y: 0.16, z: 0.22}
+      rotation: {x: 0, y: 282.09, z: 134.36}
+      constraint:
+    restSocket:

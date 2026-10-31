@@ -192,6 +192,11 @@ namespace Lilium
             stage.editingRig.ResetBonesToRest ();
             stage.heldObjects.ResetHolds ();
             holdPreview_ = selected != null && selected.kind == RigControlKind.Object && stage.fullBody != null;
+            // 差す場所を選んでいる間は、物をそこへ差して見せる。物そのものを選んでいる間は、差さない基準の場所を見せる
+            if (holdPreview_) {
+                foreach (HeldObjectRig.Entry entry in stage.heldObjects.entries) entry.ClearSockets ();
+                if (selected.heldSocket != null) selected.held.EnterSocket (selected.heldSocket);
+            }
             stage.heldObjects.Refresh ();
             if (holdPreview_) {
                 stage.fullBody.CaptureInput ();
@@ -236,6 +241,32 @@ namespace Lilium
             Rebuild ();
         }
 
+        /// <summary>差す場所を足す。場所は腰の左前で、柄を前、切っ先を後ろ下へ向けた所（リグエディタのハンドルで直す）</summary>
+        internal void AddHeldSocket (HeldObjectDefinition held)
+        {
+            CharacterSettings target = settings;
+            if (target == null) return;
+            string name = "Hip";
+            for (int i = 2; held.sockets.Exists (s => s != null && s.name == name); i++) name = "Hip " + i;
+            Undo.RecordObject (target, "Add Held Object Socket");
+            held.sockets.Add (new HeldObjectSocket { name = name, bone = HumanBodyBones.Hips, position = new Vector3 (-0.13f, 0.16f, 0.22f), rotation = new Vector3 (0, 282.09f, 134.36f) });
+            SaveHeldObjects (target);
+            selectedId_ = "Object/" + held.name + "/Socket/" + name;
+            Rebuild ();
+        }
+
+        internal void RemoveHeldSocket (HeldObjectDefinition held, HeldObjectSocket socket)
+        {
+            CharacterSettings target = settings;
+            if (target == null || !held.sockets.Contains (socket)) return;
+            Undo.RecordObject (target, "Remove Held Object Socket");
+            held.sockets.Remove (socket);
+            if (held.restSocket == socket.name) held.restSocket = "";
+            SaveHeldObjects (target);
+            selectedId_ = "Object/" + held.name;
+            Rebuild ();
+        }
+
         static void SaveHeldObjects (CharacterSettings target)
         {
             EditorUtility.SetDirty (target);
@@ -255,6 +286,7 @@ namespace Lilium
             Vector3 position;
             Quaternion rotation;
             if (selected.hand != null) rig.GetGrip (selected.hand, out position, out rotation);
+            else if (selected.heldSocket != null) rig.GetSocketWorld (selected.heldSocket, out position, out rotation);
             else selected.held.GetWorldPose (out position, out rotation);
             if (selected.heldPoint != null) position = rig.GetPointWorld (selected.heldPoint);
             Handles.color = KindColor (RigControlKind.Object);
@@ -265,6 +297,7 @@ namespace Lilium
             if (EditorGUI.EndChangeCheck ()) {
                 if (selected.heldPoint != null) rig.SetPointWorld (selected.heldPoint, position);
                 else if (selected.hand != null) rig.SetGrip (selected.hand, position, rotation);
+                else if (selected.heldSocket != null) rig.SetSocketWorld (selected.heldSocket, position, rotation);
                 else selected.held.DragTo (position, rotation);
                 heldHandleDirty_ = true;
                 stage.editingRig.ResetBonesToRest ();
@@ -282,6 +315,7 @@ namespace Lilium
                 Undo.RecordObject (target, "Move Held Object");
                 if (selected.heldPoint != null) rig.StorePoint (selected.heldPoint);
                 else if (selected.hand != null) rig.StoreGrip (selected.hand);
+                else if (selected.heldSocket != null) rig.StoreSocket (selected.heldSocket);
                 else rig.StoreRest (selected.held);
                 SaveHeldObjects (target);
                 QueueRebuild ();

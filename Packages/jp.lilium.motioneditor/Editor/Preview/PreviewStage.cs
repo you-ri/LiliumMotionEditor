@@ -880,6 +880,8 @@ namespace Lilium
             }
             if (span == null || buildingKeyPoseGaps_) return;
             KeyPoseGaps gaps = GetKeyPoseGaps (clip);
+            // 測り直しは全部のキーを当てるので、持ち物の持ち方が最後のキーのまま残る（その 1 フレームだけ物が最後のキーの持ち方へ跳んだ）
+            if (heldObjects != null) heldObjects.ApplyHoldKeys (clip, time);
             if (gaps == null) return;
             MoveLockedSpanRigidly (clip, time, span, gaps);
             foreach (int i in span) AddKeyPoseGap (clip, i, time, gaps);

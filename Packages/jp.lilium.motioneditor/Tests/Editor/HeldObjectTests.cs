@@ -125,6 +125,331 @@ namespace Lilium
             session.SolveAfterEdit ();
         }
 
+        // ---- S91f 片手・両手・差す ----
+
+        const string kHip = "Hip";
+
+        HeldObjectDefinition CreateObjectWithSocket ()
+        {
+            HeldObjectDefinition definition = CreateObject ();
+            // 両手の届く、腰の前（届かない場所は SocketOutOfReach_ のテスト）
+            definition.sockets.Add (new HeldObjectSocket { name = kHip, bone = HumanBodyBones.Hips, position = new Vector3 (0, 0.2f, 0.25f) });
+            return definition;
+        }
+
+        static Transform Bone (PoseSession session, HumanBodyBones bone)
+        {
+            return session.stage.editingRig.GetEditingBone (bone);
+        }
+
+        /// <summary>今のフレームで差して（CLI と同じ経路）キーを打つ</summary>
+        static void WriteSocket (PoseSession session, int frame, string socket, string hold = "")
+        {
+            PoseDocument document = new PoseDocument { frame = frame };
+            document.objects.Add (new PoseObject { name = kName, socket = socket, hold = hold });
+            Assert.IsNull (PoseDocument.Write (session, document), "書ける");
+        }
+
+        [Test]
+        public void OneHandThenTwoHands_ByHoldKeys ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            PoseDocument oneHand = new PoseDocument { frame = 20 };
+            oneHand.objects.Add (new PoseObject { name = kName, hold = "Right" });
+            Assert.IsNull (PoseDocument.Write (session, oneHand));
+            PoseDocument twoHands = new PoseDocument { frame = 40 };
+            twoHands.objects.Add (new PoseObject { name = kName, hold = "Both" });
+            Assert.IsNull (PoseDocument.Write (session, twoHands));
+
+            session.Evaluate (30);
+            Assert.AreEqual (0, Entry (session).values.leftHold, "片手");
+            Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), kGripTolerance, "右手は握りに付く");
+            session.Evaluate (40);
+            AssertHolding (session, "両手に戻した");
+        }
+
+        [Test]
+        public void InSocket_ObjectStaysOnBone_WhenHipsMove ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            WriteSocket (session, 0, kHip);
+            HeldObjectRig.Entry entry = Entry (session);
+            Assert.AreEqual (0, entry.values.leftHold, "両手を放す");
+            Assert.AreEqual (0, entry.values.rightHold, "両手を放す");
+            Transform hips = Bone (session, HumanBodyBones.Hips);
+            Vector3 local = hips.InverseTransformPoint (entry.editing.position);
+
+            Point (session, HumanBodyBones.Hips).MoveBy (new Vector3 (0.2f, -0.1f, 0.1f));
+            session.SolveAfterEdit ();
+            Assert.LessOrEqual (Vector3.Distance (local, hips.InverseTransformPoint (entry.editing.position)), kJumpTolerance, "腰に付いて動く");
+        }
+
+        [Test]
+        public void EnteringSocket_HandsDoNotJump_AndObjectDoesNotJump ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            WriteSocket (session, 30, kHip);
+            session.Evaluate (30);
+            Vector3 hand = Bone (session, HumanBodyBones.RightHand).position;
+            Vector3 sword = Entry (session).editing.position;
+            Assert.AreEqual (kHip, Entry (session).socket.definition.name);
+
+            session.Evaluate (29);
+            Assert.AreEqual (1, Entry (session).values.rightHold, "前のフレームは持っている（段差）");
+            Assert.IsNull (Entry (session).socket, "前のフレームは差していない（段差）");
+            AssertHolding (session, "差す前のキーの間");
+            // 30 フレームで腰まで動くので、1 フレームの動きの大きさは許す
+            Assert.LessOrEqual (Vector3.Distance (sword, Entry (session).editing.position), 0.05f, "物が跳ばない");
+            Assert.LessOrEqual (Vector3.Distance (hand, Bone (session, HumanBodyBones.RightHand).position), 0.05f, "手が跳ばない");
+        }
+
+        [Test]
+        public void LeavingSocket_ObjectStartsFromSocket_AndHandsHold ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            WriteSocket (session, 0, kHip);
+            session.Evaluate (20);
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (20);
+            Vector3 sword = Entry (session).editing.position;
+
+            WriteSocket (session, 40, HeldObjectDefinition.kNoSocketName);
+            session.Evaluate (40);
+            Assert.IsNull (Entry (session).socket, "抜いた");
+            Assert.AreEqual (1, Entry (session).values.rightHold, "持っている手が無ければ握りで持つ");
+            AssertHolding (session, "抜いたフレーム");
+            Assert.LessOrEqual (Vector3.Distance (sword, Entry (session).editing.position), kGripTolerance, "差していた場所から動き始める");
+
+            session.Evaluate (39);
+            Assert.IsNotNull (Entry (session).socket, "前のフレームは差している（段差）");
+        }
+
+        [Test]
+        public void HandCanHoldObjectInSocket_ObjectStays ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            WriteSocket (session, 0, kHip);
+            Vector3 sword = Entry (session).editing.position;
+            WriteSocket (session, 20, "", "Right");
+            session.Evaluate (20);
+            Assert.AreEqual (kHip, Entry (session).socket.definition.name, "差したまま");
+            Assert.LessOrEqual (Vector3.Distance (sword, Entry (session).editing.position), kGripTolerance, "物は動かない");
+            Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), 0.05f, "手が柄へ行く");
+        }
+
+        [Test]
+        public void InSocket_DraggingDoesNothing_AndPointsAreIgnored ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            WriteSocket (session, 0, kHip);
+            Vector3 sword = Entry (session).editing.position;
+            MoveObject (session, new Vector3 (0.3f, 0, 0));
+            Assert.LessOrEqual (Vector3.Distance (sword, Entry (session).editing.position), kJumpTolerance, "骨に固定で動かない");
+        }
+
+        [Test]
+        public void RestSocket_ClipsWithoutKeys_SitInSocketWithFreeHands ()
+        {
+            HeldObjectDefinition definition = CreateObjectWithSocket ();
+            definition.restSocket = kHip;
+            PoseSession session = Open (definition);
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            Assert.AreEqual (kHip, entry.socket.definition.name);
+            Assert.AreEqual (0, entry.values.rightHold, "手は持たない");
+            Assert.AreEqual (0, entry.values.leftHold, "手は持たない");
+        }
+
+        [Test]
+        public void NoSockets_NoSocketCurve ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (session.clip).Where (b => b.propertyName == HeldObjectControl.kSocketProperty), "差す場所の無い物のカーブの組は変えない");
+        }
+
+        [Test]
+        public void KeysBeforeSocketWasAdded_AreNotInSocket ()
+        {
+            // 差す場所を足す前に打ったキーを、場所のカーブの無いキーとして作る
+            HeldObjectDefinition definition = CreateObjectWithSocket ();
+            PoseSession session = Open (definition);
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (60);
+            Assert.IsNull (session.CommitPose ());
+            EditorCurveBinding binding = EditorCurveBinding.FloatCurve (RigPaths.ObjectSocket (kName, kHip), typeof (HeldObjectControl), HeldObjectControl.kSocketProperty);
+            AnimationUtility.SetEditorCurve (session.clip, binding, null);
+            session.stage.InvalidateClipCurves ();
+
+            WriteSocket (session, 30, kHip);
+            AnimationCurve curve = AnimationUtility.GetEditorCurve (session.clip, binding);
+            Assert.AreEqual (1, curve.length, "場所のカーブは差したキーだけ");
+            session.Evaluate (45);
+            Assert.AreEqual (kHip, Entry (session).socket.definition.name, "次のキーまでは差している");
+            session.Evaluate (60);
+            Assert.IsNull (Entry (session).socket, "後ろのキーは物の持ち方のまま");
+            AssertHolding (session, "後ろのキー");
+        }
+
+        [Test]
+        public void SocketsAreKeyedByName_ReorderingKeepsKeys ()
+        {
+            HeldObjectDefinition definition = CreateObjectWithSocket ();
+            definition.sockets.Add (new HeldObjectSocket { name = "Back", bone = HumanBodyBones.Chest, position = new Vector3 (0, 0, -0.15f) });
+            PoseSession session = Open (definition);
+            session.Evaluate (0);
+            WriteSocket (session, 0, kHip);
+            AnimationClip clip = session.clip;
+
+            definition.sockets.Reverse ();
+            PoseSession reordered = Open (definition);
+            reordered.clip = clip;
+            reordered.Evaluate (0);
+            Assert.AreEqual (kHip, Entry (reordered).socket.definition.name, "並べ替えてもキーの意味は変わらない");
+        }
+
+        [Test]
+        public void SocketOutOfReach_ObjectGoesExactlyThere_AndGapIsReported ()
+        {
+            HeldObjectDefinition definition = CreateObject ();
+            // 腕より遠い所
+            definition.sockets.Add (new HeldObjectSocket { name = kHip, bone = HumanBodyBones.Hips, position = new Vector3 (0, 0, -3) });
+            PoseSession session = Open (definition);
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            entry.BringTo (entry.sockets[0]);
+            session.SolveAfterEdit ();
+            Assert.Greater (entry.bringGap, 0.5f, "届かない差を知らせる");
+            session.stage.heldObjects.GetSocketWorld (entry.sockets[0], out Vector3 socket, out Quaternion unused);
+            Assert.LessOrEqual (Vector3.Distance (socket, entry.editing.position), kGripTolerance, "物は体へ寄らず、差す場所まで行く");
+
+            PoseDocument document = new PoseDocument { frame = 0 };
+            document.objects.Add (new PoseObject { name = kName, socket = kHip });
+            Assert.IsNull (PoseDocument.Solve (session, document));
+            CollectionAssert.Contains (PoseDocument.FindMovedObjects (document, PoseDocument.ReadCurrent (session), 0.01f), kName, "CLI の unreached に出る");
+        }
+
+        /// <summary>左手が、ずらした握りに付いているときの差（メートル）</summary>
+        static float SlidGap (PoseSession session, float slide)
+        {
+            HeldObjectRig.Entry entry = Entry (session);
+            Vector3 target = entry.editing.TransformPoint (entry.definition.leftGrip.position + entry.definition.gripAxis.normalized * slide);
+            return Vector3.Distance (session.stage.editingRig.GetEditingBone (HumanBodyBones.LeftHand).position, target);
+        }
+
+        static void WriteSlide (PoseSession session, int frame, float left)
+        {
+            PoseDocument document = new PoseDocument { frame = frame };
+            document.objects.Add (new PoseObject { name = kName, slide = new List<PoseGripSlide> { new PoseGripSlide { hand = "Left", value = left } } });
+            Assert.IsNull (PoseDocument.Write (session, document), "書ける");
+        }
+
+        [Test]
+        public void GripSlide_HandFollowsAlongHandle_AndInterpolatesBetweenKeys ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            WriteSlide (session, 30, 0.06f);
+
+            session.Evaluate (30);
+            Assert.AreEqual (0.06f, Entry (session).values.leftSlide, 1e-5f, "打った値");
+            Assert.LessOrEqual (SlidGap (session, 0.06f), kGripTolerance, "手がずらした握りへ行く");
+            Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), kGripTolerance, "もう片方の手は元の握り");
+
+            session.Evaluate (15);
+            float middle = Entry (session).values.leftSlide;
+            Assert.AreEqual (0.03f, middle, 1e-4f, "キーの間は滑る");
+            Assert.LessOrEqual (SlidGap (session, middle), kGripTolerance, "キーの間も手が握りに付く");
+
+            session.Evaluate (0);
+            Assert.AreEqual (0, Entry (session).values.leftSlide, 1e-5f, "カーブを足す前に打ったキーは 0 のまま");
+            Assert.AreEqual (0, Entry (session).values.rightSlide, "もう片方の手はずれない");
+        }
+
+        [Test]
+        public void GripSlide_NoSlide_NoCurve_AndKeysKeepValue ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            Assert.IsEmpty (AnimationUtility.GetCurveBindings (session.clip).Where (b => b.propertyName == HeldObjectControl.kLeftSlideProperty), "ずらしていないクリップのカーブの組は変えない");
+
+            WriteSlide (session, 30, 0.06f);
+            // 書かないキーは今の値のまま打つ
+            PoseDocument next = new PoseDocument { frame = 50 };
+            next.objects.Add (new PoseObject { name = kName });
+            Assert.IsNull (PoseDocument.Write (session, next));
+            session.Evaluate (50);
+            Assert.AreEqual (0.06f, Entry (session).values.leftSlide, 1e-5f);
+            PoseDocument read = PoseDocument.Read (session, 50, out string problem);
+            Assert.IsNull (problem);
+            Assert.AreEqual (0.06f, read.objects[0].slide[0].value, 1e-5f, "読み返せる");
+        }
+
+        [Test]
+        public void GripSlide_MovingHeldHand_MovesObject_KeepingTheSlide ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            WriteSlide (session, 30, -0.05f);
+            session.Evaluate (30);
+            MoveObject (session, new Vector3 (0.05f, 0.02f, 0));
+            Assert.LessOrEqual (SlidGap (session, -0.05f), kGripTolerance, "物を動かしても、ずらした握りに付く");
+        }
+
+        [Test]
+        public void GripSlide_UnknownHand_IsRefused ()
+        {
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            PoseDocument document = new PoseDocument { frame = 0 };
+            document.objects.Add (new PoseObject { name = kName, slide = new List<PoseGripSlide> { new PoseGripSlide { hand = "Both", value = 0.1f } } });
+            Assert.IsNotNull (PoseDocument.Write (session, document));
+        }
+
+        [Test]
+        public void MeasuringKeyGaps_KeepsThisFramesHold ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            // 前後のキーで Locked の点があると、キーの間でキーの差を測り直す（全部のキーを当てる）
+            Point (session, HumanBodyBones.LeftFoot).SetLocked (true);
+            Assert.IsNull (session.CommitPose ());
+            WriteSocket (session, 30, kHip);
+            session.stage.InvalidateClipCurves ();
+
+            session.Evaluate (15);
+            Assert.IsNull (Entry (session).socket, "最後のキーの持ち方が残らない");
+            Assert.AreEqual (1, Entry (session).values.rightHold, "最後のキーの持ち方が残らない");
+            AssertHolding (session, "測り直した直後のフレーム");
+        }
+
+        [Test]
+        public void UnknownSocket_IsRefused_AndDuplicateNamesAreReported ()
+        {
+            PoseSession session = Open (CreateObjectWithSocket ());
+            session.Evaluate (0);
+            PoseDocument document = new PoseDocument { frame = 0 };
+            document.objects.Add (new PoseObject { name = kName, socket = "Back" });
+            Assert.IsNotNull (PoseDocument.Write (session, document), "無い場所は断る");
+
+            HeldObjectDefinition definition = CreateObjectWithSocket ();
+            definition.sockets.Add (new HeldObjectSocket { name = kHip });
+            Assert.IsNotEmpty (definition.Validate (), "同じ名前を知らせる");
+        }
+
         // ---- S91e 物の上の点 ----
 
         const string kCenter = kName + ".Center";

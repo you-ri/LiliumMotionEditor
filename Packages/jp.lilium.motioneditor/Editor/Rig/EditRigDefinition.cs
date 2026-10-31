@@ -592,6 +592,12 @@ namespace Lilium
             return kObject + "/" + name;
         }
 
+        /// <summary>持ち物の差す場所（Controls/Object/物の名前/場所の名前）。場所ごとに差しているかのカーブを持つ</summary>
+        public static string ObjectSocket (string name, string socket)
+        {
+            return Object (name) + "/" + socket;
+        }
+
         /// <summary>
         /// ゲームの Rig の値の代理（Controls/Game/&lt;Rig 名&gt;）。Rig の下の物は、ゲームと同じ相対パスで並べる
         /// </summary>

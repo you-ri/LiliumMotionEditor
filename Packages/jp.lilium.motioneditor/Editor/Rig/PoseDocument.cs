@@ -201,6 +201,9 @@ namespace Lilium
                         position = toBody * root.InverseTransformPoint (position),
                         aim = new PoseAim { forward = local * Vector3.forward, up = local * Vector3.up },
                         hold = HoldName (entry),
+                        socket = entry.sockets.Count == 0 ? "" : entry.socket != null ? entry.socket.definition.name : HeldObjectDefinition.kNoSocketName,
+                        handGap = entry.bringGap,
+                        slide = ReadSlides (entry),
                     });
                 }
             }
@@ -211,6 +214,15 @@ namespace Lilium
         const string kHoldLeft = "Left";
         const string kHoldRight = "Right";
         const string kHoldNone = "None";
+
+        /// <summary>握りをずらした手か、ずらすキーのある手の値（どちらも無ければ空）</summary>
+        static List<PoseGripSlide> ReadSlides (HeldObjectRig.Entry entry)
+        {
+            List<PoseGripSlide> slides = new List<PoseGripSlide> ();
+            if (entry.right != null && (entry.right.slideKeyed || entry.right.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldRight, value = entry.right.slide });
+            if (entry.left != null && (entry.left.slideKeyed || entry.left.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldLeft, value = entry.left.slide });
+            return slides;
+        }
 
         static string HoldName (HeldObjectRig.Entry entry)
         {
@@ -356,6 +368,25 @@ namespace Lilium
         public PoseAim aim;
         /// <summary>持っている手（Both / Left / Right / None）。空なら今のまま。次にこの物のキーを打つまで段差で続く</summary>
         public string hold;
+        /// <summary>
+        /// 差す場所の名前（None で差すのをやめる）。空なら今のまま。次にこの物のキーを打つまで段差で続く。
+        /// 差すと、持っている手を差す場所まで動かしてから放す（position・aim は使わない）
+        /// </summary>
+        public string socket;
+        /// <summary>読むときだけ。差す場所まで運んだときに、握りに届かなかった手の差（メートル）</summary>
+        public float handGap;
+        /// <summary>握りを柄に沿ってずらす手と量。書かない手は今のまま。キーの間は補間するので、手が柄の上を滑る</summary>
+        public List<PoseGripSlide> slide;
+    }
+
+    /// <summary>握りをずらす手と量</summary>
+    [System.Serializable]
+    public sealed class PoseGripSlide
+    {
+        /// <summary>Left / Right</summary>
+        public string hand;
+        /// <summary>キャラの設定の握りから、柄の向き（gripAxis）に沿ってずらす量（メートル）</summary>
+        public float value;
     }
 
     /// <summary>snap で寄せた点（S60）</summary>

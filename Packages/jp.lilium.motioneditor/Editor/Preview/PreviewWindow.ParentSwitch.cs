@@ -105,6 +105,71 @@ namespace Lilium
             SolveAfterManipulate ();
             CommitFullBodyPose ();
         }
+
+        /// <summary>
+        /// 今のフレームで物を差す場所へ入れて、姿勢のキーを打つ（index が負なら差すのをやめる）。
+        /// 差すときは、持っている手を物と一緒に差す場所まで動かしてから放す（前のキーの間で手が物に付いたまま動き、跳ばない）。
+        /// やめたときに持っている手が無ければ、キャラの設定の握りで持つ。
+        /// 手が届かない場所と、後ろに物のキーが残っているとき（そのキーの持ち方へ跳ぶ）は知らせる
+        /// </summary>
+        public void SetObjectSocket (HeldObjectRig.Entry entry, HeldObjectRig.Socket socket)
+        {
+            string blocked = heldObjectBlockReason;
+            if (blocked != null) {
+                ShowNotification (new GUIContent (blocked), 1.5);
+                return;
+            }
+            CommitHandleKeys ();
+            SamplePose ();
+            string note = null;
+            if (socket != null) {
+                entry.BringTo (socket);
+                SolveAfterManipulate ();
+                if (entry.bringGap > kSocketReachTolerance) note = Tr ("HELD_OBJECT_SOCKET_OUT_OF_REACH", entry.name, socket.definition.name);
+                entry.EnterSocket (socket);
+                // Pin の点を残すと、抜いたフレームで物が留めた場所へ戻る
+                foreach (PoseTarget target in targets_) {
+                    if (target is BodyPointTarget point && point.heldObject == entry) point.SetState (BodyPointState.Free);
+                }
+            }
+            else {
+                entry.LeaveSocket ();
+                entry.HoldByDefaultIfFree ();
+            }
+            SolveAfterManipulate ();
+            CommitFullBodyPose ();
+            if (note == null && HeldObjectRig.HasLaterKey (editingClip_, entry, currentFrame / editingClip_.frameRate)) note = Tr ("HELD_OBJECT_SOCKET_LATER_KEY", entry.name);
+            if (note != null) ShowNotification (new GUIContent (note), 2.5);
+        }
+
+        bool slideEditing_;
+
+        /// <summary>
+        /// 今のフレームで、握りを柄に沿ってずらす（スライダーを動かす間）。動かす間は物と体を解くだけで、キーは EndObjectSlide で打つ
+        /// </summary>
+        public void SetObjectSlide (HeldObjectRig.Hand hand, float value)
+        {
+            if (heldObjectBlockReason != null) return;
+            if (!slideEditing_) {
+                CommitHandleKeys ();
+                SamplePose ();
+                slideEditing_ = true;
+            }
+            hand.slide = value;
+            SolveAfterManipulate ();
+            RepaintView ();
+        }
+
+        /// <summary>握りをずらすのを終えて、姿勢のキーを打つ</summary>
+        public void EndObjectSlide ()
+        {
+            if (!slideEditing_) return;
+            slideEditing_ = false;
+            CommitFullBodyPose ();
+        }
+
+        /// <summary>差す場所へ運ぶ手の差を知らせる大きさ（メートル）</summary>
+        const float kSocketReachTolerance = 0.01f;
     }
 
 }

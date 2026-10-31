@@ -95,7 +95,8 @@ namespace Lilium
         public override void OnHandleGUI (bool selected)
         {
             Transform display = entry_.display;
-            if (display == null) return;
+            // 差している物は骨に固定で動かせない（場所はリグエディタで直す）
+            if (display == null || entry_.socket != null) return;
             Quaternion rotation = display.rotation;
             PoseHandleUtility.DoObjectHandles (moveHash_, rotateHash_, entry_.control, display, handleLength, kColor, selected,
                 position => entry_.DragTo (position, rotation),
@@ -110,11 +111,22 @@ namespace Lilium
             if (writer.storePosition != null) return;
             writer.Float (entry_.control, typeof (HeldObjectControl), HeldObjectControl.kLeftHoldProperty, entry_.values.leftHold);
             writer.Float (entry_.control, typeof (HeldObjectControl), HeldObjectControl.kRightHoldProperty, entry_.values.rightHold);
+            foreach (HeldObjectRig.Socket socket in entry_.sockets) writer.Float (socket.control, typeof (HeldObjectControl), HeldObjectControl.kSocketProperty, socket.values.socket);
+            WriteSlide (writer, entry_.left, HeldObjectControl.kLeftSlideProperty);
+            WriteSlide (writer, entry_.right, HeldObjectControl.kRightSlideProperty);
+        }
+
+        /// <summary>握りをずらしたクリップにだけカーブを作る（ずらしていないクリップのカーブの組は変えない）</summary>
+        void WriteSlide (CurveWriter writer, HeldObjectRig.Hand hand, string property)
+        {
+            if (hand == null || (!hand.slideKeyed && hand.slide == 0)) return;
+            writer.Float (entry_.control, typeof (HeldObjectControl), property, hand.slide);
         }
 
         public override void CollectKeyedPaths (ICollection<string> result)
         {
             result.Add (RigPaths.Object (entry_.name));
+            foreach (HeldObjectRig.Socket socket in entry_.sockets) result.Add (RigPaths.ObjectSocket (entry_.name, socket.definition.name));
         }
 
         /// <summary>物のメッシュをクリックしたら選ぶ</summary>

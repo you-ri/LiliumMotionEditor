@@ -363,8 +363,13 @@ namespace Lilium
             property.isExpanded = true;
             fields_.Add (new PropertyField (property, selected.label));
             fields_.Bind (serialized);
-            if (selected.hand == null && selected.heldPoint == null) {
-                HeldObjectDefinition held = selected.held.definition;
+            HeldObjectDefinition held = selected.held.definition;
+            if (selected.heldSocket != null) {
+                HeldObjectSocket socket = selected.heldSocket.definition;
+                fields_.Add (new Button (() => window_.RemoveHeldSocket (held, socket)) { text = Tr ("RIG_EDITOR_REMOVE_SOCKET") });
+            }
+            else if (selected.hand == null && selected.heldPoint == null) {
+                fields_.Add (new Button (() => window_.AddHeldSocket (held)) { text = Tr ("RIG_EDITOR_ADD_SOCKET") });
                 fields_.Add (new Button (() => window_.RemoveHeldObject (held)) { text = Tr ("RIG_EDITOR_REMOVE_OBJECT") });
             }
         }

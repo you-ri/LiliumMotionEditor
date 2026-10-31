@@ -61,9 +61,39 @@ namespace Lilium
                 if (!placement.rotation) placement.target.ReleaseRotation ();
                 placement.target.SetState (placement.state);
             }
+            MoveObjectsToSockets (session, document);
             PlaceObjects (session, document);
             session.SolveAfterEdit ();
             return null;
+        }
+
+        /// <summary>
+        /// 差す場所を切り替える（S91f）。窓の SetObjectSocket と同じに、差すときは持っている手を差す場所まで動かしてから放す
+        /// </summary>
+        static void MoveObjectsToSockets (PoseSession session, PoseDocument document)
+        {
+            if (document.objects == null) return;
+            foreach (PoseObject item in document.objects) {
+                if (item == null || string.IsNullOrEmpty (item.socket)) continue;
+                HeldObjectRig.Entry entry = FindObject (session, item.name);
+                if (item.socket == HeldObjectDefinition.kNoSocketName) {
+                    if (entry.socket == null) continue;
+                    entry.LeaveSocket ();
+                    entry.HoldByDefaultIfFree ();
+                    continue;
+                }
+                HeldObjectRig.Socket socket = entry.sockets.Find (s => s.definition.name == item.socket);
+                if (socket == entry.socket) continue;
+                // 同じ要求で置いた点（腰など）を先に効かせる。差す場所は骨に付いて動く
+                session.SolveAfterEdit ();
+                entry.BringTo (socket);
+                session.SolveAfterEdit ();
+                entry.EnterSocket (socket);
+                // Pin の点を残すと、抜いたフレームで物が留めた場所へ戻る
+                foreach (BodyPointTarget point in session.targets.OfType<BodyPointTarget> ()) {
+                    if (point.heldObject == entry) point.SetState (BodyPointState.Free);
+                }
+            }
         }
 
         /// <summary>持ち物を置く（S91）。つかんで動かしたのと同じに、持っている手と体が付いてくる。手が届かない所へは物が寄る</summary>
@@ -79,6 +109,13 @@ namespace Lilium
                 if (!string.IsNullOrEmpty (item.hold)) {
                     entry.values.leftHold = item.hold == kHoldBoth || item.hold == kHoldLeft ? 1 : 0;
                     entry.values.rightHold = item.hold == kHoldBoth || item.hold == kHoldRight ? 1 : 0;
+                    entry.keysPending = true;
+                }
+                foreach (PoseGripSlide slide in item.slide ?? new List<PoseGripSlide> ()) {
+                    if (slide == null) continue;
+                    HeldObjectRig.Hand hand = slide.hand == kHoldLeft ? entry.left : entry.right;
+                    if (hand == null) continue;
+                    hand.slide = slide.value;
                     entry.keysPending = true;
                 }
                 bool place = item.position.sqrMagnitude > kEpsilon;
@@ -115,9 +152,15 @@ namespace Lilium
             List<string> names = new List<string> ();
             if (written == null || written.objects == null || solved == null || solved.objects == null) return names;
             foreach (PoseObject item in written.objects) {
-                if (item == null || item.position.sqrMagnitude <= kEpsilon) continue;
+                if (item == null) continue;
                 PoseObject placed = solved.objects.FirstOrDefault (o => o.name == item.name);
-                if (placed != null && Vector3.Distance (item.position, placed.position) > tolerance) names.Add (item.name);
+                if (placed == null) continue;
+                // 差している物は書いた場所を使わない。差す場所まで手が届かなければ、差すフレームで跳ぶ
+                if (!string.IsNullOrEmpty (placed.socket) && placed.socket != HeldObjectDefinition.kNoSocketName) {
+                    if (placed.handGap > tolerance) names.Add (item.name);
+                    continue;
+                }
+                if (item.position.sqrMagnitude > kEpsilon && Vector3.Distance (item.position, placed.position) > tolerance) names.Add (item.name);
             }
             return names;
         }
@@ -194,6 +237,13 @@ namespace Lilium
                 }
                 if (!string.IsNullOrEmpty (item.hold) && item.hold != kHoldBoth && item.hold != kHoldLeft && item.hold != kHoldRight && item.hold != kHoldNone) {
                     return Tr ("POSE_DOCUMENT_UNKNOWN_HOLD", item.name, item.hold);
+                }
+                HeldObjectRig.Entry entry = FindObject (session, item.name);
+                foreach (PoseGripSlide slide in item.slide ?? new List<PoseGripSlide> ()) {
+                    if (slide != null && slide.hand != kHoldLeft && slide.hand != kHoldRight) return Tr ("POSE_DOCUMENT_UNKNOWN_SLIDE_HAND", item.name, slide.hand);
+                }
+                if (!string.IsNullOrEmpty (item.socket) && item.socket != HeldObjectDefinition.kNoSocketName && !entry.sockets.Exists (s => s.definition.name == item.socket)) {
+                    return Tr ("POSE_DOCUMENT_UNKNOWN_SOCKET", item.name, item.socket, string.Join (", ", entry.sockets.Select (s => s.definition.name)));
                 }
             }
             return null;

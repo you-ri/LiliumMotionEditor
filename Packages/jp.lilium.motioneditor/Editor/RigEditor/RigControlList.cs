@@ -46,6 +46,8 @@ namespace Lilium
         public HeldObjectRig.Hand hand;
         /// <summary>持ち物の上の点（kind が Object のとき）。全身 IK の点だが、項目はリグ定義でなくキャラの設定にある</summary>
         public HeldObjectRig.ObjectPoint heldPoint;
+        /// <summary>持ち物の差す場所（S91f）</summary>
+        public HeldObjectRig.Socket heldSocket;
         /// <summary>キャラの設定のどの項目か（SerializedObject のパス。持ち物のとき）</summary>
         public string settingsPath;
 
@@ -136,6 +138,18 @@ namespace Lilium
                         heldPoint = point,
                         settingsPath = path + ".points.Array.data[" + entry.definition.points.IndexOf (point.definition) + "]",
                         scale = point.definition.weight <= 0 ? BodyPointTarget.kAimScale : 1,
+                    });
+                }
+                foreach (HeldObjectRig.Socket socket in entry.sockets) {
+                    rig.GetSocketWorld (socket, out Vector3 at, out Quaternion unused);
+                    entries.Add (new RigControlEntry {
+                        id = "Object/" + entry.name + "/Socket/" + socket.definition.name,
+                        kind = RigControlKind.Object,
+                        label = Tr ("RIG_EDITOR_SOCKET", entry.name, socket.definition.name),
+                        position = at,
+                        held = entry,
+                        heldSocket = socket,
+                        settingsPath = path + ".sockets.Array.data[" + entry.definition.sockets.IndexOf (socket.definition) + "]",
                     });
                 }
             }

@@ -47,21 +47,6 @@ namespace Lilium
                     for (int p = bodyParents_[body]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
                 }
             }
-            foreach (Transform bone in heldFixedBones_) {
-                int index = bodies_.IndexOf (bone);
-                if (index >= 0) data_.fixedBones[index] = 1;
-            }
-        }
-
-        readonly List<Transform> heldFixedBones_ = new List<Transform> ();
-
-        /// <summary>
-        /// 持ち物を持っている間、解いても動かさない骨を入れる（鎖骨。物を持った手に引かれて肩が落ち、焼くと可動域で丸められて手がずれる。10-31 実測で 1.7 倍）
-        /// </summary>
-        internal void SetHeldFixedBones (List<Transform> bones)
-        {
-            heldFixedBones_.Clear ();
-            heldFixedBones_.AddRange (bones);
         }
 
         /// <summary>

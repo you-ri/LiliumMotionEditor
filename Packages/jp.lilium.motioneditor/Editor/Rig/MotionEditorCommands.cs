@@ -1181,6 +1181,7 @@ namespace Lilium
                         restRotation = definition.restRotation,
                         rightGrip = definition.rightGrip != null ? definition.rightGrip.position : Vector3.zero,
                         leftGrip = definition.leftGrip != null ? definition.leftGrip.position : Vector3.zero,
+                        sockets = entry.sockets.ConvertAll (s => s.definition.name),
                     });
                 }
             }
@@ -1439,6 +1440,8 @@ namespace Lilium
         /// <summary>手首が来る場所（物のローカル・メートル）</summary>
         public Vector3 rightGrip;
         public Vector3 leftGrip;
+        /// <summary>差す場所の名前（姿勢の objects の socket に書く）</summary>
+        public List<string> sockets;
     }
 
     [System.Serializable]

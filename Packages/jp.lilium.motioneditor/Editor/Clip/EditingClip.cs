@@ -235,7 +235,57 @@ namespace Lilium
         /// </summary>
         public static float GetStepValue (AnimationClip clip, string path, System.Type type, string property, float time, float fallback)
         {
-            if (clip == null) return fallback;
+            return TryGetStepKey (clip, path, type, property, time, out Keyframe key) ? key.value : fallback;
+        }
+
+        static readonly Dictionary<(AnimationClip, string, string), (int version, float[] times, float[] values)> easedKeys_ = new Dictionary<(AnimationClip, string, string), (int, float[], float[])> ();
+
+        /// <summary>
+        /// 後から足すカーブの、キーの間を滑らかに補間した値。anchorProperty のカーブのキーには、このカーブのキーが無ければ 0 のキーがあるものとして読む
+        /// （カーブを足す前に打ったキーを 0 のまま残す）。カーブが無ければ keyed を false にして 0 を返す
+        /// </summary>
+        public static float GetEasedValue (AnimationClip clip, string path, System.Type type, string property, string anchorProperty, float time, out bool keyed)
+        {
+            keyed = false;
+            if (clip == null) return 0;
+            int version = GetCurveVersion (clip);
+            (AnimationClip, string, string) id = (clip, path, property);
+            (int version, float[] times, float[] values) cached;
+            if (!easedKeys_.TryGetValue (id, out cached) || cached.version != version) {
+                AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve (path, type, property));
+                SortedList<float, float> merged = new SortedList<float, float> ();
+                if (curve != null) {
+                    foreach (Keyframe key in curve.keys) merged[key.time] = key.value;
+                    AnimationCurve anchor = AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve (path, type, anchorProperty));
+                    float margin = 0.5f / clip.frameRate;
+                    if (anchor != null) {
+                        foreach (Keyframe key in anchor.keys) {
+                            if (!System.Array.Exists (curve.keys, k => Mathf.Abs (k.time - key.time) <= margin)) merged[key.time] = 0;
+                        }
+                    }
+                }
+                cached = (version, new float[merged.Count], new float[merged.Count]);
+                merged.Keys.CopyTo (cached.times, 0);
+                merged.Values.CopyTo (cached.values, 0);
+                easedKeys_[id] = cached;
+            }
+            int count = cached.times.Length;
+            if (count == 0) return 0;
+            keyed = true;
+            if (time <= cached.times[0]) return cached.values[0];
+            for (int k = 1; k < count; k++) {
+                if (time > cached.times[k]) continue;
+                float rate = Mathf.InverseLerp (cached.times[k - 1], cached.times[k], time);
+                return Mathf.Lerp (cached.values[k - 1], cached.values[k], Mathf.SmoothStep (0, 1, rate));
+            }
+            return cached.values[count - 1];
+        }
+
+        /// <summary>その時刻以前でいちばん近いキー。無ければ false</summary>
+        public static bool TryGetStepKey (AnimationClip clip, string path, System.Type type, string property, float time, out Keyframe key)
+        {
+            key = default;
+            if (clip == null) return false;
             int version = GetCurveVersion (clip);
             (AnimationClip, string, string) id = (clip, path, property);
             (int version, Keyframe[] keys) cached;
@@ -246,9 +296,12 @@ namespace Lilium
             }
             float limit = time + 0.01f / clip.frameRate;
             for (int k = cached.keys.Length - 1; k >= 0; k--) {
-                if (cached.keys[k].time <= limit) return cached.keys[k].value;
+                if (cached.keys[k].time <= limit) {
+                    key = cached.keys[k];
+                    return true;
+                }
             }
-            return fallback;
+            return false;
         }
 
         /// <summary>
