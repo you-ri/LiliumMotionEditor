@@ -17,6 +17,16 @@ namespace Lilium
             if (stage != null && stage.fullBody != null) targets.AddRange (BodyPointTarget.Create (stage.editingRig, stage.fullBody));
             // 物の持ち替え（キャラの設定の parentSwitches）の物。表示モデルの上でつかんで、握りを動かす
             if (stage != null) targets.AddRange (ParentSwitchTarget.Create (stage));
+            // 持ち物（S91）と、持っている手の点の結び付け
+            targets.AddRange (HeldObjectTarget.Create (stage));
+            if (stage != null && stage.heldObjects != null) {
+                foreach (PoseTarget target in targets) {
+                    BodyPointTarget point = target as BodyPointTarget;
+                    if (point == null) continue;
+                    point.holder = stage.heldObjects.FindHand (point.id);
+                    point.heldObject = stage.heldObjects.FindPointOwner (point.id);
+                }
+            }
             return targets;
         }
 

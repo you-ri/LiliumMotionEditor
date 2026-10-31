@@ -67,7 +67,7 @@ namespace Lilium
             Assert.AreEqual (HumanBodyBones.Hips, chest.origin);
             Assert.AreEqual (HumanBodyBones.Head, chest.toward);
             Assert.AreEqual (1, chest.weight, "胸の点は重い点");
-            // 胸の点の下にお腹の点（Cascadeur の stomach）。腰と胸の点の間で Spine に乗り、線は腰 → お腹 → 胸
+            // 胸の点の下にお腹の点。腰と胸の点の間で Spine に乗り、線は腰 → お腹 → 胸
             EditRigDefinition.BodyPoint stomach = definition_.bodyPoints.Single (p => p.name == "Stomach");
             Assert.AreEqual (HumanBodyBones.Spine, stomach.bone);
             Assert.AreEqual (HumanBodyBones.Hips, stomach.origin);

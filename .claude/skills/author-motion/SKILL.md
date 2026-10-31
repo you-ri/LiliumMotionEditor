@@ -167,6 +167,28 @@ unity cmd motion_write_hand --project-path "$P" --frame 20 --preset Hand_Fist --
 - Hand shapes interpolate between keys. To clench or open at a given moment, also key the previous shape on the key just before (otherwise it changes gradually from the previous key)
 - Rewriting a body key keeps the fingers at that frame as they were (no need to rewrite the hand)
 
+## Held objects
+
+Characters can hold objects (a two-handed sword, etc.; `objects` in `motion_open` / `motion_describe`: `name`, `parent`, `frame`, `rest`, `restRotation`, `rightGrip`, `leftGrip`). Objects are added in the Rig Editor. **The object leads and the hands follow**: key the object, not the hands.
+
+```json
+{"frame": 38, "points": [...], "contacts": [...],
+ "objects": [{"name": "TwoHandedSword", "position": {"x": 0, "y": 1.15, "z": 0.43},
+              "aim": {"forward": {"x": 0, "y": -0.94, "z": 0.34}, "up": {"x": 0, "y": 0.34, "z": 0.94}}, "hold": "Both"}],
+ "hands": [{"preset": "Hand_Grip"}]}
+```
+
+- Works in `motion_write_motion` keys and `motion_write_pose`, and `--dry_run true` tries it. `motion_read_motion` and `motion_read_pose` return it in the same shape
+- `position`: the object's origin in the body frame (meters from the feet). Omit it to keep the current place
+- `aim`: `forward` is where the object's local +Z points and `up` where its local +Y points (body frame). `target` (a position) can replace `forward`; `restForward` / `restUp` name other local axes. The demo sword's origin is the middle of the handle, +Y is the tip and +Z is the cutting edge
+- `hold`: `Both` / `Left` / `Right` / `None`. It is a step and lasts until the next key. Omit it to keep the state. Without keys, the character's grip settings decide
+- **Points on the object are ordinary points**, listed in `points` as `<object>.<point>` (the demo sword: `TwoHandedSword.Center` weight 1, `TwoHandedSword.Tip` and `TwoHandedSword.Pommel` weight 0). Write them in `points` like any other point: `Locked` on `TwoHandedSword.Tip` on two keys keeps the tip on a straight line between them (a sword stuck in the ground). Pinning `Center` places the object without turning it; pinning `Tip` as well turns it around `Center`. `objects` overrides `Pin` points on the same key (only `Locked` points stay)
+- **Do not list a held hand's points** (`LeftHand`, `RightHand`). They get no keys; writing them moves the object instead
+- The object is keyed relative to its `frame` bone (`Chest` by default), so it follows that bone between keys. Hands stay on the grips on every frame, keyed or not
+- If the hands cannot reach, a free body is pulled along, otherwise the object moves toward the body. The object's name then appears in `unreached`, and the place it reached is in the response. Lock the hips or feet to keep the body from being pulled
+- Close the fingers with `hands` (the demo has `Hand_Grip`)
+- **Keep the wrists in range**: the object's tilt must suit the forearms. On a two-handed swing, stop the blade about 10–20° above horizontal with the hands in front of the belly; a level blade with level forearms trips `Hand In-Out` in `motion_lint`. Add keys so the object turns 90° or less between keys
+
 ## Rules
 
 These follow from how the editor interpolates. Breaking them trips lint or breaks the pose between keys.

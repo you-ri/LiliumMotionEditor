@@ -144,6 +144,15 @@ namespace Lilium
             detail_ = new Label { style = { whiteSpace = WhiteSpace.Normal, marginTop = 2, marginLeft = 2, marginRight = 2 } };
             root.Add (detail_);
 
+            // 持ち物を足す欄。prefab か FBX を入れると、キャラの設定に足す（S91）
+            ObjectField add = new ObjectField (Tr ("RIG_EDITOR_ADD_OBJECT")) { objectType = typeof (GameObject), allowSceneObjects = false, tooltip = Tr ("RIG_EDITOR_ADD_OBJECT_TOOLTIP") };
+            add.RegisterValueChangedCallback (e => {
+                if (e.newValue == null) return;
+                window_.AddHeldObject (e.newValue as GameObject);
+                add.SetValueWithoutNotify (null);
+            });
+            root.Add (add);
+
             Refresh ();
             Resubscribe ();
             return root;
@@ -306,14 +315,15 @@ namespace Lilium
 
             RigControlEntry selected = window_.selectedEntry;
             title_.text = selected != null ? RigControlList.KindLabel (selected.kind) + ": " + selected.label : Tr ("RIG_EDITOR_DEFINITION_SETTINGS");
-            string path = selected != null ? selected.propertyPath : null;
+            string path = selected != null ? selected.settingsPath ?? selected.propertyPath : null;
             if (definition != boundDefinition_ || path != boundPath_ || (reason != null) != boundReadOnly_) {
                 boundDefinition_ = definition;
                 boundPath_ = path;
                 boundReadOnly_ = reason != null;
                 BuildFields (definition, selected, path);
             }
-            fields_.SetEnabled (reason == null);
+            // 持ち物はキャラの設定の項目なので、定義が読み取り専用でも直せる
+            fields_.SetEnabled (reason == null || (selected != null && selected.settingsPath != null));
             RefreshUsers (definition);
         }
 
@@ -321,6 +331,10 @@ namespace Lilium
         {
             fields_.Unbind ();
             fields_.Clear ();
+            if (selected != null && selected.settingsPath != null) {
+                BuildHeldObjectFields (selected);
+                return;
+            }
             if (definition == null) return;
             SerializedObject serialized = new SerializedObject (definition);
             SerializedProperty property = path != null ? serialized.FindProperty (path) : null;
@@ -336,6 +350,23 @@ namespace Lilium
                 fields_.Add (new PropertyField (fullBody));
             }
             fields_.Bind (serialized);
+        }
+
+        /// <summary>持ち物か握りの欄（キャラの設定の項目）と、持ち物を外すボタン</summary>
+        void BuildHeldObjectFields (RigControlEntry selected)
+        {
+            CharacterSettings settings = SettingsLookup.Find (window_.model);
+            if (settings == null) return;
+            SerializedObject serialized = new SerializedObject (settings);
+            SerializedProperty property = serialized.FindProperty (selected.settingsPath);
+            if (property == null) return;
+            property.isExpanded = true;
+            fields_.Add (new PropertyField (property, selected.label));
+            fields_.Bind (serialized);
+            if (selected.hand == null && selected.heldPoint == null) {
+                HeldObjectDefinition held = selected.held.definition;
+                fields_.Add (new Button (() => window_.RemoveHeldObject (held)) { text = Tr ("RIG_EDITOR_REMOVE_OBJECT") });
+            }
         }
 
         void RefreshUsers (EditRigDefinition definition)

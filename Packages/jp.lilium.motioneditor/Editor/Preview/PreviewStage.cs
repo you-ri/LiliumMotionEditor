@@ -131,6 +131,8 @@ namespace Lilium
         /// 全身 IK（S25）。点が 1 つも置けなかったキャラでは null
         /// </summary>
         public FullBodyRig fullBody { get; private set; }
+        /// <summary>持ち物（S91）。持ち物の無いキャラでは null</summary>
+        public HeldObjectRig heldObjects { get; private set; }
         public string error { get; private set; }
 
         /// <summary>
@@ -851,6 +853,7 @@ namespace Lilium
         {
             carriedPoints_.Clear ();
             lockedSpanPoints_.Clear ();
+            if (heldObjects != null) heldObjects.ApplyHoldKeys (clip, time);
             if (bodyPoints_.Length == 0 || editingRig == null || editingRig.root == null) return;
             EnsureBodyPointPaths ();
             // 外部の補間（AI）の区間でも、点の状態は曲線・リニアの区間と同じ決まりで扱う（10-26 ユーザー指示）。
@@ -1155,6 +1158,7 @@ namespace Lilium
             }
             WritePointValues (bodyPointRest_);
             WriteProxyWeights (weightProxyRest_);
+            if (heldObjects != null) heldObjects.ResetHolds ();
         }
 
         /// <summary>
@@ -1339,9 +1343,13 @@ namespace Lilium
         /// </summary>
         public void SolveLockedSpan (float weight)
         {
-            if (fullBody == null || weight <= 0 || lockedSpanPoints_.Count == 0) return;
+            if (fullBody == null) return;
+            bool span = weight > 0 && lockedSpanPoints_.Count > 0;
+            if (!span && heldObjects == null) return;
             fullBody.CaptureInput ();
-            fullBody.SolveOnly (lockedSpanPoints_, weight, true);
+            if (heldObjects != null) heldObjects.Prepare (fullBody, lockedSpanPoints_);
+            if (span) fullBody.SolveOnly (lockedSpanPoints_, weight, true);
+            if (heldObjects != null) heldObjects.Finish (fullBody, weight);
         }
 
         /// <summary>
@@ -1409,6 +1417,8 @@ namespace Lilium
             // 全身 IK が曲げた分を戻してから解く（S25。コントロールの無い骨に残ると、解き直すたびに積み重なる）
             if (fullBody != null) fullBody.Unsolve ();
             editingRigSolver.Solve ();
+            // 全身 IK の段を落としていても、物は枠の骨に付いて動く
+            if (heldObjects != null) heldObjects.Refresh ();
         }
 
         /// <summary>

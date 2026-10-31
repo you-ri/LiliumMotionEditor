@@ -61,8 +61,65 @@ namespace Lilium
                 if (!placement.rotation) placement.target.ReleaseRotation ();
                 placement.target.SetState (placement.state);
             }
+            PlaceObjects (session, document);
             session.SolveAfterEdit ();
             return null;
+        }
+
+        /// <summary>持ち物を置く（S91）。つかんで動かしたのと同じに、持っている手と体が付いてくる。手が届かない所へは物が寄る</summary>
+        static void PlaceObjects (PoseSession session, PoseDocument document)
+        {
+            if (document.objects == null) return;
+            EditingRig rig = session.stage.editingRig;
+            Transform root = session.stage.editingRoot;
+            Quaternion toRoot = BodyBasis (rig);
+            foreach (PoseObject item in document.objects) {
+                if (item == null) continue;
+                HeldObjectRig.Entry entry = FindObject (session, item.name);
+                if (!string.IsNullOrEmpty (item.hold)) {
+                    entry.values.leftHold = item.hold == kHoldBoth || item.hold == kHoldLeft ? 1 : 0;
+                    entry.values.rightHold = item.hold == kHoldBoth || item.hold == kHoldRight ? 1 : 0;
+                    entry.keysPending = true;
+                }
+                bool place = item.position.sqrMagnitude > kEpsilon;
+                bool aim = HasAim (item.aim);
+                if (!place && !aim) continue;
+                entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                if (place) position = root.TransformPoint (toRoot * item.position);
+                if (aim) {
+                    Vector3 restForward = item.aim.restForward.sqrMagnitude > kEpsilon ? item.aim.restForward : Vector3.forward;
+                    Vector3 restUp = item.aim.restUp.sqrMagnitude > kEpsilon ? item.aim.restUp : Vector3.up;
+                    Vector3 forward = item.aim.forward.sqrMagnitude > kEpsilon ? item.aim.forward : item.aim.target - Quaternion.Inverse (toRoot) * root.InverseTransformPoint (position);
+                    Vector3 up = item.aim.up.sqrMagnitude > kEpsilon ? item.aim.up : restUp;
+                    rotation = root.rotation * toRoot * Quaternion.LookRotation (forward, up) * Quaternion.Inverse (Quaternion.LookRotation (restForward, restUp));
+                }
+                entry.DragTo (position, rotation);
+            }
+        }
+
+        static HeldObjectRig.Entry FindObject (PoseSession session, string name)
+        {
+            HeldObjectRig held = session.stage.heldObjects;
+            if (held == null) return null;
+            foreach (HeldObjectRig.Entry entry in held.entries) {
+                if (entry.name == name) return entry;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 書いた場所へ置けなかった持ち物（手が届かないので物が寄った）の名前。解いた後に読んだ姿勢（solved）と比べる
+        /// </summary>
+        internal static List<string> FindMovedObjects (PoseDocument written, PoseDocument solved, float tolerance)
+        {
+            List<string> names = new List<string> ();
+            if (written == null || written.objects == null || solved == null || solved.objects == null) return names;
+            foreach (PoseObject item in written.objects) {
+                if (item == null || item.position.sqrMagnitude <= kEpsilon) continue;
+                PoseObject placed = solved.objects.FirstOrDefault (o => o.name == item.name);
+                if (placed != null && Vector3.Distance (item.position, placed.position) > tolerance) names.Add (item.name);
+            }
+            return names;
         }
 
         /// <summary>
@@ -127,6 +184,17 @@ namespace Lilium
                 if (contact == null) continue;
                 problem = CollectContact (session, contact, targets, placements);
                 if (problem != null) return problem;
+            }
+
+            foreach (PoseObject item in document.objects ?? new List<PoseObject> ()) {
+                if (item == null) continue;
+                if (FindObject (session, item.name) == null) {
+                    HeldObjectRig held = session.stage.heldObjects;
+                    return Tr ("POSE_DOCUMENT_UNKNOWN_OBJECT", item.name, held != null ? string.Join (", ", held.entries.Select (e => e.name)) : "");
+                }
+                if (!string.IsNullOrEmpty (item.hold) && item.hold != kHoldBoth && item.hold != kHoldLeft && item.hold != kHoldRight && item.hold != kHoldNone) {
+                    return Tr ("POSE_DOCUMENT_UNKNOWN_HOLD", item.name, item.hold);
+                }
             }
             return null;
         }

@@ -69,6 +69,42 @@ namespace Lilium
             });
             if (note != null) ShowNotification (new GUIContent (note), 2.5);
         }
+
+        /// <summary>このキャラの持ち物（S91。無ければ空）</summary>
+        public IReadOnlyList<HeldObjectRig.Entry> heldObjects
+        {
+            get {
+                HeldObjectRig held = stage_ != null ? stage_.heldObjects : null;
+                return held != null ? held.entries : (IReadOnlyList<HeldObjectRig.Entry>)System.Array.Empty<HeldObjectRig.Entry> ();
+            }
+        }
+
+        /// <summary>持つ・やめるを切り替えられない理由（切り替えられるなら null）。切り替えは元のクリップに打つ</summary>
+        public string heldObjectBlockReason
+        {
+            get {
+                if (!CanEditClip ()) return Tr ("PREVIEW_WINDOW_PARENT_SWITCH_CANNOT_EDIT_CLIP");
+                return overrideBlocksBaseWrite;
+            }
+        }
+
+        /// <summary>
+        /// 今のフレームで、手で持つ・やめるを切り替えて姿勢のキーを打つ。やめた手は今の場所に留まり、持った手は握りへ動く
+        /// </summary>
+        public void SetObjectHold (HeldObjectRig.Entry entry, bool left, bool hold)
+        {
+            string blocked = heldObjectBlockReason;
+            if (blocked != null) {
+                ShowNotification (new GUIContent (blocked), 1.5);
+                return;
+            }
+            CommitHandleKeys ();
+            SamplePose ();
+            if (left) entry.values.leftHold = hold ? 1 : 0;
+            else entry.values.rightHold = hold ? 1 : 0;
+            SolveAfterManipulate ();
+            CommitFullBodyPose ();
+        }
     }
 
 }

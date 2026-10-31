@@ -139,10 +139,10 @@ namespace Lilium
             SetKey (curve, index, before, before);
         }
 
-        /// <summary>区間の補間を持つカーブか（編集用リグのカーブ。点の状態（Pin・Locked・固定の強さ）は段差で接線を使わないので外す）</summary>
+        /// <summary>区間の補間を持つカーブか（編集用リグのカーブ。点の状態（Pin・Locked・固定の強さ）と、持ち物を持っているかは段差で接線を使わないので外す）</summary>
         public static bool IsTarget (EditorCurveBinding binding)
         {
-            return EditingClip.IsRigBinding (binding) && binding.type != typeof (BodyPoint);
+            return EditingClip.IsRigBinding (binding) && binding.type != typeof (BodyPoint) && binding.type != typeof (HeldObjectControl);
         }
 
         /// <summary>

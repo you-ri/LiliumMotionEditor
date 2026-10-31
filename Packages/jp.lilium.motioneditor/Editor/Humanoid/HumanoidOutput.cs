@@ -131,6 +131,17 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// 焼いた版が今の設定で焼いたものかを見分ける値。リグの定義に、持ち物の設定（握り・親の枠は焼いた姿勢を変える。S91）を足す。
+        /// 持ち物の無いキャラは定義だけ（項目を足す前に焼いた版を、古い扱いにしない）
+        /// </summary>
+        static string WithHeldObjects (string definitionHash, GameObject model)
+        {
+            CharacterSettings settings = SettingsLookup.Find (model);
+            string held = settings != null ? settings.GetHeldObjectsKey () : "";
+            return (definitionHash ?? "") + (held.Length > 0 ? "/" + Hash128.Compute (held) : "");
+        }
+
         /// <param name="overrides">一緒に焼いた Override のクリップ（S14。無ければ null）</param>
         /// <param name="definitionHash">リグの定義のうち、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
         public static void WriteLink (string outputPath, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides = null, string definitionHash = null)
@@ -145,7 +156,7 @@ namespace Lilium
                 sourceHash = EditorUtility.IsDirty (source) ? kUnsaved : ComputeFileHash (sourcePath),
                 overrides = OverrideGuids (overrides),
                 overridesHash = OverridesHash (overrides),
-                definition = definitionHash ?? "",
+                definition = WithHeldObjects (definitionHash, model),
             };
             string json = JsonUtility.ToJson (link);
             if (importer.userData == json) return;
@@ -236,7 +247,7 @@ namespace Lilium
                 GameObject baked = AssetDatabase.LoadAssetAtPath<GameObject> (AssetDatabase.GUIDToAssetPath (link.model));
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_OTHER_CHARACTER", baked != null ? baked.name : Tr ("HUMANOID_OUTPUT_UNKNOWN")));
             }
-            if ((link.definition ?? "") != (definitionHash ?? "")) {
+            if ((link.definition ?? "") != WithHeldObjects (definitionHash, model)) {
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_DEFINITION_CHANGED"));
             }
             if (EditorUtility.IsDirty (source)) {

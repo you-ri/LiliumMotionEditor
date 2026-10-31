@@ -11,6 +11,8 @@ namespace Lilium
         Fk,
         Extra,
         Point,
+        /// <summary>持ち物とその握り（S91）。リグ定義ではなくキャラの設定の項目</summary>
+        Object,
     }
 
     /// <summary>
@@ -39,6 +41,13 @@ namespace Lilium
         public float scale = 1;
         /// <summary>使えない理由。null なら使える</summary>
         public string disabledReason;
+        /// <summary>持ち物（kind が Object のとき）。hand があれば、その手の握り</summary>
+        public HeldObjectRig.Entry held;
+        public HeldObjectRig.Hand hand;
+        /// <summary>持ち物の上の点（kind が Object のとき）。全身 IK の点だが、項目はリグ定義でなくキャラの設定にある</summary>
+        public HeldObjectRig.ObjectPoint heldPoint;
+        /// <summary>キャラの設定のどの項目か（SerializedObject のパス。持ち物のとき）</summary>
+        public string settingsPath;
 
         public bool enabled
         {
@@ -88,6 +97,8 @@ namespace Lilium
 
             // 全身 IK の点は、割り当てに残ったものだけが並ぶ（乗る骨が見つからない点は割り当てに入らない）
             foreach (RigBinding.Point point in binding.points) {
+                // 持ち物の上の点は、持ち物と一緒に並ぶ（AddHeldObjects）
+                if (point.onObject) continue;
                 Transform host = rig.GetEditingBone (point.bone);
                 entries.Add (new RigControlEntry {
                     id = "Point/" + point.name,
@@ -101,6 +112,40 @@ namespace Lilium
                 });
             }
             return entries;
+        }
+
+        /// <summary>持ち物と握りを一覧へ足す（S91）。場所は今の物の姿勢</summary>
+        public static void AddHeldObjects (List<RigControlEntry> entries, HeldObjectRig rig, CharacterSettings settings)
+        {
+            if (rig == null || settings == null) return;
+            foreach (HeldObjectRig.Entry entry in rig.entries) {
+                int index = settings.heldObjects.IndexOf (entry.definition);
+                if (index < 0) continue;
+                string path = "heldObjects.Array.data[" + index + "]";
+                entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                entries.Add (new RigControlEntry { id = "Object/" + entry.name, kind = RigControlKind.Object, label = entry.name, position = position, held = entry, settingsPath = path });
+                AddGrip (entries, rig, entry, entry.right, Tr ("RIG_EDITOR_RIGHT_GRIP", entry.name), path + ".rightGrip");
+                AddGrip (entries, rig, entry, entry.left, Tr ("RIG_EDITOR_LEFT_GRIP", entry.name), path + ".leftGrip");
+                foreach (HeldObjectRig.ObjectPoint point in entry.points) {
+                    entries.Add (new RigControlEntry {
+                        id = "Object/" + entry.name + "/Point/" + point.id,
+                        kind = RigControlKind.Object,
+                        label = point.id.ToString (),
+                        position = rig.GetPointWorld (point),
+                        held = entry,
+                        heldPoint = point,
+                        settingsPath = path + ".points.Array.data[" + entry.definition.points.IndexOf (point.definition) + "]",
+                        scale = point.definition.weight <= 0 ? BodyPointTarget.kAimScale : 1,
+                    });
+                }
+            }
+        }
+
+        static void AddGrip (List<RigControlEntry> entries, HeldObjectRig rig, HeldObjectRig.Entry entry, HeldObjectRig.Hand hand, string label, string path)
+        {
+            if (hand == null) return;
+            rig.GetGrip (hand, out Vector3 position, out Quaternion rotation);
+            entries.Add (new RigControlEntry { id = "Object/" + entry.name + "/" + hand.id, kind = RigControlKind.Object, label = label, position = position, held = entry, hand = hand, settingsPath = path });
         }
 
         static string ElementPath (EditRigDefinition definition, string list, int index)
@@ -149,6 +194,7 @@ namespace Lilium
             switch (kind) {
                 case RigControlKind.Fk: return Tr ("RIG_EDITOR_KIND_FK");
                 case RigControlKind.Extra: return Tr ("RIG_EDITOR_KIND_EXTRA");
+                case RigControlKind.Object: return Tr ("RIG_EDITOR_KIND_OBJECT");
                 default: return Tr ("RIG_EDITOR_KIND_POINT");
             }
         }

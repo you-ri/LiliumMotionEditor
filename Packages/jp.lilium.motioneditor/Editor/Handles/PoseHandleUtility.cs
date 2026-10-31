@@ -140,7 +140,7 @@ namespace Lilium
             try {
                 Vector3 position = target.position;
                 Quaternion rotation = target.rotation;
-                Vector3 moved = DoJointHandle (moveHash, owner, position, rotation);
+                Vector3 moved = DoJointHandle (moveHash, owner, position, rotation, true, true);
                 if (moved != position) {
                     move (moved);
                     GUI.changed = true;

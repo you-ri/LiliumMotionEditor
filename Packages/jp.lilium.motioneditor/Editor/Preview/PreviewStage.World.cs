@@ -153,14 +153,22 @@ namespace Lilium
                 return;
             }
 
+            // 持ち物（S91）は骨と一緒に複製させるので、編集用の体を作る前に表示モデルへ置く
+            IReadOnlyList<HeldObjectDefinition> held = FindHeldObjects (prefab);
+            List<string> heldErrors = new List<string> ();
+            List<Transform> heldPlaced = HeldObjectRig.Place (animator, held, InstantiateHeldObject, heldErrors);
+
             // 基準姿勢は prefab の初期姿勢（T ポーズ）1 つ。表示のリセットと FK の差分の基準は同じ値を使う
             CaptureRestPose ();
             editingRig = EditingRig.Create (definition_, animator, CreateGameObject, RigProbe.Describe (model));
+            editingRig.errors.AddRange (heldErrors);
+            heldObjects = HeldObjectRig.Create (editingRig, held, heldPlaced, CreateGameObject);
             editingRigSolver = new EditingRigSolver (editingRig);
             // 全身 IK（S25）。点が 1 つでも置けたときだけ
             if (editingRig.binding.points.Count > 0) {
                 fullBody = new FullBodyRig (editingRig, definition_);
             }
+            if (heldObjects != null) heldObjects.BindHands (fullBody);
             clipSampler_ = new ClipSampler (editingRig.animator);
             genericSampler_ = new ClipSampler (editingRig.animator);
             // コントロールの初期値は基準姿勢から取る（FK の差分は 0）
@@ -169,6 +177,29 @@ namespace Lilium
             foreach (string problem in editingRig.errors) {
                 Debug.LogWarning ("MotionEditor: " + prefab.name + ": " + problem);
             }
+        }
+
+        /// <summary>テストで渡す持ち物の定義（テストの人型は prefab のアセットではないので、キャラの設定を引けない）</summary>
+        internal static IReadOnlyList<HeldObjectDefinition> heldObjectsForTest;
+
+        /// <summary>このキャラの持ち物の定義（キャラの設定が無ければ空）</summary>
+        static IReadOnlyList<HeldObjectDefinition> FindHeldObjects (GameObject prefab)
+        {
+            if (heldObjectsForTest != null) return heldObjectsForTest;
+            CharacterSettings settings = SettingsLookup.Find (prefab);
+            return settings != null && settings.heldObjects != null ? settings.heldObjects : (IReadOnlyList<HeldObjectDefinition>)System.Array.Empty<HeldObjectDefinition> ();
+        }
+
+        /// <summary>持ち物の prefab を複製して、見た目以外を外す（キャラと同じく、無効にした親の下で複製して Awake を走らせない）</summary>
+        GameObject InstantiateHeldObject (GameObject prefab)
+        {
+            GameObject holder = CreateGameObject ("Held Object");
+            holder.SetActive (false);
+            GameObject instance = Object.Instantiate (prefab, holder.transform, false);
+            StripComponents (instance, StripPolicy.EditTarget);
+            instance.transform.SetParent (null, false);
+            Object.DestroyImmediate (holder);
+            return instance;
         }
 
         void CaptureRestPose ()

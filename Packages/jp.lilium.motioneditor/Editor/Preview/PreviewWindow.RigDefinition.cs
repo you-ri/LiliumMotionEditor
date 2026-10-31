@@ -39,15 +39,30 @@ namespace Lilium
             RepaintView ();
         }
 
+        /// <summary>今の世界を作ったときの持ち物の設定（直されたかを見分ける）</summary>
+        string stageHeldObjectsKey_;
+
+        /// <summary>持ち物の設定が直されたとき（リグエディタ・インスペクタ・Undo）。中身が変わっていれば作り直す（キャラの設定はほかの項目でも知らせが来る）</summary>
+        void OnHeldObjectsChanged (CharacterSettings settings)
+        {
+            if (settings == null || settings != characterSettings || rigDefinitionRebuildQueued_) return;
+            if (settings.GetHeldObjectsKey () == (stageHeldObjectsKey_ ?? "")) return;
+            rigDefinitionRebuildQueued_ = true;
+            EditorApplication.delayCall += RebuildForRigDefinition;
+        }
+
         void SubscribeRigDefinition ()
         {
             EditRigDefinition.changed -= OnRigDefinitionChanged;
             EditRigDefinition.changed += OnRigDefinitionChanged;
+            CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
+            CharacterSettings.heldObjectsChanged += OnHeldObjectsChanged;
         }
 
         void UnsubscribeRigDefinition ()
         {
             EditRigDefinition.changed -= OnRigDefinitionChanged;
+            CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
             EditorApplication.delayCall -= RebuildForRigDefinition;
             rigDefinitionRebuildQueued_ = false;
         }

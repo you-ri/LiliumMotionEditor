@@ -784,7 +784,7 @@ namespace Lilium
             if (GetMaskProblem (target) != null) return false;
             if (autoKey || !CanEditClip ()) return true;
             // 全身 IK の点は、離すと解いた全身の姿勢を打つ（S25）。点ごとのキーではなくフレームで見て、姿勢のキーがあるフレームでだけ動かす
-            if (target is BodyPointTarget) return HasPoseKeyAtCurrentFrame ();
+            if (target is BodyPointTarget || target is HeldObjectTarget) return HasPoseKeyAtCurrentFrame ();
             return System.Array.IndexOf (GetTargetKeyFrames (target), currentFrame) >= 0;
         }
 
@@ -1247,6 +1247,7 @@ namespace Lilium
                 stageRigDefinition_ = rigDefinition;
                 stage_ = new PreviewStage (prefab_, stageRigDefinition_);
             }
+            stageHeldObjectsKey_ = characterSettings != null ? characterSettings.GetHeldObjectsKey () : "";
             stage_.showFloor = showFloor_;
             stage_.grabbedBones = GrabbedDisplayBones;
             AddContext ();

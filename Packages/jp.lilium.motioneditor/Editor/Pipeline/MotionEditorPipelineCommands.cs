@@ -23,7 +23,7 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "open", prefab = prefab, clip = clip, create = create, definition = definition });
         }
 
-        [CliCommand ("motion_describe", "Describe the open character and clip (key frames, writable range, full-body IK points)", Tags = new[] { kTag })]
+        [CliCommand ("motion_describe", "Describe the open character and clip (key frames, writable range, full-body IK points, held objects)", Tags = new[] { kTag })]
         public static JToken Describe ()
         {
             return Run (new MotionEditorRequest { command = "describe" });
@@ -49,7 +49,7 @@ namespace Lilium
             return Run ("{\"command\":\"writePose\",\"dryRun\":" + (dryRun ? "true" : "false") + ",\"compact\":" + (compact ? "true" : "false") + ",\"pose\":" + pose + "}");
         }
 
-        [CliCommand ("motion_write_motion", "Write every key of a motion in one call: {\"keys\":[{\"frame\":0,\"points\":[...],\"hands\":[{\"preset\":\"Hand_Fist\",\"hand\":\"Both\",\"muscles\":[...]}]}]} (the shape motion_read_motion returns). Keys are written in frame order, body then hands. A key's \"interpolation\" (curve / linear / constant, or external when the clip has an external motion) sets the segment to the next key. Everything is checked first; nothing is written if any key is wrong. One motion_undo reverts it all. Returns per key the max residual and unreached points, then the lint report", Tags = new[] { kTag })]
+        [CliCommand ("motion_write_motion", "Write every key of a motion in one call: {\"keys\":[{\"frame\":0,\"points\":[...],\"objects\":[{\"name\":\"Sword\",\"position\":{...},\"aim\":{...},\"hold\":\"Both\"}],\"hands\":[{\"preset\":\"Hand_Fist\",\"hand\":\"Both\",\"muscles\":[...]}]}]} (the shape motion_read_motion returns). Held objects lead: the hands holding one follow its grips. Keys are written in frame order, body then hands. A key's \"interpolation\" (curve / linear / constant, or external when the clip has an external motion) sets the segment to the next key. Everything is checked first; nothing is written if any key is wrong. One motion_undo reverts it all. Returns per key the max residual and unreached points, then the lint report", Tags = new[] { kTag })]
         public static JToken WriteMotion (
             [CliArg ("file", "Path of a file with the keys JSON (absolute, or relative to the project folder)", Required = true)] string file,
             [CliArg ("replace", "Delete every key of the clip before writing (start over)")] bool replace = false,

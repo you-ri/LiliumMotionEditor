@@ -410,6 +410,18 @@ namespace Lilium
                 }
             }
 
+            // 持ち物（S91）。親の骨から見たローカルの値を焼くので、親が手なら、ゲームでも物は手に付いたままになる
+            foreach (Transform baked in rig_.bakedBones) {
+                if (baked == null) continue;
+                Transform editing = readFromDisplay ? baked : rig_.GetEditingBone (baked);
+                if (editing == null) continue;
+                // ゲームの Animator はクリップの体の向きと場所を揃えて再生するので、ルートの子の物だけ体からずれる（10-31 実測で 45〜60cm）
+                if (baked.parent == displayRoot) context.notes.Add (Tr ("HUMANOID_BAKER_HELD_OBJECT_UNDER_ROOT", baked.name));
+                string path = AnimationUtility.CalculateTransformPath (baked, displayRoot);
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, editing.localRotation));
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, editing.localPosition));
+            }
+
             // ゲームの Rig の値（代理 → ゲーム prefab のパス）。Rig を通した後の姿勢を焼くときは焼かない（S21）
             if (!bakeRigProxies && rig_.rigProxies != null && rig_.rigProxies.channels.Count > 0) {
                 context.notes.Add (Tr ("HUMANOID_BAKER_RIG_VALUES_NOT_BAKED"));

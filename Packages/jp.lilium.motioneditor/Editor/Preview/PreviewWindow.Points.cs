@@ -437,6 +437,7 @@ namespace Lilium
                 BodyPointTarget point = target as BodyPointTarget;
                 if (point != null) point.ClearPendingKeys ();
             }
+            if (stage_ != null && stage_.heldObjects != null) stage_.heldObjects.ClearPendingKeys ();
         }
 
         bool HasPendingPointKeys ()
@@ -445,7 +446,8 @@ namespace Lilium
                 BodyPointTarget point = target as BodyPointTarget;
                 if (point != null && point.hasPendingKeys) return true;
             }
-            return false;
+            // 持ち物を動かすと全身が付いてくるので、点を動かしたときと同じく姿勢全体のキーを打つ
+            return stage_ != null && stage_.heldObjects != null && stage_.heldObjects.hasPendingKeys;
         }
 
         /// <summary>

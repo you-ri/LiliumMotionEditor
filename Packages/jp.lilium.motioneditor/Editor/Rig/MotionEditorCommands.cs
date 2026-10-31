@@ -21,7 +21,7 @@ namespace Lilium
     /// - writePose: pose（PoseDocument）を pose.frame に書き、その姿勢を読み直して返す。応答の各点の residual（届かなかった差）と、
     ///   unreached（届かなかった点）・issues（そのフレームの床と muscle の範囲）も返す。dryRun ならキーを打たずに解いた姿勢だけを返す。
     ///   pose の代わりに poseFile（PoseDocument の JSON のファイル）でもよい
-    /// - writeMotion: keys（キーごとに frame・points・hands）を 1 回で書く。先に全部確かめ、誤りがあれば何も書かない。replace なら先にキーを全部消す。
+    /// - writeMotion: keys（キーごとに frame・points・contacts・objects・hands）を 1 回で書く。先に全部確かめ、誤りがあれば何も書かない。replace なら先にキーを全部消す。
     ///   応答はキーごとの届かなかった点と、lint（既定 true）なら全体の検査
     /// - readMotion: キーのあるフレームごとの姿勢（compact）と指の muscle を、writeMotion の要求と同じ形で返す
     /// - deleteKeys: frames（all なら全部）のキーを消す。無いフレームがあれば何も消さない。応答は describe と cycleRemoved
@@ -197,7 +197,7 @@ namespace Lilium
                         pose = ReadPoseFile (request.poseFile, out error);
                         if (error != null) return null;
                     }
-                    if (pose == null || (pose.points == null || pose.points.Count == 0) && (pose.contacts == null || pose.contacts.Count == 0)) {
+                    if (pose == null || !pose.hasContent) {
                         error = Tr ("POSE_DOCUMENT_EMPTY");
                         return null;
                     }
@@ -207,7 +207,7 @@ namespace Lilium
                         // 届いたかはキーを打つ前に読む。打つと点は骨が届いた所でキーになり、読み直すと差が無くなる
                         PoseDocument solved = PoseDocument.ReadCurrent (session_);
                         if (!request.dryRun) error = RecordWrite (() => session_.CommitPose ("Write Pose"));
-                        if (error == null) return WriteResult (solved, snapped, request.compact);
+                        if (error == null) return WriteResult (pose, solved, snapped, request.compact);
                     }
                     // 点を置いた後に打てなかったときも、置いた点を残さない
                     session_.Evaluate (session_.frame);
@@ -280,7 +280,7 @@ namespace Lilium
         /// そのフレームの床・muscle の範囲の検査、snap で寄せた点（S60。あるときだけ）を足す。
         /// 検査は骨を崩すので、最後にそのフレームの姿勢をクリップから作り直す（試しに解いた姿勢もここで捨てる）
         /// </summary>
-        static string WriteResult (PoseDocument solved, List<PoseSnap> snapped, bool compact)
+        static string WriteResult (PoseDocument written, PoseDocument solved, List<PoseSnap> snapped, bool compact)
         {
             PoseDocument pose = PoseDocument.ReadCurrent (session_);
             foreach (PosePoint point in pose.points) {
@@ -291,7 +291,7 @@ namespace Lilium
             session_.Evaluate (session_.frame);
             float reach = kReachTolerance * pose.humanScale;
             WriteExtra extra = new WriteExtra {
-                unreached = pose.points.Where (p => p.residual > reach).Select (p => p.name).ToList (),
+                unreached = pose.points.Where (p => p.residual > reach).Select (p => p.name).Concat (PoseDocument.FindMovedObjects (written, solved, reach)).ToList (),
                 issues = issues,
                 snapped = snapped,
             };
@@ -351,7 +351,7 @@ namespace Lilium
                 MotionEditorKey key = keys[i];
                 string problem = null;
                 Dictionary<int, float> muscles = null;
-                bool hasPoints = key.points != null && key.points.Count > 0 || key.contacts != null && key.contacts.Count > 0;
+                bool hasPoints = KeyPose (key).hasContent;
                 bool hasHands = key.hands != null && key.hands.Count > 0;
                 if (key.frame < 0) problem = Tr ("MOTION_EDITOR_COMMANDS_NEGATIVE_FRAME");
                 else if (!string.IsNullOrEmpty (key.interpolation) && !IsExternal (key.interpolation) && !KeyInterpolations.TryParse (key.interpolation, out KeyInterpolation ignored)) problem = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_INTERPOLATION", key.interpolation);
@@ -387,8 +387,9 @@ namespace Lilium
                         MotionEditorKey key = keys[i];
                         PoseDocument solved = null;
                         List<PoseSnap> snapped = new List<PoseSnap> ();
-                        if (key.points != null && key.points.Count > 0 || key.contacts != null && key.contacts.Count > 0) {
-                            problem = PoseDocument.Solve (session_, KeyPose (key), snapped);
+                        PoseDocument written = KeyPose (key);
+                        if (written.hasContent) {
+                            problem = PoseDocument.Solve (session_, written, snapped);
                             if (problem == null) {
                                 solved = PoseDocument.ReadCurrent (session_);
                                 problem = session_.CommitPose ("Write Motion");
@@ -407,7 +408,7 @@ namespace Lilium
                         if (i > 0) json.Append (',');
                         json.Append ("{\"frame\":").Append (key.frame)
                             .Append (",\"maxResidual\":").Append (PoseDocument.Number (points.Count > 0 ? points.Max (p => p.residual) : 0, 3))
-                            .Append (",\"unreached\":[").Append (string.Join (",", points.Where (p => p.residual > reach).Select (p => "\"" + p.name + "\""))).Append (']');
+                            .Append (",\"unreached\":[").Append (string.Join (",", points.Where (p => p.residual > reach).Select (p => p.name).Concat (PoseDocument.FindMovedObjects (written, solved, reach)).Select (n => "\"" + n + "\""))).Append (']');
                         AppendSnapped (json, snapped);
                         json.Append ('}');
                     }
@@ -446,7 +447,7 @@ namespace Lilium
 
         static PoseDocument KeyPose (MotionEditorKey key)
         {
-            return new PoseDocument { frame = key.frame, points = key.points ?? new List<PosePoint> (), contacts = key.contacts ?? new List<PoseContact> () };
+            return new PoseDocument { frame = key.frame, points = key.points ?? new List<PosePoint> (), contacts = key.contacts ?? new List<PoseContact> (), objects = key.objects ?? new List<PoseObject> () };
         }
 
         /// <summary>
@@ -643,6 +644,7 @@ namespace Lilium
                 }
                 json.Append (",\"points\":");
                 pose.AppendCompactPoints (json);
+                pose.AppendCompactObjects (json);
                 float[] muscles = session_.stage.ReadMuscles ();
                 // 表示モデルへ当てた分を戻す（ReadHand と同じ）
                 session_.Evaluate (frames[k]);
@@ -1157,13 +1159,28 @@ namespace Lilium
                     description.points.Add (new MotionEditorPointInfo {
                         name = id.name,
                         hasRotation = body.PointHasRotation (id),
-                        bone = point != null ? point.bone.ToString () : "",
+                        bone = point != null ? (point.heldObject != null ? point.heldObject.name : point.bone.ToString ()) : "",
                         rest = rest,
                         link = link != null ? link.id.name : "",
                         length = link != null ? Vector3.Distance (rest, PoseDocument.RestPosition (session, link.id)) : 0,
                         contact = body.IsContact (id),
                         ground = binding != null && binding.definition != null && binding.definition.ground,
                         passive = body.IsPassive (id),
+                    });
+                }
+            }
+            if (stage.heldObjects != null) {
+                Quaternion toBody = Quaternion.Inverse (PoseDocument.BodyBasis (stage.editingRig));
+                foreach (HeldObjectRig.Entry entry in stage.heldObjects.entries) {
+                    HeldObjectDefinition definition = entry.definition;
+                    description.objects.Add (new MotionEditorObjectInfo {
+                        name = entry.name,
+                        parent = definition.parentBone == HumanBodyBones.LastBone ? "" : definition.parentBone.ToString (),
+                        frame = definition.frame.ToString (),
+                        rest = toBody * stage.heldObjects.GetRestPosition (entry),
+                        restRotation = definition.restRotation,
+                        rightGrip = definition.rightGrip != null ? definition.rightGrip.position : Vector3.zero,
+                        leftGrip = definition.leftGrip != null ? definition.leftGrip.position : Vector3.zero,
                     });
                 }
             }
@@ -1349,6 +1366,8 @@ namespace Lilium
         public List<PosePoint> points = new List<PosePoint> ();
         /// <summary>接地をまとめて書く（PoseDocument の contacts と同じ。S60）</summary>
         public List<PoseContact> contacts = new List<PoseContact> ();
+        /// <summary>持ち物（PoseDocument の objects と同じ。S91）</summary>
+        public List<PoseObject> objects = new List<PoseObject> ();
         /// <summary>手の形（writeHand と同じ指定。並べた順に当て、後のものが上書きする）</summary>
         public List<MotionEditorHandShape> hands = new List<MotionEditorHandShape> ();
         /// <summary>
@@ -1400,6 +1419,26 @@ namespace Lilium
         /// <summary>今キーを打てない理由（打てるなら空）</summary>
         public string writeProblem;
         public List<MotionEditorPointInfo> points = new List<MotionEditorPointInfo> ();
+        /// <summary>持ち物（S91。無ければ空）</summary>
+        public List<MotionEditorObjectInfo> objects = new List<MotionEditorObjectInfo> ();
+    }
+
+    /// <summary>持ち物 1 つの説明（S91）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorObjectInfo
+    {
+        public string name;
+        /// <summary>物の階層の親の骨（HumanBodyBones の名前。空は Animator の GameObject）</summary>
+        public string parent;
+        /// <summary>キーの値がどの骨から見た値か（Root / Hips / Chest）。その骨が動くと物も付いて動く</summary>
+        public string frame;
+        /// <summary>キーの無いときの T ポーズでの場所（体の向き基準・メートル）</summary>
+        public Vector3 rest;
+        /// <summary>キーの無いときの向き（体の向き基準のオイラー角。度）</summary>
+        public Vector3 restRotation;
+        /// <summary>手首が来る場所（物のローカル・メートル）</summary>
+        public Vector3 rightGrip;
+        public Vector3 leftGrip;
     }
 
     [System.Serializable]

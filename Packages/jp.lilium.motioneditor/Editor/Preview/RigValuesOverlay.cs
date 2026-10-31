@@ -54,6 +54,7 @@ namespace Lilium
 
         void OnPanelGUI ()
         {
+            DrawHeldObjects ();
             DrawParentSwitches ();
             RigProxies proxies = window_ != null ? window_.rigProxies : null;
             if (proxies == null || proxies.rigs.Count == 0) {
@@ -88,6 +89,29 @@ namespace Lilium
             EditorGUIUtility.labelWidth = labelWidth;
             DrawNotes (proxies);
             EditorGUILayout.EndScrollView ();
+        }
+
+        /// <summary>
+        /// 持ち物（S91）。手ごとに、今のフレームで持っているかを押された状態で出し、押すと今のフレームで切り替える
+        /// </summary>
+        void DrawHeldObjects ()
+        {
+            if (window_ == null || window_.heldObjects.Count == 0) return;
+            using (new EditorGUI.DisabledScope (window_.heldObjectBlockReason != null)) {
+                foreach (HeldObjectRig.Entry entry in window_.heldObjects) {
+                    EditorGUILayout.LabelField (Tr ("RIG_VALUES_OVERLAY_HELD_OBJECT", entry.name), EditorStyles.boldLabel);
+                    EditorGUILayout.BeginHorizontal ();
+                    HoldToggle (entry, true, entry.values.leftHold >= 0.5f, Tr ("RIG_VALUES_OVERLAY_LEFT_HAND"));
+                    HoldToggle (entry, false, entry.values.rightHold >= 0.5f, Tr ("RIG_VALUES_OVERLAY_RIGHT_HAND"));
+                    EditorGUILayout.EndHorizontal ();
+                }
+            }
+            EditorGUILayout.Space (4);
+        }
+
+        void HoldToggle (HeldObjectRig.Entry entry, bool left, bool holding, string label)
+        {
+            if (GUILayout.Toggle (holding, label, EditorStyles.miniButton) != holding) window_.SetObjectHold (entry, left, !holding);
         }
 
         /// <summary>

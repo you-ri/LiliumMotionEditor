@@ -50,3 +50,34 @@ MonoBehaviour:
       mode: Additive
       mask: 
   parentSwitches: []
+  heldObjects:
+  - name: TwoHandedSword
+    prefab: {fileID: 919132149155446097, guid: 4d161f212dbd1c644bb3a2ae1b99d7c4, type: 3}
+    path: 
+    parentBone: 18
+    frame: 2
+    restPosition: {x: 0, y: -0.25, z: 0.3}
+    restRotation: {x: 35, y: 0, z: 0}
+    rightGrip:
+      hold: 1
+      position: {x: 0.03, y: 0.026790928, z: -0.057453334}
+      rotation: {x: 310, y: 180, z: 89.99998}
+      constraint: 
+    leftGrip:
+      hold: 1
+      position: {x: -0.03, y: -0.123209074, z: -0.057453334}
+      rotation: {x: 310, y: 180, z: 270.00003}
+      constraint: 
+    points:
+    - name: Center
+      position: {x: -2.3883978e-10, y: 0.21230493, z: -9.825e-10}
+      weight: 1
+      rotation: 1
+    - name: Pommel
+      position: {x: 0, y: -0.20409709, z: 0}
+      weight: 0
+      rotation: 0
+    - name: Tip
+      position: {x: 0, y: 1.128, z: 0}
+      weight: 0
+      rotation: 0

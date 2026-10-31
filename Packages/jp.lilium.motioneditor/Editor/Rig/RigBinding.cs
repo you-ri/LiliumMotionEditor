@@ -79,6 +79,15 @@ namespace Lilium
             /// 混ぜない点・相手が乗る骨と同じになった点は null
             /// </summary>
             public Transform blendBone;
+            /// <summary>
+            /// 持ち物の上の点か（S91e）。bone は表示モデルの物で、humanBone は LastBone。扱いはほかの点と同じで、
+            /// 解き方だけが違う（剛体 1 つなので全身 IK のソルバーへ渡さず、HeldObjectRig が物の姿勢を決める）
+            /// </summary>
+            public bool onObject;
+            /// <summary>持ち物の上の点の、物のローカルの場所（メートル）</summary>
+            public Vector3 objectOffset;
+            /// <summary>持ち物の上の点の基準の場所（物を定義の基準の場所に置いたときの、ルートから見た位置・メートル）</summary>
+            public Vector3 objectRest;
         }
 
         public readonly List<Fk> fk = new List<Fk> ();

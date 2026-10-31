@@ -59,6 +59,8 @@ namespace Lilium
         static readonly Color kLockedColor = new Color (1f, 0.2f, 0.15f, 0.85f);
         /// <summary>動かせない点（定義の passive。S89）の丸の色。状態を持たないので、状態の色と見分けられる灰色。リグエディタも同じ色で描く</summary>
         internal static readonly Color kPassiveColor = new Color (0.6f, 0.6f, 0.6f, 0.6f);
+        /// <summary>持ち物を持っている手の丸の色（S91。状態を持たない）</summary>
+        static readonly Color kHeldColor = new Color (1f, 0.75f, 0.2f, 0.85f);
         /// <summary>
         /// 丸の外に出す輪。丸との隙間（ハンドルの大きさの何倍か）と線の太さ（ピクセル）。
         /// 色で選び方を表す（丸の色は状態のためにとってある）: 選ぼうとしている（マウスが乗っている・枠に入っている）/ 選んで動かせる
@@ -99,6 +101,28 @@ namespace Lilium
         /// <summary>完全固定を切り替えたがまだキーを打っていない</summary>
         bool lockedDirty_;
         bool contextClicked_;
+
+        /// <summary>持ち物を持つ手か（S91。手首の点だけ。持っていないフレームではふつうの点）</summary>
+        public HeldObjectRig.Hand holder;
+
+        /// <summary>
+        /// 今のフレームで持ち物を持っている手か。値は物の姿勢と握りから作るので、キーを打たず読まず、固定の付け外しもできない。
+        /// つかむと物を動かす
+        /// </summary>
+        public bool held
+        {
+            get { return holder != null && holder.held; }
+        }
+
+        /// <summary>乗っている持ち物（S91e。物の上の点だけ）。扱いはほかの点と同じで、乗る骨の代わりに物へ乗る</summary>
+        public HeldObjectRig.Entry heldObject;
+
+        /// <summary>持っている手の点・物の上の点を回すと、その点を中心に物を回す</summary>
+        public void TurnHeldObject (Quaternion delta)
+        {
+            if (held) holder.owner.TurnAboutHand (holder, delta);
+            else if (heldObject != null) heldObject.TurnAbout (framePosition, delta);
+        }
 
         /// <summary>選んだときに移動 / 回転のギズモを出すか（いくつか選んでいる間は、中心の点にだけ出す。窓が描く前に入れる）</summary>
         public bool showGizmo = true;
@@ -331,6 +355,8 @@ namespace Lilium
         /// </summary>
         public void CarryWith (Vector3 pivot, Quaternion delta, Vector3 offset)
         {
+            // 持っている手は物に付いているので、骨と一緒には動かさない。物の上の点も、物は階層の親の骨に付いて動く物ではない
+            if (held || heldObject != null) return;
             Vector3 position;
             Quaternion rotation;
             GetPoint (out position, out rotation);
@@ -387,6 +413,8 @@ namespace Lilium
             foreach (PoseTarget target in targets) {
                 BodyPointTarget point = (BodyPointTarget)target;
                 if (!string.IsNullOrEmpty (point.linkName_)) byName.TryGetValue (point.linkName_, out point.link_);
+                // 持ち物の上の点は、物の中だけをつなぐ（階層の親は持つ手で、手を離しても線が残る）
+                if (point.humanBone_ == HumanBodyBones.LastBone) continue;
                 Transform root = rig.root.transform;
                 for (Transform t = point.offsetPoint_ ? point.bone_ : point.bone_.parent; t != null && t != root && point.link_ == null; t = t.parent) {
                     BodyPointTarget joint;
@@ -514,6 +542,7 @@ namespace Lilium
         {
             get {
                 if (passive_) return kPassiveColor;
+                if (held) return kHeldColor;
                 Color color = locked ? kLockedColor : pinned ? kPinnedColor : kFreeColor;
                 return weakened ? Color.Lerp (kFreeColor, color, pull) : color;
             }
@@ -588,6 +617,11 @@ namespace Lilium
         {
             // つかむ・ギズモ・Spinner・数値欄・まとめて動かす・回す、どれもここを通る。動かせない点は値を持たないので何もしない
             if (passive_) return;
+            // 持っている手は物に付いている。手を動かす操作は、物を動かす操作にする
+            if (held) {
+                holder.owner.DragHandTo (holder, position);
+                return;
+            }
             if (clamp) position = ClampToFloor (position);
             if (!pinned) body_.CapturePoint (human_);
             body_.MarkGrabbed (human_);
@@ -599,6 +633,13 @@ namespace Lilium
         void PinRotation (Quaternion rotation)
         {
             if (!hasRotation_ || passive_) return;
+            if (held) {
+                Vector3 position;
+                Quaternion current;
+                GetPoint (out position, out current);
+                TurnHeldObject (rotation * Quaternion.Inverse (current));
+                return;
+            }
             if (!pinned) body_.CapturePoint (human_);
             body_.SetPointRotationWorld (human_, rotation);
             body_.SetRotationWeight (human_, 1);
@@ -610,7 +651,7 @@ namespace Lilium
         /// </summary>
         public void ReleaseRotation ()
         {
-            if (!rotationPinned) return;
+            if (!rotationPinned || held) return;
             body_.SetRotationWeight (human_, 0);
             rotationDirty_ = true;
         }
@@ -632,7 +673,7 @@ namespace Lilium
         /// <summary>位置も向きも固定を外し、完全固定も外す（外した値は次のキーで強さ 0 を打つ。位置のキーは呼ぶ側が決める）</summary>
         void Unpin ()
         {
-            if (passive_) return;
+            if (passive_ || held) return;
             rotationDirty_ = rotationPinned;
             lockedDirty_ = body_.GetLocked (human_);
             body_.SetPositionWeight (human_, 0);
@@ -643,7 +684,7 @@ namespace Lilium
         /// <summary>完全固定を付け外しする（変わったら次のキーで打つ）</summary>
         void SetLockedFlag (bool on)
         {
-            if (passive_ || body_.GetLocked (human_) == on) return;
+            if (passive_ || held || body_.GetLocked (human_) == on) return;
             body_.SetLocked (human_, on);
             lockedDirty_ = true;
         }
@@ -721,6 +762,7 @@ namespace Lilium
         /// </summary>
         public bool SyncToBone ()
         {
+            if (held) return false;
             bool position, rotation;
             body_.SyncPointToBone (human_, out position, out rotation);
             positionDirty_ |= position;
@@ -741,8 +783,8 @@ namespace Lilium
         public override bool MirrorFrom (PoseTarget source)
         {
             BodyPointTarget other = source as BodyPointTarget;
-            // 相手は名前の左右を入れ替えた点（体の中心の点は自分）
-            if (other == null) return false;
+            // 相手は名前の左右を入れ替えた点（体の中心の点は自分）。持ち物は左右反転しないので、物の上の点もしない
+            if (other == null || held || heldObject != null) return false;
             string mirrored = MirrorNames.Swap (human_.name) ?? human_.name;
             if (other.human_.name != mirrored) return false;
             BodyPointState from = other.state;
@@ -983,6 +1025,8 @@ namespace Lilium
         /// </summary>
         public override void WriteKeys (CurveWriter writer)
         {
+            // 持っている手の値は物から作る（物のキーと手のキーの二重管理にしない）
+            if (held) return;
             if (positionPinned) WritePosition (writer);
             if (rotationPinned) WriteRotation (writer);
             if (locked) WriteLocked (writer);
@@ -993,6 +1037,10 @@ namespace Lilium
         /// </summary>
         public void WritePendingKeys (CurveWriter writer)
         {
+            if (held) {
+                ClearPendingKeys ();
+                return;
+            }
             if (positionDirty_) WritePosition (writer);
             if (rotationDirty_) WriteRotation (writer);
             if (lockedDirty_) WriteLocked (writer);
@@ -1089,7 +1137,8 @@ namespace Lilium
         {
             Vector3 position;
             Quaternion rotation;
-            if (passive_ || !body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
+            // 物の上の点は親から見た基準姿勢を持たない（物の基準の場所へ戻すのは物の FK）
+            if (passive_ || held || heldObject != null || !body_.TryGetPointLocalRestWorld (human_, resetBones, out position, out rotation)) return;
             if ((channels & TransformChannels.Position) != 0) {
                 body_.SetPointPositionWorld (human_, ClampToFloor (position));
                 positionDirty_ = true;
@@ -1107,7 +1156,7 @@ namespace Lilium
         {
             Vector3 position;
             Quaternion rotation;
-            if (passive_ || !body_.TryGetPointRestValues (human_, out position, out rotation)) return;
+            if (passive_ || held || !body_.TryGetPointRestValues (human_, out position, out rotation)) return;
             control_.localPosition = position;
             control_.localRotation = rotation;
             positionDirty_ = positionPinned;

@@ -29,6 +29,16 @@ namespace Lilium
         public List<PosePoint> points = new List<PosePoint> ();
         /// <summary>接地をまとめて書く（S60。書くときだけ使う。PoseContact）</summary>
         public List<PoseContact> contacts = new List<PoseContact> ();
+        /// <summary>持ち物（S91）の場所・向き・持っているか。読むとキャラの持ち物が全部入る。書くときは並べた物だけ変える</summary>
+        public List<PoseObject> objects = new List<PoseObject> ();
+
+        /// <summary>書く中身があるか（点・接地・持ち物のどれか）</summary>
+        public bool hasContent
+        {
+            get {
+                return points != null && points.Count > 0 || contacts != null && contacts.Count > 0 || objects != null && objects.Count > 0;
+            }
+        }
 
         public string ToJson (bool pretty = true)
         {
@@ -47,7 +57,27 @@ namespace Lilium
                 .Append (",\"humanScale\":").Append (Number (humanScale, 4))
                 .Append (",\"points\":");
             AppendCompactPoints (json);
+            AppendCompactObjects (json);
             return json.Append ('}').ToString ();
+        }
+
+        /// <summary>持ち物の並びを ",\"objects\":[...]" の形で書く（持ち物の無いキャラは何も書かない）</summary>
+        internal void AppendCompactObjects (StringBuilder json)
+        {
+            if (objects == null || objects.Count == 0) return;
+            json.Append (",\"objects\":[");
+            for (int i = 0; i < objects.Count; i++) {
+                PoseObject item = objects[i];
+                if (i > 0) json.Append (',');
+                json.Append ("{\"name\":\"").Append (item.name).Append ("\",\"position\":");
+                AppendVector (json, item.position, 3);
+                json.Append (",\"aim\":{\"forward\":");
+                AppendVector (json, item.aim.forward, 3);
+                json.Append (",\"up\":");
+                AppendVector (json, item.aim.up, 3);
+                json.Append ("},\"hold\":\"").Append (item.hold).Append ("\"}");
+            }
+            json.Append (']');
         }
 
         /// <summary>点の並びを ToCompactJson と同じ形で書く（[...]）</summary>
@@ -109,6 +139,11 @@ namespace Lilium
             foreach (PosePoint point in points) {
                 if (point != null) point.position *= ratio;
             }
+            if (objects != null) {
+                foreach (PoseObject item in objects) {
+                    if (item != null) item.position *= ratio;
+                }
+            }
             humanScale = targetHumanScale;
         }
 
@@ -155,7 +190,33 @@ namespace Lilium
                 }
                 document.points.Add (point);
             }
+            HeldObjectRig held = session.stage.heldObjects;
+            if (held != null) {
+                Transform root = session.stage.editingRoot;
+                foreach (HeldObjectRig.Entry entry in held.entries) {
+                    entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                    Quaternion local = toBody * Quaternion.Inverse (root.rotation) * rotation;
+                    document.objects.Add (new PoseObject {
+                        name = entry.name,
+                        position = toBody * root.InverseTransformPoint (position),
+                        aim = new PoseAim { forward = local * Vector3.forward, up = local * Vector3.up },
+                        hold = HoldName (entry),
+                    });
+                }
+            }
             return document;
+        }
+
+        const string kHoldBoth = "Both";
+        const string kHoldLeft = "Left";
+        const string kHoldRight = "Right";
+        const string kHoldNone = "None";
+
+        static string HoldName (HeldObjectRig.Entry entry)
+        {
+            bool left = entry.values.leftHold >= 0.5f;
+            bool right = entry.values.rightHold >= 0.5f;
+            return left && right ? kHoldBoth : left ? kHoldLeft : right ? kHoldRight : kHoldNone;
         }
 
         /// <summary>
@@ -275,6 +336,26 @@ namespace Lilium
         public float lift;
         /// <summary>点の状態（省くと Locked）</summary>
         public string state;
+    }
+
+    /// <summary>
+    /// 持ち物 1 つ（PoseDocument.objects。S91）。物が導き、手が従うので、持っている手の点は書かない（書いても物を動かす）。
+    /// 枠が胸の物は、キーの間は胸に付いて動く
+    /// </summary>
+    [System.Serializable]
+    public sealed class PoseObject
+    {
+        /// <summary>持ち物の名前（キャラの設定の持ち物の名前）</summary>
+        public string name;
+        /// <summary>物の原点の場所（体の向き基準・足元から。メートル）。0 なら今の場所のまま</summary>
+        public Vector3 position;
+        /// <summary>
+        /// 物の向き（体の向き基準）。物のローカルで restForward（省くと +Z）だった向きが forward を、restUp（省くと +Y）だった向きが up を向く。
+        /// forward の代わりに target（場所）でもよい。どちらも 0 なら今の向きのまま
+        /// </summary>
+        public PoseAim aim;
+        /// <summary>持っている手（Both / Left / Right / None）。空なら今のまま。次にこの物のキーを打つまで段差で続く</summary>
+        public string hold;
     }
 
     /// <summary>snap で寄せた点（S60）</summary>

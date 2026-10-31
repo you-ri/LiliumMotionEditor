@@ -31,6 +31,26 @@ namespace Lilium
             carried_.Remove (point);
         }
 
+        /// <summary>今つかんで動かしている点か</summary>
+        public bool IsGrabbed (BodyPointId id)
+        {
+            Point point = Find (id);
+            return point != null && grabbed_.Contains (point);
+        }
+
+        /// <summary>今つかんで動かしている点があるか</summary>
+        public bool anyGrabbed
+        {
+            get { return grabbed_.Count > 0; }
+        }
+
+        /// <summary>つかんだ点から外す（持ち物を動かした後、手を手足だけで合わせ直すとき）</summary>
+        public void UnmarkGrabbed (BodyPointId id)
+        {
+            Point point = Find (id);
+            if (point != null) grabbed_.Remove (point);
+        }
+
         /// <summary>つかんだ点と一緒に動かすのをやめる（キーを打ったとき・クリップから姿勢を当て直したとき）。足の箱（TryMoveFoot）も捨てる</summary>
         public void EndGrab ()
         {

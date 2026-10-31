@@ -188,6 +188,7 @@ namespace Lilium
             float scale = humanScale;
             EditRigDefinition.BodyPoint definition = point.definition;
             if (definition == null) return Vector3.zero;
+            if (point.onObject) return GetRestRootRotation (GetEditingBone (point.bone)) * point.objectOffset;
             return GetAnchorRestOffset (point) + BodyToRoot (definition.offset) * scale;
         }
 
@@ -245,6 +246,21 @@ namespace Lilium
             control.SetParent (parent, false);
             controls_.Add (path, control);
             return control;
+        }
+
+        readonly List<Transform> bakedBones_ = new List<Transform> ();
+
+        /// <summary>
+        /// コントロールは持たないが、Humanoid へ焼くときに Transform を焼く骨（持ち物。表示モデルの骨）
+        /// </summary>
+        public IReadOnlyList<Transform> bakedBones
+        {
+            get { return bakedBones_; }
+        }
+
+        internal void AddBakedBone (Transform displayBone)
+        {
+            bakedBones_.Add (displayBone);
         }
 
         /// <summary>

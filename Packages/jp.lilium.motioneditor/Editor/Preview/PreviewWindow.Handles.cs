@@ -81,7 +81,11 @@ namespace Lilium
                             // ギズモで回した: いくつか選んでいれば選んだ点だけをこの点のまわりで、1 つなら骨を FK で回す（その骨より先の固定している点も一緒に回る）
                             Quaternion turned = point.ConsumeRotateDelta ();
                             // ドラッグの始めの姿勢へ戻し、始めからの合計で回し直す（ねじれを積み上げない。PointTurn）
-                            if (turned != Quaternion.identity) {
+                            if (turned != Quaternion.identity && (point.held || (point.heldObject != null && !(selected && selection_.Count > 1)))) {
+                                // 持っている手・物の上の点を回すと、その点を中心に物を回す（物には FK の骨が無い）
+                                point.TurnHeldObject (turned);
+                            }
+                            else if (turned != Quaternion.identity) {
                                 Quaternion total = pointTurn_.Add (stage_, point, turned, SolveAfterManipulate);
                                 if (selected && selection_.Count > 1) RotateSelectedPoints (point, total);
                                 else RotatePointFk (targets_, point, total);

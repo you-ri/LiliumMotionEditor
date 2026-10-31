@@ -75,13 +75,24 @@ namespace Lilium
             if (body == null) return;
             // クリップから姿勢を当て直したら、足と一緒に動かしていた Pin の点も置いた場所の固定に戻す（Floor Clamp。FullBodyRig.CarryFootPins）
             body.EndGrab ();
+            HeldObjectRig held = stage_.heldObjects;
+            if (held != null) {
+                held.EndDrag ();
+                // 物の上の点も引き継ぐので、先に物をこのフレームの場所へ置く
+                held.Refresh ();
+            }
             // 前のキーフレームから状態だけ引き継いだ点は、このフレームの骨の位置に置く
             stage_.SnapCarriedPoints ();
             body.CaptureInput ();
             ICollection<UnityEngine.Transform> locked = stage_.lockedSpanPoints;
-            if (weight <= 0 || locked.Count == 0) return;
-            // Locked の点のある手足だけを IK で動かし、腰・背骨と Pin / Free の手足は骨のキーの補間（FK）のまま
-            body.SolveOnly (locked, weight, true);
+            if (held != null) held.Prepare (body, locked);
+            if (weight > 0 && locked.Count > 0) {
+                // Locked の点のある手足だけを IK で動かし、腰・背骨と Pin / Free の手足は骨のキーの補間（FK）のまま
+                body.SolveOnly (locked, weight, true);
+            }
+            else if (held == null) return;
+            // 持っている手は、キーのあるフレームでも解く（S25d の例外。物のキーだけ直しても手が外れないように）
+            if (held != null) held.Finish (body, weight);
             stage_.ShowEditingBody ();
         }
 
@@ -109,9 +120,12 @@ namespace Lilium
 
         void Solve (FullBodyRig body)
         {
-            if (weight <= 0 || !body.hasActivePoint) return;
-            body.Solve (weight);
-            stage_.ShowEditingBody ();
+            HeldObjectRig held = stage_.heldObjects;
+            if (held != null) held.Prepare (body);
+            bool solve = weight > 0 && body.hasActivePoint;
+            if (solve) body.Solve (weight);
+            if (held != null) held.Finish (body, weight);
+            if (solve || held != null) stage_.ShowEditingBody ();
         }
     }
 

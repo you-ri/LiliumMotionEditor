@@ -15,3 +15,5 @@ Copyright: Models by Quaternius
 Location: Samples~/Demo/Sample/Quaternius (models and textures; materials were made for this package)
 Source: https://quaternius.com/packs/universalbasecharacters.html
 License Text: Samples~/Demo/Sample/Quaternius/License_Standard.txt
+
+The two-handed sword in Samples~/Demo/Sample/Props was made for this package (MIT, same as the package). make_two_handed_sword.py in the same folder builds it with Blender.

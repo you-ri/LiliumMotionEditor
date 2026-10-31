@@ -174,7 +174,7 @@ namespace Lilium
 
             SolveAfterManipulate ();
             // 全身 IK の点は、離したとき（EndSpin）に姿勢ごとキーを打つ
-            if (CanEditClip () && !(target is BodyPointTarget)) {
+            if (CanEditClip () && !(target is BodyPointTarget) && !(target is HeldObjectTarget)) {
                 using (CurveWriter writer = BeginCurves ("Spin " + target.label, true)) {
                     target.WriteSpinKeys (writer, channels);
                 }
@@ -328,7 +328,7 @@ namespace Lilium
                 EditCarryingPinnedPoints (targets, edit);
                 SolveAfterManipulate ();
                 // 入れた対象も含めて、姿勢全体のキーを打つ（Spinner を離したときと同じ）
-                CommitPose (targets.Any (t => t is BodyPointTarget));
+                CommitPose (targets.Any (t => t is BodyPointTarget || t is HeldObjectTarget));
             });
         }
 

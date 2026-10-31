@@ -226,6 +226,31 @@ namespace Lilium
             return keyed;
         }
 
+        /// <summary>クリップごとの、段差で読むカーブのキー（作ったときのカーブの版。版が変わったら作り直す）</summary>
+        static readonly Dictionary<(AnimationClip, string, string), (int version, Keyframe[] keys)> stepKeys_ = new Dictionary<(AnimationClip, string, string), (int, Keyframe[])> ();
+
+        /// <summary>
+        /// カーブの、その時刻以前でいちばん近いキーの値（キーの間で補間しない。カーブが無い・最初のキーより前は fallback）。
+        /// 画面を描くたびに呼ばれるので、カーブが書き換わるまで覚えておく
+        /// </summary>
+        public static float GetStepValue (AnimationClip clip, string path, System.Type type, string property, float time, float fallback)
+        {
+            if (clip == null) return fallback;
+            int version = GetCurveVersion (clip);
+            (AnimationClip, string, string) id = (clip, path, property);
+            (int version, Keyframe[] keys) cached;
+            if (!stepKeys_.TryGetValue (id, out cached) || cached.version != version) {
+                AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve (path, type, property));
+                cached = (version, curve != null ? curve.keys : System.Array.Empty<Keyframe> ());
+                stepKeys_[id] = cached;
+            }
+            float limit = time + 0.01f / clip.frameRate;
+            for (int k = cached.keys.Length - 1; k >= 0; k--) {
+                if (cached.keys[k].time <= limit) return cached.keys[k].value;
+            }
+            return fallback;
+        }
+
         /// <summary>
         /// 編集用リグのカーブか（パスが Controls の下）
         /// </summary>

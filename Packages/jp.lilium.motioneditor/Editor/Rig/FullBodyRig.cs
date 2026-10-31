@@ -230,7 +230,7 @@ namespace Lilium
                         passive = point.definition != null && point.definition.passive,
                         radius = point.definition != null ? Mathf.Max (0, point.definition.radius) * rig.humanScale : 0,
                         restRootRotation = restRotation,
-                        restRootPosition = rig.GetRestRootPosition (bone) + offset,
+                        restRootPosition = point.onObject ? point.objectRest : rig.GetRestRootPosition (bone) + offset,
                         depth = Depth (bone, rig.root.transform),
                     });
                 }

@@ -52,6 +52,10 @@ namespace Lilium
         bool rebuildQueued_;
         int cameraDragButton_ = -1;
         bool cameraDragAlt_;
+        /// <summary>持ち物か握りを選んでいて、物を持った姿勢を見せているか</summary>
+        bool holdPreview_;
+        /// <summary>持ち物のハンドルで動かして、まだ定義へ書いていないか</summary>
+        bool heldHandleDirty_;
 
         [MenuItem ("Window/Lilium Motion Editor/Rig Editor")]
         public static RigEditorWindow Open ()
@@ -165,8 +169,123 @@ namespace Lilium
         {
             if (selectedId_ == id) return;
             selectedId_ = id;
+            UpdateHeldPreview ();
             if (selectionChanged != null) selectionChanged ();
             RepaintView ();
+        }
+
+        // ---- 持ち物（S91） ----
+
+        /// <summary>今のキャラの設定（無ければ null）</summary>
+        CharacterSettings settings
+        {
+            get { return SettingsLookup.Find (prefab_); }
+        }
+
+        /// <summary>
+        /// 持ち物か握りを選んでいる間は、物を持った姿勢を解いて見せる（書き込まない）。それ以外は T ポーズのまま物を基準の場所に置く
+        /// </summary>
+        void UpdateHeldPreview ()
+        {
+            if (stage == null || stage.heldObjects == null) return;
+            RigControlEntry selected = selectedEntry;
+            stage.editingRig.ResetBonesToRest ();
+            stage.heldObjects.ResetHolds ();
+            holdPreview_ = selected != null && selected.kind == RigControlKind.Object && stage.fullBody != null;
+            stage.heldObjects.Refresh ();
+            if (holdPreview_) {
+                stage.fullBody.CaptureInput ();
+                stage.heldObjects.Prepare (stage.fullBody);
+                stage.heldObjects.Finish (stage.fullBody, 1);
+            }
+            stage.ShowEditingBody ();
+        }
+
+        /// <summary>
+        /// 持ち物を足す。キャラの設定が無ければ作る。モデルに空の Grip_R・Grip_L があれば握りの初期値にする
+        /// </summary>
+        internal void AddHeldObject (GameObject model)
+        {
+            if (model == null || prefab_ == null) return;
+            CharacterSettings target = settings;
+            if (target == null) target = SettingsLookup.Create (prefab_, null, definition, true);
+            if (target == null) {
+                ShowNotification (new GUIContent (Tr ("RIG_EDITOR_ADD_OBJECT_NEEDS_PREFAB")), 2);
+                return;
+            }
+            string name = model.name;
+            for (int i = 2; target.heldObjects.Exists (h => h != null && h.name == name); i++) name = model.name + " " + i;
+            HeldObjectDefinition held = new HeldObjectDefinition { name = name, prefab = model };
+            held.LoadGrips (model);
+            held.LoadPoints (model);
+            Undo.RecordObject (target, "Add Held Object");
+            target.heldObjects.Add (held);
+            SaveHeldObjects (target);
+            selectedId_ = "Object/" + name;
+            Rebuild ();
+        }
+
+        internal void RemoveHeldObject (HeldObjectDefinition held)
+        {
+            CharacterSettings target = settings;
+            if (target == null || !target.heldObjects.Contains (held)) return;
+            Undo.RecordObject (target, "Remove Held Object");
+            target.heldObjects.Remove (held);
+            SaveHeldObjects (target);
+            selectedId_ = null;
+            Rebuild ();
+        }
+
+        static void SaveHeldObjects (CharacterSettings target)
+        {
+            EditorUtility.SetDirty (target);
+            AssetDatabase.SaveAssetIfDirty (target);
+            CharacterSettings.NotifyHeldObjectsChanged (target);
+        }
+
+        /// <summary>
+        /// 選んでいる持ち物か握りのハンドル。動かす間は定義へ書かず、物を持った姿勢で見せる。離したときに Undo つきで定義へ書く
+        /// （ドラッグの途中で定義を書くと、作り直しが走ってつかんだ物を失う）
+        /// </summary>
+        void DoHeldHandles ()
+        {
+            RigControlEntry selected = selectedEntry;
+            if (selected == null || selected.kind != RigControlKind.Object || !holdPreview_) return;
+            HeldObjectRig rig = stage.heldObjects;
+            Vector3 position;
+            Quaternion rotation;
+            if (selected.hand != null) rig.GetGrip (selected.hand, out position, out rotation);
+            else selected.held.GetWorldPose (out position, out rotation);
+            if (selected.heldPoint != null) position = rig.GetPointWorld (selected.heldPoint);
+            Handles.color = KindColor (RigControlKind.Object);
+            EditorGUI.BeginChangeCheck ();
+            // 物の上の点は場所だけを持つ（向きは物の向き）
+            if (selected.heldPoint != null) position = Handles.PositionHandle (position, rotation);
+            else Handles.TransformHandle (ref position, ref rotation);
+            if (EditorGUI.EndChangeCheck ()) {
+                if (selected.heldPoint != null) rig.SetPointWorld (selected.heldPoint, position);
+                else if (selected.hand != null) rig.SetGrip (selected.hand, position, rotation);
+                else selected.held.DragTo (position, rotation);
+                heldHandleDirty_ = true;
+                stage.editingRig.ResetBonesToRest ();
+                stage.heldObjects.Refresh ();
+                stage.fullBody.CaptureInput ();
+                rig.Prepare (stage.fullBody);
+                rig.Finish (stage.fullBody, 1);
+                stage.ShowEditingBody ();
+                RepaintView ();
+            }
+            if (heldHandleDirty_ && GUIUtility.hotControl == 0) {
+                heldHandleDirty_ = false;
+                CharacterSettings target = settings;
+                if (target == null) return;
+                Undo.RecordObject (target, "Move Held Object");
+                if (selected.heldPoint != null) rig.StorePoint (selected.heldPoint);
+                else if (selected.hand != null) rig.StoreGrip (selected.hand);
+                else rig.StoreRest (selected.held);
+                SaveHeldObjects (target);
+                QueueRebuild ();
+            }
         }
 
         RigControlEntry Find (string id)
@@ -185,6 +304,8 @@ namespace Lilium
             wantsMouseMove = true;
             EditRigDefinition.changed -= OnDefinitionChanged;
             EditRigDefinition.changed += OnDefinitionChanged;
+            CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
+            CharacterSettings.heldObjectsChanged += OnHeldObjectsChanged;
             ProjectSettings.changed -= QueueRebuild;
             ProjectSettings.changed += QueueRebuild;
             AssemblyReloadEvents.beforeAssemblyReload -= DisposeSession;
@@ -197,6 +318,7 @@ namespace Lilium
         void OnDisable ()
         {
             EditRigDefinition.changed -= OnDefinitionChanged;
+            CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
             ProjectSettings.changed -= QueueRebuild;
             AssemblyReloadEvents.beforeAssemblyReload -= DisposeSession;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
@@ -219,6 +341,14 @@ namespace Lilium
         {
             if (changed == definition) QueueRebuild ();
         }
+
+        /// <summary>持ち物の設定が直された（インスペクタ・Undo）。キャラの設定はほかの項目でも知らせが来るので、中身が変わったときだけ作り直す</summary>
+        void OnHeldObjectsChanged (CharacterSettings changed)
+        {
+            if (changed != null && changed == settings && changed.GetHeldObjectsKey () != (sessionHeldObjectsKey_ ?? "")) QueueRebuild ();
+        }
+
+        string sessionHeldObjectsKey_;
 
         /// <summary>
         /// 作り直しを 1 回にまとめる（インスペクタで値を変えると OnValidate が続けて来る）
@@ -245,6 +375,7 @@ namespace Lilium
             errorCount_ = 0;
             users_ = RigDefinitionAssets.FindUsers (definition);
             if (prefab_ != null && !EditorApplication.isPlayingOrWillChangePlaymode) {
+                sessionHeldObjectsKey_ = settings != null ? settings.GetHeldObjectsKey () : "";
                 session_ = new PoseSession (prefab_, definition, true);
                 if (session_.error != null) {
                     problems_.Add (session_.error);
@@ -253,6 +384,11 @@ namespace Lilium
                 EditingRig rig = stage.editingRig;
                 if (rig != null) {
                     entries_ = RigControlList.Build (rig, definition);
+                    if (stage.heldObjects != null) {
+                        stage.heldObjects.Refresh ();
+                        RigControlList.AddHeldObjects (entries_, stage.heldObjects, settings);
+                        UpdateHeldPreview ();
+                    }
                     int errors;
                     List<string> found = RigControlList.CollectProblems (rig, out errors);
                     problems_.InsertRange (errorCount_, found.GetRange (0, errors));
@@ -380,6 +516,7 @@ namespace Lilium
         {
             if (stage == null || viewport_ == null) return;
             EditorHost.current = this;
+            DoHeldHandles ();
 
             Event ev = Event.current;
             Rect rect = ViewportRect ();
@@ -519,6 +656,8 @@ namespace Lilium
             Color color = Handles.color;
 
             foreach (RigControlEntry entry in entries_) {
+                // 物を持った姿勢を見せている間は、T ポーズの骨の線と点を出さない（体とずれる）
+                if (holdPreview_) break;
                 bool selected = entry.id == selectedId_;
                 bool hover = entry.id == hoverId_;
                 Handles.color = selected ? BodyPointTarget.kRingSelectedColor
@@ -534,7 +673,12 @@ namespace Lilium
                 }
             }
             foreach (RigControlEntry entry in entries_) {
-                if (entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
+                if (entry.kind == RigControlKind.Object && entry.position.HasValue && !holdPreview_) {
+                    Handles.color = KindColor (entry.kind);
+                    Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale);
+                    continue;
+                }
+                if (holdPreview_ || entry.kind != RigControlKind.Point || !entry.position.HasValue) continue;
                 Handles.color = entry.enabled ? KindColor (entry.kind) : new Color (0.55f, 0.55f, 0.55f, 0.6f);
                 Handles.DrawSolidDisc (entry.position.Value, facing, size * kPointScale * entry.scale);
                 // 床との当たりの球（定義の radius）。基準姿勢で地面に着いているのが見えるよう、3 方向の輪で描く
@@ -545,8 +689,10 @@ namespace Lilium
             }
 
             // 指している物・選んでいる物は、最後に重ねて名前を出す（点は輪も。骨の線は上で太く描いた）
-            DrawHighlight (Find (hoverId_), facing, size, new Color (1, 1, 1, 0.8f));
-            DrawHighlight (selectedEntry, facing, size, new Color (1, 0.85f, 0.2f, 1));
+            if (!holdPreview_) {
+                DrawHighlight (Find (hoverId_), facing, size, new Color (1, 1, 1, 0.8f));
+                DrawHighlight (selectedEntry, facing, size, new Color (1, 0.85f, 0.2f, 1));
+            }
 
             Handles.color = color;
             Handles.zTest = zTest;
@@ -571,6 +717,7 @@ namespace Lilium
             switch (kind) {
                 case RigControlKind.Fk: return new Color (0.4f, 0.8f, 1f);
                 case RigControlKind.Extra: return new Color (0.8f, 0.55f, 1f);
+                case RigControlKind.Object: return new Color (1f, 0.75f, 0.2f);
                 default: return new Color (0.35f, 1f, 0.5f);
             }
         }

@@ -42,7 +42,7 @@ https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motion
 
 Select this package in the Package Manager and import the `Demo` sample.
 
-The demo models are the male and female characters from Quaternius' [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) (CC0).
+The demo models are the male and female characters from Quaternius' [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) (CC0). `Demo/Sample/Props` has a two-handed sword made for this package (MIT). To hold it, drop `TwoHandedSword.fbx` on **Add object** in the Rig Editor: dragging the sword then brings both hands and the body along.
 
 `Demo/Poses` contains eight hand poses (Fist, Open, Point, and more). To show them in the PoseBank, add `{prefabFolder}/Poses` and the imported `Demo/Poses` folder (e.g. `Assets/Samples/Lilium Motion Editor/<version>/Demo/Poses`) to PoseBank Folders in `Project Settings > Lilium Motion Editor`. They are Humanoid finger values, so they can be pasted onto any Humanoid character with finger bones.
 

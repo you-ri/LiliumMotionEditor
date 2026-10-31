@@ -326,7 +326,7 @@ namespace Lilium
         /// - 解く骨ごとに、骨の付け根の点（手・足首・頭・腰は向きも持つ）。つま先の骨（足の点で足りる）と肩（上腕の点で足りる）には置かない
         /// - 背骨（Spine・Chest・UpperChest）は骨ごとに置かず、胸の点 1 つにまとめる。キャラによって背骨の数が違っても、同じ名前の点が同じ場所（腰から頭の付け根への kChestHeight 倍）に
         ///   できるので、点の値をキャラの間で使い回せる。点は UpperChest に乗り、無いキャラでは親の骨（Chest・Spine）へ乗る。間の背骨は硬さの分だけ付いてくる（肩と同じ）
-        /// - 胸の点の下に、お腹の点（Cascadeur の stomach）。腰と胸の点の真ん中（kStomachHeight）に置き、Spine に乗る。お腹と胸を別々に曲げられる
+        /// - 胸の点の下に、お腹の点。腰と胸の点の真ん中（kStomachHeight）に置き、Spine に乗る。お腹と胸を別々に曲げられる
         /// - 腰・胸・頭の前の点と頭のてっぺんの点。顔の前の点は目の高さ。胸の前の点も胸の点と同じ骨に乗る。
         ///   重さは 0（骨を回して向けるだけ。S28）。膝・肘の Pole は置かない（膝・肘の点で足りる。S56）
         /// - 足の踵・足裏の中心・小指側・つま先の先と、手の人差し指と小指の付け根。踵と足裏の中心は足に乗り、足首とつなぐ。
@@ -409,7 +409,7 @@ namespace Lilium
         /// </summary>
         public const float kChestHeight = 0.5f;
 
-        /// <summary>背骨の下側（お腹）の点の名前（Cascadeur の stomach。10-19 ユーザー指示）</summary>
+        /// <summary>背骨の下側（お腹）の点の名前（10-19 ユーザー指示）</summary>
         public const string kStomachPoint = "Stomach";
         /// <summary>
         /// お腹の点の高さ（腰から頭の付け根までの何倍の所か）。腰と胸の点の真ん中。
@@ -582,6 +582,14 @@ namespace Lilium
         public static string Extra (string name)
         {
             return kExtra + "/" + name;
+        }
+
+        /// <summary>持ち物（S91）</summary>
+        public const string kObject = kRoot + "/Object";
+
+        public static string Object (string name)
+        {
+            return kObject + "/" + name;
         }
 
         /// <summary>
