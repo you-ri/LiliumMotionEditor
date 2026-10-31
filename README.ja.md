@@ -42,7 +42,9 @@ https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motion
 
 Package Manager でこのパッケージを選び、Samples の `Demo` をインポートします。
 
-デモのモデルは Quaternius の [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html)（CC0）の男女 2 体です。
+デモのモデルは Quaternius の [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html)（CC0）の男女 2 体です。`Demo/Sample/Props` には、このパッケージ用に作った両手剣（MIT）があります。持たせるには、リグエディタの **持ち物を足す** に `TwoHandedSword.fbx` を入れます。剣をドラッグすると、両手と体がついてきます。
+
+![Motion Editor の窓で、フルボディ IK で両手剣のポーズを付けているところ](Docs/Images/two-handed-sword.gif)
 
 `Demo/Poses` には手の形の姿勢（Fist・Open・Point など 8 つ）が入っています。PoseBank に出すには、`Project Settings > Lilium Motion Editor` の PoseBank Folders に、`{prefabFolder}/Poses` と、インポートした `Demo/Poses` のフォルダ（例 `Assets/Samples/Lilium Motion Editor/<version>/Demo/Poses`）を足します。Humanoid の指の値なので、指の骨のある Humanoid のキャラクターならそのまま貼れます。
 
