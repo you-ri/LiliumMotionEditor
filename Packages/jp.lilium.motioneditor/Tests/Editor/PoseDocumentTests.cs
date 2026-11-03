@@ -135,7 +135,8 @@ namespace Lilium
                 Assert.IsNull (PoseDocument.Write (session, previous));
                 PoseDocument again = Read (session, 10);
                 float step = again.points.Max (p => Vector3.Distance (p.position, previous.Find (p.name).position));
-                Assert.LessOrEqual (step, i == 0 ? 2e-3f : lastStep, i + " 回目の書き直しで動いた量");
+                // 浮動小数の誤差まで縮んだら、それ以上は縮まない
+                Assert.LessOrEqual (step, i == 0 ? 2e-3f : Mathf.Max (lastStep, 1e-5f), i + " 回目の書き直しで動いた量");
                 AssertSamePoints (posed, again, "読む → 書く → 読む", 1, 3e-3f, 1);
                 lastStep = step;
                 previous = again;

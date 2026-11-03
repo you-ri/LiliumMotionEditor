@@ -147,9 +147,11 @@ namespace Lilium
             }
             holder.SetActive (true);
 
-            animator = model.GetComponentsInChildren<Animator> (true).FirstOrDefault (a => a.avatar != null && a.avatar.isHuman);
+            // Humanoid でないキャラ（S93）は、人型の FK が無効になるだけで追加コントロールで動かせる
+            Animator[] animators = model.GetComponentsInChildren<Animator> (true);
+            animator = animators.FirstOrDefault (a => a.avatar != null && a.avatar.isHuman) ?? animators.FirstOrDefault ();
             if (animator == null) {
-                error = Tr ("PREVIEW_STAGE_NO_HUMANOID_ANIMATOR", prefab.name);
+                error = Tr ("PREVIEW_STAGE_NO_ANIMATOR", prefab.name);
                 return;
             }
 

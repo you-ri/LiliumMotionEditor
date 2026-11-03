@@ -924,6 +924,34 @@ namespace Lilium
         }
 
         [Test]
+        public void LiftingHeavyChest_CarriesTheHipsWithoutTurningTheChest ([Values (0f, 0.03f)] float front)
+        {
+            // 腰と首を Pin にして、重い胸の点を 5cm 持ち上げる。胸の点は乗る骨の付け根より下にある（front なら前下）。胸の点は届き、
+            // 背骨は伸びきっているので腰が引かれて上がり、胸の骨はほとんど回らない（11-03 実測で、デモの定義で胸が 60° 回り、頭が 30cm 動いた。
+            // 点を鎖の向きへそろえる長さに数え、胸ごと回して点を振り上げれば届くとみなしていた）
+            definition_.bodyPoints.First (p => p.name == EditRigDefinition.kChestPoint).offset = new Vector3 (0, 0, front);
+            Setup s = Create ();
+            Pin (s, HumanBodyBones.Hips, Vector3.zero);
+            Pin (s, HumanBodyBones.Neck, Vector3.zero);
+            BodyPointId chest = new BodyPointId (EditRigDefinition.kChestPoint);
+            s.body.CapturePoint (chest);
+            s.body.SetPositionWeight (chest, 1);
+            Solve (s);
+            Transform hips = Bone (s, HumanBodyBones.Hips);
+            Transform chestBone = Bone (s, HumanBodyBones.UpperChest) != null ? Bone (s, HumanBodyBones.UpperChest) : Bone (s, HumanBodyBones.Chest);
+            Vector3 hipsRest = hips.position, chestRest;
+            Quaternion chestTurn = chestBone.rotation;
+            s.body.TryGetBonePointWorld (chest, out chestRest);
+            s.body.MarkGrabbed (chest);
+            s.body.SetPointPositionWorld (chest, chestRest + s.up * 0.05f);
+            Solve (s);
+            Assert.LessOrEqual (s.body.GetResidual (chest), kReach, "胸の点は届く");
+            Assert.Greater (hips.position.y - hipsRest.y, 0.03f, "Pin の腰は引かれて上がる");
+            Assert.LessOrEqual (Quaternion.Angle (chestTurn, chestBone.rotation), 5f, "胸の骨はほとんど回らない");
+            s.body.EndGrab ();
+        }
+
+        [Test]
         public void LiftingHeavyNeck_CarriesThePinsOnTheWayToTheRootFirst ()
         {
             // 腰と左手を Pin にして、重い首を 10cm 持ち上げる。首から根へたどる道の上にある腰の Pin が、首が届かなかった分だけ運ばれ、首は届く。
@@ -1167,7 +1195,7 @@ namespace Lilium
             Assert.LessOrEqual (Quaternion.Angle (headRotation, head.rotation), 0.05f, "頭は回らない");
         }
 
-        // ---- 動かせない点（passive。S89）: 軽い点をつかんでいる間だけ、Pin の点と同じ壁になる ----
+        // ---- 動かせない点（passive。S89）: 付け根から離れていれば、骨を軸まわりにだけ回す。力は止めない ----
 
         /// <summary>左右の肩（鎖骨）の付け根（offset だけずらした所。体の向き・humanScale に対する割合）に、動かせない点を足す。Create の前に呼ぶ</summary>
         void AddPassiveShoulders (Vector3 offset = default)
@@ -1178,29 +1206,61 @@ namespace Lilium
         }
 
         [Test]
-        public void PassiveShoulder_StopsLightElbowAtTheShoulder ([Values (false, true)] bool passive)
+        public void PassiveShoulderAtRoot_ChangesNothing_ForLightPoints ()
         {
-            // 胴・腕を軽く（0）し、肘をつかんで前へ動かす。鎖骨の付け根に動かせない点があれば、そこが壁になり、
-            // 鎖骨から先だけが動く（胴・首・頭・反対の腕は動かない）。無ければ、軽い胴が引かれて回る。
-            // 手も軽くする（重い手は Free でも壁になり、肘は手と肩の間で少ししか動けない）
+            // 付け根に置いた動かせない点は骨を縛らず、力も止めない。胴・腕を軽く（0）して肘をつかんで前へ動かすと、動かせない点の無い定義と同じ姿勢
+            // （11-02 ユーザー指示「壁をなくす」。前は壁になり、胴が動かなかった）
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
-            if (passive) AddPassiveShoulders ();
+            Setup plain = Create (shoulders: true);
+            PullLightElbow (plain);
+            Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
+            plain.body.EndGrab ();
+
+            definition_ = CreateDefinition ();
+            SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
+            AddPassiveShoulders ();
             Assert.IsEmpty (definition_.Validate ());
             Setup s = Create (shoulders: true);
+            PullLightElbow (s);
+            AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
+            s.body.EndGrab ();
+        }
+
+        static void PullLightElbow (Setup s)
+        {
             Solve (s);
-            Transform[] bones = s.rig.editingBones.ToArray ();
-            Pose[] rest = Poses (bones);
-            Transform elbow = Bone (s, HumanBodyBones.LeftLowerArm);
-            Transform chest = Bone (s, HumanBodyBones.Chest);
-            Vector3 elbowRest = elbow.position;
-            Quaternion chestRest = chest.rotation;
-            Dictionary<Transform, float> lengths = Lengths (s);
             s.body.MarkGrabbed (HumanBodyBones.LeftLowerArm);
             Pin (s, HumanBodyBones.LeftLowerArm, s.forward * 0.1f + s.up * 0.05f);
             Solve (s);
-            Assert.Greater (Vector3.Distance (elbowRest, elbow.position), 0.02f, "肘は動く");
-            if (passive) AssertUnchanged (bones, rest, 1e-4f, 0.01f, "左の鎖骨から先のほか", LeftArm (s));
-            else Assert.Greater (Quaternion.Angle (chestRest, chest.rotation), 0.5f, "動かせない点が無ければ、胸は引かれて回る");
+        }
+
+        [Test]
+        public void OffsetPassiveShoulder_PullingShoulderAcrossTheAxis_TurnsTheChest ()
+        {
+            // 動かせない点を鎖骨の付け根から前へずらして置き、軽い肩を前へ動かす。肩は軸の向きへは動けないので、軽い胸が回って肩が前へ出る。
+            // 点は胸から見て動かない（11-02 ユーザー指示「肩の元にある passive な点はローカル位置で動いていけない」「やっぱり体を回転させてもおk」「壁をなくす」）。
+            // 両腕も軽くする（重い点は Free でも留まるので、反対の腕の点が胸を止め、T ポーズで伸びきった腕の手は肩を止める）
+            SetLight ("LeftHand", "RightHand", "LeftLowerArm", "RightLowerArm", "LeftUpperArm", "RightUpperArm", "Chest", "Stomach");
+            AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
+            Setup s = Create (shoulders: true);
+            Solve (s);
+            BodyPointId id = new BodyPointId ("LeftShoulder");
+            Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
+            Transform upperArm = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform chest = shoulder.parent;
+            Vector3 point;
+            s.body.TryGetBonePointWorld (id, out point);
+            Vector3 onChest = chest.InverseTransformPoint (point);
+            Vector3 armRest = upperArm.position;
+            Quaternion chestRest = chest.rotation;
+            Dictionary<Transform, float> lengths = Lengths (s);
+            s.body.MarkGrabbed (HumanBodyBones.LeftUpperArm);
+            Pin (s, HumanBodyBones.LeftUpperArm, s.forward * 0.05f);
+            Solve (s);
+            s.body.TryGetBonePointWorld (id, out point);
+            Assert.Greater (Vector3.Dot (upperArm.position - armRest, s.forward), 0.03f, "肩は前へ出る");
+            Assert.Greater (Quaternion.Angle (chestRest, chest.rotation), 1f, "胸が回る");
+            Assert.LessOrEqual (Vector3.Distance (onChest, chest.InverseTransformPoint (point)), 1e-3f, "動かせない点は胸から見て動かない");
             AssertLengths (lengths, 1e-4f, "骨の長さ");
             s.body.EndGrab ();
         }
@@ -1208,9 +1268,9 @@ namespace Lilium
         [Test]
         public void OffsetPassiveShoulder_TurnsShoulderAboutTheAxis ()
         {
-            // 動かせない点を鎖骨の付け根から前へずらして置き、軽い肘を上へ動かす。鎖骨は付け根と点を結ぶ軸（体の前後）まわりに回って肩が上がり、
+            // 動かせない点を鎖骨の付け根から前へずらして置き、胴を重いままにして軽い肘を上へ動かす。鎖骨は付け根と点を結ぶ軸（体の前後）まわりに回って肩が上がり、
             // 付け根と点は動かず、胸から先（胴・首・頭・反対の腕）も動かない（10-28 ユーザー指示「やっぱり回したい」）
-            SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
+            SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
             Setup s = Create (shoulders: true);
             Solve (s);
@@ -1242,6 +1302,53 @@ namespace Lilium
             AssertUnchanged (bones, rest, 1e-4f, 0.01f, "左の鎖骨から先のほか", LeftArm (s));
             AssertLengths (lengths, 1e-4f, "骨の長さ");
             s.body.EndGrab ();
+        }
+
+        [Test]
+        public void PullingShoulderOutOfReach_GoesToTheNearestReachablePlace ([Values (0.1f, 0.35f)] float handIn)
+        {
+            // 胴を重いままにして重い手を Pin にし、軽い肩（上腕の付け根）の点を動かす。肩は付け根と動かせない点を結ぶ軸まわりの円の上で、手から腕の長さ以内にしか居られない。
+            // 届かない目標でも、その中で目標に一番近い所へ行き、動く前より目標から離れず、動かせない点は胸から見て動かない
+            // （11-02 ユーザー報告。肘を置く基準を鎖骨の先にしていたときは、引いた分が肘と一緒に打ち消され、肩が目標と逆へ滑ることがあった）
+            SetLight ("LeftLowerArm", "LeftUpperArm");
+            AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
+            Setup s = Create (shoulders: true);
+            Solve (s);
+            BodyPointId id = new BodyPointId ("LeftShoulder");
+            Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
+            Transform upperArm = Bone (s, HumanBodyBones.LeftUpperArm);
+            Transform lowerArm = Bone (s, HumanBodyBones.LeftLowerArm);
+            Transform hand = Bone (s, HumanBodyBones.LeftHand);
+            // 手を肩の方へ寄せて、腕を曲げたキーにする
+            Pin (s, HumanBodyBones.LeftHand, (upperArm.position - hand.position).normalized * handIn + s.forward * 0.05f, true);
+            Solve (s);
+            Vector3 start = upperArm.position, root = shoulder.position, handAt = hand.position;
+            Vector3 point;
+            s.body.TryGetBonePointWorld (id, out point);
+            Vector3 onChest = shoulder.parent.InverseTransformPoint (point);
+            Vector3 axis = (point - root).normalized;
+            float arm = Vector3.Distance (start, lowerArm.position) + Vector3.Distance (lowerArm.position, handAt);
+            Vector3 side = Vector3.Cross (s.up, s.forward);
+            foreach (Vector3 direction in new[] { s.forward, -s.forward, s.up, -s.up, side, -side }) {
+                Vector3 goal = start + direction * 0.05f;
+                float nearest = float.MaxValue;
+                for (int a = 0; a < 360; a++) {
+                    Vector3 place = root + Quaternion.AngleAxis (a, axis) * (start - root);
+                    if (Vector3.Distance (place, handAt) <= arm) nearest = Mathf.Min (nearest, Vector3.Distance (place, goal));
+                }
+                s.body.MarkGrabbed (HumanBodyBones.LeftUpperArm);
+                Pin (s, HumanBodyBones.LeftUpperArm, direction * 0.05f);
+                Solve (s);
+                float reached = Vector3.Distance (upperArm.position, goal);
+                s.body.TryGetBonePointWorld (id, out point);
+                Assert.LessOrEqual (reached, 0.05f + 1e-3f, "動く前より目標から離れない " + direction);
+                Assert.LessOrEqual (reached, nearest + 5e-3f, "届く中で目標に一番近い所 " + direction);
+                Assert.LessOrEqual (Vector3.Distance (hand.position, handAt), 1e-3f, "手は動かない");
+                Assert.LessOrEqual (Vector3.Distance (onChest, shoulder.parent.InverseTransformPoint (point)), 1e-3f, "動かせない点は胸から見て動かない");
+                s.body.EndGrab ();
+                s.body.SetPointPositionWorld (HumanBodyBones.LeftUpperArm, start);
+                Solve (s);
+            }
         }
 
         [Test]
@@ -1318,10 +1425,10 @@ namespace Lilium
         }
 
         [Test]
-        public void PassiveShoulder_IsNotUsed_WhenTheTorsoSideIsGrabbed ([Values (false, true)] bool withHand)
+        public void PassiveShoulderAtRoot_ChangesNothing_WhenTheTorsoIsGrabbed ([Values (false, true)] bool withHand)
         {
-            // 胸（肩の根の側）をつかんで動かすときは、動かせない点を壁にしない（力は肩の先から伝わってこない）。重い手も一緒につかんでも同じ（10-28 ユーザー報告
-            // 「passiveとふつうの点とを複数選択して移動するとpassiveの点が動く」。軽い胸だけをつかむと、両肩の点が壁になって胸が動かなかった）。
+            // 胸（肩の根の側）をつかんで動かすとき、重い手も一緒につかんでも、動かせない点の無い定義と同じ姿勢（10-28 ユーザー報告
+            // 「passiveとふつうの点とを複数選択して移動するとpassiveの点が動く」。軽い胸だけをつかむと、両肩の点が胸を止めていた）。
             // 点は付け根に置く（付け根から離すと軸まわりにだけ回るので、無い定義とは姿勢が違う）
             SetLight ("Chest", "Stomach");
             Setup plain = Create (shoulders: true);
@@ -1615,6 +1722,139 @@ namespace Lilium
             data.iterations = 20;
             data.rootPin = 0.6f;
             return data;
+        }
+
+        /// <summary>
+        /// 根元と先端を留めて縮めた鎖（S96）。7 本の骨が上へ 0.2 ずつ（根元の骨だけ 0.15）並び、関節ごとに曲がり ±60°・ひねり ±5°（遊び 5°）。
+        /// 根元をその場に、先端の骨の付け根を 0.3 下（と少し横）へ、どちらも向きごと留める。返すのは、先端の点の残りと、根元から 2 つめの関節の曲がり（度）
+        /// </summary>
+        static (float residual, float rootBend) SolveCompressedChain (bool ownWeight)
+        {
+            const int n = 7;
+            FullBodyIkData data = FullBodyIkData.Create (n, 2, Allocator.Temp);
+            try {
+                // 制限の枠: x がひねり（骨の向きの上）、y・z が振り（FullBodyRig.TryGetLimitFrame と同じ並び）
+                quaternion frame = quaternion.LookRotation (new float3 (1, 0, 0), new float3 (0, 0, 1));
+                float3 range = math.radians (new float3 (5, 60, 60));
+                for (int i = 0; i < n; i++) {
+                    data.bones[i] = new FullBodyIkBone {
+                        parent = i - 1, stiffness = 0.3f, ownWeight = ownWeight ? 1 : 0,
+                        limit = i > 0 ? 1 : 0, limitFrame = frame, limitRest = quaternion.identity,
+                        limitMin = -range, limitMax = range, limitSlack = math.radians (new float3 (5, 5, 5)),
+                    };
+                    data.positions[i] = new float3 (0, i == 0 ? 0 : 0.15f + (i - 1) * 0.2f, 0);
+                    data.rotations[i] = quaternion.identity;
+                }
+                data.iterations = 48;
+                data.rootPin = 0.6f;
+                data.effectors[0] = new FullBodyIkEffector { bone = 0, position = float3.zero, rotation = quaternion.identity, positionWeight = 1, rotationWeight = 1 };
+                data.effectors[1] = new FullBodyIkEffector { bone = n - 1, position = new float3 (0.02f, 0.85f, 0), rotation = quaternion.identity, positionWeight = 1, rotationWeight = 1 };
+                data.effectorCount = 2;
+                FullBodyIk.Solve (ref data);
+                quaternion relative = math.mul (math.inverse (data.rotations[1]), data.rotations[2]);
+                return (data.residuals[1], math.degrees (2 * math.acos (math.min (1, math.abs (relative.value.w)))));
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        [Test]
+        public void Solver_OwnWeight_SpreadsTheBendAlongAChain ()
+        {
+            // 先の骨を重さに足すと根元が回りにくく、曲がりが先端の側に集まって角度制限で止まり、先端が届かない
+            (float residual, float rootBend) summed = SolveCompressedChain (false);
+            (float residual, float rootBend) own = SolveCompressedChain (true);
+            Assert.Greater (summed.residual, 0.03f, "先の骨を足すと届かない（確かめ）: " + summed.residual);
+            Assert.Less (own.residual, 0.03f, "自分の骨の分だけなら届く: " + own.residual);
+            Assert.Greater (own.rootBend, summed.rootBend + 10, "根元の側も曲がる: " + own.rootBend + " / " + summed.rootBend);
+        }
+
+        /// <summary>
+        /// 根を留めない鎖（S97）。7 本の骨が上へ 0.2 ずつ、重さは骨ごとに自分の分だけ。grabEnd なら先端の骨、でなければ根の骨の付け根を
+        /// 元の場所から move だけ動かして向きごと留める。lockOther なら反対の端の骨も、元の場所と向きに留める。返すのは骨の付け根の場所。
+        /// rotationWeight は両端の点の向きの強さ（0 なら位置だけ留める）。residuals があれば、点ごとの残り（動かした点・反対の端の点）を入れる
+        /// </summary>
+        static float3[] SolveUnpinnedChain (bool grabEnd, float3 move, bool lockOther, float rotationWeight = 1, float[] residuals = null)
+        {
+            const int n = 7;
+            FullBodyIkData data = FullBodyIkData.Create (n, 2, Allocator.Temp);
+            try {
+                for (int i = 0; i < n; i++) {
+                    data.bones[i] = new FullBodyIkBone { parent = i - 1, stiffness = 0.2f, ownWeight = 1 };
+                    data.positions[i] = new float3 (0, i * 0.2f, 0);
+                    data.rotations[i] = quaternion.identity;
+                }
+                data.iterations = 48;
+                data.rootPin = 0;
+                int grabbed = grabEnd ? n - 1 : 0;
+                int other = grabEnd ? 0 : n - 1;
+                data.effectors[0] = new FullBodyIkEffector { bone = grabbed, position = data.positions[grabbed] + move, rotation = quaternion.identity, positionWeight = 1, rotationWeight = rotationWeight };
+                data.effectors[1] = new FullBodyIkEffector { bone = other, position = data.positions[other], rotation = quaternion.identity, positionWeight = 1, rotationWeight = rotationWeight };
+                data.effectorCount = lockOther ? 2 : 1;
+                FullBodyIk.Solve (ref data);
+                if (residuals != null) {
+                    residuals[0] = data.residuals[0];
+                    residuals[1] = lockOther ? data.residuals[1] : 0;
+                }
+                return data.positions.ToArray ();
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        [Test]
+        public void Solver_UnpinnedRoot_MovingEitherEndCarriesTheChain ()
+        {
+            // 根を留めないなら、反対の端が自由なとき、どちらの端を動かしても鎖ごと動く（根の側だけでなく、先の側を動かしても）
+            float3 move = new float3 (0.3f, 0.2f, 0);
+            foreach (bool grabEnd in new[] { false, true }) {
+                float3[] moved = SolveUnpinnedChain (grabEnd, grabEnd ? move * new float3 (1, -1, 1) : move, false);
+                for (int i = 0; i < moved.Length; i++) {
+                    float3 expected = new float3 (0, i * 0.2f, 0) + (grabEnd ? move * new float3 (1, -1, 1) : move);
+                    Assert.LessOrEqual (math.distance (moved[i], expected), 1e-4f, (grabEnd ? "先端" : "根") + "を動かしたときの骨 " + i);
+                }
+            }
+        }
+
+        [Test]
+        public void Solver_UnpinnedRoot_EndsMoveSymmetrically ()
+        {
+            // 反対の端を留めて片方の端を動かす。根の側を動かしたときと先の側を動かしたときで、上下に鏡写しの姿勢になる
+            float3[] root = SolveUnpinnedChain (false, new float3 (0.3f, 0.2f, 0), true);
+            float3[] end = SolveUnpinnedChain (true, new float3 (0.3f, -0.2f, 0), true);
+            // 両端の骨（根の骨は 0〜0.2、先端の骨は長さ無し）は形が違うので、比べるのは間の関節（骨 1〜6 の付け根。高さ 0.2〜1.2）。
+            // 骨 i の付け根は、先の側を動かしたときの骨 n-i の付け根を、真ん中の高さ 0.7 で上下に返した所。
+            // 関節をたどる順（根から・先からを交互）は骨の並びで決まるので、少し（2cm 程度）違う。付けて動かす前は 40cm 近く違った
+            for (int i = 1; i < root.Length; i++) {
+                float3 mirrored = end[root.Length - i] * new float3 (1, -1, 1) + new float3 (0, 1.4f, 0);
+                Assert.LessOrEqual (math.distance (root[i], mirrored), 0.03f, "骨 " + i + ": " + root[i] + " / " + mirrored);
+            }
+        }
+
+        [Test]
+        public void Solver_UnpinnedRoot_UnreachablePullIsStraight ()
+        {
+            // 反対の端を留めて、届かない所へ斜めに引く（S98）。どちらの端を引いても、留めた端は目標に残り、骨の付け根は一直線に並び、
+            // 届かない分は引いた点に残る（両端で同じ）。向きを留めない点なので、両端の骨も線にそろう
+            float[] residuals = new float[2];
+            float[] reached = new float[2];
+            foreach (bool grabEnd in new[] { false, true }) {
+                float3[] positions = SolveUnpinnedChain (grabEnd, new float3 (0.5f, grabEnd ? 0.3f : -0.3f, 0), true, 0, residuals);
+                string label = grabEnd ? "先端を引いたとき" : "根を引いたとき";
+                int other = grabEnd ? 0 : positions.Length - 1;
+                Assert.LessOrEqual (math.distance (positions[other], new float3 (0, other * 0.2f, 0)), 1e-3f, label + ": 留めた端は動かない");
+                Assert.LessOrEqual (residuals[1], 1e-3f, label + ": 留めた点の残り");
+                Assert.Greater (residuals[0], 0.3f, label + ": 引いた点は届かない");
+                float3 a = positions[0], b = positions[positions.Length - 1];
+                for (int i = 1; i < positions.Length - 1; i++) {
+                    float off = math.length (math.cross (b - a, positions[i] - a)) / math.length (b - a);
+                    Assert.LessOrEqual (off, 1e-3f, label + ": 骨 " + i + " は両端を結ぶ線の上");
+                }
+                reached[grabEnd ? 1 : 0] = residuals[0];
+            }
+            Assert.AreEqual (reached[0], reached[1], 1e-3f, "届かない分は両端で同じ");
         }
 
         [Test]

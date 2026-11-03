@@ -16,6 +16,7 @@ MonoBehaviour:
     iterations: 48
     pull: 1
     hipsPin: 0.6
+  bodyScale: 0
   fkControls:
   - bone: 0
     position: 1
@@ -24,6 +25,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 1
     position: 0
     fullBodySolve: 1
@@ -31,6 +46,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -121
+        max: 20
+      y:
+        mode: 1
+        min: -31
+        max: 31
+      z:
+        mode: 1
+        min: -62
+        max: 62
+      slack: 15
   - bone: 2
     position: 0
     fullBodySolve: 1
@@ -38,6 +67,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -121
+        max: 20
+      y:
+        mode: 1
+        min: -31
+        max: 31
+      z:
+        mode: 1
+        min: -62
+        max: 62
+      slack: 15
   - bone: 3
     position: 0
     fullBodySolve: 1
@@ -45,6 +88,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 1
     bendDirection: {x: 0, y: 0, z: 1}
+    limit:
+      x:
+        mode: 1
+        min: -1
+        max: 160
+      y:
+        mode: 1
+        min: -41
+        max: 41
+      z:
+        mode: 1
+        min: -7
+        max: 7
+      slack: 15
   - bone: 4
     position: 0
     fullBodySolve: 1
@@ -52,6 +109,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 1
     bendDirection: {x: 0, y: 0, z: 1}
+    limit:
+      x:
+        mode: 1
+        min: -1
+        max: 160
+      y:
+        mode: 1
+        min: -41
+        max: 41
+      z:
+        mode: 1
+        min: -7
+        max: 7
+      slack: 15
   - bone: 5
     position: 0
     fullBodySolve: 1
@@ -59,6 +130,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -50
+        max: 50
+      y:
+        mode: 1
+        min: 0
+        max: -0
+      z:
+        mode: 1
+        min: -30
+        max: 30
+      slack: 15
   - bone: 6
     position: 0
     fullBodySolve: 1
@@ -66,6 +151,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -50
+        max: 50
+      y:
+        mode: 1
+        min: 0
+        max: -0
+      z:
+        mode: 1
+        min: -30
+        max: 30
+      slack: 15
   - bone: 7
     position: 0
     fullBodySolve: 1
@@ -73,6 +172,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -40
+        max: 40
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -40
+        max: 40
+      slack: 15
   - bone: 8
     position: 0
     fullBodySolve: 1
@@ -80,6 +193,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -40
+        max: 40
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -40
+        max: 40
+      slack: 15
   - bone: 9
     position: 0
     fullBodySolve: 1
@@ -87,6 +214,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -40
+        max: 40
+      y:
+        mode: 1
+        min: -39
+        max: 39
+      z:
+        mode: 1
+        min: -39
+        max: 39
+      slack: 15
   - bone: 10
     position: 0
     fullBodySolve: 1
@@ -94,6 +235,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -40
+        max: 40
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -40
+        max: 40
+      slack: 15
   - bone: 11
     position: 0
     fullBodySolve: 1
@@ -101,6 +256,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -6
+        max: 12
+      y:
+        mode: 1
+        min: -4
+        max: 26
+      z:
+        mode: 1
+        min: -31
+        max: 9
+      slack: 15
   - bone: 12
     position: 0
     fullBodySolve: 1
@@ -108,6 +277,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -6
+        max: 12
+      y:
+        mode: 1
+        min: -26
+        max: 4
+      z:
+        mode: 1
+        min: -9
+        max: 31
+      slack: 15
   - bone: 13
     position: 0
     fullBodySolve: 1
@@ -115,6 +298,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -71
+        max: 38
+      y:
+        mode: 1
+        min: -78
+        max: 107
+      z:
+        mode: 1
+        min: -59
+        max: 102
+      slack: 15
   - bone: 14
     position: 0
     fullBodySolve: 1
@@ -122,6 +319,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -71
+        max: 38
+      y:
+        mode: 1
+        min: -107
+        max: 78
+      z:
+        mode: 1
+        min: -102
+        max: 59
+      slack: 15
   - bone: 15
     position: 0
     fullBodySolve: 1
@@ -129,6 +340,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 1
     bendDirection: {x: 0, y: 0, z: -1}
+    limit:
+      x:
+        mode: 1
+        min: -47
+        max: 42
+      y:
+        mode: 1
+        min: -4
+        max: 157
+      z:
+        mode: 1
+        min: -15
+        max: 2
+      slack: 15
   - bone: 16
     position: 0
     fullBodySolve: 1
@@ -136,6 +361,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 1
     bendDirection: {x: 0, y: 0, z: -1}
+    limit:
+      x:
+        mode: 1
+        min: -47
+        max: 42
+      y:
+        mode: 1
+        min: -157
+        max: 4
+      z:
+        mode: 1
+        min: -2
+        max: 15
+      slack: 15
   - bone: 17
     position: 0
     fullBodySolve: 1
@@ -143,6 +382,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -3
+        max: 3
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -80
+        max: 80
+      slack: 15
   - bone: 18
     position: 0
     fullBodySolve: 1
@@ -150,6 +403,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -3
+        max: 3
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -80
+        max: 80
+      slack: 15
   - bone: 19
     position: 0
     fullBodySolve: 1
@@ -157,6 +424,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -50
+        max: 50
+      y:
+        mode: 1
+        min: 0
+        max: -0
+      z:
+        mode: 1
+        min: 0
+        max: -0
+      slack: 15
   - bone: 20
     position: 0
     fullBodySolve: 1
@@ -164,6 +445,20 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -50
+        max: 50
+      y:
+        mode: 1
+        min: 0
+        max: -0
+      z:
+        mode: 1
+        min: 0
+        max: -0
+      slack: 15
   - bone: 21
     position: 0
     fullBodySolve: 0
@@ -171,6 +466,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 22
     position: 0
     fullBodySolve: 0
@@ -178,6 +487,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 23
     position: 0
     fullBodySolve: 0
@@ -185,6 +508,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 24
     position: 0
     fullBodySolve: 0
@@ -192,6 +529,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 25
     position: 0
     fullBodySolve: 0
@@ -199,6 +550,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 26
     position: 0
     fullBodySolve: 0
@@ -206,6 +571,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 27
     position: 0
     fullBodySolve: 0
@@ -213,6 +592,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 28
     position: 0
     fullBodySolve: 0
@@ -220,6 +613,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 29
     position: 0
     fullBodySolve: 0
@@ -227,6 +634,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 30
     position: 0
     fullBodySolve: 0
@@ -234,6 +655,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 31
     position: 0
     fullBodySolve: 0
@@ -241,6 +676,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 32
     position: 0
     fullBodySolve: 0
@@ -248,6 +697,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 33
     position: 0
     fullBodySolve: 0
@@ -255,6 +718,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 34
     position: 0
     fullBodySolve: 0
@@ -262,6 +739,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 35
     position: 0
     fullBodySolve: 0
@@ -269,6 +760,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 36
     position: 0
     fullBodySolve: 0
@@ -276,6 +781,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 37
     position: 0
     fullBodySolve: 0
@@ -283,6 +802,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 38
     position: 0
     fullBodySolve: 0
@@ -290,6 +823,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 39
     position: 0
     fullBodySolve: 0
@@ -297,6 +844,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 40
     position: 0
     fullBodySolve: 0
@@ -304,6 +865,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 41
     position: 0
     fullBodySolve: 0
@@ -311,6 +886,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 42
     position: 0
     fullBodySolve: 0
@@ -318,6 +907,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 43
     position: 0
     fullBodySolve: 0
@@ -325,6 +928,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 44
     position: 0
     fullBodySolve: 0
@@ -332,6 +949,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 45
     position: 0
     fullBodySolve: 0
@@ -339,6 +970,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 46
     position: 0
     fullBodySolve: 0
@@ -346,6 +991,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 47
     position: 0
     fullBodySolve: 0
@@ -353,6 +1012,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 48
     position: 0
     fullBodySolve: 0
@@ -360,6 +1033,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 49
     position: 0
     fullBodySolve: 0
@@ -367,6 +1054,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 50
     position: 0
     fullBodySolve: 0
@@ -374,6 +1075,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 51
     position: 0
     fullBodySolve: 0
@@ -381,6 +1096,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 52
     position: 0
     fullBodySolve: 0
@@ -388,6 +1117,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 53
     position: 0
     fullBodySolve: 0
@@ -395,6 +1138,20 @@ MonoBehaviour:
     fullBodyHandle: 1
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
   - bone: 54
     position: 0
     fullBodySolve: 1
@@ -402,11 +1159,27 @@ MonoBehaviour:
     fullBodyHandle: 0
     hinge: 0
     bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -20
+        max: 20
+      y:
+        mode: 1
+        min: -20
+        max: 20
+      z:
+        mode: 1
+        min: -20
+        max: 20
+      slack: 15
   extraControls: []
   bodyPoints:
   - enabled: 1
     name: Hips
     bone: 0
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -422,9 +1195,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -440,9 +1216,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightUpperLeg
     bone: 2
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -458,9 +1237,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -476,9 +1258,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightLowerLeg
     bone: 4
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -494,9 +1279,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftFoot
     bone: 5
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -512,9 +1300,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightFoot
     bone: 6
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -530,9 +1321,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0
+    passive: 0
   - enabled: 1
     name: Neck
     bone: 9
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -548,9 +1342,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: Head
     bone: 10
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -566,9 +1363,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftUpperArm
     bone: 13
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -584,9 +1384,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightUpperArm
     bone: 14
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -602,9 +1405,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftLowerArm
     bone: 15
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -620,9 +1426,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -638,9 +1447,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftHand
     bone: 17
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -656,9 +1468,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightHand
     bone: 18
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -674,9 +1489,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: Chest
     bone: 54
+    control: 
+    blendControl: 
     origin: 0
     toward: 10
     along: 0.5
@@ -686,15 +1504,18 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 0
+    weight: 1
     link: Stomach
     blendBone: 0
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: Stomach
     bone: 7
+    control: 
+    blendControl: 
     origin: 0
     toward: 10
     along: 0.25
@@ -710,9 +1531,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: HipsDirection
     bone: 0
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -728,9 +1552,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: ChestDirection
     bone: 54
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -746,9 +1573,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
+    control: 
+    blendControl: 
     origin: 55
     toward: 21
     along: 0
@@ -764,9 +1594,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: HeadTop
     bone: 10
+    control: 
+    blendControl: 
     origin: 55
     toward: 55
     along: 0
@@ -782,9 +1615,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftHeel
     bone: 5
+    control: 
+    blendControl: 
     origin: 5
     toward: 19
     along: -0.15
@@ -800,9 +1636,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: LeftSoleBall
     bone: 5
+    control: 
+    blendControl: 
     origin: 5
     toward: 19
     along: 1
@@ -818,9 +1657,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
+    control: 
+    blendControl: 
     origin: 5
     toward: 19
     along: 1
@@ -836,9 +1678,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: LeftToeTip
     bone: 19
+    control: 
+    blendControl: 
     origin: 5
     toward: 19
     along: 1.45
@@ -854,9 +1699,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
+    control: 
+    blendControl: 
     origin: 27
     toward: 55
     along: 0
@@ -872,9 +1720,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
+    control: 
+    blendControl: 
     origin: 36
     toward: 55
     along: 0
@@ -890,9 +1741,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightHeel
     bone: 6
+    control: 
+    blendControl: 
     origin: 6
     toward: 20
     along: -0.15
@@ -908,9 +1762,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: RightSoleBall
     bone: 6
+    control: 
+    blendControl: 
     origin: 6
     toward: 20
     along: 1
@@ -926,9 +1783,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
+    control: 
+    blendControl: 
     origin: 6
     toward: 20
     along: 1
@@ -944,9 +1804,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: RightToeTip
     bone: 20
+    control: 
+    blendControl: 
     origin: 6
     toward: 20
     along: 1.45
@@ -962,9 +1825,12 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0.02
+    passive: 0
   - enabled: 1
     name: RightPalmIndex
     bone: 18
+    control: 
+    blendControl: 
     origin: 42
     toward: 55
     along: 0
@@ -980,9 +1846,12 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
+    control: 
+    blendControl: 
     origin: 51
     toward: 55
     along: 0
@@ -998,12 +1867,15 @@ MonoBehaviour:
     blend: 0
     contact: 0
     radius: 0
+    passive: 0
   - enabled: 1
     name: LeftShoulder
     bone: 11
+    control: 
+    blendControl: 
     origin: 11
     toward: 13
-    along: 1
+    along: 0
     across: 0
     axes: {x: 0, y: 0, z: 1}
     ground: 0
@@ -1020,9 +1892,11 @@ MonoBehaviour:
   - enabled: 1
     name: RightShoulder
     bone: 12
+    control: 
+    blendControl: 
     origin: 12
     toward: 14
-    along: 1
+    along: 0
     across: 0
     axes: {x: 0, y: 0, z: 1}
     ground: 0

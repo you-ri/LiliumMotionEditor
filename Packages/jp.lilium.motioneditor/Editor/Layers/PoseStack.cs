@@ -128,7 +128,9 @@ namespace Lilium
             }
             // 全身 IK（S25）。リグの定義が全身 IK のときだけ
             if (stage.fullBody != null) stack.Add (new FullBodyLayer (stage));
-            // Generic Pose（GenericPoseLayer）は既定の並びに入れない。段の並びを選べるようにしたときに足す
+            // Generic Pose（GenericPoseLayer）は Humanoid のキャラの既定の並びに入れない。段の並びを選べるようにしたときに足す。
+            // Humanoid でないキャラは、Generic のクリップを取り込むのに使う（S93）
+            if (!stage.animator.isHuman && host != null) stack.Add (new GenericPoseLayer (stage, host));
             // Humanoid Pose は置くと決めたときだけ（S21。既定は置かない）
             if (stage.animator.isHuman && (host == null || host.humanoidPoseLayer)) stack.Add (new HumanoidLayer (stage, host));
             stack.AddTimelineClip (stage, host);
@@ -136,8 +138,8 @@ namespace Lilium
             stack.AddUserLayers (stage);
             stack.Add (new DisplayBoneLayer (stage));
             stack.Sort ();
-            // 焼いて書き出す段（S21）は並びの設定どおりに差し込む（書き出せるのは今は Humanoid のクリップだけ）
-            if (host != null && stage.animator.isHuman) stack.InsertOutputs (host);
+            // 焼いて書き出す段（S21）は並びの設定どおりに差し込む
+            if (host != null) stack.InsertOutputs (host);
             return stack;
         }
 

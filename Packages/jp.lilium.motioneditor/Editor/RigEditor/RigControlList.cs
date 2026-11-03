@@ -70,7 +70,10 @@ namespace Lilium
             RigBinding binding = rig.binding;
             BoneShapes shapes = new BoneShapes (rig);
 
+            // Humanoid でないキャラ（S93）では、人型の FK は全部無効なので並べない
+            bool human = rig.displayAnimator != null && rig.displayAnimator.isHuman;
             foreach (RigBinding.Fk fk in binding.fk) {
+                if (!human) break;
                 Transform bone = rig.GetEditingBone (fk.bone);
                 RigControlEntry entry = new RigControlEntry {
                     id = "Fk/" + fk.control.bone,

@@ -22,6 +22,7 @@ namespace Lilium
         ObjectField model_;
         ObjectField definition_;
         EditorToolbarButton duplicate_;
+        EditorToolbarButton fromBones_;
 
         public override VisualElement CreatePanelContent ()
         {
@@ -54,6 +55,10 @@ namespace Lilium
             duplicate_ = new EditorToolbarButton (ShowDuplicateMenu) { tooltip = Tr ("RIG_EDITOR_DUPLICATE_TOOLTIP") };
             toolbar.Add (duplicate_);
 
+            // Humanoid でないキャラは、骨から定義を作る（S93）
+            fromBones_ = new EditorToolbarButton (Tr ("RIG_EDITOR_FROM_BONES"), window_.SetDefinitionFromBones) { tooltip = Tr ("RIG_EDITOR_FROM_BONES_TOOLTIP") };
+            toolbar.Add (fromBones_);
+
             toolbar.Add (new EditorToolbarButton ("Reload", window_.Rebuild) { tooltip = Tr ("RIG_EDITOR_RELOAD_TOOLTIP") });
 
             Refresh ();
@@ -77,6 +82,7 @@ namespace Lilium
             // 定義のアセットが無いときは、既定の中身を保存して直す
             duplicate_.text = definition == null || !EditorUtility.IsPersistent (definition) ? Tr ("RIG_EDITOR_SAVE") : Tr ("RIG_EDITOR_DUPLICATE");
             duplicate_.SetEnabled (window_.model != null);
+            fromBones_.SetEnabled (window_.canSetDefinitionFromBones);
         }
 
         /// <summary>複製をどこに使うかを選ぶ</summary>
@@ -341,6 +347,7 @@ namespace Lilium
             if (property != null) {
                 property.isExpanded = true;
                 fields_.Add (new PropertyField (property, selected.label));
+                if (selected.kind == RigControlKind.Fk) AddLimitMirror (definition, selected, property);
             }
             else {
                 // 選んでいないとき（と、定義に項目の無いもの）は、定義全体の解き方
@@ -348,8 +355,42 @@ namespace Lilium
                 SerializedProperty fullBody = serialized.FindProperty ("fullBody");
                 fullBody.isExpanded = true;
                 fields_.Add (new PropertyField (fullBody));
+                Button limits = new Button (window_.SetLimitsFromHumanoid) { text = Tr ("RIG_EDITOR_LIMITS_FROM_HUMANOID"), tooltip = Tr ("RIG_EDITOR_LIMITS_FROM_HUMANOID_TOOLTIP") };
+                limits.SetEnabled (window_.canSetLimitsFromHumanoid);
+                fields_.Add (limits);
             }
             fields_.Bind (serialized);
+        }
+
+        /// <summary>左右まとめて編集（S95）の切り替えの保存先</summary>
+        const string kMirrorLimitsKey = "Lilium.MotionEditor.RigEditor.MirrorLimits";
+
+        /// <summary>
+        /// 左右のある FK の骨なら「左右まとめて編集」を出し、ON の間は角度制限を直すたびに反対側の骨へ鏡写しにする（S95）
+        /// </summary>
+        void AddLimitMirror (EditRigDefinition definition, RigControlEntry selected, SerializedProperty property)
+        {
+            HumanBodyBones bone;
+            if (!System.Enum.TryParse (selected.label, out bone)) return;
+            HumanBodyBones? opposite = EditRigDefinition.OppositeBone (bone);
+            if (opposite == null) return;
+            Toggle mirror = new Toggle (Tr ("RIG_EDITOR_MIRROR_LIMITS")) { tooltip = Tr ("RIG_EDITOR_MIRROR_LIMITS_TOOLTIP"), value = EditorPrefs.GetBool (kMirrorLimitsKey, true) };
+            mirror.RegisterValueChangedCallback (e => EditorPrefs.SetBool (kMirrorLimitsKey, e.newValue));
+            fields_.Add (mirror);
+            SerializedProperty limit = property.FindPropertyRelative ("limit");
+            if (limit == null) return;
+            fields_.TrackPropertyValue (limit, changed => {
+                if (!mirror.value) return;
+                EditRigDefinition.FkControl self = definition.FindFkControl (bone);
+                EditRigDefinition.FkControl other = definition.FindFkControl (opposite.Value);
+                if (self == null || other == null || self.limit == null) return;
+                EditRigDefinition.JointLimit mirrored = self.limit.Mirrored ();
+                if (JsonUtility.ToJson (mirrored) == JsonUtility.ToJson (other.limit)) return;
+                Undo.RecordObject (definition, "Mirror Joint Limit");
+                other.limit = mirrored;
+                EditorUtility.SetDirty (definition);
+                EditRigDefinition.NotifyChanged (definition);
+            });
         }
 
         /// <summary>持ち物か握りの欄（キャラの設定の項目）と、持ち物を外すボタン</summary>

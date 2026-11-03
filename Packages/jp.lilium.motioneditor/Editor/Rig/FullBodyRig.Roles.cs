@@ -71,7 +71,7 @@ namespace Lilium
 
         /// <summary>
         /// 軽い点をつかんでいるとき（2 回目）の点の扱い。grabbedBodies_ を入れてから呼ぶ。
-        /// 動かない点は、Free の重い点（重さ 1）と、つかんでいない Pin の重い点・Lock の点（位置の強さ 1。Lock は重さに関係なく）と、動かせない点（passive。S89）。
+        /// 動かない点は、Free の重い点（重さ 1）と、つかんでいない Pin の重い点・Lock の点（位置の強さ 1。Lock は重さに関係なく）。
         /// 強さが 1 より小さい Pin の点と、向きを混ぜる点（膝の Pole）と、つかんだ点と同じ骨の点は、動かない点にしない（自分の目標で、つかんだ点と引き合う）
         /// </summary>
         PointRole LightRole (Point point, out float positionWeight, out float rotationWeight)
@@ -79,8 +79,8 @@ namespace Lilium
             bool weighted = GetWeights (point, out positionWeight, out rotationWeight);
             if (!IsUsable (point)) return PointRole.Follow;
             if (grabbed_.Contains (point)) return weighted ? PointRole.Grabbed : PointRole.Follow;
-            // 動かせない点（S89）は、重さに関係なく Pin の点と同じに留まる（向きは持たない）。力が先から伝わってこなければ、Free の軽い点と同じに引かれる
-            if (point.passive) return !grabbedBodies_[point.body] && PassiveApplies (point) ? PointRole.Held : PointRole.Follow;
+            // 動かせない点（S89）は、骨を軸まわりに縛るだけで、力を止めない（11-02 ユーザー指示「壁をなくす」）
+            if (point.passive) return PointRole.Follow;
             if (weighted) {
                 // 重さ 0 の Pin の点は、Free の軽い点と同じに引かれる（10-30 ユーザー指示「Pin でも引く」）
                 if (point.weightless && PullsPin (point)) return PointRole.Follow;

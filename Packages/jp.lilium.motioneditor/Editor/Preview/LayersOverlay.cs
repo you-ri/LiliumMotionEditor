@@ -134,12 +134,8 @@ namespace Lilium
             addOverride_.tooltip = overrideProblem == null
                 ? Tr ("LAYERS_OVERLAY_ADD_OVERRIDE_TOOLTIP")
                 : Tr ("LAYERS_OVERLAY_CANNOT_ADD_OVERRIDE", overrideProblem);
-            // 書き出せるのは今は Humanoid のクリップだけ
-            bool human = window_.isHumanModel;
-            addOutput_.SetEnabled (human);
-            addOutput_.tooltip = human
-                ? Tr ("LAYERS_OVERLAY_ADD_OUTPUT_TOOLTIP")
-                : Tr ("LAYERS_OVERLAY_CANNOT_ADD_OUTPUT", Tr ("LAYERS_OVERLAY_DISPLAY_MODEL_NOT_HUMANOID"));
+            addOutput_.SetEnabled (true);
+            addOutput_.tooltip = Tr ("LAYERS_OVERLAY_ADD_OUTPUT_TOOLTIP");
         }
 
         /// <summary>

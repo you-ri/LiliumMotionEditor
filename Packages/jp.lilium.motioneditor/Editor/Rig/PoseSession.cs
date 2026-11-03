@@ -577,6 +577,35 @@ namespace Lilium
             }
         }
 
+        /// <summary>
+        /// 骨を直接動かす Generic のクリップを、今の編集用クリップの値へ取り込む（S93）。そのクリップの編集用リグのカーブは置き換える。
+        /// カーブの無い骨は基準姿勢のまま。段は通さない（窓の Generic Pose の段と違い、今のクリップの値と合成しない）
+        /// </summary>
+        /// <returns>取り込めなかった理由（取り込めたら null）</returns>
+        public string ImportGeneric (AnimationClip source, out PoseImport.Result result)
+        {
+            result = default;
+            string character = characterProblem;
+            if (character != null) return character;
+            if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
+            string problem = GenericImport.GetProblem (source);
+            if (problem != null) return problem;
+            try {
+                ClipUndo.Record (clip_, "Import Generic Clip");
+                result = GenericImport.Import (source, clip_, stage.editingRig, stage.editingRigSolver, time => {
+                    stage.editingRig.ResetBonesToRest ();
+                    stage.BlendGenericClip (source, time, 1);
+                }, targets_);
+                return null;
+            }
+            catch (System.Exception e) {
+                return e.Message;
+            }
+            finally {
+                RestoreFrame ();
+            }
+        }
+
         /// <summary>外の Humanoid のクリップを取り込めない理由（書き込み先は見ない）</summary>
         string GetOverrideImportProblem (AnimationClip source, OverrideImportOptions options)
         {

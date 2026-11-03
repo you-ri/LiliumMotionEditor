@@ -43,6 +43,14 @@ namespace Lilium
             public bool hinge;
             /// <summary>蝶番（hinge）の曲がる向き。関節が出る向きを、体の向き（x 右・y 上・z 前）で書く（肘は後ろ・膝は前）</summary>
             public Vector3 bendDirection;
+            /// <summary>全身 IK の角度制限（S95）。FK のハンドルには掛けない</summary>
+            public JointLimit limit = new JointLimit ();
+            /// <summary>
+            /// 全身 IK の重さ（回しにくさ）を、この骨の分だけにするか（S96）。既定は、この骨から先の骨を全部足す（根ほど重い。人の胴が腕より回しにくくなる）。
+            /// 鎖・尻尾のような一列の骨を両端で留めて曲げると、足した重さで根元が回りにくく、曲がりが先の軽い骨に集まる。足さなければ全体に配られる
+            /// </summary>
+            [Tooltip (kOwnWeightOnlyTooltip)]
+            public bool ownWeightOnly;
 
             /// <summary>Humanoid で必須の骨か（無ければ Avatar が作れないので、どのキャラにもある）</summary>
             public bool required
@@ -60,9 +68,104 @@ namespace Lilium
             public string name;
             public string pattern;
             public bool position;
-            /// <summary>全身 IK の点をつかむ間も、ハンドルを出すか（追加のコントロールは全身 IK で解かず点も無いので、既定は出す）</summary>
+            /// <summary>全身 IK の点をつかむ間も、ハンドルを出すか（解かない追加のコントロールには点が無いので、既定は出す）</summary>
             public bool fullBodyHandle = true;
+            /// <summary>全身 IK で解く骨か（S93。解く骨には点（BodyPoint.control）を乗せられる。Humanoid でないキャラの体はこれで作る）</summary>
+            public bool fullBodySolve;
+            /// <summary>全身 IK の硬さ（0〜1）。FK の同じ項目と同じ</summary>
+            [Range (0, 1)]
+            public float stiffness = kDefaultStiffness;
+            /// <summary>一方向にだけ曲がる関節か。FK の同じ項目と同じ</summary>
+            public bool hinge;
+            /// <summary>蝶番の曲がる向き。関節が出る向きを、体の向き（x 右・y 上・z 前）で書く</summary>
+            public Vector3 bendDirection;
+            /// <summary>全身 IK の角度制限（S95）。FK の同じ項目と同じ</summary>
+            public JointLimit limit = new JointLimit ();
+            /// <summary>全身 IK の重さを、この骨の分だけにするか（S96）。FK の同じ項目と同じ</summary>
+            [Tooltip (kOwnWeightOnlyTooltip)]
+            public bool ownWeightOnly;
         }
+
+        const string kOwnWeightOnlyTooltip = "Full-body IK weighs this bone by itself instead of with every bone beyond it. Turn on for a row of bones held at both ends (a chain, a tail) so the bend spreads along it instead of gathering at the light end.";
+
+        /// <summary>角度制限の軸ごとの決め方</summary>
+        public enum LimitMode
+        {
+            /// <summary>制限しない</summary>
+            Free,
+            /// <summary>最小〜最大の範囲。越えると遊びの分だけ徐々に回しにくくなる</summary>
+            Range,
+            /// <summary>回さない（遊びも使わない）</summary>
+            Locked,
+        }
+
+        /// <summary>角度制限の 1 軸（体の向きの軸まわりの回り。度）</summary>
+        [System.Serializable]
+        public sealed class AxisLimit
+        {
+            public LimitMode mode;
+            public float min = -45;
+            public float max = 45;
+
+            public AxisLimit Clone ()
+            {
+                return new AxisLimit { mode = mode, min = min, max = max };
+            }
+        }
+
+        /// <summary>
+        /// 全身 IK の角度制限（S95）。親の解く骨から見た、T ポーズからの回りを、T ポーズの体の向きの軸（x 右・y 上・z 前）で書く
+        /// （骨の軸の取り方に依らず、全キャラで同じ意味）。T ポーズの骨の向きにいちばん近い軸がひねり（腕は x、脚・背骨は y、足は z）、
+        /// 残り 2 軸が振り。範囲を越えると、越えた量が遊び（slack）に近づくほど回しにくくなり、範囲 + 遊びで止まる。
+        /// 元の姿勢（キーの姿勢）が範囲の外なら、そこまでは許す
+        /// </summary>
+        [System.Serializable]
+        public sealed class JointLimit
+        {
+            [Tooltip ("Rotation about the body's right axis, relative to the T-pose as seen from the parent bone (degrees).")]
+            public AxisLimit x = new AxisLimit ();
+            [Tooltip ("Rotation about the body's up axis, relative to the T-pose as seen from the parent bone (degrees).")]
+            public AxisLimit y = new AxisLimit ();
+            [Tooltip ("Rotation about the body's forward axis, relative to the T-pose as seen from the parent bone (degrees).")]
+            public AxisLimit z = new AxisLimit ();
+            /// <summary>遊び（度）。範囲を越えてから止まるまでの角度。この間は越えるほど回しにくくなる</summary>
+            [Min (0)]
+            [Tooltip ("Play beyond the range (degrees). Past the range the joint gets gradually harder to turn and stops at range + slack.")]
+            public float slack = kDefaultLimitSlack;
+
+            /// <summary>どれかの軸を制限しているか</summary>
+            public bool any
+            {
+                get { return x.mode != LimitMode.Free || y.mode != LimitMode.Free || z.mode != LimitMode.Free; }
+            }
+
+            public AxisLimit this[int axis]
+            {
+                get { return axis == 0 ? x : axis == 1 ? y : z; }
+            }
+
+            /// <summary>
+            /// 左右の反対側の骨の値（体の左右の面で鏡写し）。回転ベクトルは面に垂直な x がそのまま、y・z は符号が変わるので、
+            /// y・z の範囲は最小と最大を入れ替えて符号を変える
+            /// </summary>
+            public JointLimit Mirrored ()
+            {
+                return new JointLimit {
+                    x = x.Clone (),
+                    y = new AxisLimit { mode = y.mode, min = -y.max, max = -y.min },
+                    z = new AxisLimit { mode = z.mode, min = -z.max, max = -z.min },
+                    slack = slack,
+                };
+            }
+
+            public JointLimit Clone ()
+            {
+                return new JointLimit { x = x.Clone (), y = y.Clone (), z = z.Clone (), slack = slack };
+            }
+        }
+
+        /// <summary>角度制限の遊びの既定（度。11-03 ユーザー指示「遊びのディフォルトは 15° ぐらい」）</summary>
+        public const float kDefaultLimitSlack = 15;
 
         /// <summary>
         /// 全身 IK の全体の設定（S25）
@@ -92,6 +195,13 @@ namespace Lilium
             public string name;
             /// <summary>乗る骨。キャラに無い・全身 IK で解かない骨なら、親の骨をたどって最初に当たる解く骨へ乗る（つま先の骨が無ければ足）</summary>
             public HumanBodyBones bone;
+            /// <summary>
+            /// 乗る骨を追加コントロールの名前で指す（S93。人型でない骨）。空でなければ bone より優先する。
+            /// 解かないコントロールなら、Transform の親をたどって最初に当たる解くコントロールへ乗る。場所は乗る骨の付け根 + offset（と ground・radius）で、origin・toward は使わない
+            /// </summary>
+            public string control;
+            /// <summary>ずれの向きを混ぜる相手を追加コントロールの名前で指す（S93）。空でなければ blendBone より優先する</summary>
+            public string blendControl;
             /// <summary>
             /// 置き場所の基準の骨（LastBone なら乗る骨）。基準の場所は、この骨の付け根 + along × d + across × (体の上 × d)。
             /// d は、この骨の付け根から toward の骨の付け根への向き（axes で成分を選ぶ）。キャラにこの骨が無ければ、点を作らない
@@ -159,12 +269,10 @@ namespace Lilium
 
             /// <summary>
             /// 動かせない点か（S89）。選べるが、つかむ・ギズモ・数値欄・状態の切り替えでは動かず、キーもトラックも持たない（灰色で描く）。
-            /// 点どうしの力の伝わり方を決めるために置く:
-            /// - 乗る骨の上でも、親の骨から見ても動かない。付け根から離して置くと、骨は付け根と点を結ぶ軸まわりにだけ回る（鎖骨の付け根から前後にずらすと、肩が上下に回る）。
-            ///   どの点を引くときも、キーから解き直すときも同じ
-            /// - 軽い点（重さ 0）を引くと、Pin の点と同じく今の場所に留まる壁になり、その向こうの骨は動かない（肘を引いても胸が動かない）
+            /// 乗る骨の上でも、親の骨から見ても動かない。付け根から離して置くと、骨は付け根と点を結ぶ軸まわりにだけ回る（鎖骨の付け根から前後にずらすと、肩が上下に回る）。
+            /// どの点を引くときも、キーから解き直すときも同じ。軸から外れる向きに引くと、親の骨が回って受ける
             /// </summary>
-            [Tooltip ("A point that can be selected but not moved, and gets no keys or tracks (drawn gray). It stays fixed on its bone and relative to the parent bone, so away from the bone's root the bone only turns about the axis from the root to the point. While a light point (weight 0) is dragged, it also stays where it is like a Pin point, so nothing beyond it moves.")]
+            [Tooltip ("A point that can be selected but not moved, and gets no keys or tracks (drawn gray). It stays fixed on its bone and relative to the parent bone, so away from the bone's root the bone only turns about the axis from the root to the point. Pulls across that axis turn the parent bone.")]
             public bool passive;
 
             /// <summary>乗る骨の付け根そのものの点か（基準の骨も d も無く、ずれも 0）</summary>
@@ -176,13 +284,30 @@ namespace Lilium
             /// <summary>ずれの向きを、ほかの骨と混ぜるか</summary>
             public bool blends
             {
-                get { return blend > 0 && blendBone != bone; }
+                get {
+                    if (blend <= 0) return false;
+                    if (!string.IsNullOrEmpty (blendControl)) return blendControl != control;
+                    return blendBone != bone;
+                }
+            }
+
+            /// <summary>乗る骨を追加コントロールの名前で指す点か（S93）</summary>
+            public bool onControl
+            {
+                get { return !string.IsNullOrEmpty (control); }
             }
         }
 
         public const float kDefaultStiffness = 0.2f;
 
         public FullBodySettings fullBody = new FullBodySettings ();
+        /// <summary>
+        /// Humanoid でないキャラの体の大きさ（メートル。S94。0 なら 1）。Humanoid の humanScale の代わりに、腰の位置・全身 IK の点の値をこれで割って持つので、
+        /// 大きさの違うキャラで同じ編集用クリップを開くと、場所の動きが大きさの比で伸び縮みする。四足なら腰の高さなど、両方のキャラで同じ所を測る。Humanoid のキャラでは使わない
+        /// </summary>
+        [Min (0)]
+        [Tooltip ("Body size in meters for a character without a Humanoid avatar (0: 1). Hip positions and full-body IK point values are stored divided by it, like humanScale for Humanoid characters, so a clip opened on a character of another size moves in proportion. Measure the same place on both characters, such as the hip height of a quadruped. Not used for Humanoid characters.")]
+        public float bodyScale;
         public List<FkControl> fkControls = new List<FkControl> ();
         public List<ExtraControl> extraControls = new List<ExtraControl> ();
         /// <summary>全身 IK の点</summary>
@@ -234,6 +359,57 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 中身を、キャラの骨から作った定義にする（S93。前の中身は捨てる。Humanoid でないキャラ向け）。
+        /// 骨ごとに解く追加コントロールと付け根の点を置く。一番上の骨は位置も持つ（全身 IK の根が 1 本になり、解いた位置がキーに残る）
+        /// </summary>
+        public void SetFromBones (Animator animator)
+        {
+            fkControls.Clear ();
+            extraControls.Clear ();
+            fullBody = new FullBodySettings ();
+            bodyPoints = new List<BodyPoint> ();
+            if (animator == null) return;
+            foreach (Transform bone in FindBones (animator)) {
+                bool top = !IsBelowBone (bone, animator);
+                extraControls.Add (new ExtraControl {
+                    name = bone.name,
+                    pattern = "^" + System.Text.RegularExpressions.Regex.Escape (bone.name) + "$",
+                    position = top,
+                    fullBodySolve = true,
+                    fullBodyHandle = false,
+                });
+                bodyPoints.Add (new BodyPoint { name = bone.name, control = bone.name, origin = HumanBodyBones.LastBone, toward = HumanBodyBones.LastBone });
+            }
+        }
+
+        /// <summary>メッシュを動かす骨とその親（Animator の下）を、親が先の順で返す。メッシュが無ければ、Animator の下の Renderer の無い Transform 全部</summary>
+        static List<Transform> FindBones (Animator animator)
+        {
+            HashSet<Transform> used = new HashSet<Transform> ();
+            foreach (SkinnedMeshRenderer skin in animator.GetComponentsInChildren<SkinnedMeshRenderer> (true)) {
+                foreach (Transform bone in skin.bones) {
+                    for (Transform t = bone; t != null && t != animator.transform && used.Add (t); t = t.parent) { }
+                }
+            }
+            List<Transform> bones = new List<Transform> ();
+            foreach (Transform t in animator.GetComponentsInChildren<Transform> (true)) {
+                if (t == animator.transform) continue;
+                if (used.Count > 0 ? used.Contains (t) : t.GetComponent<Renderer> () == null) bones.Add (t);
+            }
+            return bones;
+        }
+
+        /// <summary>親にも骨があるか（Animator の直下の中間の物は骨に数えない）</summary>
+        static bool IsBelowBone (Transform bone, Animator animator)
+        {
+            HashSet<Transform> bones = new HashSet<Transform> (FindBones (animator));
+            for (Transform t = bone.parent; t != null && t != animator.transform; t = t.parent) {
+                if (bones.Contains (t)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// source の中身を写す（名前とアセットの情報は写さない）
         /// </summary>
         public void CopyFrom (EditRigDefinition source)
@@ -261,6 +437,8 @@ namespace Lilium
             System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.InvariantCulture;
             FullBodySettings settings = fullBody ?? new FullBodySettings ();
             text.Append (settings.iterations).Append ('/').Append (settings.pull.ToString ("R", culture)).Append ('/').Append (settings.hipsPin.ToString ("R", culture));
+            // 体の大きさ（S94）は入れたときだけ足す（無い定義は、項目を足す前と同じハッシュのまま）
+            if (bodyScale > 0) text.Append ("/s").Append (bodyScale.ToString ("R", culture));
             foreach (FkControl control in fkControls) {
                 if (control == null) continue;
                 text.Append ('|').Append ((int)control.bone).Append (control.fullBodySolve ? 's' : '-').Append (control.stiffness.ToString ("R", culture));
@@ -268,6 +446,17 @@ namespace Lilium
                     text.Append ('h').Append (control.bendDirection.x.ToString ("R", culture)).Append (',')
                         .Append (control.bendDirection.y.ToString ("R", culture)).Append (',').Append (control.bendDirection.z.ToString ("R", culture));
                 }
+                AppendLimit (text, control.limit, culture);
+                // 重さを自分の骨の分だけにする骨（S96）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
+                if (control.ownWeightOnly) text.Append ('o');
+            }
+            // 解く追加コントロール（S93）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
+            foreach (ExtraControl control in extraControls) {
+                if (control == null || !control.fullBodySolve) continue;
+                text.Append ("|e").Append (control.name).Append (',').Append (control.pattern).Append (',').Append (control.stiffness.ToString ("R", culture));
+                if (control.hinge) AppendVector (text, control.bendDirection, culture);
+                AppendLimit (text, control.limit, culture);
+                if (control.ownWeightOnly) text.Append ('o');
             }
             if (bodyPoints != null) {
                 foreach (BodyPoint point in bodyPoints) {
@@ -286,9 +475,24 @@ namespace Lilium
                     if (point.radius > 0) text.Append ('c').Append (point.radius.ToString ("R", culture));
                     // 動かせない点（passive。S89）だけ足す（骨を軸まわりにだけ回すので、キーから解いた姿勢も変わる。無い定義は、項目を足す前と同じハッシュのまま）
                     if (point.passive) text.Append ('v');
+                    // 名前で乗る点（S93）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
+                    if (point.onControl) text.Append ('n').Append (point.control);
+                    if (point.blends && !string.IsNullOrEmpty (point.blendControl)) text.Append ('m').Append (point.blendControl);
                 }
             }
             return Hash128.Compute (text.ToString ()).ToString ();
+        }
+
+        /// <summary>角度制限（S95）は、制限している骨だけ足す（全部 Free の定義は、項目を足す前と同じハッシュのまま）</summary>
+        static void AppendLimit (System.Text.StringBuilder text, JointLimit limit, System.Globalization.CultureInfo culture)
+        {
+            if (limit == null || !limit.any) return;
+            text.Append ('l').Append (limit.slack.ToString ("R", culture));
+            for (int axis = 0; axis < 3; axis++) {
+                AxisLimit value = limit[axis];
+                text.Append (',').Append ((int)value.mode);
+                if (value.mode == LimitMode.Range) text.Append (':').Append (value.min.ToString ("R", culture)).Append (':').Append (value.max.ToString ("R", culture));
+            }
         }
 
         static void AppendVector (System.Text.StringBuilder text, Vector3 value, System.Globalization.CultureInfo culture)
@@ -493,6 +697,7 @@ namespace Lilium
                 if (control.bone < 0 || control.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_FK_BONE_OUT_OF_RANGE", control.bone));
                 if (control.stiffness < 0 || control.stiffness > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE", control.bone));
                 if (control.hinge && control.bendDirection.sqrMagnitude < 1e-6f) errors.Add (Tr ("EDIT_RIG_DEFINITION_ZERO_BEND_DIRECTION", control.bone));
+                ValidateLimit (control.limit, control.bone.ToString (), errors);
             }
             if (fullBody != null) {
                 if (fullBody.iterations < 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW"));
@@ -506,12 +711,19 @@ namespace Lilium
                 foreach (BodyPoint point in bodyPoints) {
                     if (point == null) continue;
                     if (!RigPaths.IsValidName (point.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_POINT_NAME", point.name));
-                    if (point.bone < 0 || point.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
+                    if (point.onControl) {
+                        // 名前で乗る点は bone を使わない（S93）
+                        if (!extraControls.Any (c => c.name == point.control)) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_UNKNOWN_CONTROL", point.name, point.control));
+                    }
+                    else if (point.bone < 0 || point.bone >= HumanBodyBones.LastBone) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
+                    if (!string.IsNullOrEmpty (point.blendControl) && !extraControls.Any (c => c.name == point.blendControl)) {
+                        errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_UNKNOWN_CONTROL", point.name, point.blendControl));
+                    }
                     if (point.origin < 0 || point.origin > HumanBodyBones.LastBone || point.toward < 0 || point.toward > HumanBodyBones.LastBone) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BONE_OUT_OF_RANGE", point.name));
                     }
                     if (point.blend < 0 || point.blend > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_OUT_OF_RANGE", point.name));
-                    if (point.blend > 0 && (point.blendBone < 0 || point.blendBone >= HumanBodyBones.LastBone)) {
+                    if (point.blend > 0 && string.IsNullOrEmpty (point.blendControl) && (point.blendBone < 0 || point.blendBone >= HumanBodyBones.LastBone)) {
                         errors.Add (Tr ("EDIT_RIG_DEFINITION_POINT_BLEND_BONE_OUT_OF_RANGE", point.name));
                     }
                     // 重さ 1 の点は、骨を剛体として引き合う解き方なので、2 本の骨の向きで決まる場所は扱えない
@@ -524,6 +736,9 @@ namespace Lilium
             }
             foreach (ExtraControl control in extraControls) {
                 if (!RigPaths.IsValidName (control.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_EXTRA_NAME", control.name));
+                if (control.stiffness < 0 || control.stiffness > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_STIFFNESS_OUT_OF_RANGE", control.name));
+                if (control.hinge && control.bendDirection.sqrMagnitude < 1e-6f) errors.Add (Tr ("EDIT_RIG_DEFINITION_ZERO_BEND_DIRECTION", control.name));
+                ValidateLimit (control.limit, control.name, errors);
                 if (string.IsNullOrEmpty (control.pattern)) {
                     errors.Add (Tr ("EDIT_RIG_DEFINITION_EMPTY_EXTRA_PATTERN", control.name));
                     continue;
@@ -536,6 +751,31 @@ namespace Lilium
                 }
             }
             return errors;
+        }
+
+        static void ValidateLimit (JointLimit limit, string label, List<string> errors)
+        {
+            if (limit == null) return;
+            if (limit.slack < 0) errors.Add (Tr ("EDIT_RIG_DEFINITION_LIMIT_SLACK_NEGATIVE", label));
+            for (int axis = 0; axis < 3; axis++) {
+                AxisLimit value = limit[axis];
+                if (value.mode == LimitMode.Range && value.min > value.max) errors.Add (Tr ("EDIT_RIG_DEFINITION_LIMIT_MIN_ABOVE_MAX", label, "XYZ"[axis]));
+            }
+        }
+
+        /// <summary>左右のある骨の、反対側の骨（中心の骨・左右の無い骨は null）</summary>
+        public static HumanBodyBones? OppositeBone (HumanBodyBones bone)
+        {
+            string name = bone.ToString ();
+            string other = name.StartsWith ("Left") ? "Right" + name.Substring (4) : name.StartsWith ("Right") ? "Left" + name.Substring (5) : null;
+            HumanBodyBones result;
+            return other != null && System.Enum.TryParse (other, out result) ? result : (HumanBodyBones?)null;
+        }
+
+        /// <summary>FK の骨（無ければ null）</summary>
+        public FkControl FindFkControl (HumanBodyBones bone)
+        {
+            return fkControls.FirstOrDefault (c => c != null && c.bone == bone);
         }
     }
 

@@ -18,7 +18,7 @@ namespace Lilium
             [CliArg ("prefab", "Character prefab path (Assets/...)", Required = true)] string prefab,
             [CliArg ("clip", "Editing clip path (Assets/....rig.anim)", Required = true)] string clip,
             [CliArg ("create", "Create the clip if it does not exist")] bool create = false,
-            [CliArg ("definition", "Rig definition path (empty uses the project setting)")] string definition = null)
+            [CliArg ("definition", "Rig definition path (empty uses the character settings, or the project setting, as the window does)")] string definition = null)
         {
             return Run (new MotionEditorRequest { command = "open", prefab = prefab, clip = clip, create = create, definition = definition });
         }
@@ -110,7 +110,7 @@ namespace Lilium
             return Run (new MotionEditorRequest { command = "lint", start = start, end = end });
         }
 
-        [CliCommand ("motion_bake", "Bake and save the Humanoid clip for the game", Tags = new[] { kTag })]
+        [CliCommand ("motion_bake", "Bake and save the clip for the game (Humanoid, or Generic for a character without a Humanoid Avatar)", Tags = new[] { kTag })]
         public static JToken Bake ([CliArg ("output_name", "Output name (empty uses the clip name)")] string output_name = null)
         {
             return Run (new MotionEditorRequest { command = "bake", outputName = output_name });
@@ -123,6 +123,14 @@ namespace Lilium
             [CliArg ("size", "Image size in pixels")] int size = 512)
         {
             return Run (new MotionEditorRequest { command = "capture", frame = frame, folder = folder, size = size });
+        }
+
+        [CliCommand ("motion_import_generic", "Import a Generic clip (bone Transform curves) into the open editing clip, replacing its rig curves. Controls are matched to the clip's bone paths. Returns notes on what was skipped. Save with motion_save", Tags = new[] { kTag })]
+        public static JToken ImportGeneric (
+            [CliArg ("source", "Clip asset path (Assets/....anim, or the FBX that holds the clip)", Required = true)] string source,
+            [CliArg ("source_name", "Clip name inside the source (for an FBX)")] string source_name = null)
+        {
+            return Run (new MotionEditorRequest { command = "importGeneric", source = source, sourceName = source_name });
         }
 
         [CliCommand ("motion_import_override", "Import a Humanoid clip, or a BVH of an external skeleton (e.g. a motion model's output), as an Override layered on the open clip, without changing the open clip. Frames past the end of the source keep the open clip", Tags = new[] { kTag })]

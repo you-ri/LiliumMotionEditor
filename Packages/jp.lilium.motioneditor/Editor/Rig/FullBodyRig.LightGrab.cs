@@ -61,27 +61,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 軽い点をつかんでいる間、動かせない点を壁にするか（S89）。つかんだ点がどれも、動かせない点の骨か、その先の骨にあるとき（力が先から伝わってくるとき）だけ。
-        /// 根の側（胸など）や、ほかの枝（反対の手）もつかんでいれば壁にしない: 胸だけをつかむと、両肩の点が壁になって胸が動けなかった
-        /// （10-28 ユーザー報告「passiveとふつうの点とを複数選択して移動するとpassiveの点が動く」）
-        /// </summary>
-        bool PassiveApplies (Point point)
-        {
-            bool any = false;
-            foreach (Point grabbed in grabbed_) {
-                float positionWeight, rotationWeight;
-                if (!GetWeights (grabbed, out positionWeight, out rotationWeight) && !IsFootBoxed (grabbed)) continue;
-                int body = IsFootBoxed (grabbed) ? grabbed.floorGroup : grabbed.body;
-                if (body < 0) continue;
-                if (body != point.body && !IsBelow (body, point.body)) return false;
-                any = true;
-            }
-            return any;
-        }
-
-        /// <summary>
         /// 軽い点をつかんで動かしている間（S88）、動かない点を今の場所（heavyPositions_ / heavyRotations_。1 回目の姿勢）へ留める目標を、先頭から入れる。入れた数を返す。
-        /// 動かない点は、Free の重い点（重さ 1）と、つかんでいない Pin の重い点・Lock の点（位置の強さ 1。Lock は重さに関係なく）と、動かせない点（passive。S89。付け根から離れていても軸まわりに回れる。AxisTurns）。
+        /// 動かない点は、Free の重い点（重さ 1）と、つかんでいない Pin の重い点・Lock の点（位置の強さ 1。Lock は重さに関係なく）。
         /// 強さが 1 より小さい Pin の点と、向きを混ぜる点（膝の Pole）は、動かない点にしない（今までどおり自分の目標で、つかんだ点と引き合う）。
         /// 動かない点は計算の上で動かない物で、その向こうの点は動かない（10-27 ユーザー指示「計算上動かないからその向こう側の制御点は動かない」）:
         /// - つかんだ点の骨から、動かない点のある骨を越えずに届かない骨は、向こう側の骨として動かない骨にする（frozen_）
@@ -106,7 +87,7 @@ namespace Lilium
                 bool weighted = positionWeight > 0 || rotationWeight > 0;
                 heldCount_[point.body]++;
                 walls_[point.body] = true;
-                if (!point.passive && (weighted ? rotationWeight > 0 : point.hasRotation)) oriented_[point.body] = true;
+                if (weighted ? rotationWeight > 0 : point.hasRotation) oriented_[point.body] = true;
                 if (point.offset.sqrMagnitude > kEpsilon * kEpsilon) offAxis_[point.body] = true;
             }
 

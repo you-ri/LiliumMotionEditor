@@ -491,7 +491,7 @@ namespace Lilium
                 List<string> problems = definition != null ? definition.Validate () : new List<string> ();
                 if (definition != null && !names.Add (definition.name)) problems.Add (Tr ("HELD_OBJECT_DUPLICATE_NAME", definition.name));
                 if (definition != null && problems.Count == 0) {
-                    Transform parent = definition.parentBone == HumanBodyBones.LastBone ? animator.transform : animator.GetBoneTransform (definition.parentBone);
+                    Transform parent = definition.parentBone == HumanBodyBones.LastBone ? animator.transform : animator.isHuman ? animator.GetBoneTransform (definition.parentBone) : null;
                     if (parent == null) problems.Add (Tr ("HELD_OBJECT_NO_PARENT_BONE", definition.name, definition.parentBone));
                     else if (definition.prefab != null) {
                         GameObject instance = instantiate (definition.prefab);

@@ -110,7 +110,7 @@ namespace Lilium
     /// 重い点（1 の点）は Free でも Pin でも今の場所に留まる。Lock の点は重さに関係なく留まる。重い点を動かすとき・キーから解き直すときは、今までどおり Free の点は重さに関係なく引かれる。
     /// 膝の Pole のように向きを混ぜる点（S34）と、重い点のある骨の上の 0 の点（既定の向きの点）は、骨を回して点を目標の方へ向けるだけ（S28）。
     /// 動かせない点（定義の passive。S89）は値を持たず、乗る骨の上でも親から見ても動かない点: 付け根から離れていれば、骨は付け根と点を結ぶ軸まわりにだけ回る
-    /// （FullBodyIkBone.axisLock。キーから解くときも同じ）。軽い点を引くときは、そこから先へ力を伝えない壁にもなる（AddHeldEffectors）
+    /// （FullBodyIkBone.axisLock。キーから解くときも、つかんで引くときも同じ）。力は止めないので、軸から外れる分は親が回って受ける
     ///
     /// 毎回、受け取った元の姿勢から解く（前に解いた結果を引き継がない）。値を直に動かして解き直すときのために、
     /// 受け取った姿勢を控えておき（CaptureInput）、解き直す前に戻す（RestoreInput）。
@@ -160,7 +160,7 @@ namespace Lilium
             public bool light;
             /// <summary>接地の点か（定義の contact）</summary>
             public bool contact;
-            /// <summary>動かせない点か（定義の passive。S89）。乗る骨を付け根と点を結ぶ軸まわりにだけ回す（axisLock）。軽い点をつかんでいる間は今の場所に留める壁にする（AddHeldEffectors）。自分の目標は使わない</summary>
+            /// <summary>動かせない点か（定義の passive。S89）。乗る骨を付け根と点を結ぶ軸まわりにだけ回す（axisLock）。自分の目標は使わない</summary>
             public bool passive;
             /// <summary>床との当たりの球の半径（メートル。定義の radius × humanScale）</summary>
             public float radius;
@@ -253,10 +253,10 @@ namespace Lilium
         void CreateBodies ()
         {
             Transform root = rig_.root.transform;
-            List<RigBinding.Fk> solved = new List<RigBinding.Fk> ();
+            List<RigBinding.BoneControl> solved = new List<RigBinding.BoneControl> ();
             List<Transform> solvedBones = new List<Transform> ();
-            foreach (RigBinding.Fk fk in rig_.binding.fk) {
-                if (!fk.enabled || !fk.control.fullBodySolve) continue;
+            foreach (RigBinding.BoneControl fk in rig_.binding.boneControls) {
+                if (!fk.enabled || !fk.fullBodySolve) continue;
                 Transform bone = rig_.GetEditingBone (fk.bone);
                 if (bone == null || solvedBones.Contains (bone)) continue;
                 solved.Add (fk);
@@ -302,25 +302,28 @@ namespace Lilium
             yieldedPositions_ = new Vector3[bodies_.Count];
             yieldedRotations_ = new Quaternion[bodies_.Count];
             for (int i = 0; i < bodies_.Count; i++) {
-                RigBinding.Fk fk = solved[order[i]];
+                RigBinding.BoneControl fk = solved[order[i]];
                 int parent = -1;
                 for (Transform t = bodies_[i].parent; t != null && t != root && parent < 0; t = t.parent) parent = bodies_.IndexOf (t);
                 bodyParents_.Add (parent);
                 if (parent >= 0) childCounts_[parent]++;
                 // 蝶番の軸は基準姿勢で決める: 親の骨の向きと、関節が出る向き（定義の bendDirection）の両方に直交する向き。親の骨の枠で持つ
-                bool hinge = fk.control.hinge && parent >= 0;
+                bool hinge = fk.hinge && parent >= 0;
                 Vector3 axis = Vector3.zero;
                 if (hinge) {
                     Vector3 upper = rig_.GetRestRootPosition (bodies_[i]) - rig_.GetRestRootPosition (bodies_[parent]);
-                    Vector3 cross = Vector3.Cross (rig_.BodyToRoot (fk.control.bendDirection), upper);
+                    Vector3 cross = Vector3.Cross (rig_.BodyToRoot (fk.bendDirection), upper);
                     if (cross.sqrMagnitude > kEpsilon) axis = Quaternion.Inverse (rig_.GetRestRootRotation (bodies_[parent])) * cross.normalized;
                 }
-                data_.bones[i] = new FullBodyIkBone {
+                FullBodyIkBone body = new FullBodyIkBone {
                     parent = parent,
-                    stiffness = Mathf.Clamp01 (fk.control.stiffness),
+                    stiffness = Mathf.Clamp01 (fk.stiffness),
                     hinge = hinge ? 1 : 0,
                     hingeAxis = axis,
+                    ownWeight = fk.ownWeightOnly ? 1 : 0,
                 };
+                if (parent >= 0) SetLimit (ref body, fk.limit, bodies_[i], bodies_[parent]);
+                data_.bones[i] = body;
             }
             foreach (Point point in points_) {
                 point.body = bodies_.IndexOf (point.bone);

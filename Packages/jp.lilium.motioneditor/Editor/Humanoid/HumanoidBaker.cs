@@ -41,6 +41,8 @@ namespace Lilium
         readonly System.Action<AnimationClip, float> sample_;
         /// <summary>そのフレームの姿勢を作る（S14。元＋Override を重ねる）。null なら sample_ でクリップを当てる</summary>
         readonly System.Action<float> apply_;
+        /// <summary>Humanoid の体を焼くか。Humanoid でないキャラ（S93）は追加コントロールの骨の Transform だけを焼く（Generic のクリップ）</summary>
+        readonly bool human_;
         HumanPoseHandler handler_;
         HumanPose pose_;
         /// <summary>手足の IK ゴールを焼いた姿勢から求める（FBX の取り込みと同じく姿勢から作る）</summary>
@@ -105,8 +107,9 @@ namespace Lilium
                 error = Tr ("HUMANOID_BAKER_NO_EDITING_BODY");
                 return;
             }
-            if (avatar == null || !avatar.isValid || !avatar.isHuman) {
-                error = Tr ("HUMANOID_BAKER_NO_HUMANOID_AVATAR");
+            human_ = avatar != null && avatar.isValid && avatar.isHuman;
+            if (!human_) {
+                if (!rig.binding.extras.Exists (e => e.enabled)) error = Tr ("HUMANOID_BAKER_NOTHING_TO_BAKE");
                 return;
             }
 
@@ -252,22 +255,22 @@ namespace Lilium
             float rate = CurveEdit.FrameRateOf (source);
             // カーブの無いクリップの長さは 1 秒と返るので、その場合は基準姿勢の 1 フレームだけ
             int frameCount = source.empty ? 1 : CurveEdit.FrameCount (source.length, rate);
-            int muscleCount = HumanTrait.MuscleCount;
+            int muscleCount = human_ ? HumanTrait.MuscleCount : 0;
             // 体の並び: RootT xyz, RootQ xyzw, muscle...
-            int bodyCount = 7 + muscleCount;
+            int bodyCount = human_ ? 7 + muscleCount : 0;
             float[][] body = new float[bodyCount][];
             for (int c = 0; c < bodyCount; c++) body[c] = new float[frameCount];
 
             List<Channel> channels = CreateChannels (context, hooks, frameCount);
             float[] buffer = new float[4];
             // IK ゴール: ゴールごとに位置 3 本・向き 4 本
-            EnsureGoals ();
+            if (human_) EnsureGoals ();
             int goalCount = goals_ != null ? HumanoidGoals.kCurveNames.Length : 0;
             float[][] goalCurves = new float[goalCount * 7][];
             for (int c = 0; c < goalCurves.Length; c++) goalCurves[c] = new float[frameCount];
             Vector3[] goalPositions = new Vector3[goalCount];
             Quaternion[] goalRotations = new Quaternion[goalCount];
-            if (goals_ == null) context.notes.Add (Tr ("HUMANOID_BAKER_CANNOT_BAKE_IK_GOALS"));
+            if (human_ && goals_ == null) context.notes.Add (Tr ("HUMANOID_BAKER_CANNOT_BAKE_IK_GOALS"));
 
             Quaternion previous = Quaternion.identity;
             for (int f = 0; f < frameCount; f++) {
@@ -275,27 +278,27 @@ namespace Lilium
                 if (apply_ != null) apply_ (f / rate);
                 else sample_ (source, f / rate);
                 solver_.Solve ();
-                if (readFromDisplay) ReadDisplayPose (ref pose_);
-                else {
-                    if (afterSolve != null) afterSolve ();
-                    ReadPose (ref pose_);
-                }
+                if (!readFromDisplay && afterSolve != null) afterSolve ();
+                if (human_) {
+                    if (readFromDisplay) ReadDisplayPose (ref pose_);
+                    else ReadPose (ref pose_);
 
-                Vector3 t = pose_.bodyPosition;
-                Quaternion q = pose_.bodyRotation;
-                // 補間で遠回りしないよう、前のフレームと同じ側の四元数にそろえる
-                if (f > 0 && Quaternion.Dot (previous, q) < 0) q = new Quaternion (-q.x, -q.y, -q.z, -q.w);
-                previous = q;
+                    Vector3 t = pose_.bodyPosition;
+                    Quaternion q = pose_.bodyRotation;
+                    // 補間で遠回りしないよう、前のフレームと同じ側の四元数にそろえる
+                    if (f > 0 && Quaternion.Dot (previous, q) < 0) q = new Quaternion (-q.x, -q.y, -q.z, -q.w);
+                    previous = q;
 
-                body[0][f] = t.x;
-                body[1][f] = t.y;
-                body[2][f] = t.z;
-                body[3][f] = q.x;
-                body[4][f] = q.y;
-                body[5][f] = q.z;
-                body[6][f] = q.w;
-                for (int m = 0; m < muscleCount; m++) {
-                    body[7 + m][f] = pose_.muscles[m];
+                    body[0][f] = t.x;
+                    body[1][f] = t.y;
+                    body[2][f] = t.z;
+                    body[3][f] = q.x;
+                    body[4][f] = q.y;
+                    body[5][f] = q.z;
+                    body[6][f] = q.w;
+                    for (int m = 0; m < muscleCount; m++) {
+                        body[7 + m][f] = pose_.muscles[m];
+                    }
                 }
                 if (goals_ != null) {
                     goals_.Compute (ref pose_, goalPositions, goalRotations);

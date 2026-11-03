@@ -30,6 +30,27 @@ namespace Lilium
         public int axisLock;
         /// <summary>axisLock の軸（自分の骨の枠で。付け根から動かせない点への向き）。元の姿勢でのこの軸を、親から見た向きに留める</summary>
         public float3 lockAxis;
+        /// <summary>
+        /// 1 なら、親から見た回りに角度制限を掛ける（S95）。回りは limitRest からの差を limitFrame の枠で表し、x 軸まわりのひねりと、
+        /// 残り（振り）の回転ベクトルの y・z 成分に分けて（FullBodyIk.LimitAngles）、軸ごとに範囲と比べる
+        /// </summary>
+        public int limit;
+        /// <summary>制限の枠（親の骨の枠から見た向き）。x がひねりの軸（T ポーズの骨の向き）、y・z が振りの軸</summary>
+        public quaternion limitFrame;
+        /// <summary>T ポーズでの、親から見た自分の向き（回りはここからの差で測る）</summary>
+        public quaternion limitRest;
+        /// <summary>範囲（ラジアン。limitFrame の軸ごと）。自由な軸は ±π より広くする</summary>
+        public float3 limitMin;
+        public float3 limitMax;
+        /// <summary>
+        /// 遊び（ラジアン。軸ごと）。範囲を越えると、越えた量が遊びに近づくほど範囲へ戻す力が強くなり、範囲 + 遊びで止まる。0 なら範囲で止まる
+        /// </summary>
+        public float3 limitSlack;
+        /// <summary>
+        /// 1 なら、重さと回しにくさをこの骨の分だけにする（S96）。0（既定）は、この骨から先の骨を全部足す（根ほど重い）。
+        /// 一列の骨を両端で留めて曲げるとき、足すと根元が回りにくく、曲がりが先の軽い骨に集まって、そこが角度制限で止まると反復が足りなくなる
+        /// </summary>
+        public int ownWeight;
     }
 
     /// <summary>
@@ -136,6 +157,13 @@ namespace Lilium
         /// <summary>床の上向き（ルート空間）と、ルートの付け根の床からの高さ（メートル）</summary>
         public float3 floorNormal;
         public float floorHeight;
+        /// <summary>
+        /// 入力。角度制限（S95）の基準にする元の姿勢の骨の向き（ルート空間）。useLimitReference が 1 のときだけ使い、0 なら positions / rotations の入力を使う。
+        /// 元の姿勢が範囲の外なら、そこまでは許す（点の固定が今の姿勢の上なら姿勢を変えない）。重い点をつかんだときの解き直しは、
+        /// 背骨を伸ばした姿勢などから解き始めるので、その姿勢でなく、手を加える前の元の姿勢を渡す（途中の姿勢を基準にすると、伸ばした分が制限の外でも許される）
+        /// </summary>
+        public NativeArray<quaternion> limitReference;
+        public int useLimitReference;
 
         // ---- 作業領域 ----
         internal NativeArray<float3> inputPositions;
@@ -162,6 +190,10 @@ namespace Lilium
         /// <summary>1 なら、軸まわりにだけ回る関節（FullBodyIkBone.axisLock）。軸は親の枠（lockAxisParent）と自分の枠（lockAxis）で持つ</summary>
         internal NativeArray<int> lockOn;
         internal NativeArray<float3> lockAxisParent;
+        /// <summary>角度制限の範囲（limitMin / limitMax を、元の姿勢の値まで広げた物）と、範囲へ戻すばねの力</summary>
+        internal NativeArray<float3> limitLow;
+        internal NativeArray<float3> limitHigh;
+        internal NativeArray<float> limitLambda;
         internal NativeArray<float2> rootLambda;
         internal NativeArray<float2> effectorLambda;
         internal NativeArray<int> active;
@@ -171,6 +203,11 @@ namespace Lilium
         internal NativeArray<int> pinCount;
         /// <summary>2 つ目の固定した点の場所（骨の枠で）</summary>
         internal NativeArray<float3> secondPin;
+        /// <summary>1 なら、解き始める前に、動かした固定の骨から付けて動かした骨（CarryFromMoved。根を留めないときだけ）</summary>
+        internal NativeArray<int> carried;
+        /// <summary>点の骨から骨の木をたどった数と、1 つ手前（点の骨の側）の骨（StraightenUnreachable。根を留めないときだけ）</summary>
+        internal NativeArray<int> pathDistance;
+        internal NativeArray<int> pathPrevious;
         internal NativeArray<int> effectorBody;
         internal NativeArray<float3> effectorPoint;
         /// <summary>1 なら、強さ 1 の目標だが、骨がもうほかの点で動かない物になっているので、その点まわりに骨を回して寄せる</summary>
@@ -226,6 +263,10 @@ namespace Lilium
             d.hingeRange = new NativeArray<float2> (boneCount, allocator);
             d.lockOn = new NativeArray<int> (boneCount, allocator);
             d.lockAxisParent = new NativeArray<float3> (boneCount, allocator);
+            d.limitReference = new NativeArray<quaternion> (boneCount, allocator);
+            d.limitLow = new NativeArray<float3> (boneCount, allocator);
+            d.limitHigh = new NativeArray<float3> (boneCount, allocator);
+            d.limitLambda = new NativeArray<float> (boneCount, allocator);
             d.rootLambda = new NativeArray<float2> (boneCount, allocator);
             d.effectorLambda = new NativeArray<float2> (math.max (1, maxEffectors), allocator);
             d.active = new NativeArray<int> (boneCount, allocator);
@@ -233,6 +274,9 @@ namespace Lilium
             d.pinnedOrigin = new NativeArray<int> (boneCount, allocator);
             d.pinCount = new NativeArray<int> (boneCount, allocator);
             d.secondPin = new NativeArray<float3> (boneCount, allocator);
+            d.carried = new NativeArray<int> (boneCount, allocator);
+            d.pathDistance = new NativeArray<int> (boneCount, allocator);
+            d.pathPrevious = new NativeArray<int> (boneCount, allocator);
             d.effectorBody = new NativeArray<int> (math.max (1, maxEffectors), allocator);
             d.effectorPoint = new NativeArray<float3> (math.max (1, maxEffectors), allocator);
             d.effectorHard = new NativeArray<int> (math.max (1, maxEffectors), allocator);
@@ -276,6 +320,10 @@ namespace Lilium
             hingeRange.Dispose ();
             lockOn.Dispose ();
             lockAxisParent.Dispose ();
+            limitReference.Dispose ();
+            limitLow.Dispose ();
+            limitHigh.Dispose ();
+            limitLambda.Dispose ();
             rootLambda.Dispose ();
             effectorLambda.Dispose ();
             active.Dispose ();
@@ -283,6 +331,9 @@ namespace Lilium
             pinnedOrigin.Dispose ();
             pinCount.Dispose ();
             secondPin.Dispose ();
+            carried.Dispose ();
+            pathDistance.Dispose ();
+            pathPrevious.Dispose ();
             effectorBody.Dispose ();
             effectorPoint.Dispose ();
             effectorHard.Dispose ();
@@ -347,6 +398,12 @@ namespace Lilium
         const float kContactTolerance = 1e-4f;
         /// <summary>仕上げで床の上へ戻すのをくり返す回数の上限（回す角度は 1 回ごとに近似なので、数回で詰める）</summary>
         const int kContactPasses = 16;
+        /// <summary>角度制限の外とみなす量（ラジアン）。元の姿勢ちょうどの値を、正規化の丸めの差で外と見て回さない</summary>
+        const float kLimitTolerance = 1e-5f;
+        /// <summary>固定の骨の目標が元の姿勢から動いたとみなす差（m・ラジアン。CarryFromMoved）</summary>
+        const float kCarryTolerance = 1e-5f;
+        /// <summary>点が届かないとみなす、届く長さを超えた分（m。StraightenUnreachable）</summary>
+        const float kStraightenTolerance = 1e-4f;
 
         [BurstDiscard]
         internal static void MarkManaged (ref FullBodyIkData d)
@@ -365,6 +422,10 @@ namespace Lilium
             if (n == 0) return;
             int effectorCount = math.clamp (d.effectorCount, 0, d.effectors.Length);
             int contactCount = d.contacts.IsCreated ? math.clamp (d.contactCount, 0, d.contacts.Length) : 0;
+            // 角度制限の基準を渡されていなければ、受け取った元の姿勢を基準にする（床の当たりで解き直すときも、解いた姿勢でなくこちらを使う）
+            if (d.useLimitReference == 0) {
+                for (int i = 0; i < n; i++) d.limitReference[i] = math.normalizesafe (d.rotations[i], quaternion.identity);
+            }
 
             d.contactsOn = 0;
             SolveOnce (ref d, n, effectorCount, 0);
@@ -395,6 +456,8 @@ namespace Lilium
             Prepare (ref d, n);
             PrepareEffectors (ref d, effectorCount);
             PrepareContacts (ref d, n, contactCount);
+            CarryFromMoved (ref d, n, effectorCount);
+            ConnectToParents (ref d, n);
 
             int iterations = math.max (1, d.iterations);
             if (contactCount > 0) {
@@ -446,6 +509,70 @@ namespace Lilium
             }
 
             Finish (ref d, n, effectorCount, contactCount);
+        }
+
+        /// <summary>
+        /// 固定した点の骨は目標の場所へ移してあるので、子の骨を向きを変えずに付いて動かし、関節をつないでから解き始める。
+        /// 蝶番は手前の骨の付け根から測るので、離れたままだと、1 回目に膝を古い場所から置いて、固定した腰が回る
+        /// （11-02 実測。腰と足を同じだけ動かすと、Free の手が 3.4mm ずれた）。関節の拘束で寄せても、離れた分だけ腰が回る。親が子より先に来る並び
+        /// </summary>
+        static void ConnectToParents (ref FullBodyIkData d, int n)
+        {
+            for (int i = 0; i < n; i++) {
+                int p = d.bones[i].parent;
+                // 動かした固定の骨から付けて動かした骨（CarryFromMoved）は、もう関節がつながっている
+                if (p < 0 || d.active[i] == 0 || d.inverseMass[i] <= 0 || d.carried[i] != 0) continue;
+                float3 joint = d.centers[p] + math.rotate (d.rotations[p], d.anchorLocal[i] - d.centerLocal[p]);
+                d.centers[i] = joint + math.rotate (d.rotations[i], d.centerLocal[i]);
+            }
+        }
+
+        /// <summary>
+        /// 根を留めない（rootPin が 0）ときの、解き始める姿勢（S97）。目標が元の姿勢から動いた固定の骨（つかんで動かした点の骨）から、
+        /// 固定していない骨を、子の側へも親の側へもたどって、向きを変えずに関節がつながる所へ付けて動かす（固定した骨の所で止まる）。
+        /// 子の側へだけ付けると（ConnectToParents）、根をつかめば全体が付いてくるのに、先の骨をつかむと何も付いてこない。
+        /// 両端を同じ形にした鎖でも、根の側を動かしたときと先の側を動かしたときで動きが対称にならなかった（11-03 ユーザー指示）。
+        /// 根を留めるとき（人の腰）は、腰を元の場所に柔らかく残す作りなので付けない（今までと同じ）
+        /// </summary>
+        static void CarryFromMoved (ref FullBodyIkData d, int n, int effectorCount)
+        {
+            for (int i = 0; i < n; i++) d.carried[i] = 0;
+            if (d.rootPin > 0) return;
+            for (int e = 0; e < effectorCount; e++) {
+                int lead = d.effectorBody[e];
+                FullBodyIkEffector effector = d.effectors[e];
+                if (lead < 0 || lead != effector.bone || d.inverseMass[lead] > 0 || IsAim (ref d, e)) continue;
+                float3 before = d.inputPositions[lead] + math.rotate (d.inputRotations[lead], d.effectorPoint[e]);
+                bool moved = math.distancesq (before, effector.position) > kCarryTolerance * kCarryTolerance;
+                if (!moved && effector.rotationWeight >= 1) moved = math.lengthsq (RotationVector (math.mul (d.rotations[lead], math.inverse (d.inputRotations[lead])))) > kCarryTolerance * kCarryTolerance;
+                if (!moved) continue;
+                d.carried[lead] = 1;
+                // 付けた骨の子・親で、まだ付けていない骨を付ける。並びに依らず広がるまで繰り返す
+                bool grew = true;
+                while (grew) {
+                    grew = false;
+                    for (int i = 0; i < n; i++) {
+                        if (d.carried[i] != 0 || d.active[i] == 0 || d.inverseMass[i] <= 0) continue;
+                        int p = d.bones[i].parent;
+                        if (p >= 0 && d.carried[p] != 0) {
+                            float3 joint = d.centers[p] + math.rotate (d.rotations[p], d.anchorLocal[i] - d.centerLocal[p]);
+                            d.centers[i] = joint + math.rotate (d.rotations[i], d.centerLocal[i]);
+                            d.carried[i] = 1;
+                            grew = true;
+                            continue;
+                        }
+                        for (int c = 0; c < n; c++) {
+                            if (d.bones[c].parent != i || d.carried[c] == 0) continue;
+                            // 子 c の付け根（関節）は、自分の枠で anchorLocal[c] の所
+                            float3 joint = d.centers[c] - math.rotate (d.rotations[c], d.centerLocal[c]);
+                            d.centers[i] = joint + math.rotate (d.rotations[i], d.centerLocal[i] - d.anchorLocal[c]);
+                            d.carried[i] = 1;
+                            grew = true;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // ---- 準備 ----
@@ -521,11 +648,16 @@ namespace Lilium
                 int p = d.bones[i].parent;
                 if (p >= 0) d.mass[p] = d.mass[p] + d.mass[i];
             }
+            // 重さを自分の骨の分だけにする骨（S96）は、先の骨を足さない。親へは先の骨も含めて足したまま（親の重さは変えない）
+            for (int i = 0; i < n; i++) {
+                if (d.bones[i].ownWeight != 0) d.mass[i] = d.extent[i];
+            }
             // 回しにくさ = その骨から先の骨が全部付いたまま回るとしたときの値（骨は長さの棒）。
             // 骨 1 本ぶんだけで出すと、胸や腰が腕 1 本より回しやすくなり、手を引いたときに胴ごと傾く
             for (int k = 0; k < n; k++) {
                 float radius = 0.5f * math.max (d.extent[k], extentFloor);
                 for (int a = k; a >= 0; a = d.bones[a].parent) {
+                    if (a != k && d.bones[a].ownWeight != 0) continue;
                     d.inertia[a] = d.inertia[a] + d.extent[k] * (math.distancesq (d.centers[k], d.centers[a]) + radius * radius);
                 }
             }
@@ -538,6 +670,19 @@ namespace Lilium
 
             for (int i = 0; i < n; i++) PrepareHinge (ref d, i);
             for (int i = 0; i < n; i++) PrepareLock (ref d, i);
+            for (int i = 0; i < n; i++) PrepareLimit (ref d, i);
+        }
+
+        /// <summary>角度制限の範囲を、元の姿勢（limitReference）の値まで広げる（元の姿勢が範囲の外なら、そこまでは許す）</summary>
+        static void PrepareLimit (ref FullBodyIkData d, int i)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            d.limitLambda[i] = 0;
+            if (bone.limit == 0 || bone.parent < 0) return;
+            quaternion reference = math.mul (math.inverse (d.limitReference[bone.parent]), d.limitReference[i]);
+            float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, reference);
+            d.limitLow[i] = math.min (bone.limitMin, angles);
+            d.limitHigh[i] = math.max (bone.limitMax, angles);
         }
 
         /// <summary>軸まわりにだけ回る関節（axisLock）の軸を、元の姿勢で親から見た向きにする</summary>
@@ -840,6 +985,8 @@ namespace Lilium
                 }
             }
 
+            if (d.bones[i].limit != 0) SolveLimit (ref d, i, p, soft);
+
             // 硬さ: 親から見た向きを、元の姿勢の値へ戻すばね
             float stiffness = soft ? math.saturate (d.bones[i].stiffness) : 0;
             if (stiffness <= 0) return;
@@ -848,6 +995,249 @@ namespace Lilium
             float spring = d.stiffnessLambda[i];
             ApplyAngular (ref d, i, p, correction, StiffnessCompliance (stiffness) * (d.inverseInertia[i] + d.inverseInertia[p]), ref spring);
             d.stiffnessLambda[i] = spring;
+        }
+
+        /// <summary>
+        /// 角度制限（S95）。範囲 + 遊びの外は必ず戻す。soft なら、範囲を越えた分を範囲の端へ戻すばねも掛ける。
+        /// ばねの硬さは「越えた量 / 遊び」（軸ごとの大きい方）で、範囲の端では効かず、遊びの端で曲がらなくなる。
+        /// 越えるほど回しにくくなるので、点を引くと、制限に近い関節より、ほかの関節が多く曲がる
+        /// </summary>
+        static void SolveLimit (ref FullBodyIkData d, int i, int p, bool soft)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            float3 low = d.limitLow[i];
+            float3 high = d.limitHigh[i];
+            float3 slack = math.max (bone.limitSlack, 0);
+            float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, math.mul (math.inverse (d.rotations[p]), d.rotations[i]));
+            float3 hard = ClampHard (ref d, i, angles);
+            if (math.any (math.abs (hard - angles) > kLimitTolerance)) {
+                float lambda = 0;
+                ApplyAngular (ref d, i, p, LimitCorrection (ref d, i, p, hard), 0, ref lambda);
+                angles = hard;
+            }
+            if (!soft) return;
+            float3 inside = math.clamp (angles, low, high);
+            float3 over = math.abs (angles - inside);
+            float stiffness = math.cmax (math.select (math.saturate (over / math.max (slack, kEpsilon)), 0, over <= kLimitTolerance));
+            if (stiffness <= 0) {
+                d.limitLambda[i] = 0;
+                return;
+            }
+            float spring = d.limitLambda[i];
+            ApplyAngular (ref d, i, p, LimitCorrection (ref d, i, p, inside), StiffnessCompliance (stiffness) * (d.inverseInertia[i] + d.inverseInertia[p]), ref spring);
+            d.limitLambda[i] = spring;
+        }
+
+        /// <summary>骨 i を、親 p から見た回りが angles（制限の枠の値）になるまで回す回転（軸 × 角度。ワールド）</summary>
+        static float3 LimitCorrection (ref FullBodyIkData d, int i, int p, float3 angles)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            quaternion wanted = math.mul (d.rotations[p], LimitRelative (bone.limitFrame, bone.limitRest, angles));
+            return RotationVector (math.mul (wanted, math.inverse (d.rotations[i])));
+        }
+
+        /// <summary>
+        /// 親から見た向き relative を、角度制限の値（ラジアン）にする: limitRest からの差を frame の枠で表し、x 軸まわりのひねり（x）と、
+        /// 残りの振りの回転ベクトルの y・z 成分に分ける（回り = 振り × ひねり）。リグ定義を Humanoid の可動域から作るときも、同じ値で測る
+        /// </summary>
+        public static float3 LimitAngles (quaternion frame, quaternion rest, quaternion relative)
+        {
+            quaternion delta = math.mul (math.mul (math.inverse (frame), math.mul (relative, math.inverse (rest))), frame);
+            float4 v = math.normalizesafe (delta, quaternion.identity).value;
+            if (v.w < 0) v = -v;
+            float twist = 2 * math.atan2 (v.x, v.w);
+            if (twist > math.PI) twist -= 2 * math.PI;
+            float3 swing = RotationVector (math.mul (new quaternion (v), quaternion.AxisAngle (new float3 (1, 0, 0), -twist)));
+            return new float3 (twist, swing.y, swing.z);
+        }
+
+        /// <summary>LimitAngles の逆。角度制限の値から、親から見た向きを作る</summary>
+        public static quaternion LimitRelative (quaternion frame, quaternion rest, float3 angles)
+        {
+            float3 swing = new float3 (0, angles.y, angles.z);
+            float swingAngle = math.length (swing);
+            quaternion turn = quaternion.AxisAngle (new float3 (1, 0, 0), angles.x);
+            if (swingAngle > kEpsilon) turn = math.mul (quaternion.AxisAngle (swing / swingAngle, swingAngle), turn);
+            return math.normalizesafe (math.mul (math.mul (math.mul (frame, turn), math.inverse (frame)), rest), rest);
+        }
+
+        /// <summary>
+        /// 仕上げの合わせ直しで、範囲 + 遊びの外へ回った骨を戻す（親から順に。先の骨は付いて回る）。
+        /// 点と両立しないときは制限が勝ち、点は届く所で止まる。回したら true
+        /// </summary>
+        static bool ClampLimits (ref FullBodyIkData d, int n)
+        {
+            bool turned = false;
+            for (int i = 0; i < n; i++) {
+                FullBodyIkBone bone = d.bones[i];
+                int p = bone.parent;
+                if (bone.limit == 0 || p < 0 || d.active[i] == 0 || d.fixedBones[i] != 0) continue;
+                float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, math.mul (math.inverse (d.rotations[p]), d.rotations[i]));
+                float3 hard = ClampHard (ref d, i, angles);
+                if (!math.any (math.abs (hard - angles) > kLimitTolerance)) continue;
+                quaternion wanted = math.mul (d.rotations[p], LimitRelative (bone.limitFrame, bone.limitRest, hard));
+                RotateSubtree (ref d, n, i, math.mul (wanted, math.inverse (d.rotations[i])));
+                turned = true;
+            }
+            return turned;
+        }
+
+        /// <summary>
+        /// 制限の値 angles を、必ず守る範囲に収める。範囲 + 遊びと、元の姿勢の値（limitLow / limitHigh に入っている）の広い方。
+        /// 元の姿勢の値の先には遊びを足さない。全身 IK の結果はキーに残って次に解くときの元の姿勢になるので、足すと解き直すたびに遊びの分ずつ広がる
+        /// </summary>
+        static float3 ClampHard (ref FullBodyIkData d, int i, float3 angles)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            float3 slack = math.max (bone.limitSlack, 0);
+            return math.clamp (angles, math.min (bone.limitMin - slack, d.limitLow[i]), math.max (bone.limitMax + slack, d.limitHigh[i]));
+        }
+
+        /// <summary>骨 i の向き rotation（ワールド）を、今の親から見て範囲 + 遊びに収まる向きにする（制限が無い・根の骨はそのまま）</summary>
+        static quaternion ClampToLimit (ref FullBodyIkData d, int i, quaternion rotation)
+        {
+            FullBodyIkBone bone = d.bones[i];
+            int p = bone.parent;
+            if (bone.limit == 0 || p < 0) return rotation;
+            float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, math.mul (math.inverse (d.rotations[p]), rotation));
+            float3 hard = ClampHard (ref d, i, angles);
+            if (!math.any (math.abs (hard - angles) > kLimitTolerance)) return rotation;
+            return math.mul (d.rotations[p], LimitRelative (bone.limitFrame, bone.limitRest, hard));
+        }
+
+        /// <summary>
+        /// 根を留めない（rootPin が 0）ときの仕上げ（S98）。点の目標が、留めた骨（位置を固定した骨）からつないだ骨の長さでは届かないとき、
+        /// 留めた骨からその点の骨までの間の骨を、目標へ向けて一直線に並べる。反復で解くと、両立しない点があると途中の形で止まり、
+        /// 間の関節が数度ずつ曲がったまま残った（11-03 ユーザー指示「point end と point root どちらを引っ張っても、間が一直線にならない」）。
+        /// 骨の木は親の側へも子の側へもたどる（根の側の骨を引いても、先の側の骨を引いても同じに並ぶ）。
+        /// 留めた骨の向きを固定していなければ、留めた点まわりに回して一緒に並べる。点の骨の向きを固定していなければ、点の骨も並べる。
+        /// 動かしていない固定の点（Lock の点など）は、留める側にだけなる。並べたら true
+        /// </summary>
+        static bool StraightenUnreachable (ref FullBodyIkData d, int n, int effectorCount)
+        {
+            if (d.rootPin > 0) return false;
+            bool changed = false;
+            for (int e = 0; e < effectorCount; e++) {
+                FullBodyIkEffector effector = d.effectors[e];
+                // 点が掛かっている骨（骨の付け根の点は、親の骨の上の点として掛かる）
+                int b = d.effectorBody[e];
+                if (b < 0 || b >= n || effector.positionWeight <= 0 || IsAim (ref d, e) || d.active[b] == 0) continue;
+                if (effector.positionWeight >= 1 && !EffectorMoved (ref d, e)) continue;
+                int anchor = FindAnchor (ref d, n, b);
+                if (anchor >= 0 && StraightenToward (ref d, n, effectorCount, e, anchor)) changed = true;
+            }
+            return changed;
+        }
+
+        /// <summary>点の目標が、元の姿勢での点の場所から動いたか</summary>
+        static bool EffectorMoved (ref FullBodyIkData d, int e)
+        {
+            FullBodyIkEffector effector = d.effectors[e];
+            float3 before = d.inputPositions[effector.bone] + math.rotate (d.inputRotations[effector.bone], effector.offset);
+            return math.distancesq (before, effector.position) > kCarryTolerance * kCarryTolerance;
+        }
+
+        /// <summary>
+        /// 骨 b から骨の木を親の側・子の側へ 1 段ずつたどって、いちばん近い留めた骨（位置を固定した骨）。無ければ -1。
+        /// 留めた骨の先へはたどらない。たどった道は pathPrevious（1 つ手前＝ b の側の骨）に残す
+        /// </summary>
+        static int FindAnchor (ref FullBodyIkData d, int n, int b)
+        {
+            for (int i = 0; i < n; i++) {
+                d.pathDistance[i] = -1;
+                d.pathPrevious[i] = -1;
+            }
+            d.pathDistance[b] = 0;
+            for (int level = 0; level < n; level++) {
+                bool grew = false;
+                for (int i = 0; i < n; i++) {
+                    if (d.pathDistance[i] != level || (i != b && d.inverseMass[i] <= 0)) continue;
+                    int p = d.bones[i].parent;
+                    if (p >= 0 && d.pathDistance[p] < 0 && d.active[p] != 0) {
+                        d.pathDistance[p] = level + 1;
+                        d.pathPrevious[p] = i;
+                        grew = true;
+                    }
+                    for (int c = 0; c < n; c++) {
+                        if (d.bones[c].parent != i || d.pathDistance[c] >= 0 || d.active[c] == 0) continue;
+                        d.pathDistance[c] = level + 1;
+                        d.pathPrevious[c] = i;
+                        grew = true;
+                    }
+                }
+                for (int i = 0; i < n; i++) {
+                    if (d.pathDistance[i] == level + 1 && d.inverseMass[i] <= 0) return i;
+                }
+                if (!grew) break;
+            }
+            return -1;
+        }
+
+        /// <summary>骨 x の上の、隣の骨 neighbor との関節の場所（x の付け根から、x の枠で）。neighbor が x の親なら x の付け根</summary>
+        static float3 JunctionLocal (ref FullBodyIkData d, int x, int neighbor)
+        {
+            return neighbor >= 0 && d.bones[neighbor].parent == x ? d.anchorLocal[neighbor] : float3.zero;
+        }
+
+        /// <summary>
+        /// 点 e の骨から留めた骨 anchor までの道（FindAnchor）を、届かなければ目標へ向けて一直線に並べる。並べたら true。
+        /// 留めた骨は今の場所でなく、留めた点の目標に置いて数える。両立しない点があると、骨を根から組み直した今の姿勢では、
+        /// 留めた骨の方が目標から外れていることがある（根の骨を引いたとき、留めた先の骨が 40cm ずれたまま、届くとみなしていた）
+        /// </summary>
+        static bool StraightenToward (ref FullBodyIkData d, int n, int effectorCount, int e, int anchor)
+        {
+            FullBodyIkEffector effector = d.effectors[e];
+            int b = d.effectorBody[e];
+            float3 leadPoint = d.effectorPoint[e];
+            int held = -1;
+            for (int k = 0; k < effectorCount && held < 0; k++) {
+                if (k != e && d.effectorBody[k] == anchor && d.effectors[k].positionWeight >= 1 && !IsAim (ref d, k)) held = k;
+            }
+            // 点の向きの固定が骨の向きを留めるのは、点が骨そのものに掛かるときだけ（付け根の点の向きは子の骨のもの）
+            bool anchorHeld = held >= 0 && d.effectorBody[held] == d.effectors[held].bone && d.effectors[held].rotationWeight >= 1;
+            bool leadHeld = b == effector.bone && effector.rotationWeight >= 1;
+            bool anchorTurns = held >= 0 && !anchorHeld && d.pinCount[anchor] < 2 && d.fixedBones[anchor] == 0;
+            bool leadTurns = !leadHeld && d.pinCount[b] < 2 && d.fixedBones[b] == 0;
+            quaternion anchorRotation = anchorHeld ? math.normalizesafe (d.effectors[held].rotation, d.rotations[anchor]) : d.rotations[anchor];
+            float3 anchorPoint = held >= 0 ? d.effectors[held].position : d.positions[anchor];
+            float3 anchorLocal = held >= 0 ? d.effectorPoint[held] : float3.zero;
+            float3 anchorOrigin = anchorPoint - math.rotate (anchorRotation, anchorLocal);
+            int first = d.pathPrevious[anchor];
+            float3 junction = anchorOrigin + math.rotate (anchorRotation, JunctionLocal (ref d, anchor, first));
+            float3 start = anchorTurns ? anchorPoint : junction;
+            // 届く長さ: 留めた点から関節まで（回せるときだけ）、間の骨の関節から関節まで、点の骨の関節から点まで
+            float reach = anchorTurns ? math.distance (anchorPoint, junction) : 0;
+            for (int x = first, from = anchor; x >= 0; from = x, x = d.pathPrevious[x]) {
+                float3 outLocal = x == b ? leadPoint : JunctionLocal (ref d, x, d.pathPrevious[x]);
+                reach += math.length (outLocal - JunctionLocal (ref d, x, from));
+            }
+            float3 toTarget = effector.position - start;
+            float distance = math.length (toTarget);
+            if (distance <= reach + kStraightenTolerance) return false;
+            float3 along = toTarget / distance;
+
+            // 骨ごとに、関節から次の関節（点の骨は点）への向きを目標の方へ回す（一番小さく回すので、ひねりは変えない）
+            if (anchorTurns) {
+                anchorRotation = math.normalizesafe (math.mul (FromTo (junction - anchorPoint, along), anchorRotation), anchorRotation);
+                anchorOrigin = anchorPoint - math.rotate (anchorRotation, anchorLocal);
+            }
+            d.rotations[anchor] = anchorRotation;
+            for (int x = first, from = anchor; x >= 0; from = x, x = d.pathPrevious[x]) {
+                if (x == b && !leadTurns) {
+                    if (leadHeld) d.rotations[b] = math.normalizesafe (effector.rotation, d.rotations[b]);
+                    break;
+                }
+                float3 outLocal = x == b ? leadPoint : JunctionLocal (ref d, x, d.pathPrevious[x]);
+                float3 segment = math.rotate (d.rotations[x], outLocal - JunctionLocal (ref d, x, from));
+                d.rotations[x] = math.normalizesafe (math.mul (FromTo (segment, along), d.rotations[x]), d.rotations[x]);
+            }
+            // 留めた骨が目標の場所に来るよう、木ごとずらす（道が根を通るときは、根の場所も変わる）
+            int root = anchor;
+            while (d.bones[root].parent >= 0) root = d.bones[root].parent;
+            Rebuild (ref d, n, false);
+            d.positions[root] = d.positions[root] + (anchorOrigin - d.positions[anchor]);
+            Rebuild (ref d, n, false);
+            return true;
         }
 
         /// <summary>
@@ -935,7 +1325,9 @@ namespace Lilium
             if (g < 0) return;
             float upper = math.length (d.anchorLocal[i]);
             if (upper < 1e-5f || lower < 1e-5f) return;
-            float3 top = d.centers[g] + math.rotate (d.rotations[g], d.anchorLocal[p] - d.centerLocal[g]);
+            // 手前の骨の付け根から測る。その親の上の関節の場所から測ると、手前の骨をつかんだ点が引いた分を、親へ伝わる前に打ち消した
+            // （11-02。肩を引くと肘と一緒に戻され、引く向きの成分が鎖骨へ届かず、横の成分だけが溜まって肩が目標と逆へ滑った）
+            float3 top = d.centers[p] - math.rotate (d.rotations[p], d.centerLocal[p]);
             float3 toTarget = target - top;
             float distance = math.length (toTarget);
             // 伸ばしきっても届かない（SolveReach が受け持つ）・畳みきっても近すぎるときは寄せない
@@ -1218,14 +1610,19 @@ namespace Lilium
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapAim (ref d, n, e, effectorCount, true)) Rebuild (ref d, n, false);
             }
-            // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す。床に当たって回した骨は戻さない（床が向きの固定に勝つ。S63）
+            // 届かない点は、留めた骨から一直線に並べる（S98。根を留めないときだけ）
+            if (StraightenUnreachable (ref d, n, effectorCount)) Rebuild (ref d, n, false);
+            // 合わせ直しで角度制限（範囲 + 遊び）の外へ回った骨を戻す（S95）
+            if (ClampLimits (ref d, n)) Rebuild (ref d, n, false);
+            // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す。床に当たって回した骨は戻さない（床が向きの固定に勝つ。S63）。
+            // 戻す向きも角度制限（範囲 + 遊び）で切る。点の向きと両立しないときは制限が勝つ（S95）。切らないと、点の向きのまま親との間がいくらでもひねれる
             for (int e = 0; e < effectorCount; e++) {
                 FullBodyIkEffector effector = d.effectors[e];
                 if (effector.bone < 0 || effector.bone >= n || effector.rotationWeight < 1 || IsAim (ref d, e)) continue;
                 if (d.contactTouched[effector.bone] != 0) continue;
                 // 骨の上の点（向きも留めた物）は、合わせ直しのときに向きを戻してある。ここで回すと、点が目標から外れる
                 if (IsOffset (ref d, e)) continue;
-                d.rotations[effector.bone] = math.normalizesafe (effector.rotation, d.rotations[effector.bone]);
+                d.rotations[effector.bone] = ClampToLimit (ref d, effector.bone, math.normalizesafe (effector.rotation, d.rotations[effector.bone]));
             }
             if (contactCount > 0) {
                 Rebuild (ref d, n, false);

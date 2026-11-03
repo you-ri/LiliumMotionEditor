@@ -9,7 +9,7 @@ An editor extension for creating character motions inside the Unity Editor.
 + No need to go back and forth with a DCC tool. Your edits show up in the motion right away.
 + Create motions non-destructively while checking the final pose as it will look in the game.
 + Edit poses with full-body IK.
-+ Outputs Humanoid clips for the game, with Animation Rigging values and other properties.
++ Outputs Humanoid clips for the game, with Animation Rigging values and other properties. Characters without a Humanoid Avatar output Generic clips.
 + Choose curve, linear, stepped or AI interpolation between keys, and cycle keys for loops.
 + Generates the poses between keys from a text prompt with NVIDIA's Kimodo motion model. (optional)
 + Under development. The specification will change in future versions.

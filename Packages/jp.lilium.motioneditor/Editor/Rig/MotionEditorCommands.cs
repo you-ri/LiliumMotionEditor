@@ -32,6 +32,8 @@ namespace Lilium
     /// - save: 書き換えたクリップを保存する
     /// - capture: frame の姿勢を 4 方向（正面・右・上・右斜め前）から PNG に書き出す（folder・size。画面のある Unity だけ）
     /// - importOverride: 外で作った Humanoid のクリップ（source）を、元に重ねる Override（overrideClip）として取り込む（mode・lockFeet）
+    /// - importGeneric: 骨を直接動かす Generic のクリップ（source。FBX の中のクリップは sourceName でも選ぶ）を、開いている編集用クリップの値へ取り込む。
+    ///   そのクリップの編集用リグのカーブは置き換える。保存は save
     /// - writeHand: frame に手の形を打つ。preset（PoseBank の Humanoid の姿勢の名前かパス）を hand（Left / Right / Both）の指に当て、
     ///   muscles（指の muscle の名前と値）で個別に上書きする。応答は readHand と同じ
     /// - readHand: frame の両手の指の muscle の値と、使えるプリセットの名前
@@ -260,6 +262,9 @@ namespace Lilium
                 case "importOverride":
                     return ImportOverride (request, out error);
 
+                case "importGeneric":
+                    return ImportGeneric (request, out error);
+
                 case "writeHand":
                     return WriteHand (request, out error);
 
@@ -270,7 +275,7 @@ namespace Lilium
                     return ExportKeys (request, out error);
 
                 default:
-                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, deleteKeys, sample, undo, lint, bake, save, capture, importOverride, exportKeys, writeHand, readHand, close");
+                    error = Tr ("MOTION_EDITOR_COMMANDS_UNKNOWN_COMMAND", request.command, "open, describe, readPose, writePose, writeMotion, readMotion, deleteKeys, sample, undo, lint, bake, save, capture, importOverride, importGeneric, exportKeys, writeHand, readHand, close");
                     return null;
             }
         }
@@ -869,6 +874,32 @@ namespace Lilium
         }
 
         /// <summary>
+        /// Generic のクリップ（source。FBX の中のクリップは sourceName でも選ぶ）を開いている編集用クリップへ取り込む（S93）
+        /// </summary>
+        static string ImportGeneric (MotionEditorRequest request, out string error)
+        {
+            AnimationClip source = null;
+            if (!string.IsNullOrEmpty (request.source)) {
+                source = string.IsNullOrEmpty (request.sourceName)
+                    ? AssetDatabase.LoadAssetAtPath<AnimationClip> (request.source)
+                    : AssetDatabase.LoadAllAssetsAtPath (request.source).OfType<AnimationClip> ().FirstOrDefault (c => c.name == request.sourceName);
+            }
+            if (source == null) {
+                error = Tr ("MOTION_EDITOR_COMMANDS_NO_CLIP", request.source + (string.IsNullOrEmpty (request.sourceName) ? "" : " " + request.sourceName));
+                return null;
+            }
+            PoseImport.Result result;
+            error = session_.ImportGeneric (source, out result);
+            if (error != null) return null;
+            return JsonUtility.ToJson (new MotionEditorGenericImport {
+                frameCount = result.frameCount,
+                curveCount = result.curveCount,
+                maxError = result.maxError,
+                notes = result.notes ?? new List<string> (),
+            });
+        }
+
+        /// <summary>
         /// キーの姿勢を外部の骨格（skeleton。ExternalSkeleton のアセット）へ写して、BVH を path へ書く（S73）。
         /// frames を省くとキーのフレーム。path の相対パスはプロジェクトのフォルダから
         /// </summary>
@@ -1055,7 +1086,9 @@ namespace Lilium
                 }
             }
             else {
-                definition = ProjectSettings.instance.defaultRigDefinition;
+                // 窓と同じ引き当て（キャラの設定で上書きしていればその定義）。プロジェクト設定だけを見ると、
+                // 人型の既定とは骨の違うキャラ（Generic など）が、窓では開けるのに CLI では全身 IK の点が無いまま開く
+                definition = RigDefinitionAssets.Resolve (SettingsLookup.Find (prefab));
             }
             AnimationClip clip = OpenClip (request.clip, request.create, out error);
             if (error != null) return null;
@@ -1159,7 +1192,7 @@ namespace Lilium
                     description.points.Add (new MotionEditorPointInfo {
                         name = id.name,
                         hasRotation = body.PointHasRotation (id),
-                        bone = point != null ? (point.heldObject != null ? point.heldObject.name : point.bone.ToString ()) : "",
+                        bone = point != null ? (point.heldObject != null ? point.heldObject.name : point.boneName) : "",
                         rest = rest,
                         link = link != null ? link.id.name : "",
                         length = link != null ? Vector3.Distance (rest, PoseDocument.RestPosition (session, link.id)) : 0,
@@ -1290,6 +1323,8 @@ namespace Lilium
         public int size = 512;
         /// <summary>importOverride の取り込む Humanoid のクリップのパス</summary>
         public string source;
+        /// <summary>importGeneric で、source の中のクリップの名前（FBX の中のクリップを選ぶとき）</summary>
+        public string sourceName;
         /// <summary>importOverride の書き先の Override のクリップのパス（create なら作る）</summary>
         public string overrideClip;
         /// <summary>importOverride の重ね方（Additive / Override）</summary>
@@ -1313,6 +1348,18 @@ namespace Lilium
         public string skeleton;
         /// <summary>exportKeys で書く BVH のパス（相対パスはプロジェクトのフォルダから）</summary>
         public string path;
+    }
+
+    /// <summary>importGeneric の応答（S93）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorGenericImport
+    {
+        public int frameCount;
+        public int curveCount;
+        /// <summary>取り込んだ値で解き直したときの骨の位置のずれの最大（m）</summary>
+        public float maxError;
+        /// <summary>取り込まなかったカーブなどの注意</summary>
+        public List<string> notes = new List<string> ();
     }
 
     /// <summary>exportKeys の応答（S73）</summary>

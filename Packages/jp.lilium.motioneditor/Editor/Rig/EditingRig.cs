@@ -46,7 +46,7 @@ namespace Lilium
         /// </summary>
         public RigProxies rigProxies { get; private set; }
         /// <summary>
-        /// 表示モデルの体の大きさ。全身 IK の点を保存するときに割る（割れるよう、人型でない・0 のときは 1）
+        /// 表示モデルの体の大きさ。全身 IK の点を保存するときに割る（人型でなければ定義の bodyScale。割れるよう、0 のときは 1）
         /// </summary>
         public float humanScale { get; private set; } = 1;
         /// <summary>
@@ -98,7 +98,8 @@ namespace Lilium
             }
 
             Transform source = displayAnimator.transform;
-            rig.humanScale = displayAnimator.isHuman && displayAnimator.humanScale > 1e-6f ? displayAnimator.humanScale : 1;
+            rig.humanScale = displayAnimator.isHuman && displayAnimator.humanScale > 1e-6f ? displayAnimator.humanScale
+                : !displayAnimator.isHuman && definition != null && definition.bodyScale > 1e-6f ? definition.bodyScale : 1;
             rig.root = createGameObject (source.name);
             rig.root.transform.SetPositionAndRotation (source.position, source.rotation);
             rig.root.transform.localScale = source.lossyScale;

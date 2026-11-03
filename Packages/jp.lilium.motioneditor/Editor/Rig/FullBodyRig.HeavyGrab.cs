@@ -53,6 +53,10 @@ namespace Lilium
         // （10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）
         void ResolveHeavyGrab ()
         {
+            if (data_.rootPin <= 0) {
+                ResolveUnpinnedHeavyGrab ();
+                return;
+            }
             bool[] path = PathToRoot ();
             System.Array.Copy (solvePositions_, startPositions_, bodies_.Count);
             System.Array.Copy (solveRotations_, startRotations_, bodies_.Count);
@@ -75,6 +79,31 @@ namespace Lilium
             finally {
                 SetStiffness (root, stiffness);
             }
+        }
+
+        /// <summary>
+        /// 根を留めない定義（rootPin が 0。S98）の解き直し。骨の木のどちら向きにも同じ扱いにする（根の側の骨をつかんでも、先の側の骨をつかんでも同じ）。
+        /// 1. Pin の点・Lock の点を留めて、つかんだ点を譲らせずに解く。届かなければ、ソルバーが留めた骨からつかんだ点まで一直線に並べる（StraightenUnreachable）。
+        /// 2. Lock の点があれば、ここまで（Lock の点は動かない）。無ければ、届かなかった分だけ Lock でない Pin の点を全部運び、
+        ///    1 の姿勢を同じだけずらした所から解き直す（一直線のまま付いてくる）。
+        /// 腰を留める定義の道（根への向き）で運ぶ量を決める作りでは、先の骨をつかむと Pin の根が一直線のまま付いてきたのに、
+        /// 根をつかむと先の Pin の点が道の外の扱いになり、間の関節が 20° ほど曲がった（11-03 ユーザー指示「point end と point root どちらを引っ張っても、間が一直線にならない」）。
+        /// ずらした姿勢から解くのは、伸びきった形（反復で解くソルバーが詰めきれない）を探させないため
+        /// </summary>
+        void ResolveUnpinnedHeavyGrab ()
+        {
+            System.Array.Copy (solvePositions_, startPositions_, bodies_.Count);
+            System.Array.Copy (solveRotations_, startRotations_, bodies_.Count);
+            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = Vector3.zero;
+            SolveHeavyTargets (null, Vector3.zero, 0, false);
+            Vector3 shift = GrabbedShift ();
+            if (shift.sqrMagnitude <= kReachTolerance * kReachTolerance || lockedEffectors_.Count > 0) return;
+            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = shift;
+            for (int i = 0; i < bodies_.Count; i++) {
+                startPositions_[i] = (Vector3)data_.positions[i] + shift;
+                startRotations_[i] = data_.rotations[i];
+            }
+            SolveHeavyTargets (null, Vector3.zero, 1, false);
         }
 
         /// <summary>解き直しの本体: 届かなかった分だけ、道の上・道の外の Pin の点の目標を運んで解く</summary>
@@ -299,8 +328,12 @@ namespace Lilium
             Vector3 target = Vector3.zero;
             foreach (int e in grabbedEffectors_) target += (Vector3)data_.effectors[e].position;
             target /= grabbedEffectors_.Count;
-            // length は、つかんだ点から骨 b の付け根までの、骨を伸ばしきった長さ
-            float length = ((Vector3)grabbed.offset).magnitude;
+            // つかんだ骨は向きを変えずに動き、その付け根から根の側の骨だけが伸びるとして数える（StraightenPath と同じ）。目標は、つかんだ骨の付け根が行く所。
+            // つかんだ骨まで回して点を鎖の向きへそろえる長さに数えると、骨の付け根から離れた点（胸の点は背骨の付け根から前下 5cm）では、
+            // 骨ごと回して点を振り上げれば届くとみなし、腰を運ばずに胸を回した（11-03 実測で、胸の点を上へ 5cm 引くと胸が 60° 回った）
+            target -= solveRotations_[grabbed.bone] * (Vector3)grabbed.offset;
+            // length は、つかんだ骨の付け根から骨 b の付け根までの、骨を伸ばしきった長さ
+            float length = 0;
             int child = -1;
             for (int b = grabbed.bone; bodyParents_[b] >= 0; child = b, b = bodyParents_[b]) {
                 int parent = bodyParents_[b];
@@ -329,7 +362,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 解き始める姿勢（startPositions_ / startRotations_）で、つかんだ点の骨から道の上の Pin の点（腰）までの骨を、運んだ Pin の点からつかんだ点の目標までの距離に合うように伸ばす。
+        /// 解き始める姿勢（startPositions_ / startRotations_）で、つかんだ点の骨の付け根から道の上の Pin の点（腰）までの骨を、運んだ Pin の点から、
+        /// つかんだ骨を向きを変えずに点を目標へ置いたときの付け根までの距離に合うように伸ばす。
         /// 骨の間の曲がりを同じ割合で小さくし（目標まで伸びるなら 0 倍でまっすぐ）、伸ばした分だけ目標の方へ向ける。距離が元の姿勢より近ければ何もしないので、境目で姿勢は跳ねない。
         /// Pin の点が向きを留めていない根（腰）なら、根の骨も、運んだ距離に応じて（kRootRelease まで）点まわりに目標の方へ回す。
         /// 蝶番（伸ばす手助けがソルバーにある）・軸まわりにだけ回る骨を含むとき（手を引くときの腕）と、つかんだ点が 2 つ以上のときは何もしない
@@ -356,21 +390,22 @@ namespace Lilium
             foreach (int b in pathChain_) {
                 if (data_.bones[b].hinge != 0 || data_.bones[b].axisLock != 0) return;
             }
+            // つかんだ骨は向きを変えずに動かし、その付け根を、点を目標へ置く所（goal）へ伸ばす（PathStretch と同じ数え方）。
+            // つかんだ骨まで伸ばす向きへ回すと、骨の付け根から離れた点（胸の点）では、伸ばすたびに胸が回り、胸に付いた首・腕が大きく振れた（11-03 実測）
+            int count = pathChain_.Count - 1;
+            if (count <= 0) return;
+            Vector3 goal = (Vector3)grabbed.position - solveRotations_[grabbed.bone] * (Vector3)grabbed.offset;
             // 根の骨は、運んだ距離に応じて回す。曲がりと一緒に回すと、伸びきる手前の短い間に回りきって、足が 1 回に 8cm 振れた（10-30 実測）。
             // 回さないと、腰と背骨の間に 21〜28° の曲がりが残った
             Vector3 rootSegment = solvePositions_[pathChain_[0]] - pinPoint;
             Vector3 pinTarget = pinPoint + pathShift;
             Quaternion rootTurn = turnsRoot
-                ? Quaternion.Slerp (Quaternion.identity, Quaternion.FromToRotation (rootSegment, (Vector3)grabbed.position - pinTarget), Mathf.Clamp01 (pathShift.magnitude / (kRootRelease * humanScale)))
+                ? Quaternion.Slerp (Quaternion.identity, Quaternion.FromToRotation (rootSegment, goal - pinTarget), Mathf.Clamp01 (pathShift.magnitude / (kRootRelease * humanScale)))
                 : Quaternion.identity;
             Vector3 start = pinTarget + rootTurn * rootSegment;
-            // 骨ごとの、付け根から次の骨の付け根（最後はつかんだ点）までのベクトル
-            int count = pathChain_.Count;
-            Vector3 end = solvePositions_[grabbed.bone] + solveRotations_[grabbed.bone] * (Vector3)grabbed.offset;
-            for (int k = 0; k < count; k++) {
-                pathSegments_[k] = rootTurn * ((k + 1 < count ? solvePositions_[pathChain_[k + 1]] : end) - solvePositions_[pathChain_[k]]);
-            }
-            Vector3 toTarget = (Vector3)grabbed.position - start;
+            // 骨ごとの、付け根から次の骨の付け根（最後はつかんだ骨の付け根）までのベクトル
+            for (int k = 0; k < count; k++) pathSegments_[k] = rootTurn * (solvePositions_[pathChain_[k + 1]] - solvePositions_[pathChain_[k]]);
+            Vector3 toTarget = goal - start;
             float demand = toTarget.magnitude;
             if (demand <= StraightenedEnd (pathSegments_, count, 1, null).magnitude) return;
             // 曲がりを何倍にすれば、先端までの距離が demand になるか（倍率が小さいほど遠い）
@@ -389,7 +424,7 @@ namespace Lilium
             for (int b = 0; b < bodies_.Count; b++) pathTurns_[b] = Quaternion.identity;
             pathTurns_[pinBody] = rootTurn;
             for (int k = 0; k < count; k++) pathTurns_[pathChain_[k]] = aim * segmentTurns_[k] * rootTurn;
-            // 骨の木を根からたどって置き直す（道の外の骨は親と一緒に動く）
+            // 骨の木を根からたどって置き直す（道の外の骨は親と一緒に動く。つかんだ骨は回しが無いままで、向きを変えない）
             for (int b = 0; b < bodies_.Count; b++) {
                 int parent = bodyParents_[b];
                 if (parent >= 0 && !pathChain_.Contains (b)) pathTurns_[b] = pathTurns_[parent];

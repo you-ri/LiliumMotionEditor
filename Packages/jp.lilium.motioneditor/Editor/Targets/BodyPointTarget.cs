@@ -87,6 +87,7 @@ namespace Lilium
         /// <summary>動かせない点か（定義の passive。S89）。選べるが、値を変える操作はどれも何もしない</summary>
         readonly bool passive_;
         readonly HumanBodyBones humanBone_;
+        readonly bool onObject_;
         readonly Transform control_;
         readonly Transform bone_;
         readonly Transform displayBone_;
@@ -414,7 +415,7 @@ namespace Lilium
                 BodyPointTarget point = (BodyPointTarget)target;
                 if (!string.IsNullOrEmpty (point.linkName_)) byName.TryGetValue (point.linkName_, out point.link_);
                 // 持ち物の上の点は、物の中だけをつなぐ（階層の親は持つ手で、手を離しても線が残る）
-                if (point.humanBone_ == HumanBodyBones.LastBone) continue;
+                if (point.onObject_) continue;
                 Transform root = rig.root.transform;
                 for (Transform t = point.offsetPoint_ ? point.bone_ : point.bone_.parent; t != null && t != root && point.link_ == null; t = t.parent) {
                     BodyPointTarget joint;
@@ -431,6 +432,7 @@ namespace Lilium
             shapes_ = shapes;
             human_ = new BodyPointId (point.name);
             humanBone_ = point.humanBone;
+            onObject_ = point.onObject;
             linkName_ = point.definition != null ? point.definition.link : null;
             offsetPoint_ = rig.GetPointRestOffset (point).sqrMagnitude > 1e-10f;
             pulls_ = point.definition == null || point.definition.weight > 0;
@@ -449,10 +451,16 @@ namespace Lilium
             get { return pulls_ ? 1 : kAimScale; }
         }
 
-        /// <summary>点が乗る骨</summary>
+        /// <summary>点が乗る骨（人型でない骨は LastBone）</summary>
         public HumanBodyBones bone
         {
             get { return humanBone_; }
+        }
+
+        /// <summary>点が乗る骨の名前（人型の骨は人型の名前。S93）</summary>
+        public string boneName
+        {
+            get { return humanBone_ != HumanBodyBones.LastBone ? humanBone_.ToString () : displayBone_ != null ? displayBone_.name : ""; }
         }
 
         /// <summary>動かせない点か（定義の passive。S89）</summary>

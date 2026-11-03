@@ -129,7 +129,10 @@ namespace Lilium
                 solveRotations_[i] = rootInverse * bodies_[i].rotation;
                 data_.positions[i] = solvePositions_[i];
                 data_.rotations[i] = solveRotations_[i];
+                // 角度制限（S95）の基準は、つかみ方ごとの解き直しで手を加える前の、この元の姿勢
+                data_.limitReference[i] = solveRotations_[i];
             }
+            data_.useLimitReference = 1;
         }
 
         /// <summary>解いた姿勢を骨へ書き戻す。何も変わらなければ骨に触らず false</summary>

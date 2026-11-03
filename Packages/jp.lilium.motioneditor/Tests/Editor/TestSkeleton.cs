@@ -6,11 +6,59 @@ using System.Linq;
 namespace Lilium
 {
 
+    /// <summary>Generic の骨格の Avatar の付け方</summary>
+    public enum GenericAvatar { None, Generic, GenericWithRootNode }
+
     /// <summary>
     /// テスト用の人型の骨。パッケージの外のアセットに頼らないよう、骨を組んで Avatar をその場で作る
     /// </summary>
     static class TestSkeleton
     {
+        /// <summary>
+        /// 四足の Generic の骨格（S93）。root の下に hip（後ろ足・尻尾）と chest（前足・頭）。前が +Z・上が +Y。
+        /// neck なら chest と head の間に無名の骨を足し、lengths で骨の長さを、twist で骨の軸（基準姿勢の localRotation）を変える
+        /// </summary>
+        public static Animator CreateQuadruped (List<Object> created, GenericAvatar avatar = GenericAvatar.None, bool neck = false, float lengths = 1, float twist = 0)
+        {
+            GameObject go = new GameObject ("Quadruped");
+            created.Add (go);
+            Transform Bone (string name, Transform parent, Vector3 position)
+            {
+                Transform bone = new GameObject (name).transform;
+                bone.SetParent (parent, false);
+                // 骨の軸を変えても世界の場所と向きが変わらないように、子を置いてから直す形にせず世界で置く
+                bone.position = parent.position + position * lengths;
+                bone.rotation = Quaternion.Euler (twist, twist * 0.5f, 0);
+                return bone;
+            }
+            Transform root = Bone ("root", go.transform, Vector3.zero);
+            Transform hip = Bone ("hip", root, new Vector3 (0, 0.6f, -0.05f));
+            Transform chest = Bone ("chest", root, new Vector3 (0, 0.6f, 0.05f));
+            foreach (string side in new[] { "L", "R" }) {
+                float x = side == "L" ? -0.1f : 0.1f;
+                Transform leg1 = Bone ("leg1_" + side, hip, new Vector3 (x, -0.1f, -0.25f));
+                Transform leg2 = Bone ("leg2_" + side, leg1, new Vector3 (0, -0.25f, 0.02f));
+                Bone ("foot_" + side, leg2, new Vector3 (0, -0.25f, -0.02f));
+                Transform arm1 = Bone ("arm1_" + side, chest, new Vector3 (x, -0.1f, 0.25f));
+                Transform arm2 = Bone ("arm2_" + side, arm1, new Vector3 (0, -0.25f, 0));
+                Bone ("hand_" + side, arm2, new Vector3 (0, -0.25f, 0));
+            }
+            Transform tail = Bone ("tail", hip, new Vector3 (0, 0.05f, -0.3f));
+            Bone ("tail2", tail, new Vector3 (0, 0, -0.2f));
+            Transform top = neck ? Bone ("neck", chest, new Vector3 (0, 0.1f, 0.2f)) : chest;
+            Bone ("head", top, neck ? new Vector3 (0, 0.1f, 0.2f) : new Vector3 (0, 0.2f, 0.4f));
+
+            Animator animator = go.AddComponent<Animator> ();
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            if (avatar != GenericAvatar.None) {
+                Avatar built = AvatarBuilder.BuildGenericAvatar (go, avatar == GenericAvatar.GenericWithRootNode ? "root" : "");
+                built.name = "Quadruped";
+                created.Add (built);
+                animator.avatar = built;
+            }
+            return animator;
+        }
+
         /// <summary>
         /// T ポーズの骨を組んで Humanoid の Avatar を付ける。withChest なら必須でない胸と首も足す。
         /// extraBones は左手の下に足す（武器など）。作った物は created に入れるので、呼ぶ側で捨てる

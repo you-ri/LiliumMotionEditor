@@ -79,7 +79,7 @@ namespace Lilium
             MotionEditorCommands.Close ();
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
             AssetDatabase.CreateFolder ("Assets", "__MktCommandsTest");
-            // 定義を指定しない open はプロジェクト設定の定義を使う。プロジェクトで直した定義（点の重さなど）でテストの結果が変わらないよう、
+            // 定義を指定しない open は、キャラの設定が無ければプロジェクト設定の定義を使う。プロジェクトで直した定義（点の重さなど）でテストの結果が変わらないよう、
             // 既定の定義をテストのフォルダに作って差し替える。プロジェクト設定は 1 つしか無いので、値を控えて後で戻す（保存はしない）
             projectBackup_ = EditorJsonUtility.ToJson (ProjectSettings.instance);
             EditRigDefinition definition = ScriptableObject.CreateInstance<EditRigDefinition> ();
@@ -198,6 +198,31 @@ namespace Lilium
             Assert.IsTrue (JsonUtility.FromJson<Head> (MotionEditorCommands.Run ("{\"command\":\"close\"}")).success);
             Assert.IsNull (MotionEditorCommands.session);
             AssertFailed (MotionEditorCommands.Run ("{\"command\":\"readPose\"}"), "閉じた後");
+        }
+
+        [Test]
+        public void Open_UsesTheCharacterSettingsDefinition ()
+        {
+            // 窓と同じく、キャラの設定で上書きした定義を使う（プロジェクト設定の定義ではなく）
+            EditRigDefinition own = ScriptableObject.CreateInstance<EditRigDefinition> ();
+            own.SetDefault ();
+            own.bodyPoints.RemoveAll (p => p.name == "LeftHand");
+            AssetDatabase.CreateAsset (own, kFolder + "/Own Rig Definition.asset");
+            CharacterSettings settings = ScriptableObject.CreateInstance<CharacterSettings> ();
+            settings.overrideRigDefinition = true;
+            settings.rigDefinition = own;
+            AssetDatabase.CreateAsset (settings, kFolder + "/Hero Motion Editor.asset");
+            SettingsLookup.Assign (settings, AssetDatabase.LoadAssetAtPath<GameObject> (prefabPath_));
+
+            DescribeResponse opened = Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Own.rig.anim", create = true });
+            Assert.IsTrue (opened.success, opened.error);
+            Assert.AreSame (own, MotionEditorCommands.session.definition);
+            Assert.IsFalse (opened.result.points.Any (p => p.name == "LeftHand"), "キャラの設定の定義の点");
+
+            // 指定した定義はキャラの設定より先
+            DescribeResponse given = Run<DescribeResponse> (new MotionEditorRequest { command = "open", prefab = prefabPath_, clip = kFolder + "/Own.rig.anim", definition = kFolder + "/Rig Definition.asset" });
+            Assert.IsTrue (given.success, given.error);
+            Assert.IsTrue (given.result.points.Any (p => p.name == "LeftHand"), "指定した定義の点");
         }
 
         [Test]

@@ -149,6 +149,73 @@ namespace Lilium
             Rebuild ();
         }
 
+        /// <summary>骨から定義を作れるか（Humanoid でないキャラで、ここで直せる定義のとき）</summary>
+        internal bool canSetDefinitionFromBones
+        {
+            get {
+                PreviewStage previewStage = session_ != null ? session_.stage : null;
+                return previewStage != null && previewStage.animator != null && !previewStage.animator.isHuman
+                    && definition != null && EditorUtility.IsPersistent (definition) && readOnlyReason == null;
+            }
+        }
+
+        /// <summary>今の定義の中身を、キャラの骨から作り直す（S93）。パッケージの既定は書き換えないので、先に複製する</summary>
+        internal void SetDefinitionFromBones ()
+        {
+            if (!canSetDefinitionFromBones) return;
+            EditRigDefinition target = definition;
+            Undo.RecordObject (target, "Set Rig Definition From Bones");
+            target.SetFromBones (session_.stage.animator);
+            EditorUtility.SetDirty (target);
+            AssetDatabase.SaveAssetIfDirty (target);
+            Rebuild ();
+        }
+
+        internal bool canSetLimitsFromHumanoid
+        {
+            get {
+                PreviewStage previewStage = session_ != null ? session_.stage : null;
+                return prefab_ != null && previewStage != null && previewStage.animator != null && previewStage.animator.isHuman
+                    && definition != null && readOnlyReason == null;
+            }
+        }
+
+        /// <summary>
+        /// 全身 IK で解く骨の角度制限を、キャラの Humanoid の可動域から作る（S95）。窓のキャラは試し動かしで動いていることがあるので、
+        /// prefab の複製（初期姿勢＝T ポーズ）をプレビューのシーンに置いて測る
+        /// </summary>
+        internal void SetLimitsFromHumanoid ()
+        {
+            if (!canSetLimitsFromHumanoid) return;
+            EditRigDefinition target = definition;
+            Undo.RecordObject (target, "Set Joint Limits From Humanoid");
+            string problem;
+            int count;
+            UnityEngine.SceneManagement.Scene scene = UnityEditor.SceneManagement.EditorSceneManager.NewPreviewScene ();
+            try {
+                GameObject copy = (GameObject)PrefabUtility.InstantiatePrefab (prefab_, scene);
+                Animator animator = null;
+                foreach (Animator candidate in copy.GetComponentsInChildren<Animator> (true)) {
+                    if (candidate.avatar != null && candidate.avatar.isHuman) {
+                        animator = candidate;
+                        break;
+                    }
+                }
+                count = HumanoidJointLimits.Apply (target, animator, out problem);
+            }
+            finally {
+                UnityEditor.SceneManagement.EditorSceneManager.ClosePreviewScene (scene);
+            }
+            if (problem != null) {
+                ShowNotification (new GUIContent (problem));
+                return;
+            }
+            EditorUtility.SetDirty (target);
+            if (EditorUtility.IsPersistent (target)) AssetDatabase.SaveAssetIfDirty (target);
+            ShowNotification (new GUIContent (Tr ("RIG_EDITOR_LIMITS_FROM_HUMANOID_DONE", count)));
+            Rebuild ();
+        }
+
         public void SetModel (GameObject prefab)
         {
             if (prefab_ == prefab) return;
