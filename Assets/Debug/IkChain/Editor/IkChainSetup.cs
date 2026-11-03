@@ -22,6 +22,8 @@ namespace Lilium
         const float kSlack = 5;
         // End の台の外側の面の、End の付け根からの高さ（make_ik_chain.py の ANCHOR_RISE + BASE_HEIGHT）。Root の点（台の底）と対にする
         const float kEndPlateHeight = 0.15f;
+        // 台（円盤）の半径（make_ik_chain.py の BASE_RADIUS）。縁の点を置く
+        const float kPlateRadius = 0.15f;
         // Blender の骨を入れる物（アーマチュア）。骨ではないので、リグ定義に入れない
         const string kArmatureNode = "Armature";
 
@@ -36,6 +38,8 @@ namespace Lilium
             }
             // Blender の向き（z 上）を骨の Transform に焼き込み、アーマチュアに回転を残さない
             importer.bakeAxisConversion = true;
+            // FBX のいちばん上が骨の入れ物（アーマチュア）1 つだけなので、まとめるとその回転（Blender の向きの 90°）がモデルの根に移り、体の向きが倒れる
+            importer.preserveHierarchy = true;
             importer.animationType = ModelImporterAnimationType.Generic;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             importer.importAnimation = false;
@@ -53,7 +57,14 @@ namespace Lilium
         {
             string path = kFolder + "/" + kName + " Rig Definition.asset";
             EditRigDefinition definition = AssetDatabase.LoadAssetAtPath<EditRigDefinition> (path);
-            if (definition != null) return definition;
+            if (definition != null) {
+                // 後から足した点は、前に作った定義にも足す（ほかの値は直したまま残す）
+                if (AddEdgePoints (definition)) {
+                    EditorUtility.SetDirty (definition);
+                    AssetDatabase.SaveAssetIfDirty (definition);
+                }
+                return definition;
+            }
             definition = ScriptableObject.CreateInstance<EditRigDefinition> ();
             definition.SetFromBones (model.GetComponent<Animator> ());
             // 骨から作ると、骨の親のアーマチュアがいちばん上の骨になる。外して、台の骨（Root）を場所も動かす根にする
@@ -93,7 +104,7 @@ namespace Lilium
         /// <summary>
         /// 両端の台の点は重さ 1 で向きも持つ（台ごと動かす・留める）。間の輪の点は重さ 0（引いても両端の台は動かず、間の輪だけが付いてくる）。
         /// End の点は台の外側の面に置き、Root の点（台の底）と対にする。End の付け根（Joint5 と噛み合う所）には、根元側の Joint1 の点と対になる
-        /// 重さ 0 の点（EndJoint）を足す（骨から作ると点は骨の付け根に 1 つずつなので、End の点を台の面へ動かすと、ここに点が無くなる）
+        /// 重さ 0 の点（EndJoint）を足す（骨から作ると点は骨の付け根に 1 つずつなので、End の点を台の面へ動かすと、ここに点が無くなる）。両端の台の縁にも点を足す
         /// </summary>
         static void SetPoints (EditRigDefinition definition)
         {
@@ -107,6 +118,29 @@ namespace Lilium
             definition.bodyPoints.Insert (end, new EditRigDefinition.BodyPoint {
                 name = "EndJoint", control = "End", origin = HumanBodyBones.LastBone, toward = HumanBodyBones.LastBone, weight = 0,
             });
+            AddEdgePoints (definition);
+        }
+
+        /// <summary>
+        /// 両端の台の縁の点（右 +X・前 +Z）。台の真ん中の点と同じ面に置き、真ん中の点と合わせた 3 点で台の向きまで決められるようにする。
+        /// 台の点なので重さ 1。無い点だけ、その台の真ん中の点の後ろへ足す。足したら true
+        /// </summary>
+        static bool AddEdgePoints (EditRigDefinition definition)
+        {
+            bool added = false;
+            foreach ((string plate, float height) in new[] { ("Root", 0f), ("End", kEndPlateHeight) }) {
+                foreach ((string side, Vector3 direction) in new[] { ("Right", Vector3.right), ("Front", Vector3.forward) }) {
+                    string name = plate + side;
+                    if (definition.bodyPoints.Exists (p => p.name == name)) continue;
+                    int center = definition.bodyPoints.FindIndex (p => p.name == plate);
+                    definition.bodyPoints.Insert (center + 1 + (side == "Front" ? 1 : 0), new EditRigDefinition.BodyPoint {
+                        name = name, control = plate, origin = HumanBodyBones.LastBone, toward = HumanBodyBones.LastBone, weight = 1,
+                        offset = direction * kPlateRadius + Vector3.up * height,
+                    });
+                    added = true;
+                }
+            }
+            return added;
         }
 
         static void SaveSettings (GameObject model, EditRigDefinition definition)

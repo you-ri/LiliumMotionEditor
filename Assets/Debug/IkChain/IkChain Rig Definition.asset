@@ -203,6 +203,48 @@ MonoBehaviour:
     radius: 0
     passive: 0
   - enabled: 1
+    name: RootRight
+    bone: 0
+    control: Root
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.15, y: 0, z: 0}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RootFront
+    bone: 0
+    control: Root
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0.15}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
     name: Joint1
     bone: 0
     control: Joint1
@@ -342,6 +384,48 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0.15, z: 0}
     rotation: 1
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: EndRight
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.15, y: 0.15, z: 0}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: EndFront
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0.15, z: 0.15}
+    rotation: 0
     weight: 1
     link: 
     blendBone: 0

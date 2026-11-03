@@ -273,8 +273,10 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 強さ 1 で固定していて完全固定でない点を、実際の骨の位置（向きも固定していれば向きも）へ合わせ直す。
+        /// 強さ 1 で固定した点（Lock の点も）を、実際の骨の位置（向きも固定していれば向きも）へ合わせ直す。
         /// 体が届かない所へ置いた点・ほかの点を動かして届かなくなった点が、体の形から離れたまま残らないようにする。
+        /// Lock の点は解くときには動かないが、両立しない点があると骨が外れることがあるので、決まった姿勢へ合わせ直す
+        /// （11-04 ユーザー指示「姿勢が決定した後、pin の制御点は新しい姿勢に合わせて位置を更新するが、lock も同じように移動して」）。
         /// 位置を直したら position、向きを直したら rotation が true
         /// </summary>
         public void SyncPointToBone (BodyPointId id, out bool position, out bool rotation)
@@ -282,7 +284,7 @@ namespace Lilium
             position = false;
             rotation = false;
             Point point = Find (id);
-            if (point == null || point.passive || point.values.locked > 0.5f) return;
+            if (point == null || point.passive) return;
             if (point.values.positionWeight >= 1 && Vector3.Distance (BonePointWorld (point), PointWorldPosition (point)) > kSyncDistance) {
                 point.control.localPosition = BoneLocalPosition (point);
                 position = true;

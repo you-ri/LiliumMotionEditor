@@ -70,7 +70,7 @@ namespace Lilium
 
         /// <summary>
         /// 点を、置いた場所でなく骨の今の場所に出すか（位置・向きそれぞれ）。足と一緒に動かしている Pin の点（CarryFootPins）と、
-        /// ほかの点をつかんで動かしている間の、離したときに骨へ付け直す点（SyncPointToBone と同じ条件。強さ 1 で Locked でない）。
+        /// ほかの点をつかんで動かしている間の、離したときに骨へ付け直す点（SyncPointToBone と同じ条件。強さ 1 の点。Lock の点も）。
         /// 置いた場所に出すと、動かしている間は動かす前の場所に残り、離したときに骨の場所へ飛んで見えた（10-27 ユーザー指示）
         /// </summary>
         public void GetShownOnBone (BodyPointId id, out bool position, out bool rotation)
@@ -82,7 +82,7 @@ namespace Lilium
                 position = rotation = true;
                 return;
             }
-            if (grabbed_.Count == 0 || grabbed_.Contains (point) || point.values.locked > 0.5f) return;
+            if (grabbed_.Count == 0 || grabbed_.Contains (point)) return;
             position = point.values.positionWeight >= 1;
             rotation = point.hasRotation && point.values.rotationWeight >= 1;
         }

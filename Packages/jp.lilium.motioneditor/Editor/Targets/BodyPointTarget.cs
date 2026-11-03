@@ -495,7 +495,14 @@ namespace Lilium
         {
             if (offsetPoint_) {
                 Vector3 toward = position - bone_.position;
-                return toward.sqrMagnitude > 1e-10f ? Quaternion.LookRotation (toward) : Quaternion.identity;
+                if (toward.sqrMagnitude <= 1e-10f) return Quaternion.identity;
+                // 上は、骨の枠で点の向きに直交する軸から取る（骨の枠での点の向きは変わらないので、軸を選び直さない）。
+                // 世界の上を使うと、点が骨の真上・真下にあるとき（鎖の台の面の点・頭のてっぺん）前と上が重なって回りが決まらず、
+                // 動かすたびにギズモが回り続けた（11-04 ユーザー報告「point end を動かすと、マニピュレーターが回転しまくる」）
+                Vector3 local = Quaternion.Inverse (bone_.rotation) * (bonePoint - bone_.position);
+                Vector3 side = Mathf.Abs (local.normalized.x) < 0.9f ? Vector3.right : Vector3.forward;
+                Vector3 up = bone_.rotation * Vector3.Cross (side, local);
+                return up.sqrMagnitude > 1e-12f ? Quaternion.LookRotation (toward, up) : Quaternion.LookRotation (toward);
             }
             return rotation * Quaternion.Inverse (bone_.rotation) * shapes_.GetRotation (bone_);
         }
@@ -516,7 +523,7 @@ namespace Lilium
             get { return hasRotation_ && body_.GetRotationWeight (human_) > 0; }
         }
 
-        /// <summary>完全固定か（置いた場所から動かさない。手を離しても骨の位置へ合わせ直さない）</summary>
+        /// <summary>完全固定か（解くときに置いた場所から動かさない。手を離したときは、Pin の点と同じく骨の位置へ合わせ直す）</summary>
         public bool locked
         {
             get { return pinned && body_.GetLocked (human_); }
@@ -766,7 +773,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 固定した点（完全固定でないもの）を、実際の骨の位置へ合わせ直す。手を離したときに呼ぶ。合わせ直したら true（キーを打つ値が増える）
+        /// 固定した点（完全固定の点も）を、実際の骨の位置へ合わせ直す。手を離したときに呼ぶ。合わせ直したら true（キーを打つ値が増える）
         /// </summary>
         public bool SyncToBone ()
         {

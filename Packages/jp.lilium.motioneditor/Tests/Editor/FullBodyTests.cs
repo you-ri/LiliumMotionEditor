@@ -590,7 +590,7 @@ namespace Lilium
         }
 
         [Test]
-        public void ReleasedPoint_SyncsToBone_UnlessLocked ()
+        public void ReleasedPoint_SyncsToBone_LockedToo ()
         {
             Setup s = Create ();
             List<PoseTarget> targets = BodyPointTarget.Create (s.rig, s.body);
@@ -609,12 +609,12 @@ namespace Lilium
             s.body.Solve ();
             Assert.Greater (s.body.GetResidual (HumanBodyBones.LeftHand), 0.5f, "届かない");
 
-            // 手を離すと、点は実際の骨の位置へ合わせ直される。完全固定の点は動かない
+            // 手を離すと、点は実際の骨の位置へ合わせ直される。完全固定の腰は骨の上に留まっているので動かない
             Vector3 hipsPoint;
             Quaternion hipsRotation;
             s.body.TryGetPointWorld (HumanBodyBones.Hips, out hipsPoint, out hipsRotation);
             Assert.IsTrue (hand.SyncToBone ());
-            Assert.IsFalse (hips.SyncToBone (), "完全固定の点は合わせ直さない");
+            Assert.IsFalse (hips.SyncToBone (), "完全固定の点は、骨の上にあれば直さない");
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kPositionTolerance, "点が骨の上に来る");
             Vector3 hipsAfter;
             s.body.TryGetPointWorld (HumanBodyBones.Hips, out hipsAfter, out hipsRotation);
@@ -635,19 +635,21 @@ namespace Lilium
             Assert.AreEqual (1, Value (clip, RigPaths.Body (HumanBodyBones.Hips), typeof (BodyPoint), BodyPoint.kLockedProperty), 1e-6f, "完全固定はキーで持つ");
             Assert.IsFalse (Bindings (clip).Any (b => b.path == path && b.propertyName == BodyPoint.kLockedProperty), "完全固定にしていない点には、そのカーブを立てない");
 
-            // 完全固定の点は、届かない所に置いても合わせ直さない
+            // 完全固定の点も、届かない所に置いたら、姿勢が決まった後に骨の位置へ合わせ直す（完全固定のまま。11-04 ユーザー指示）
             hand.ToggleLock ();
             hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
             s.body.RestoreInput ();
             s.body.Solve ();
-            Assert.IsFalse (hand.SyncToBone ());
-            Assert.Greater (s.body.GetResidual (HumanBodyBones.LeftHand), 0.5f, "点は置いた場所に残る");
+            Assert.Greater (s.body.GetResidual (HumanBodyBones.LeftHand), 0.5f, "解くときは置いた場所から動かさない（届かない）");
+            Assert.IsTrue (hand.SyncToBone ());
+            Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kPositionTolerance, "点が骨の上に来る");
+            Assert.IsTrue (hand.locked, "完全固定は外れない");
 
-            // 完全固定を外すと固定は残り、次に手を離したときに合わせ直される。固定ごと外すと完全固定も外れる
+            // 完全固定を外すと固定は残る。固定ごと外すと完全固定も外れる
             hand.ToggleLock ();
             Assert.IsTrue (hand.pinned);
             Assert.IsFalse (hand.locked);
-            Assert.IsTrue (hand.SyncToBone ());
+            Assert.IsFalse (hand.SyncToBone (), "もう合っているので直さない");
             hips.TogglePin ();
             Assert.IsFalse (s.body.GetLocked (HumanBodyBones.Hips));
         }
