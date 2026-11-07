@@ -385,8 +385,8 @@ MonoBehaviour:
     limit:
       x:
         mode: 1
-        min: -3
-        max: 3
+        min: -50
+        max: 45
       y:
         mode: 1
         min: -40
@@ -406,8 +406,8 @@ MonoBehaviour:
     limit:
       x:
         mode: 1
-        min: -3
-        max: 3
+        min: -50
+        max: 45
       y:
         mode: 1
         min: -40

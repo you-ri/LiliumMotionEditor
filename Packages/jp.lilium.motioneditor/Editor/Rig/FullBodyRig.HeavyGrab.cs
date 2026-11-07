@@ -230,6 +230,12 @@ namespace Lilium
                 if (role == PointRole.Grabbed) grabbedEffectors_.Add (count);
                 else if (role == PointRole.Lock) lockedEffectors_.Add (count);
                 if (role == PointRole.Grabbed && yield) positionWeight = Mathf.Min (positionWeight, kLightPull);
+                // 両手で持った物（輪の関節の物の側。S102）をつかんで輪が閉じなかったときは、つかんだ点を輪より少し弱くする（SolveBodies）。
+                // 手が物から外れず、つかんだ点が届かない分を残す
+                if (role == PointRole.Grabbed && yieldToLoops_ && OnHeldLoop (point.body)) {
+                    positionWeight = Mathf.Min (positionWeight, kLightPull);
+                    rotationWeight = Mathf.Min (rotationWeight, kLightPull);
+                }
                 FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight);
                 if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] ? pathShift : branchShifts_[i] * branchScale);
                 data_.effectors[count++] = effector;

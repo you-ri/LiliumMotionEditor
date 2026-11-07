@@ -29,6 +29,9 @@ namespace Lilium
             }
         }
 
+        /// <summary>両手で持った物の輪の関節が閉じないとき、前の答えから続けて解き直す回数</summary>
+        const int kHeldLoopPasses = 4;
+
         ICollection<Transform> solveOnly_;
         bool limbsOnly_;
 
@@ -46,14 +49,14 @@ namespace Lilium
                     data_.fixedBones[body] = 0;
                     for (int p = bodyParents_[body]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
                 }
-                // 輪の関節でつないだ手（両手で持つ物のもう片方の手。S102）は点が効いていなくても、物と一緒に動かす
+                // 輪の関節でつないだ手（両手で持つ物のもう片方の手・差した物を握る手。S102）は点が効いていなくても、物へ伸ばす
                 for (int l = 0; l < data_.loopCount; l++) {
                     FullBodyIkLoop loop = data_.loops[l];
-                    if (data_.fixedBones[loop.boneB] != 0) continue;
                     data_.fixedBones[loop.boneA] = 0;
                     for (int p = bodyParents_[loop.boneA]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
                 }
             }
+            MarkFixedHeldBodies ();
         }
 
         /// <summary>
@@ -124,6 +127,28 @@ namespace Lilium
             if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
 
             if (pins && !Solved ()) ResolveHeavyGrab ();
+            // 両手で持った物をつかんで輪の関節が閉じなければ、まず前の答えから続けて解く（腕が伸びた姿勢から解き始めると、届く所でも輪が 1cm 開いたまま残った。11-07 実測）。
+            // それでも閉じなければ（届かない所へ引いた）、つかんだ点を輪より少し弱くして解き直す（S102）。どちらも必ず満たす拘束のままだと取り合って、
+            // 体が折れ、もう片方の手が物から 1.5m 外れた（11-07 実測）。届く間は弱くしない（弱くすると、仕上げでつかんだ点を合わせ直さないので、物が少しずれる）
+            for (int pass = 0; pass < kHeldLoopPasses && grab == GrabKind.Heavy && count > 0 && !HeldLoopsClosed (); pass++) {
+                for (int i = 0; i < bodies_.Count; i++) {
+                    startPositions_[i] = data_.positions[i];
+                    startRotations_[i] = data_.rotations[i];
+                }
+                count = HeavyEffectors (null, Vector3.zero, 0, false);
+                RunSolver (count, startPositions_, startRotations_);
+            }
+            if (grab == GrabKind.Heavy && count > 0 && !HeldLoopsClosed ()) {
+                yieldToLoops_ = true;
+                try {
+                    count = HeavyEffectors (null, Vector3.zero, 0, false);
+                    RunSolver (count, solvePositions_, solveRotations_);
+                    if (pins && !Solved ()) ResolveHeavyGrab ();
+                }
+                finally {
+                    yieldToLoops_ = false;
+                }
+            }
             if (grab == GrabKind.Light) SolveLightGrab (count > 0);
             return WriteBack ();
         }

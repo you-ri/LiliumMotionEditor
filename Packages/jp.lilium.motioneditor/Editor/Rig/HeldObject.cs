@@ -352,6 +352,8 @@ namespace Lilium
             public readonly List<Socket> sockets = new List<Socket> ();
             /// <summary>差す場所へ運んでいる間か（手が届かなくても物を寄せない。差す場所はずれない）</summary>
             internal bool bringing;
+            /// <summary>運んでいる先の差す場所（bringing の間だけ）</summary>
+            internal Socket bringTarget;
             /// <summary>差す場所へ運んだとき、握りに届かなかった手の差（メートル）。届かない分は差すフレームで手か物が跳ぶ</summary>
             public float bringGap;
             internal RigProxies.Weight leftConstraint;
@@ -403,6 +405,7 @@ namespace Lilium
                 ClearSockets ();
                 PlaceWithoutPulling (position, rotation);
                 bringing = true;
+                bringTarget = target;
             }
 
             /// <summary>今の場所のまま差すのをやめる。今の姿勢を物の値に残すので、次のキーまでここから動く</summary>
@@ -939,7 +942,19 @@ namespace Lilium
             loops_.Clear ();
             foreach (Entry entry in entries_) {
                 Hand primary = PrimaryHand (body, entry);
-                if (primary != null) attachments_.Add (new FullBodyRig.HeldAttachment { body = entry.editing, parent = primary.bone, axis = entry.definition.gripAxis });
+                if (primary == null) continue;
+                // 差している・差す場所へ運んでいる物は動かさない（動かない剛体にして、持っている手を全部輪でつなぐ。手だけが物へ伸びる）
+                bool fixedPose = Fixed (entry);
+                Socket socket = entry.socket ?? entry.bringTarget;
+                Transform parent = !fixedPose ? primary.bone : socket != null && body.IsSolvedBody (socket.bone) ? socket.bone : null;
+                attachments_.Add (new FullBodyRig.HeldAttachment {
+                    body = entry.editing,
+                    parent = parent,
+                    axis = entry.definition.gripAxis,
+                    fixedPose = fixedPose,
+                    // 差す骨から見た物の向き（GetSocketPose の物の向き = 骨 × 骨の基準⁻¹ × 差す向き）
+                    weld = fixedPose && parent != null ? Quaternion.Normalize (Quaternion.Inverse (socket.boneRest) * socket.rotation) : Quaternion.identity,
+                });
             }
             body.SetHeldAttachments (attachments_);
             foreach (Entry entry in entries_) {
@@ -961,15 +976,17 @@ namespace Lilium
                         body.SetRotationWeight (other, 0);
                     }
                 }
-                PlaceOnHand (body, entry, primary);
-                Hand second = primary == entry.right ? entry.left : entry.right;
-                if (second != null && second.held) {
+                bool fixedPose = Fixed (entry);
+                if (fixedPose) Place (entry);
+                else PlaceOnHand (body, entry, primary);
+                foreach (Hand hand in new[] { entry.right, entry.left }) {
+                    if (hand == null || !hand.held || (hand == primary && !fixedPose)) continue;
                     loops_.Add (new FullBodyRig.HeldLoop {
-                        hand = second.id,
+                        hand = hand.id,
                         body = entry.editing,
-                        grip = second.gripAt,
+                        grip = hand.gripAt,
                         axis = entry.definition.gripAxis,
-                        toObject = Quaternion.Normalize (body_ * Quaternion.Inverse (second.heldGripRotation)),
+                        toObject = Quaternion.Normalize (body_ * Quaternion.Inverse (hand.heldGripRotation)),
                     });
                 }
                 SetPosePoint (body, entry);
@@ -979,6 +996,12 @@ namespace Lilium
 
         readonly List<FullBodyRig.HeldAttachment> attachments_ = new List<FullBodyRig.HeldAttachment> ();
         readonly List<FullBodyRig.HeldLoop> loops_ = new List<FullBodyRig.HeldLoop> ();
+
+        /// <summary>動かさない物か（差している・差す場所へ運んでいる）</summary>
+        static bool Fixed (Entry entry)
+        {
+            return entry.socket != null || entry.bringing;
+        }
 
         /// <summary>物を子にする手（右手で持っていれば右手、そうでなければ左手）。持っていない・手の骨を解かなければ null</summary>
         static Hand PrimaryHand (FullBodyRig body, Entry entry)
@@ -1015,8 +1038,8 @@ namespace Lilium
 
         /// <summary>
         /// 物の姿勢の点の目標と強さを入れる。物そのものを動かしていればつかんだ点（全身を引く。引かずに置くだけなら Lock）。
-        /// 物の上の点をつかんでいる・物の上の点に強さが入っている間は効かせない（物の上の点で決める）。
-        /// そのほかは強さ 1 で、枠がルート・差している・差す場所へ運んでいる間は Lock、枠が腰・胸なら Pin（つかんだ点が届かなければ付いて動く）
+        /// 物の上の重い点をつかんでいる間は効かせない。物の上のほかの点をつかんでいる・物の上の点に強さが入っている間は Pin。
+        /// そのほかは、枠がルート・差している・差す場所へ運んでいる間は Lock、枠が腰・胸なら Pin（つかんだ点が届かなければ付いて動く）
         /// </summary>
         void SetPosePoint (FullBodyRig body, Entry entry)
         {
@@ -1025,13 +1048,26 @@ namespace Lilium
             bool direct = entry.dragging && entry.direct;
             bool grabbed = direct && entry.pulling;
             entry.fitted = !direct && AnyPointActive (body, entry);
-            float weight = entry.fitted ? 0 : 1;
+            // 物の上の重い点をつかんでいる間は効かせない（物は重い点に引かれ、向きは腕で決まる。届かない所まで引くと腕と一直線になる）。
+            // 留めると、物が握りのまわりに回るだけで腕が伸びなかった（11-07 実測。腕のデバッグ用キャラで手首が 72〜78° 曲がったまま）。
+            // 軽い点・向けるだけの点をつかんでいる間と、物の上の点に強さが入っている間は、物のキーの姿勢として Pin のまま留める。
+            // 効かせないと物を留める物が無くなり、腕がキーの無い姿勢へ戻って物ごと回った（11-07 実測で、柄の軸の上の点を引くと 77° 回った）
+            float weight = HeavyPointGrabbed (body, entry) ? 0 : 1;
             body.SetPositionWeight (entry.poseId, weight);
             body.SetRotationWeight (entry.poseId, weight);
-            bool locks = direct || entry.frameBone == null || entry.socket != null || entry.bringing;
-            body.SetLocked (entry.poseId, weight > 0 && !grabbed && locks);
+            bool locks = !entry.fitted && (direct || entry.frameBone == null || entry.socket != null || entry.bringing);
+            body.SetLocked (entry.poseId, !grabbed && locks);
             if (grabbed) body.MarkGrabbed (entry.poseId);
             else body.UnmarkGrabbed (entry.poseId);
+        }
+
+        /// <summary>物の上の重い点をつかんでいるか</summary>
+        static bool HeavyPointGrabbed (FullBodyRig body, Entry entry)
+        {
+            foreach (ObjectPoint point in entry.points) {
+                if (point.heavy && body.IsGrabbed (point.id)) return true;
+            }
+            return false;
         }
 
         /// <summary>物の上の点をつかんでいるか、効かせる点（fitOnly_）に強さが入っているか</summary>
@@ -1371,10 +1407,13 @@ namespace Lilium
         /// <summary>編集用の体の物を、今の物の姿勢へ置く</summary>
         void Place ()
         {
+            foreach (Entry entry in entries_) Place (entry);
+        }
+
+        void Place (Entry entry)
+        {
             Transform root = rig_.root.transform;
-            foreach (Entry entry in entries_) {
-                entry.editing.SetPositionAndRotation (root.TransformPoint (entry.position), root.rotation * entry.rotation);
-            }
+            entry.editing.SetPositionAndRotation (root.TransformPoint (entry.position), root.rotation * entry.rotation);
         }
     }
 

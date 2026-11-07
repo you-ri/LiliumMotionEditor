@@ -57,7 +57,10 @@ namespace Lilium
         /// 付け根（原点）が重心で、ほかの骨とは輪の関節（FullBodyIkLoop）でだけつながる
         /// </summary>
         public int detached;
-        /// <summary>detached の剛体の大きさ（メートル。原点から点・握りまでのいちばん遠い距離）</summary>
+        /// <summary>
+        /// detached の剛体の大きさ（メートル。原点から点・握りまでのいちばん遠い距離）。detached でない骨も、0 より大きければ重さと回しにくさをこの大きさで決め、
+        /// ほかの骨の回しにくさの下限には入れない（手に持たせた物。S102。葉の骨は親からの距離の 3 割になるので、握りの近くの物は手よりずっと軽くなる）
+        /// </summary>
         public float extent;
     }
 
@@ -75,10 +78,15 @@ namespace Lilium
         public float3 anchorB;
         public float3 axisB;
         /// <summary>
-        /// 軸まわりの回りを、元の姿勢での回りに保つ強さ（0〜1。骨の硬さ stiffness と同じ。S102）。1 なら反復の間は回らず、仕上げ（必ず満たす物だけを詰める）でだけ回る。
+        /// 軸まわりの回りを、元の姿勢での回りに保つ強さ（0〜1。骨の硬さ stiffness と同じ。S102）。反復の間も仕上げの間も掛ける（1 未満のばねにする。1 だと必ず満たす物どうしで取り合う）。
         /// 柄を握った手が、ほかの拘束に要らないのに柄のまわりを回り込まないようにする
         /// </summary>
         public float stiffness;
+        /// <summary>
+        /// 軸まわりの硬さの基準: 骨 a から見た骨 b の向き（骨 a の向き⁻¹ × 骨 b の向き）。0 の四元数（既定）なら元の姿勢での向き。
+        /// 持った物では握りの向きを渡す（元の姿勢の手は、持つ前のキーの手のことがある）
+        /// </summary>
+        public quaternion rest;
     }
 
     /// <summary>
@@ -520,11 +528,11 @@ namespace Lilium
                     else {
                         for (int i = n - 1; i >= 0; i--) SolveJoint (ref d, i, false);
                     }
-                    SolveLoops (ref d, n, loopCount, iteration, false);
+                    SolveLoops (ref d, n, loopCount, iteration);
                     for (int e = 0; e < effectorCount; e++) SolveEffector (ref d, e, false);
                     for (int c = 0; c < contactCount; c++) SolveContact (ref d, c, n);
                 }
-                Finish (ref d, n, effectorCount, contactCount);
+                Finish (ref d, n, effectorCount, contactCount, loopCount);
                 MeasureLoops (ref d, n, loopCount);
                 return;
             }
@@ -540,7 +548,7 @@ namespace Lilium
                     for (int i = n - 1; i >= 0; i--) SolveJoint (ref d, i, true);
                 }
                 // 輪の関節は木の関節の後（S101）
-                SolveLoops (ref d, n, loopCount, iteration, true);
+                SolveLoops (ref d, n, loopCount, iteration);
                 // 目標は最後に満たす（反復の終わりで、固定した点がいちばん合っている）
                 for (int e = 0; e < effectorCount; e++) SolveEffector (ref d, e, true);
             }
@@ -556,11 +564,11 @@ namespace Lilium
                 else {
                     for (int i = n - 1; i >= 0; i--) SolveJoint (ref d, i, false);
                 }
-                SolveLoops (ref d, n, loopCount, iteration, true);
+                SolveLoops (ref d, n, loopCount, iteration);
                 for (int e = 0; e < effectorCount; e++) SolveEffector (ref d, e, false);
             }
 
-            Finish (ref d, n, effectorCount, contactCount);
+            Finish (ref d, n, effectorCount, contactCount, loopCount);
             MeasureLoops (ref d, n, loopCount);
         }
 
@@ -573,7 +581,10 @@ namespace Lilium
                 if (loop.boneA < 0 || loop.boneA >= n || loop.boneB < 0 || loop.boneB >= n) continue;
                 for (int i = loop.boneA; i >= 0 && d.active[i] == 0; i = d.bones[i].parent) d.active[i] = 1;
                 for (int i = loop.boneB; i >= 0 && d.active[i] == 0; i = d.bones[i].parent) d.active[i] = 1;
-                d.loopRest[l] = math.mul (math.inverse (d.rotations[loop.boneA]), d.rotations[loop.boneB]);
+                // 基準は元の姿勢（目標の点で骨の向きを置き直す前。木の関節の restRelative と同じ）
+                d.loopRest[l] = math.lengthsq (loop.rest.value) > 0.5f
+                    ? math.normalize (loop.rest)
+                    : math.mul (math.inverse (d.inputRotations[loop.boneA]), d.inputRotations[loop.boneB]);
             }
             return count;
         }
@@ -582,13 +593,13 @@ namespace Lilium
         /// 輪の関節を全部解く。奇数回と偶数回で並びを逆にたどる（木の関節と同じ）。いつも同じ順だと、先に解く方の腕へ物が寄る
         /// （11-05 実測で、左右対称に置いた 2 本の腕で棒が 25mm 横へ寄った）
         /// </summary>
-        static void SolveLoops (ref FullBodyIkData d, int n, int loopCount, int iteration, bool soft)
+        static void SolveLoops (ref FullBodyIkData d, int n, int loopCount, int iteration)
         {
             if ((iteration & 1) == 0) {
-                for (int l = 0; l < loopCount; l++) SolveLoop (ref d, l, n, soft);
+                for (int l = 0; l < loopCount; l++) SolveLoop (ref d, l, n);
             }
             else {
-                for (int l = loopCount - 1; l >= 0; l--) SolveLoop (ref d, l, n, soft);
+                for (int l = loopCount - 1; l >= 0; l--) SolveLoop (ref d, l, n);
             }
         }
 
@@ -598,14 +609,14 @@ namespace Lilium
         /// 2 つの点の真ん中を中心に回すと、回すたびに両方の骨が横へずれ、角度制限と取り合う間ずれが積もって物が流れ続けた
         /// （11-05 実測で、反復を増やすほど物が目標から 360mm まで離れ、入力を 0.0001° 変えるだけで骨が 120° 変わった。Burst とマネージドの不一致もここから）
         /// </summary>
-        static void SolveLoop (ref FullBodyIkData d, int l, int n, bool soft)
+        static void SolveLoop (ref FullBodyIkData d, int l, int n)
         {
             FullBodyIkLoop loop = d.loops[l];
             int a = loop.boneA;
             int b = loop.boneB;
             if (a < 0 || a >= n || b < 0 || b >= n || a == b) return;
             AlignLoop (ref d, loop, a, b);
-            if (soft && loop.stiffness > 0) SolveLoopTwist (ref d, l, loop, a, b);
+            if (loop.stiffness > 0) SolveLoopTwist (ref d, l, loop, a, b);
         }
 
         /// <summary>輪の関節の 2 つの点を寄せ、2 つの軸をそろえる（必ず満たす拘束）</summary>
@@ -644,7 +655,9 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 輪の関節の軸まわりの硬さ（S102）: 骨 a から見た骨 b の軸まわりの回りを、元の姿勢の回りへ戻す（反復の間だけ。仕上げでは回してよい）。
+        /// 輪の関節の軸まわりの硬さ（S102）: 骨 a から見た骨 b の軸まわりの回りを、元の姿勢の回りへ戻す。
+        /// 仕上げにも掛ける: 仕上げは必ず満たす物だけを詰めるので、掛けないと点を寄せる補正で手が柄のまわりを少しずつ回り、握りから 3mm ほど外れた（11-07 実測）。
+        /// 軸まわりの回りは点の寄せ・軸合わせと直交する（点は軸の上）ので、輪が閉じるのは妨げない。
         /// 軸をそろえるときと同じく、それぞれの骨を重心まわりに回すだけ（場所は動かさない）
         /// </summary>
         static void SolveLoopTwist (ref FullBodyIkData d, int l, FullBodyIkLoop loop, int a, int b)
@@ -815,6 +828,10 @@ namespace Lilium
                 d.extent[i] = math.max (d.extent[i], 1e-3f);
                 d.tipLocal[i] = tip;
                 d.centerLocal[i] = tip * 0.5f;
+                if (d.bones[i].extent > 0) {
+                    d.extent[i] = d.bones[i].extent;
+                    continue;
+                }
                 extentSum += d.extent[i];
                 extentCount++;
             }
@@ -837,7 +854,7 @@ namespace Lilium
             // 回しにくさ = その骨から先の骨が全部付いたまま回るとしたときの値（骨は長さの棒）。
             // 骨 1 本ぶんだけで出すと、胸や腰が腕 1 本より回しやすくなり、手を引いたときに胴ごと傾く
             for (int k = 0; k < n; k++) {
-                float radius = 0.5f * (d.bones[k].detached != 0 ? d.extent[k] : math.max (d.extent[k], extentFloor));
+                float radius = 0.5f * (d.bones[k].detached != 0 || d.bones[k].extent > 0 ? d.extent[k] : math.max (d.extent[k], extentFloor));
                 for (int a = k; a >= 0; a = d.bones[a].parent) {
                     if (a != k && d.bones[a].ownWeight != 0) continue;
                     d.inertia[a] = d.inertia[a] + d.extent[k] * (math.distancesq (d.centers[k], d.centers[a]) + radius * radius);
@@ -1738,10 +1755,23 @@ namespace Lilium
             if (first < 0) {
                 int p = d.bones[b].parent;
                 quaternion rest = p >= 0 ? math.mul (d.rotations[p], d.restRelative[b]) : d.inputRotations[b];
-                quaternion aimed = math.mul (FromTo (math.rotate (rest, PointOffset (ref d, e) - pivotLocal), effector.position - pivot), rest);
+                float3 have = math.rotate (rest, PointOffset (ref d, e) - pivotLocal);
+                float3 want = effector.position - pivot;
+                quaternion aim = FromTo (have, want);
+                // 軸まわりにだけ回る骨（S89・持った物の握り S102）は、その軸まわりにだけ回して向ける（親との関節を外さない）。
+                // 軸の上の点（柄の軸の上の物の点）は、軸まわりに回しても動かないので向かない
+                if (d.lockOn[b] != 0 && p >= 0) {
+                    float3 lockAxis = math.normalizesafe (math.rotate (rest, math.normalize (d.bones[b].lockAxis)));
+                    float3 f = have - lockAxis * math.dot (have, lockAxis);
+                    float3 t = want - lockAxis * math.dot (want, lockAxis);
+                    aim = math.lengthsq (f) < 1e-12f || math.lengthsq (t) < 1e-12f ? quaternion.identity : quaternion.AxisAngle (lockAxis, SignedAngle (math.normalize (f), math.normalize (t), lockAxis));
+                }
+                quaternion aimed = math.mul (aim, rest);
                 return math.normalizesafe (weight >= 1 ? aimed : math.slerp (rest, aimed, weight), rest);
             }
             quaternion current = d.rotations[b];
+            // 軸まわりにだけ回る骨は、1 つ目の点で残る動き（軸まわり）を使い切っている
+            if (d.lockOn[b] != 0) return current;
             float3 axis = math.normalizesafe (math.rotate (current, PointOffset (ref d, first) - pivotLocal));
             float3 from = math.rotate (current, PointOffset (ref d, e) - pivotLocal);
             float3 to = effector.position - pivot;
@@ -1784,7 +1814,7 @@ namespace Lilium
         /// 作り直すと、詰めきれなかった関節のずれが固定した点の側へ寄るので、固定した点ごとに手前の骨を回して点へ合わせ直す。
         /// 元の姿勢から変わらなかった骨は、元の値をそのまま返す
         /// </summary>
-        static void Finish (ref FullBodyIkData d, int n, int effectorCount, int contactCount)
+        static void Finish (ref FullBodyIkData d, int n, int effectorCount, int contactCount, int loopCount)
         {
             // 根の位置（解いた根だけ。解かなかった根は元の値のまま）
             for (int i = 0; i < n; i++) {
@@ -1810,6 +1840,8 @@ namespace Lilium
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapToEffector (ref d, n, e)) Rebuild (ref d, n, false);
             }
+            // 輪の関節（S102）も合わせ直す。点を合わせ直すと輪の片側（物を子にした手）だけが動き、もう片方の手が物から外れる
+            CloseLoops (ref d, n, loopCount);
             // 膝・肘の Pole は、手足の先を合わせ終わってから、付け根と先を結ぶ軸まわりに回す（先の点は軸の上なので外れない）
             for (int e = 0; e < effectorCount; e++) {
                 if (SnapPole (ref d, n, e, effectorCount)) Rebuild (ref d, n, false);
@@ -1821,6 +1853,11 @@ namespace Lilium
             if (StraightenUnreachable (ref d, n, effectorCount)) Rebuild (ref d, n, false);
             // 合わせ直しで角度制限（範囲 + 遊び）の外へ回った骨を戻す（S95）
             if (ClampLimits (ref d, n)) Rebuild (ref d, n, false);
+            // 軸まわりにだけ回る骨（S89・持った物の握り S102）は、親に合わせて軸をそろえ直す（軸まわりの回りは今のまま）。
+            // 制限で親（手首）だけを戻すと、子（持った物）は自分の向きのまま残り、握りの軸が手から外れた（11-07 実測で 6cm）
+            if (AlignLocks (ref d, n)) Rebuild (ref d, n, false);
+            // 制限で戻した手が物から外れないよう、輪の関節をもう一度合わせる（両立しなければ握りが勝つ。手が物から外れない方を取る）
+            CloseLoops (ref d, n, loopCount);
             // 向きを強さ 1 で固定した骨は、合わせ直しで回った分を戻す。床に当たって回した骨は戻さない（床が向きの固定に勝つ。S63）。
             // 戻す向きも角度制限（範囲 + 遊び）で切る。点の向きと両立しないときは制限が勝つ（S95）。切らないと、点の向きのまま親との間がいくらでもひねれる
             for (int e = 0; e < effectorCount; e++) {
@@ -1829,6 +1866,12 @@ namespace Lilium
                 if (d.contactTouched[effector.bone] != 0) continue;
                 // 骨の上の点（向きも留めた物）は、合わせ直しのときに向きを戻してある。ここで回すと、点が目標から外れる
                 if (IsOffset (ref d, e)) continue;
+                // 軸まわりにだけ回る骨（持った物の握り。S102）は、親との関節が勝つ: 軸を親に合わせ、軸まわりだけ目標の向きへ戻す。
+                // 目標の向きへそのまま戻すと、手で作れない向きでも物が目標のまま残り、握りの軸が手から外れた（物が譲らない）
+                if (d.lockOn[effector.bone] != 0) {
+                    d.rotations[effector.bone] = TwistToward (ref d, effector.bone, effector.rotation);
+                    continue;
+                }
                 d.rotations[effector.bone] = ClampToLimit (ref d, effector.bone, math.normalizesafe (effector.rotation, d.rotations[effector.bone]));
             }
             if (contactCount > 0) {
@@ -1850,6 +1893,81 @@ namespace Lilium
                 }
                 d.residuals[e] = math.distance (effector.position, point);
             }
+        }
+
+        /// <summary>
+        /// 輪の関節を仕上げで閉じる（S102）。骨 a（両手で持つ物のもう片方の手）を付け根まわりに回して軸を骨 b の軸へそろえ、
+        /// a の上の点が b の上の点に来るように手前の骨を合わせ直す（a の向きは戻す）。木の関節の点の合わせ直し（SnapToEffector）と同じ扱い
+        /// </summary>
+        static void CloseLoops (ref FullBodyIkData d, int n, int loopCount)
+        {
+            for (int l = 0; l < loopCount; l++) {
+                FullBodyIkLoop loop = d.loops[l];
+                int a = loop.boneA;
+                int b = loop.boneB;
+                if (a < 0 || a >= n || b < 0 || b >= n || a == b || d.bones[a].parent < 0) continue;
+                if (math.lengthsq (loop.axisA) > 1e-12f && math.lengthsq (loop.axisB) > 1e-12f) {
+                    float3 axisA = math.rotate (d.rotations[a], math.normalize (loop.axisA));
+                    float3 axisB = math.rotate (d.rotations[b], math.normalize (loop.axisB));
+                    if (math.dot (axisA, axisB) < 1 - 1e-9f) {
+                        RotateSubtree (ref d, n, a, FromTo (axisA, axisB));
+                        Rebuild (ref d, n, false);
+                    }
+                }
+                SnapLoopHand (ref d, n, loop);
+                // 手が届かなければ（腕が伸びきった）、持った物の方を手へ寄せて（物を子にした腕を合わせ直す）、もう一度手を合わせる
+                float3 pointA = d.positions[a] + math.rotate (d.rotations[a], loop.anchorA);
+                float3 pointB = d.positions[b] + math.rotate (d.rotations[b], loop.anchorB);
+                if (math.distancesq (pointA, pointB) < kLoopCloseTolerance * kLoopCloseTolerance || !IsHeldBody (ref d, b)) continue;
+                if (SnapHeldOrigin (ref d, n, b, pointA - math.rotate (d.rotations[b], loop.anchorB))) Rebuild (ref d, n, false);
+                SnapLoopHand (ref d, n, loop);
+            }
+        }
+
+        /// <summary>輪の関節で閉じるときの、点の離れの許し（m）。これより手が届かなければ、物の方を手へ寄せる</summary>
+        const float kLoopCloseTolerance = 1e-4f;
+
+        /// <summary>輪の関節の骨 a（手）の上の点が、骨 b（物）の上の点に来るように、手前の骨を合わせ直す（a の向きは戻す）</summary>
+        static void SnapLoopHand (ref FullBodyIkData d, int n, FullBodyIkLoop loop)
+        {
+            int a = loop.boneA;
+            int b = loop.boneB;
+            quaternion rotation = d.rotations[a];
+            float3 target = d.positions[b] + math.rotate (d.rotations[b], loop.anchorB) - math.rotate (rotation, loop.anchorA);
+            if (math.distancesq (target, d.positions[a]) < 1e-14f) return;
+            if (!SnapOrigin (ref d, n, a, target)) return;
+            RotateSubtree (ref d, n, a, math.mul (rotation, math.inverse (d.rotations[a])));
+            Rebuild (ref d, n, false);
+        }
+
+        /// <summary>軸まわりにだけ回る骨（解いた骨）を、親に合わせて軸をそろえる。回したら true</summary>
+        static bool AlignLocks (ref FullBodyIkData d, int n)
+        {
+            bool turned = false;
+            for (int i = 0; i < n; i++) {
+                if (d.lockOn[i] == 0 || d.active[i] == 0 || d.bones[i].parent < 0) continue;
+                quaternion aligned = TwistToward (ref d, i, d.rotations[i]);
+                if (math.abs (math.dot (aligned.value, d.rotations[i].value)) >= 1 - 1e-9f) continue;
+                d.rotations[i] = aligned;
+                turned = true;
+            }
+            return turned;
+        }
+
+        /// <summary>
+        /// 軸まわりにだけ回る骨 b（axisLock）の向きを、軸を親から見た向きに合わせたうえで、軸まわりだけ target に一番近くした向き
+        /// </summary>
+        static quaternion TwistToward (ref FullBodyIkData d, int b, quaternion target)
+        {
+            int p = d.bones[b].parent;
+            quaternion rotation = d.rotations[b];
+            if (p < 0) return rotation;
+            float3 want = math.normalizesafe (math.rotate (d.rotations[p], d.lockAxisParent[b]));
+            float3 have = math.normalizesafe (math.rotate (rotation, math.normalize (d.bones[b].lockAxis)));
+            if (math.lengthsq (want) < 0.5f || math.lengthsq (have) < 0.5f) return rotation;
+            quaternion aligned = math.normalizesafe (math.mul (FromTo (have, want), rotation), rotation);
+            float angle = math.dot (RotationVector (math.mul (math.normalizesafe (target, aligned), math.inverse (aligned))), want);
+            return math.normalizesafe (math.mul (quaternion.AxisAngle (want, angle), aligned), aligned);
         }
 
         /// <summary>
@@ -1954,6 +2072,8 @@ namespace Lilium
             // 同じ骨の 2 つ目以降の点は動かさない（1 つ目の点が外れる。骨の向きは、準備のときに 2 つ目以降の点の方へ向けてある）
             if (d.effectorHard[e] != 0) return false;
             quaternion rotation = d.rotations[b];
+            // 持った物（S102）の点は、物を手に付いた剛体として、手の付け根を合わせ直して運ぶ
+            if (IsHeldBody (ref d, b)) return SnapHeldOrigin (ref d, n, b, effector.position - (IsOffset (ref d, e) ? math.rotate (rotation, effector.offset) : float3.zero));
             if (!IsOffset (ref d, e)) {
                 // 付け根の点。骨が回らない物（向きも固定・同じ骨にほかの点もある）なら、手前の骨を合わせたときに一緒に回った分を戻す
                 // 床に当たった骨（S63）も、床に沿わせた向きを保つ（手前の骨を合わせ直すと、足も一緒に回って床から外れる）
@@ -1967,6 +2087,29 @@ namespace Lilium
             float3 onBone = math.rotate (d.rotations[b], effector.offset);
             if (!SnapOrigin (ref d, n, b, effector.position - onBone)) return false;
             RotateSubtree (ref d, n, b, math.mul (rotation, math.inverse (d.rotations[b])));
+            return true;
+        }
+
+        /// <summary>持った物の骨か（手の骨の子にした物。大きさを渡した、骨格に付いていない根でない骨）</summary>
+        static bool IsHeldBody (ref FullBodyIkData d, int b)
+        {
+            int p = d.bones[b].parent;
+            return p >= 0 && d.bones[p].parent >= 0 && d.bones[b].extent > 0 && d.bones[b].detached == 0;
+        }
+
+        /// <summary>
+        /// 持った物の骨 b の付け根が target に来るように、手（親）の付け根を合わせ直す（手と物の向きは戻す）。
+        /// 物の骨そのものを合わせると、親の手の骨を回すだけで（2 本の骨の IK は親が蝶番の骨のときだけ）物が動かず、
+        /// 手足を伸ばしきった姿勢から解き始めると、持った物が 3cm 届かなかった（11-07 実測）。回したら true
+        /// </summary>
+        static bool SnapHeldOrigin (ref FullBodyIkData d, int n, int b, float3 target)
+        {
+            int p = d.bones[b].parent;
+            quaternion handRotation = d.rotations[p];
+            quaternion objectRotation = d.rotations[b];
+            if (!SnapOrigin (ref d, n, p, target - math.rotate (handRotation, d.anchorLocal[b]))) return false;
+            RotateSubtree (ref d, n, p, math.mul (handRotation, math.inverse (d.rotations[p])));
+            RotateSubtree (ref d, n, b, math.mul (objectRotation, math.inverse (d.rotations[b])));
             return true;
         }
 

@@ -115,10 +115,14 @@ namespace Lilium
             return Mathf.Max (along, radial);
         }
 
+        /// <summary>
+        /// 両手とも柄を握っている（柄に沿った場所と柄からの距離で見る）。握りは柄の軸まわりに自由なので（S100）、物を手の骨の子にして解くと（S102）、
+        /// 手は腕の楽な向きへ柄のまわりを少し回った所を握る
+        /// </summary>
         static void AssertHolding (PoseSession session, string message)
         {
-            Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), kGripTolerance, message + ": 右手");
-            Assert.LessOrEqual (GripGap (session, HumanBodyBones.LeftHand), kGripTolerance, message + ": 左手");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, message + ": 右手");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, message + ": 左手");
         }
 
         static BodyPointTarget Point (PoseSession session, HumanBodyBones bone)
@@ -517,52 +521,59 @@ namespace Lilium
         }
 
         [Test]
-        public void GrabbingHeavyPoint_MovesObjectWithoutTurning_AndPullsBody ()
+        public void GrabbingHeavyPoint_PullsBody_AndHandsKeepHolding ()
         {
+            // S102: 物は持つ手の骨の子なので、重い点を引くと体の点と同じく手・腕・体が付いてくる。
+            // 物の向きは物の点の向きを留めていなければ腕で決まり、届かない所まで引くと腕と一直線になるよう回る（S91e の「物は回らない」ではない）
             PoseSession session = Open (CreateObjectWithPoints ());
             session.Evaluate (0);
-            Quaternion rotation = Entry (session).editing.rotation;
             Vector3 hips = session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips).position;
             BodyPointTarget center = ObjectPoint (session, kCenter);
             Vector3 target = center.framePosition + new Vector3 (0, 0, 0.5f);
             center.MoveTo (target);
             session.SolveAfterEdit ();
             Assert.Less (Vector3.Distance (OnObject (session, kCenterOffset), target), 0.25f, "重心は目標へ寄る");
-            Assert.Less (Quaternion.Angle (Entry (session).editing.rotation, rotation), 0.01f, "物は回らない");
             Assert.Greater (Vector3.Distance (session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips).position, hips), 0.01f, "重い点は体を引く");
-            AssertHolding (session, "動かした後も持っている");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, "右手は柄に付く");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, "左手は柄に付く");
         }
 
         [Test]
-        public void GrabbingLightPoint_TurnsObjectAroundHeavyPoint_AndLeavesBody ()
+        public void GrabbingLightPointOnHandleAxis_DoesNotTurnObject_AndLeavesBody ()
         {
+            // S102: 物の上の点は体の点と同じ決まり。重さ 0 の点は、重い点（Center）のある骨では骨を回して向けるだけの点で、ほかの骨を引かない。
+            // 物は手に対して柄の軸まわりにしか回れないので、柄の軸の上の点（Tip）を引いても物は向きを変えない（11-07 ユーザー決定「体の点と同じにする」）
             PoseSession session = Open (CreateObjectWithPoints ());
             session.Evaluate (0);
-            Vector3 center = OnObject (session, kCenterOffset);
+            // 比べる基準は、何も動かさずに解いた姿勢（キーの無いクリップは、キーのフレームの手足だけの解き方と、動かした後の全身の解き方で腰が少し違う）
+            session.SolveAfterEdit ();
             Vector3 hips = session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips).position;
             Quaternion rotation = Entry (session).editing.rotation;
             BodyPointTarget tip = ObjectPoint (session, kTip);
             tip.MoveTo (tip.framePosition + new Vector3 (0.15f, 0, 0));
             session.SolveAfterEdit ();
-            Assert.Greater (Quaternion.Angle (Entry (session).editing.rotation, rotation), 1, "物は回る");
-            Assert.Less (Vector3.Distance (OnObject (session, kCenterOffset), center), 0.002f, "重心は動かない");
+            Assert.Less (Vector3.Angle (Entry (session).editing.rotation * Vector3.up, rotation * Vector3.up), 0.5f, "柄の軸は向きを変えない");
             Assert.Less (Vector3.Distance (session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips).position, hips), 1e-4f, "軽い点は腰を引かない");
-            AssertHolding (session, "回した後も持っている");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, "右手は柄に付く");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, "左手は柄に付く");
         }
 
         [Test]
-        public void LockedTip_StaysWhenHeavyPointMoves ()
+        public void LockedTip_IsOnlyAnAimPoint_HeavyPointStillMovesObject ()
         {
+            // S102: 物の上の点は体の点と同じ決まり。重さ 0 の点は、重い点のある骨では向けるだけの点なので、Lock にしても場所は留めない
+            // （S91e では物を物の点で決めていたので、Lock の先は動かなかった）。重い点を動かせば物は付いてくる
             PoseSession session = Open (CreateObjectWithPoints ());
             session.Evaluate (0);
             BodyPointTarget tip = ObjectPoint (session, kTip);
             tip.SetState (BodyPointState.Locked);
             session.SolveAfterEdit ();
-            Vector3 locked = OnObject (session, kTipOffset);
             BodyPointTarget center = ObjectPoint (session, kCenter);
-            center.MoveTo (center.framePosition + new Vector3 (0.05f, 0, 0));
+            Vector3 target = center.framePosition + new Vector3 (0.05f, 0, 0);
+            center.MoveTo (target);
             session.SolveAfterEdit ();
-            Assert.Less (Vector3.Distance (OnObject (session, kTipOffset), locked), 0.002f, "Lock の先は動かない");
+            Assert.Less (Vector3.Distance (OnObject (session, kCenterOffset), target), 0.002f, "重心は目標へ行く");
+            AssertHolding (session, "動かした後も持っている");
         }
 
         [Test]
@@ -873,8 +884,8 @@ namespace Lilium
         [Test]
         public void TwoHands_TurnBeyondTheWrists_BothHandsKeepTheGrips ()
         {
-            // S101 の B: 両手で持った物を腕で作れない向きへ回すと、物と両腕を輪として解き、物が譲って両手とも握りに付く。
-            // いちばん届いていない手へ物を合わせ直すだけ（A）だと、片方の手がぴったり、もう片方が最大 78mm・33° 外れた
+            // 腕のひねりを止め、手首のひねりを狭くした定義で両手の物を回しても、両手とも柄に付く（S101 の B。S102 では物を右手の子・左手を輪の関節にして解く）。
+            // いちばん届いていない手へ物を合わせ直すだけ（S101 の A）だと、片方の手がぴったり、もう片方が最大 78mm・33° 外れた
             definition_.fullBody.hipsPin = 1;
             foreach (HumanBodyBones arm in new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm }) {
                 definition_.FindFkControl (arm).limit.x.mode = EditRigDefinition.LimitMode.Locked;
@@ -896,8 +907,7 @@ namespace Lilium
                 session.SolveAfterEdit ();
                 Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, local + ": 右手は握りに付く");
                 Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, local + ": 左手は握りに付く");
-                // 1 回目（物の右の軸まわり）は腕で作れない。2 回目は 1 回目に譲った姿勢から回すので、腕でほぼ作れる
-                if (local == Vector3.right) Assert.Greater (Quaternion.Angle (entry.editing.rotation, dragged), 5f, "物は譲る");
+                // S102 からは、両手とも柄の軸まわりに回れるので、この向きは腕で作れ、物はほとんど譲らない（S101 では 1 回目に 5° より多く譲った）
             }
         }
 
@@ -1001,9 +1011,11 @@ namespace Lilium
             PoseDocument read = PoseDocument.Read (session, 0, out string problem);
             Assert.IsNull (problem);
             PoseObject item = read.objects.First (o => o.name == kName);
-            Assert.LessOrEqual (Vector3.Distance (chestSpot, item.position), kGripTolerance, "書いた場所");
-            Assert.LessOrEqual (Vector3.Angle (Vector3.up, item.aim.forward), 0.1f, "物の +Z の向き");
-            Assert.LessOrEqual (Vector3.Angle (Vector3.back, item.aim.up), 0.1f, "物の +Y の向き");
+            // 両手の物を、腕を伸ばした姿勢（キーの無いクリップ）から置くと、左手を合わせきれない分だけ物が手の方へ寄る（S102。手は握りから外さない。11-07 実測で 2.0mm）
+            Assert.LessOrEqual (Vector3.Distance (chestSpot, item.position), 0.003f, "書いた場所");
+            // 向きも同じく、手首の角度制限が勝つ分だけずれる（11-07 実測で 0.95°）
+            Assert.LessOrEqual (Vector3.Angle (Vector3.up, item.aim.forward), 1.5f, "物の +Z の向き");
+            Assert.LessOrEqual (Vector3.Angle (Vector3.back, item.aim.up), 1.5f, "物の +Y の向き");
             Assert.AreEqual ("Both", item.hold);
             AssertHolding (session, "書いた後");
             StringAssert.Contains ("\"objects\":[", read.ToCompactJson (), "丸めた形にも出す");

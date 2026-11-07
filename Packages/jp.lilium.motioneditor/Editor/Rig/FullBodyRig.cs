@@ -277,7 +277,8 @@ namespace Lilium
             foreach (int index in order) bodies_.Add (solvedBones[index]);
             int skeleton = bodies_.Count;
             foreach (HeldAttachment attachment in heldAttachments_) {
-                if (attachment.body != null && bodies_.Contains (attachment.parent) && !bodies_.Contains (attachment.body)) bodies_.Add (attachment.body);
+                bool placed = attachment.parent != null ? bodies_.Contains (attachment.parent) : attachment.fixedPose;
+                if (attachment.body != null && placed && !bodies_.Contains (attachment.body)) bodies_.Add (attachment.body);
             }
             if (bodies_.Count == 0) return;
 
