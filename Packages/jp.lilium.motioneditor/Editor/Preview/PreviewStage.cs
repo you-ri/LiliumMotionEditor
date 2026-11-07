@@ -79,6 +79,7 @@ namespace Lilium
         /// <summary>全身 IK の点（S25）と、その固定の強さの基準（点ごとに BodyPoint.kValueCount 個ずつ並べる）</summary>
         Lilium.BodyPoint[] bodyPoints_ = new Lilium.BodyPoint[0];
         float[] bodyPointRest_ = new float[0];
+        readonly float[] pointRest_ = new float[Lilium.BodyPoint.kValueCount];
         /// <summary>ゲームの Rig の重みの代理（層と拘束）と、その基準の重み</summary>
         Lilium.RigWeightProxy[] weightProxies_ = new Lilium.RigWeightProxy[0];
         float[] weightProxyRest_ = new float[0];
@@ -864,7 +865,9 @@ namespace Lilium
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
                 bool keyed;
-                EditingClip.GetPointState (clip, bodyPointPaths_[i], time, pointState_, out keyed);
+                // キーより前は、その点の基準の値（体の点は Free。持ち物の姿勢の点は Pin。S102）
+                for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) pointRest_[v] = i * Lilium.BodyPoint.kValueCount + v < bodyPointRest_.Length ? bodyPointRest_[i * Lilium.BodyPoint.kValueCount + v] : 0;
+                EditingClip.GetPointState (clip, bodyPointPaths_[i], time, pointState_, out keyed, pointRest_);
                 bool active = false;
                 for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) {
                     bodyPoints_[i].SetValue (v, pointState_[v]);

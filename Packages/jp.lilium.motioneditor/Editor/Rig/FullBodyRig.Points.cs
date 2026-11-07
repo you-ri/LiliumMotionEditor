@@ -27,11 +27,12 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 固定の強さが入っている点があるか。無ければ解かない（素通し）
+        /// 固定の強さが入っている点があるか。無ければ解かない（素通し）。両手で持った物の輪の関節（S102）があれば、点が無くても解く（手を物に付ける）
         /// </summary>
         public bool hasActivePoint
         {
             get {
+                if (heldLoops_.Count > 0) return true;
                 foreach (Point point in points_) {
                     if (!point.passive && (point.values.positionWeight > 0 || (point.hasRotation && point.values.rotationWeight > 0))) return true;
                 }

@@ -110,8 +110,9 @@ namespace Lilium
             // 解き直すたびに元の姿勢（キーの姿勢）から解くので、動かない点の「今の場所」は、つかんだ点が無いときに点が居る場所
             grabbedEffectors_.Clear ();
             lockedEffectors_.Clear ();
-            int count = grab == GrabKind.Heavy ? HeavyEffectors (null, Vector3.zero, 0, false) : KeyedEffectors (grab == GrabKind.Light);
-            if (count == 0 && grab != GrabKind.Light) return false;
+            // 道（PathToRoot）を渡すのは、つかんだ点と離れの変わらない Pin の点（RigidToGrabbed）を見分けるため。運ぶ量は 0（Pin の点は目標のまま）
+            int count = grab == GrabKind.Heavy ? HeavyEffectors (PathToRoot (), Vector3.zero, 0, false) : KeyedEffectors (grab == GrabKind.Light);
+            if (count == 0 && grab != GrabKind.Light && data_.loopCount == 0) return false;
             MarkFixedBones ();
             // 重い点をつかんで Pin の点を効かせている間は、反復を増やす（kLightIterations 倍）。Pin の点に挟まれた背骨が詰め切れず、
             // 届く所でも届かないとみなして腰の Pin を外していた（10-28 実測で、腹・胸を硬さ 0.6〜0.8 にした定義で首を前へ 5mm 動かすと、1 倍では 1.9mm 残った）
@@ -124,7 +125,7 @@ namespace Lilium
             data_.iterations = Mathf.Max (1, settings_.iterations) * (pins || data_.loopCount > 0 ? kLightIterations : 1);
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
             SetContacts ();
-            if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
+            if (count > 0 || data_.loopCount > 0) RunSolver (count, solvePositions_, solveRotations_);
 
             if (pins && !Solved ()) ResolveHeavyGrab ();
             // 両手で持った物をつかんで輪の関節が閉じなければ、まず前の答えから続けて解く（腕が伸びた姿勢から解き始めると、届く所でも輪が 1cm 開いたまま残った。11-07 実測）。
@@ -228,9 +229,23 @@ namespace Lilium
                 float positionWeight, rotationWeight;
                 if (!GetWeights (point, out positionWeight, out rotationWeight)) continue;
                 if (skipGrabbed && grabbed_.Contains (point)) continue;
+                if (PulledAim (point)) continue;
                 data_.effectors[count++] = PointEffector (point, positionWeight, rotationWeight);
             }
             return AddFootBoxes (count);
+        }
+
+        /// <summary>
+        /// 向けるだけの点（重さ 0）をつかんでいる間、同じ骨のほかの向けるだけの点は、Pin でも引かれる（目標に使わない。軽い点の S88 と同じ決まり）。
+        /// 使うと、Pin の点どうしが骨を自分の目標へ向け合い、持った棒の片端を引いても、もう片端の Pin の点が棒を元へ戻した（11-07 ユーザー報告「棒の端をドラッグすると」）
+        /// </summary>
+        bool PulledAim (Point point)
+        {
+            if (!point.weightless || point.light || grabbed_.Count == 0 || grabbed_.Contains (point)) return false;
+            foreach (Point other in grabbed_) {
+                if (other.body == point.body && other.weightless && !other.light) return true;
+            }
+            return false;
         }
 
         /// <summary>解く骨 i が、解く骨 bone の先（子・孫）にあるか</summary>

@@ -199,7 +199,7 @@ namespace Lilium
     /// 物の姿勢の値（＝編集用クリップに保存する値。Controls/Object/名前 の Transform）:
     /// - localRotation = 枠の骨の基準姿勢からの回りを戻した、ルートから見た物の向き
     /// - localPosition = 枠の骨から物までの向き（同じ回りを戻した） / humanScale
-    /// 枠が Chest なら、腰や胸が動いても物は胸に付いて動く。手首の点の値は持っている間は打たず、ここで作る。
+    /// 枠が Chest なら、腰や胸が動いても物は胸に付いて動く。
     ///
     /// 解き方は Prepare → 全身 IK → Finish の順（S102。11-07 ユーザー指示「持ったときに IK 構造を再構築する。いままで同じ IK 構造を解くだけでよくなる」）。
     /// Prepare は、持っている物を持つ手の骨の子として全身 IK の骨の組みに入れ（両手なら右手の子、左手は輪の関節）、物を手 × 握りへ置く。
@@ -284,6 +284,13 @@ namespace Lilium
 
             /// <summary>握りの柄の軸まわりの回り（ルート空間。Finish が解いた手首から決める。持っている間だけ使う）</summary>
             internal Quaternion twist = Quaternion.identity;
+
+            /// <summary>
+            /// 前に解いた姿勢での、手から見た物の柄の軸まわりの回り（物のローカル。手首に合わせた物の向き⁻¹ × 物の向き）。
+            /// Finish が解いた手首と物から決める。hasRoll が false なら、まだ解いていない
+            /// </summary>
+            internal Quaternion roll = Quaternion.identity;
+            internal bool hasRoll;
 
             /// <summary>今のフレームで持っているか</summary>
             public bool held
@@ -371,9 +378,40 @@ namespace Lilium
             internal Quaternion rotation = Quaternion.identity;
             /// <summary>今の姿勢を物の上の点で決めたか（Prepare から Finish の間だけ）</summary>
             internal bool fitted;
-            /// <summary>物の姿勢の点（S102。見えない点）のコントロールと名前。持っている間、物の骨の原点を物の姿勢へ寄せる</summary>
+            /// <summary>
+            /// 物の姿勢の点（S102）のコントロールと名前と値。持っている間、物の骨の原点を物の姿勢へ寄せる全身 IK の点（点の一覧には出ない）。
+            /// 状態（Free / Pin / Lock）は体の点と同じで、持ち物の対象（HeldObjectTarget）で切り替え、キーを打つ（11-07 ユーザー指示「持ち物 Stick も制御点に」）
+            /// </summary>
             internal Transform poseControl;
             internal BodyPointId poseId;
+            internal BodyPoint poseValues;
+
+            /// <summary>物の姿勢の点の状態（体の点と同じ。位置か向きの強さが入っていれば Pin、さらに Lock の値が入っていれば Lock）</summary>
+            public BodyPointState poseState
+            {
+                get {
+                    bool pinned = poseValues.positionWeight > 0 || poseValues.rotationWeight > 0;
+                    return !pinned ? BodyPointState.Free : poseValues.locked >= 0.5f ? BodyPointState.Locked : BodyPointState.Pin;
+                }
+            }
+
+            /// <summary>
+            /// 物の姿勢の点の状態を変える（体の点の SetState と同じ: Free は強さも Lock も外す。Free から Pin / Lock にするときは位置だけ固定する。
+            /// 向きは物を回したときに固定する）。キーは次に物のキーを打つときに打つ
+            /// </summary>
+            public void SetPoseState (BodyPointState state)
+            {
+                if (state == BodyPointState.Free) {
+                    poseValues.positionWeight = 0;
+                    poseValues.rotationWeight = 0;
+                    poseValues.locked = 0;
+                }
+                else {
+                    if (poseState == BodyPointState.Free) poseValues.positionWeight = 1;
+                    poseValues.locked = state == BodyPointState.Locked ? 1 : 0;
+                }
+                keysPending = true;
+            }
             /// <summary>今の解き方で、物を骨の組み（持つ手の子）に入れたか（Prepare から Finish の間だけ）</summary>
             internal bool attached;
             /// <summary>動かしたがまだキーを打っていないか</summary>
@@ -456,11 +494,18 @@ namespace Lilium
                 ApplyConstraintWeights (this);
             }
 
-            /// <summary>物のワールドの姿勢を置いて、つかんだ状態にする。解くまで骨は動かない。差している間は動かない（場所はリグエディタで直す）</summary>
+            /// <summary>
+            /// 物のワールドの姿勢を置いて、つかんだ状態にする。解くまで骨は動かない。差している間は動かない（場所はリグエディタで直す）。
+            /// 体の点と同じく、動かした分だけ固定する: 場所を変えたら物の姿勢の点の位置の強さを、向きを変えたら向きの強さを 1 にする（Pin）。
+            /// 場所だけ動かしたときに向きまで固定すると、手首を Pin にして物を動かしても手首の角度が変わらなかった（11-07 ユーザー報告「通常の IK 制御では回転するはず」）
+            /// </summary>
             public void DragTo (Vector3 worldPosition, Quaternion worldRotation)
             {
                 if (socket != null) return;
                 Transform root = rig.rig_.root.transform;
+                GetWorldPose (out Vector3 currentPosition, out Quaternion currentRotation);
+                if (Vector3.Distance (currentPosition, worldPosition) > 1e-6f) poseValues.positionWeight = 1;
+                if (Quaternion.Angle (currentRotation, worldRotation) > 1e-3f) poseValues.rotationWeight = 1;
                 dragging = true;
                 pulling = true;
                 direct = true;
@@ -476,20 +521,6 @@ namespace Lilium
                 Transform root = rig.rig_.root.transform;
                 worldPosition = root.TransformPoint (local);
                 worldRotation = root.rotation * rotated;
-            }
-
-            /// <summary>手が hand の場所へ来るように物を動かす（持っている手の点をつかむ操作）</summary>
-            public void DragHandTo (Hand hand, Vector3 worldPosition)
-            {
-                GetWorldPose (out Vector3 position, out Quaternion rotation);
-                DragTo (worldPosition - rig.rig_.root.transform.rotation * rig.GripOffset (hand, Quaternion.Inverse (rig.rig_.root.transform.rotation) * rotation), rotation);
-            }
-
-            /// <summary>手の点を中心に、物を delta（ワールド）だけ回す（持っている手の点を回す操作）</summary>
-            public void TurnAboutHand (Hand hand, Quaternion delta)
-            {
-                GetWorldPose (out Vector3 position, out Quaternion rotation);
-                TurnAbout (position + rig.rig_.root.transform.rotation * rig.GripOffset (hand, Quaternion.Inverse (rig.rig_.root.transform.rotation) * rotation), delta);
             }
 
             /// <summary>ワールドの pivot を中心に、物を delta（ワールド）だけ回す</summary>
@@ -577,9 +608,13 @@ namespace Lilium
             if (editing == null) return;
             Transform control = rig_.CreateControl (RigPaths.Object (definition.name), createGameObject);
             Transform poseControl = rig_.CreateControl (RigPaths.ObjectPose (definition.name), createGameObject);
-            poseControl.gameObject.AddComponent<BodyPoint> ();
+            // キーの無いクリップでは位置だけの Pin（届く間は物の場所に留まり、引かれれば付いて動く。向きは体の点と同じく、回したときに固定する。
+            // 11-07 ユーザー決定。向きまで固定すると、物を動かしても手首の角度が変わらなかった）
+            BodyPoint poseValues = poseControl.gameObject.AddComponent<BodyPoint> ();
+            poseValues.positionWeight = 1;
             Entry entry = new Entry {
                 poseControl = poseControl,
+                poseValues = poseValues,
                 poseId = new BodyPointId (RigPaths.ObjectPose (definition.name)),
                 rig = this,
                 definition = definition,
@@ -930,7 +965,7 @@ namespace Lilium
         /// <summary>
         /// 全身 IK を解く前に呼ぶ（S102）。持っている物は、持つ手の骨の子として骨の組みに入れ（持つ・離す・差すが変わったときだけ組み直す）、
         /// 物を手の今の姿勢 × 握りへ置いて、物の姿勢（キー・つかんで置いた姿勢・差す場所）を物の姿勢の点の目標にする。
-        /// 両手で持つ物は右手の子にし、左手は輪の関節でつなぐ。持っている手の点は効かせない（物が導き、手が従う）。
+        /// 両手で持つ物は右手の子にし、左手は輪の関節でつなぐ。持っている手の点もふつうの点（11-07 ユーザー指示。物は握りの関節で手に付き、物と手の点の状態どおりに解く）。
         /// 持っていない物は組みに入れない（Finish で物の点から姿勢を決める）
         /// </summary>
         /// <param name="only">物の上の点のうち、効かせる点（キーの間の Locked の点。null なら動かした後で、固定している点を全部効かせる）</param>
@@ -967,15 +1002,6 @@ namespace Lilium
                     continue;
                 }
                 GetPose (entry, out entry.position, out entry.rotation);
-                foreach (Hand hand in new[] { entry.right, entry.left }) {
-                    if (hand == null || !hand.held) continue;
-                    body.SetPositionWeight (hand.id, 0);
-                    body.SetRotationWeight (hand.id, 0);
-                    foreach (BodyPointId other in hand.others) {
-                        body.SetPositionWeight (other, 0);
-                        body.SetRotationWeight (other, 0);
-                    }
-                }
                 bool fixedPose = Fixed (entry);
                 if (fixedPose) Place (entry);
                 else PlaceOnHand (body, entry, primary);
@@ -1027,7 +1053,12 @@ namespace Lilium
             Vector3 onAxis = Vector3.zero;
             if (axis.sqrMagnitude > 1e-8f) {
                 axis.Normalize ();
-                rotation = Quaternion.Normalize (Quaternion.FromToRotation (entry.rotation * axis, exact * axis) * entry.rotation);
+                // 物そのもの・物の点をつかんで動かしている間、向きを留めていなければ、前に解いた姿勢の手の中の回りのままにする。
+                // つかんでいる間の物の向き（置いた姿勢）は前に解いた後の向きで、解き直しはキーの手から始まる。前に解いた手に対する回りを
+                // キーの手に一番近い向きで当てはめると、手がキーからねじれた分だけ解くたびに回りが足され、丸い棒が手の中で柄の軸まわりに回り続けた
+                // （11-07 ユーザー報告「表示しているボーンが回転しまくる。見た目は回転していないのに」。60 回動かす間に ±170°）
+                if (entry.dragging && hand.hasRoll && entry.poseValues.rotationWeight <= 0) rotation = Quaternion.Normalize (exact * hand.roll);
+                else rotation = Quaternion.Normalize (Quaternion.FromToRotation (entry.rotation * axis, exact * axis) * entry.rotation);
                 onAxis = axis * Vector3.Dot (at, axis);
             }
             // 握りの場所: 柄の軸の上の分は物と一緒に、柄から離れた分は手と一緒に回る
@@ -1037,9 +1068,9 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 物の姿勢の点の目標と強さを入れる。物そのものを動かしていればつかんだ点（全身を引く。引かずに置くだけなら Lock）。
-        /// 物の上の重い点をつかんでいる間は効かせない。物の上のほかの点をつかんでいる・物の上の点に強さが入っている間は Pin。
-        /// そのほかは、枠がルート・差している・差す場所へ運んでいる間は Lock、枠が腰・胸なら Pin（つかんだ点が届かなければ付いて動く）
+        /// 物の姿勢の点の目標を入れる。状態（強さ・Lock）は、ほかの点と同じくキーと持ち物の対象で決めた値のまま（11-07 ユーザー指示「汎用的な制御にすることが重要、体の点の決まりどおりに」）。
+        /// 物そのものを動かしていればつかんだ点にする（強さは動かした分だけ DragTo が入れる。体の点をつかんで動かしたときと同じ。Lock は今のまま）。
+        /// 引かずに置くだけ（差す場所から抜いた所に残す）なら、つかんだ点にしない
         /// </summary>
         void SetPosePoint (FullBodyRig body, Entry entry)
         {
@@ -1048,26 +1079,13 @@ namespace Lilium
             bool direct = entry.dragging && entry.direct;
             bool grabbed = direct && entry.pulling;
             entry.fitted = !direct && AnyPointActive (body, entry);
-            // 物の上の重い点をつかんでいる間は効かせない（物は重い点に引かれ、向きは腕で決まる。届かない所まで引くと腕と一直線になる）。
-            // 留めると、物が握りのまわりに回るだけで腕が伸びなかった（11-07 実測。腕のデバッグ用キャラで手首が 72〜78° 曲がったまま）。
-            // 軽い点・向けるだけの点をつかんでいる間と、物の上の点に強さが入っている間は、物のキーの姿勢として Pin のまま留める。
-            // 効かせないと物を留める物が無くなり、腕がキーの無い姿勢へ戻って物ごと回った（11-07 実測で、柄の軸の上の点を引くと 77° 回った）
-            float weight = HeavyPointGrabbed (body, entry) ? 0 : 1;
-            body.SetPositionWeight (entry.poseId, weight);
-            body.SetRotationWeight (entry.poseId, weight);
-            bool locks = !entry.fitted && (direct || entry.frameBone == null || entry.socket != null || entry.bringing);
-            body.SetLocked (entry.poseId, !grabbed && locks);
+            // 引かずに置くだけ（差す場所から抜いた所に残す）は、場所も向きもそこに留める
+            if (direct && !entry.pulling) {
+                entry.poseValues.positionWeight = 1;
+                entry.poseValues.rotationWeight = 1;
+            }
             if (grabbed) body.MarkGrabbed (entry.poseId);
             else body.UnmarkGrabbed (entry.poseId);
-        }
-
-        /// <summary>物の上の重い点をつかんでいるか</summary>
-        static bool HeavyPointGrabbed (FullBodyRig body, Entry entry)
-        {
-            foreach (ObjectPoint point in entry.points) {
-                if (point.heavy && body.IsGrabbed (point.id)) return true;
-            }
-            return false;
         }
 
         /// <summary>物の上の点をつかんでいるか、効かせる点（fitOnly_）に強さが入っているか</summary>
@@ -1237,10 +1255,7 @@ namespace Lilium
                     entry.rotation = Quaternion.Normalize (Quaternion.Inverse (root.rotation) * entry.editing.rotation);
                 }
                 foreach (Hand hand in new[] { entry.right, entry.left }) {
-                    if (hand == null || !hand.held) continue;
-                    UpdateTwist (body, hand);
-                    // 持っている間の手の点は効かせないので、骨の今の場所に出す（離したときに、ここから動かせる）
-                    body.CapturePoint (hand.id);
+                    if (hand != null && hand.held) UpdateTwist (body, hand);
                 }
             }
             Place ();
@@ -1249,8 +1264,11 @@ namespace Lilium
             }
             // 点で決めた姿勢も、動かした後なら値に残す（打つキーは解いた姿勢。キーの間で Lock の点に留めた姿勢はクリップの値を変えない）
             // 差している間の値は使わないが、抜いたフレームと差す前のキーの間で物がここへ向かうように、打つ値は差す場所の姿勢にする
+            // 持っている物は、物の上の点で姿勢を決めても値に残さない（キーを打つときに SyncToBodies で解いた物の骨の姿勢へ合わせ直す。体の骨と同じ）。
+            // 解くたびに残すと、次に解くときの元の姿勢（キー）が前の答えになり、手首を引く間に物が手の中で柄の軸まわりに回り続けた
+            // （11-08 ユーザー報告「手首を動かしていると、たまに棒の姿勢がワープする」。物の上の点を Pin にした棒が 1 回 20° 回った）
             foreach (Entry entry in entries_) {
-                if (entry.dragging || (edited && (entry.fitted || entry.socket != null))) StoreValues (entry);
+                if (entry.dragging || (edited && ((entry.fitted && !entry.attached) || entry.socket != null))) StoreValues (entry);
             }
             fitOnly_ = null;
         }
@@ -1261,9 +1279,25 @@ namespace Lilium
         void UpdateTwist (FullBodyRig body, Hand hand)
         {
             hand.twist = Quaternion.identity;
+            hand.hasRoll = false;
             if (!body.TryGetCapturedValues (hand.control, out Vector3 unused, out Quaternion wrist)) return;
             Quaternion exact = Quaternion.Normalize (wrist * body_ * Quaternion.Inverse (hand.heldGripRotation));
             hand.twist = Quaternion.Normalize (exact * Quaternion.Inverse (hand.entry.rotation));
+            hand.roll = Quaternion.Normalize (Quaternion.Inverse (exact) * hand.entry.rotation);
+            hand.hasRoll = true;
+        }
+
+        /// <summary>
+        /// キーを打つ前に呼ぶ（体の点の BodyPointTarget.SyncToBone と同じ）。持っている物の値（物のキー・物の姿勢の点の目標）を、解いた物の骨の姿勢へ合わせ直す。
+        /// 物は手の子の骨なので、ほかの骨と同じく解いた姿勢をキーにする。物の上の点が効いているときだけ値に残していたため、手首を引いて離すと、
+        /// 元の場所の物の姿勢の点（Pin）が手首を引き戻した（11-07 ユーザー報告「手首を動かすと、ドラッグを離すと元の位置に戻っている」。IkArm で 7〜20cm）。
+        /// 差している・差す場所へ運んでいる物は骨に固定なので、そのまま
+        /// </summary>
+        public void SyncToBodies ()
+        {
+            foreach (Entry entry in entries_) {
+                if (entry.attached && !Fixed (entry)) StoreValues (entry);
+            }
         }
 
         /// <summary>持っている手のうち、いちばん握りに届いていない差（メートル）</summary>

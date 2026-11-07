@@ -1039,7 +1039,8 @@ namespace Lilium
                 if (!IsUsed (ref d, e, n) || !IsAim (ref d, e)) continue;
                 int bone = d.effectors[e].bone;
                 if (d.aimed[bone] == 0) {
-                    if (d.fixedBones[bone] != 0 || (d.active[bone] != 0 && d.inverseInertia[bone] <= 0)) continue;
+                    // 軸まわりにしか回れない骨（持った物の握り。S102）は、向きが決まっていても親の骨を回して向ける（SnapAim の AimWithParent）
+                    if (d.fixedBones[bone] != 0 || (d.active[bone] != 0 && d.inverseInertia[bone] <= 0 && d.lockOn[bone] == 0)) continue;
                     d.aimed[bone] = 1;
                 }
                 d.effectorBody[e] = bone;
@@ -1985,9 +1986,71 @@ namespace Lilium
             if (math.lengthsq (pivotLocal) > 1e-12f) return false;
             quaternion wanted = AimRotation (ref d, e, d.positions[b], pivotLocal);
             quaternion turn = math.mul (wanted, math.inverse (d.rotations[b]));
-            if (math.lengthsq (RotationVector (turn)) < 1e-14f) return false;
-            RotateSubtree (ref d, n, b, turn);
+            bool turned = math.lengthsq (RotationVector (turn)) >= 1e-14f;
+            if (turned) RotateSubtree (ref d, n, b, turn);
+            // 軸まわりにしか回れない骨（S89・持った物の握り S102）では向けきれない分を、親の骨を回して向ける（11-07 ユーザー決定「1」）
+            if (d.lockOn[b] != 0) {
+                if (turned) Rebuild (ref d, n, false);
+                turned |= AimWithParent (ref d, n, e, b);
+            }
+            return turned;
+        }
+
+        /// <summary>
+        /// 向けるだけの点 e を、骨 b の親を付け根まわりに回して目標の方へ向ける（親の角度制限の範囲 + 遊びまで。骨 b と先の骨は親に付いて回る）。
+        /// b が軸まわりにしか回れない骨のとき、b を回すだけでは軸の外へ向けられない（持った棒の柄の軸の上の点は、まったく向かなかった。11-07 ユーザー報告
+        /// 「棒の両端の制御点動かしても棒が回転しない」）。ChestDirection が胸だけを回すのと同じく、腕や体は引かない。
+        /// 親の向きが決まっている（向きを留めた点がある）・親が蝶番・根なら回さない。回したら true
+        /// </summary>
+        static bool AimWithParent (ref FullBodyIkData d, int n, int e, int b)
+        {
+            int p = d.bones[b].parent;
+            if (p < 0 || d.bones[p].parent < 0 || d.hingeOn[p] != 0 || d.inverseInertia[p] <= 0 || d.fixedBones[p] != 0) return false;
+            FullBodyIkEffector effector = d.effectors[e];
+            float3 point = d.positions[b] + math.rotate (d.rotations[b], PointOffset (ref d, e));
+            float3 want;
+            float3 have;
+            quaternion turn;
+            // 持った物の上に位置を留めた点（物の姿勢の点の Pin など）があれば、その点を中心に回し、腕を付いてこさせる（体の点と同じく、
+            // 軽い点を引いても重い Pin の点は留まる。11-07 ユーザー報告「棒の端をドラッグすると、Pin で重さ 1 の持ち物の位置が動く」。手首まわりに回すと物の原点が 7〜31mm 動いた）。
+            // 手首の点も位置を留めていれば、手首と留めた点を結ぶ線のまわりにだけ回す
+            float3 pivotLocal = float3.zero;
+            bool pivoted = IsHeldBody (ref d, b) && FindPinnedPoint (ref d, b, e, out pivotLocal);
+            float3 pivot = pivoted ? d.positions[b] + math.rotate (d.rotations[b], pivotLocal) : d.positions[p];
+            have = point - pivot;
+            want = effector.position - pivot;
+            if (math.lengthsq (have) < 1e-12f || math.lengthsq (want) < 1e-12f) return false;
+            if (pivoted && FindPinnedPoint (ref d, p, -1, out float3 wristLocal)) {
+                float3 line = math.normalizesafe (pivot - (d.positions[p] + math.rotate (d.rotations[p], wristLocal)));
+                float3 f = have - line * math.dot (have, line);
+                float3 t = want - line * math.dot (want, line);
+                if (math.lengthsq (line) < 0.5f || math.lengthsq (f) < 1e-12f || math.lengthsq (t) < 1e-12f) return false;
+                turn = quaternion.AxisAngle (line, SignedAngle (math.normalize (f), math.normalize (t), line));
+            }
+            else turn = TurnToward (ref d, p, have, want);
+            float weight = math.saturate (effector.positionWeight);
+            if (weight < 1) turn = math.slerp (quaternion.identity, turn, weight);
+            quaternion wanted = ClampToLimit (ref d, p, math.normalizesafe (math.mul (turn, d.rotations[p]), d.rotations[p]));
+            quaternion delta = math.mul (wanted, math.inverse (d.rotations[p]));
+            if (math.lengthsq (RotationVector (delta)) < 1e-14f) return false;
+            RotateSubtree (ref d, n, p, delta);
+            Rebuild (ref d, n, false);
+            // 手首まわりに回して動いた留めた点を、腕を合わせ直して戻す（手と物の向きはそのまま）
+            if (pivoted) SnapHeldOrigin (ref d, n, b, pivot - math.rotate (d.rotations[b], pivotLocal));
             return true;
+        }
+
+        /// <summary>骨 b の上の、位置を留めた点（向けるだけの点でない、位置の強さのある点。skip の点は除く）の、骨の枠での場所。あれば true</summary>
+        static bool FindPinnedPoint (ref FullBodyIkData d, int b, int skip, out float3 offset)
+        {
+            offset = float3.zero;
+            for (int k = 0; k < d.effectorCount; k++) {
+                FullBodyIkEffector other = d.effectors[k];
+                if (k == skip || other.bone != b || other.positionWeight <= 0 || IsAim (ref d, k)) continue;
+                offset = other.offset;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>

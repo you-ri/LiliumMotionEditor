@@ -81,15 +81,15 @@ namespace Lilium
         /// <summary>
         /// 全身 IK の点（Controls/Body/...）の、その時刻の状態（S25）。
         /// 状態（Pin / Locked）は、次にその点のキーを打つまで引き継ぐ。キーの間で補間はしない:
-        /// 値は、その時刻以前でいちばん近いキーの値（最初のキーより前は 0 = Free）。
+        /// 値は、その時刻以前でいちばん近いキーの値（最初のキーより前は既定の値。defaults が無ければ 0 = Free。持ち物の姿勢の点は Pin が既定。S102）。
         /// keyed は、その時刻ちょうどに状態のキーがあるか（あれば、点の位置と向きもそのキーの値を使う。無ければ、その時刻の骨の位置に置く）。
         /// 画面を描くたびに呼ばれるので、クリップごとに覚えておき、カーブが書き換わったら作り直す
         /// </summary>
         /// <param name="values">BodyPoint.kProperties の並び（kValueCount 個）</param>
-        public static void GetPointState (AnimationClip clip, string path, float time, float[] values, out bool keyed)
+        public static void GetPointState (AnimationClip clip, string path, float time, float[] values, out bool keyed, float[] defaults = null)
         {
             keyed = false;
-            for (int v = 0; v < values.Length; v++) values[v] = 0;
+            for (int v = 0; v < values.Length; v++) values[v] = defaults != null && v < defaults.Length ? defaults[v] : 0;
             if (clip == null || string.IsNullOrEmpty (path)) return;
             PointKeys keys;
             if (!GetPointKeys (clip).TryGetValue (path, out keys)) return;

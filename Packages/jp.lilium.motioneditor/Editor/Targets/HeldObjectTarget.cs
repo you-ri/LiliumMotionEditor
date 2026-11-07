@@ -9,6 +9,8 @@ namespace Lilium
     /// <summary>
     /// 持ち物の FK（S91）。骨の FK と同じく View の Bones で出す。動かすと持っている手と体が付いてくる。
     /// キーは物の姿勢（Controls/Object/名前）と、手ごとの持っているか。離すと姿勢全体のキーを打つ。
+    /// 持っている間の物の姿勢は全身 IK の点（S102）で、体の点と同じ状態（Free / Pin / Lock）を持つ。状態は Controller の点の状態のボタンで変え、
+    /// 物の姿勢の点（Controls/ObjectPose/名前）の強さと Lock の値をキーに打つ。
     /// 物の上の点（重心・先など）はふつうの全身 IK の点（BodyPointTarget。S91e）
     /// </summary>
     public sealed class HeldObjectTarget : PoseTarget
@@ -41,6 +43,18 @@ namespace Lilium
             get { return entry_; }
         }
 
+        /// <summary>物の姿勢の点の状態（体の点と同じ Free / Pin / Lock）</summary>
+        public BodyPointState state
+        {
+            get { return entry_.poseState; }
+        }
+
+        /// <summary>物の姿勢の点の状態を変える（BodyPointTarget.SetState と同じく、Pin / Lock は今の物の姿勢で留める）</summary>
+        public void SetState (BodyPointState value)
+        {
+            if (value != state) entry_.SetPoseState (value);
+        }
+
         public override GameObject gameObject
         {
             get { return entry_.control != null ? entry_.control.gameObject : null; }
@@ -62,11 +76,6 @@ namespace Lilium
                 entry_.GetWorldPose (out Vector3 position, out Quaternion rotation);
                 return position;
             }
-        }
-
-        float handleLength
-        {
-            get { return 0.2f * Mathf.Max (0.1f, rig_.humanScale); }
         }
 
         public override TransformChannels GetSpinChannels ()
@@ -97,15 +106,64 @@ namespace Lilium
             Transform display = entry_.display;
             // 差している物は骨に固定で動かせない（場所はリグエディタで直す）
             if (display == null || entry_.socket != null) return;
-            Quaternion rotation = display.rotation;
-            PoseHandleUtility.DoObjectHandles (moveHash_, rotateHash_, entry_.control, display, handleLength, kColor, selected,
-                position => entry_.DragTo (position, rotation),
-                rotated => entry_.DragTo (display.position, rotated));
+            // 体の点（BodyPointTarget.OnHandleGUI）と同じ出し方: 丸は状態の色、選んでいることは丸の外の輪、
+            // 選んでいる間のギズモは Controller パネルのモード（Rot なら回転、それ以外は移動）。
+            // 前は Rig のターゲットと同じ物のハンドルで、回転は向きの棒を押したときだけ出て、Rot にしても回転のギズモが出なかった（11-07 ユーザー報告）。
+            // 動かす量は物の姿勢（GetWorldPose）に足す。表示の姿勢をそのまま渡すと、位置だけ動かしても解いた向きとキーの向きの差で向きまで Pin になる
+            Vector3 shown = display.position;
+            Quaternion axes = display.rotation;
+            PoseHandleUtility.color = handleColor;
+            try {
+                if (selected && Event.current.type == EventType.Repaint) BodyPointTarget.DrawRing (shown, 1, BodyPointTarget.kRingSelectedColor);
+                Vector3 moved = PoseHandleUtility.DoJointHandle (moveHash_, entry_.control, shown, axes, false, false);
+                if (moved != shown) MoveBy (moved - shown);
+                if (!selected) return;
+                if (PoseHandleUtility.goalRotate) {
+                    if (PoseHandleUtility.DoRotateGizmo (rotateHash_, shown, axes, out Quaternion turned)) {
+                        entry_.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                        entry_.DragTo (position, turned * rotation);
+                        GUI.changed = true;
+                    }
+                }
+                else {
+                    Vector3 gizmo = PoseHandles.PositionHandle (shown, PoseHandleUtility.GizmoAxes (axes));
+                    if (gizmo != shown) MoveBy (gizmo - shown);
+                }
+            }
+            finally {
+                PoseHandleUtility.color = PoseHandleUtility.StandardColor;
+            }
+        }
+
+        /// <summary>物の姿勢を、向きを変えずに delta（ワールド）だけ動かす</summary>
+        void MoveBy (Vector3 delta)
+        {
+            entry_.GetWorldPose (out Vector3 position, out Quaternion rotation);
+            entry_.DragTo (position + delta, rotation);
+            GUI.changed = true;
+        }
+
+        /// <summary>
+        /// ハンドルの色。持っている間は、物の姿勢の点の状態の色（体の点の丸と同じ。Pin なら Pin の色）。
+        /// 持っていない物の姿勢は全身 IK の点でなく、状態を使わないので、Rig のターゲットと同じ物の色
+        /// </summary>
+        Color handleColor
+        {
+            get {
+                if (!entry_.attached) return kColor;
+                BodyPoint values = entry_.poseValues;
+                bool pinned = values.positionWeight > 0 || values.rotationWeight > 0;
+                return BodyPointTarget.StateColor (pinned, pinned && values.locked >= 0.5f, Mathf.Clamp01 (Mathf.Max (values.positionWeight, values.rotationWeight)));
+            }
         }
 
         public override void WriteKeys (CurveWriter writer)
         {
             writer.Transform (entry_.control, TransformChannels.Position | TransformChannels.Rotation);
+            // 物の姿勢の点の状態（体の点と同じ値。S102）
+            writer.Float (entry_.poseControl, typeof (BodyPoint), BodyPoint.kPositionWeightProperty, entry_.poseValues.positionWeight);
+            writer.Float (entry_.poseControl, typeof (BodyPoint), BodyPoint.kRotationWeightProperty, entry_.poseValues.rotationWeight);
+            writer.Float (entry_.poseControl, typeof (BodyPoint), BodyPoint.kLockedProperty, entry_.poseValues.locked);
             entry_.keysPending = false;
             // 持っているかは元のクリップだけから読む（Override の段へ書く間は打たない。切り替えは元のクリップに打つ）
             if (writer.storePosition != null) return;
@@ -152,6 +210,7 @@ namespace Lilium
         public override void CollectKeyedPaths (ICollection<string> result)
         {
             result.Add (RigPaths.Object (entry_.name));
+            result.Add (RigPaths.ObjectPose (entry_.name));
             foreach (HeldObjectRig.Socket socket in entry_.sockets) result.Add (RigPaths.ObjectSocket (entry_.name, socket.definition.name));
         }
 

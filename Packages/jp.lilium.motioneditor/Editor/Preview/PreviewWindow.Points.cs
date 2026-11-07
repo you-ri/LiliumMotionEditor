@@ -364,16 +364,29 @@ namespace Lilium
         /// <summary>選んでいる全身 IK の点の数（Controller のパネルが、状態のボタンを出すかどうかに使う）</summary>
         public int selectedPointCount
         {
-            get { return stage_ != null && stage_.fullBody != null ? GetSelectedPoints ().Count : 0; }
+            get { return stage_ != null && stage_.fullBody != null ? GetSelectedPoints ().Count + GetSelectedHeldObjects ().Count : 0; }
         }
 
-        /// <summary>選んでいる点のうち、その状態と出している点の数（ほとんど引いていない点は Free と数える）</summary>
+        /// <summary>選んでいる持ち物（物の姿勢は全身 IK の点で、体の点と同じ状態を持つ。S102）</summary>
+        List<HeldObjectTarget> GetSelectedHeldObjects ()
+        {
+            List<HeldObjectTarget> objects = new List<HeldObjectTarget> ();
+            foreach (PoseTarget target in targets_) {
+                if (target is HeldObjectTarget held && held.gameObject != null && IsSelected (held.gameObject)) objects.Add (held);
+            }
+            return objects;
+        }
+
+        /// <summary>選んでいる点（持ち物も）のうち、その状態と出している点の数（ほとんど引いていない点は Free と数える）</summary>
         public int CountSelectedPoints (BodyPointState state)
         {
             if (stage_ == null || stage_.fullBody == null) return 0;
             int count = 0;
             foreach (BodyPointTarget point in GetSelectedPoints ()) {
                 if (point.shownState == state) count++;
+            }
+            foreach (HeldObjectTarget held in GetSelectedHeldObjects ()) {
+                if (held.state == state) count++;
             }
             return count;
         }
@@ -385,8 +398,10 @@ namespace Lilium
         {
             if (stage_ == null || stage_.fullBody == null) return;
             List<BodyPointTarget> points = GetSelectedPoints ();
-            if (points.Count == 0) return;
+            List<HeldObjectTarget> objects = GetSelectedHeldObjects ();
+            if (points.Count == 0 && objects.Count == 0) return;
             foreach (BodyPointTarget point in points) point.SetState (state);
+            foreach (HeldObjectTarget held in objects) held.SetState (state);
             SolveAfterManipulate ();
             CommitFullBodyPose ();
             RaiseStateChanged ();

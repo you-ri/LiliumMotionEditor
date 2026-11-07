@@ -76,6 +76,8 @@ namespace Lilium
                 BodyPointTarget point = target as BodyPointTarget;
                 if (point != null) point.SyncToBone ();
             }
+            // 持っている物も、解いた物の骨の姿勢へ合わせ直す（物は手の子の骨。体の点と同じ）
+            if (stage.heldObjects != null) stage.heldObjects.SyncToBodies ();
             // 足と一緒に動かした Pin の点は、骨の今の場所へ付け直した（Floor Clamp。FullBodyRig.CarryFootPins）
             stage.fullBody.EndGrab ();
             // ここからは、この姿勢が元の姿勢

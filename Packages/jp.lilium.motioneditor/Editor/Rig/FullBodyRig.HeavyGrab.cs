@@ -36,6 +36,9 @@ namespace Lilium
         Vector3[] branchShifts_;
         // 重い点をつかんでいる間の、Lock の点の目標の並び（Lock の点が動いたかを見る）と、つかんだ点を譲らせて解いた姿勢（保持解き）
         readonly List<int> lockedEffectors_ = new List<int> ();
+        // 重い点をつかんでいる間の、つかんだ点と離れの変わらない Pin の点の目標の並びと、元の姿勢でのずれ（RigidToGrabbed。Solved で留まったかを見る）
+        readonly List<int> rigidEffectors_ = new List<int> ();
+        readonly List<float> rigidBases_ = new List<float> ();
         Vector3[] yieldedPositions_;
         Quaternion[] yieldedRotations_;
 
@@ -175,7 +178,9 @@ namespace Lilium
         /// </summary>
         bool Solved ()
         {
-            return Reached (grabbedEffectors_) && LocksHeld ();
+            // つかんだ点と離れの変わらない Pin の点（RigidToGrabbed）も、留まっていなければ解き直す。つかんだ点が届いても、その点を外して届いた答えは、
+            // 届かなかったときに運ぶ量（BranchShifts）と食い違い、引くたびに 2 つの姿勢の間を跳んだ
+            return Reached (grabbedEffectors_) && LocksHeld () && Held (rigidEffectors_, rigidBases_);
         }
 
         /// <summary>Lock の点がどれも、元の姿勢でのずれ（lockBases_）から kReachTolerance より大きくは動いていないか</summary>
@@ -221,12 +226,16 @@ namespace Lilium
             int count = 0;
             grabbedEffectors_.Clear ();
             lockedEffectors_.Clear ();
+            rigidEffectors_.Clear ();
+            rigidBases_.Clear ();
             for (int i = 0; i < points_.Count; i++) {
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
                 PointRole role = HeavyRole (point, out positionWeight, out rotationWeight);
                 if (role == PointRole.Follow) continue;
-                if (role == PointRole.CarriedPin && !branches && !path[point.body]) continue;
+                // つかんだ点と離れの変わらない Pin の点は、道の上の骨に乗っていても道の外の点と同じに運ぶ（BranchShifts）
+                bool rigid = role == PointRole.CarriedPin && RigidToGrabbed (point, path, out Vector3 unusedTarget, out float unusedDistance);
+                if (role == PointRole.CarriedPin && !branches && (rigid || !path[point.body])) continue;
                 if (role == PointRole.Grabbed) grabbedEffectors_.Add (count);
                 else if (role == PointRole.Lock) lockedEffectors_.Add (count);
                 if (role == PointRole.Grabbed && yield) positionWeight = Mathf.Min (positionWeight, kLightPull);
@@ -237,8 +246,13 @@ namespace Lilium
                     rotationWeight = Mathf.Min (rotationWeight, kLightPull);
                 }
                 FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight);
-                if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] ? pathShift : branchShifts_[i] * branchScale);
-                data_.effectors[count++] = effector;
+                if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] && !rigid ? pathShift : branchShifts_[i] * branchScale);
+                data_.effectors[count] = effector;
+                if (rigid) {
+                    rigidEffectors_.Add (count);
+                    rigidBases_.Add (InputResidual (count));
+                }
+                count++;
             }
             int boxes = count;
             count = AddFootBoxes (count);
@@ -313,7 +327,15 @@ namespace Lilium
                 branchShifts_[i] = Vector3.zero;
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
-                if (HeavyRole (point, out positionWeight, out rotationWeight) != PointRole.CarriedPin || path[point.body]) continue;
+                if (HeavyRole (point, out positionWeight, out rotationWeight) != PointRole.CarriedPin) continue;
+                // つかんだ点と離れの変わらない Pin の点は、つかんだ点の目標から決まった離れの球の上で、一番近い所へ運ぶ（RigidToGrabbed）
+                if (RigidToGrabbed (point, path, out Vector3 grabbedTarget, out float distance)) {
+                    Vector3 toGrabbed = grabbedTarget - TargetPosition (point);
+                    float gap = toGrabbed.magnitude;
+                    if (gap > kEpsilon) branchShifts_[i] = toGrabbed / gap * (gap - distance);
+                    continue;
+                }
+                if (path[point.body]) continue;
                 float length;
                 int root = LimbRoot (point, path, out length);
                 Vector3 target = TargetPosition (point);
@@ -321,6 +343,39 @@ namespace Lilium
                 float over = toRoot.magnitude - length;
                 if (over > 0) branchShifts_[i] = toRoot.normalized * over;
             }
+        }
+
+        /// <summary>
+        /// 重さ 1 の Pin の点が、つかんだ点との離れの変わらない点か（つかんだ点の骨の上の点か、つかんだ点の骨にぶら下がる骨の付け根の点。
+        /// 手首をつかんだときの手のひらの点、持っている物の原点の点など）。そうなら、つかんだ点の目標と、元の姿勢での 2 つの点の離れを返す。
+        /// こうした点は、つかんだ骨を点のまわりに回せば留まり、届かなければ、つかんだ点から決まった離れのまま引かれる（体の点の Pin の決まり「その場を維持する。ただし引っ張ることはできる」）。
+        /// 手足の長さで運ぶ量を決める形（BranchShifts の手足・PathStretch）では、つかんだ骨を回せることを数えず、こうした点は手足の長さが 0 で必ず付いて動くとみなした。
+        /// 一方 1 回目に解いたときは、つかんだ骨を大きく回して届くと留まるので、引くたびに 2 つの姿勢の間を跳んだ
+        /// （11-07 ユーザー報告「手首を動かしていると、たまに棒の姿勢がワープする」。腕のデバッグ用キャラで、持った棒が 1 回 18cm・130°、手のひらの Pin の点が 1 回 22cm）
+        /// </summary>
+        bool RigidToGrabbed (Point point, bool[] path, out Vector3 grabbedTarget, out float distance)
+        {
+            grabbedTarget = Vector3.zero;
+            distance = 0;
+            // 根を留めない定義（S98）は、Pin の点を全部同じだけ運ぶ（ResolveUnpinnedHeavyGrab）ので、ここでは数えない
+            if (path == null || settings_.hipsPin <= 0) return false;
+            int bone = point.body;
+            if (!path[bone]) {
+                // 道の外の点は、道の上の骨にぶら下がる骨の付け根に乗っていれば、その骨から動かない
+                int root = LimbRoot (point, path, out float length);
+                int parent = bodyParents_[root];
+                if (length > kEpsilon || parent < 0 || !path[parent]) return false;
+                bone = parent;
+            }
+            foreach (Point grabbed in grabbed_) {
+                if (grabbed == point || grabbed.body != bone || !GetWeights (grabbed, out float positionWeight, out float rotationWeight)) continue;
+                grabbedTarget = TargetPosition (grabbed);
+                Vector3 from = solvePositions_[grabbed.body] + solveRotations_[grabbed.body] * grabbed.offset;
+                Vector3 to = solvePositions_[point.body] + solveRotations_[point.body] * point.offset;
+                distance = Vector3.Distance (from, to);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
