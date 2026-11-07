@@ -100,6 +100,21 @@ namespace Lilium
             return Vector3.Distance (session.stage.editingRig.GetEditingBone (hand).position, target);
         }
 
+        /// <summary>
+        /// 手首と、キャラの設定の握りの差のうち、柄の軸まわりの回りに依らない分（柄に沿った場所の差と、柄からの距離の差の大きい方。メートル）。
+        /// 握りは柄の軸まわりに自由なので（S100）、物と腕を鎖で解くと、手は柄のまわりで回った所を握る
+        /// </summary>
+        static float HandleGap (PoseSession session, HumanBodyBones hand)
+        {
+            HeldObjectRig.Entry entry = Entry (session);
+            HeldObjectGrip grip = hand == HumanBodyBones.RightHand ? entry.definition.rightGrip : entry.definition.leftGrip;
+            Vector3 axis = entry.definition.gripAxis.normalized;
+            Vector3 at = entry.editing.InverseTransformPoint (session.stage.editingRig.GetEditingBone (hand).position);
+            float along = Mathf.Abs (Vector3.Dot (at - grip.position, axis));
+            float radial = Mathf.Abs (Vector3.ProjectOnPlane (at, axis).magnitude - Vector3.ProjectOnPlane (grip.position, axis).magnitude);
+            return Mathf.Max (along, radial);
+        }
+
         static void AssertHolding (PoseSession session, string message)
         {
             Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), kGripTolerance, message + ": 右手");
@@ -722,7 +737,9 @@ namespace Lilium
             Vector3 far = start + new Vector3 (0, 0, 4);
             entry.DragTo (far, rotation);
             session.SolveAfterEdit ();
-            AssertHolding (session, "届かない所");
+            // 届かないときは物と腕を 1 つの鎖で解くので、手は柄のまわりで回った所を握ることがある（S101）。柄に沿った場所と柄からの距離で見る
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, "届かない所: 右手");
+            Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, "届かない所: 左手");
             Assert.Greater (Vector3.Distance (far, entry.editing.position), 0.5f, "物が体の方へ寄る");
         }
 
@@ -747,6 +764,193 @@ namespace Lilium
 
             session.Evaluate (15);
             Assert.AreEqual (1, Entry (session).values.leftHold, "前のキーまでは持っている（段差）");
+        }
+
+        [Test]
+        public void GrabAtCurrent_HoldsWhereTheHandIs_AndFollowsTheObject ()
+        {
+            // S99: 持つボタン（SetObjectHold）と同じ経路。押した瞬間の手首の場所と向きを、物から見た握りにして拘束する。
+            // 枠がルートの物は体が動いても動かないので、持ってもワールドで手が留まる
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            Vector3 hand = GrabMovedLeftHand (session, out Quaternion turn);
+            Assert.LessOrEqual (Vector3.Distance (hand, Bone (session, HumanBodyBones.LeftHand).position), kGripTolerance, "持っても手は動かない");
+            Assert.LessOrEqual (Quaternion.Angle (turn, Bone (session, HumanBodyBones.LeftHand).rotation), 0.5f, "向きも動かない");
+            Assert.Greater (GripGap (session, HumanBodyBones.LeftHand), 0.03f, "キャラの設定の握りへ動かない");
+            Assert.IsNull (session.CommitPose ());
+
+            session.Evaluate (30);
+            Assert.IsTrue (Entry (session).left.gripKeyed, "握りはキーから戻る");
+            Assert.LessOrEqual (Vector3.Distance (hand, Bone (session, HumanBodyBones.LeftHand).position), kGripTolerance, "キーから戻った手");
+            Vector3 local = Entry (session).editing.InverseTransformPoint (Bone (session, HumanBodyBones.LeftHand).position);
+            MoveObject (session, new Vector3 (0.03f, 0.02f, 0));
+            Assert.LessOrEqual (Vector3.Distance (local, Entry (session).editing.InverseTransformPoint (Bone (session, HumanBodyBones.LeftHand).position)), kGripTolerance, "物を動かしても握った所のまま付いてくる");
+            Assert.LessOrEqual (GripGap (session, HumanBodyBones.RightHand), kGripTolerance, "右手はキャラの設定の握りのまま");
+            session.Evaluate (15);
+            Assert.IsFalse (Entry (session).left.gripKeyed, "持つ前のキーの間は、キーで持った握りではない（段で切り替わる）");
+        }
+
+        [Test]
+        public void GrabAtCurrent_ChestFrame_KeepsTheGripOnTheObject ()
+        {
+            // 枠が胸の物は、手の Pin（ワールドに留める）が物への拘束に変わると胸が少し戻り、物と手が一緒に動く。握った所は物の上で変わらない
+            PoseSession session = Open (CreateObject ());
+            GrabMovedLeftHand (session, out Quaternion _);
+            Vector3 grip = Entry (session).editing.TransformPoint (Entry (session).left.heldGripPosition);
+            Assert.LessOrEqual (Vector3.Distance (grip, Bone (session, HumanBodyBones.LeftHand).position), kGripTolerance, "押した瞬間の握りに付く");
+            Assert.Greater (GripGap (session, HumanBodyBones.LeftHand), 0.03f, "キャラの設定の握りへ動かない");
+        }
+
+        [Test]
+        public void HeldHand_TwistsFreelyAroundTheGripAxis ()
+        {
+            // 11-05: 握りは柄の軸まわりにだけ自由。物を柄の軸まわりに回すと柄が手の中で回り、手首は一緒に回らない。
+            // 柄は手に対して同じ所を通る（向きだけ自由にして場所を物に留めると、手首の点が柄のまわりを回って、柄が手の別の所を通った）
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            Transform hand = Bone (session, HumanBodyBones.RightHand);
+            Vector3 axis = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Vector3 onHand = Quaternion.Inverse (hand.rotation) * axis;
+            Vector3 line = HandleOnHand (entry, hand);
+            Quaternion before = hand.rotation;
+
+            entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+            entry.DragTo (position, Quaternion.AngleAxis (40, axis) * rotation);
+            session.SolveAfterEdit ();
+            Vector3 turned = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Assert.LessOrEqual (Vector3.Angle (turned, axis), 0.5f, "物は柄の軸まわりに回った");
+            Assert.Greater (Quaternion.Angle (Quaternion.AngleAxis (40, axis) * before, hand.rotation), 20f, "手首は物と一緒に回らない");
+            Assert.LessOrEqual (Vector3.Angle (hand.rotation * onHand, turned), 0.5f, "柄の軸は手に対して変わらない");
+            Assert.LessOrEqual (Vector3.Distance (line, HandleOnHand (entry, hand)), kGripTolerance, "柄は手の同じ所を通る");
+
+            // 柄の軸を傾けると、手も一緒に傾く
+            entry.GetWorldPose (out position, out rotation);
+            entry.DragTo (position, Quaternion.AngleAxis (25, Vector3.forward) * rotation);
+            session.SolveAfterEdit ();
+            turned = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Assert.Greater (Vector3.Angle (turned, axis), 20f, "柄の軸が傾いた");
+            Assert.LessOrEqual (Vector3.Angle (hand.rotation * onHand, turned), 0.5f, "手も柄の軸に合わせて傾く");
+            Assert.LessOrEqual (Vector3.Distance (line, HandleOnHand (entry, hand)), kGripTolerance, "傾けても柄は手の同じ所を通る");
+        }
+
+        [Test]
+        public void TurnBeyondTheWrist_ObjectYields_HandKeepsTheGrip ()
+        {
+            // S101 の A: 腕で作れない向きへ物を回すと、手首は制限で止まり、物の方が手の作れた向きまで譲る（柄は手の同じ所を通り、柄の軸も手に合う）。
+            // 前は場所だけ寄せたので、手の向きが握りから外れたまま残った（腕のデバッグ用キャラで 38.6°）。
+            // 腕のひねり（体の右の軸 x）を上腕・前腕で止め、手首のひねりを ±3°（遊び 15°）にして、物を前腕の向きのまわりに 60° 回す
+            foreach (HumanBodyBones arm in new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm }) {
+                definition_.FindFkControl (arm).limit.x.mode = EditRigDefinition.LimitMode.Locked;
+            }
+            EditRigDefinition.JointLimit wrist = definition_.FindFkControl (HumanBodyBones.RightHand).limit;
+            wrist.x.mode = EditRigDefinition.LimitMode.Range;
+            wrist.x.min = -3;
+            wrist.x.max = 3;
+            wrist.slack = 15;
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            entry.values.leftHold = 0;
+            session.SolveAfterEdit ();
+            Transform hand = Bone (session, HumanBodyBones.RightHand);
+            Vector3 axis = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Vector3 onHand = Quaternion.Inverse (hand.rotation) * axis;
+            Vector3 line = HandleOnHand (entry, hand);
+
+            // 前腕の向きのまわり（手首のひねり）に回す
+            Vector3 forearm = (hand.position - Bone (session, HumanBodyBones.RightLowerArm).position).normalized;
+            entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+            Quaternion dragged = Quaternion.AngleAxis (60, forearm) * rotation;
+            entry.DragTo (position, dragged);
+            session.SolveAfterEdit ();
+            Vector3 turned = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Assert.Greater (Vector3.Angle (dragged * entry.definition.gripAxis.normalized, turned), 20f, "物は腕で作れる向きまで譲る");
+            Assert.Greater (Vector3.Angle (axis, turned), 3f, "物は少しは回る");
+            Assert.LessOrEqual (Vector3.Angle (hand.rotation * onHand, turned), 0.5f, "柄の軸は手に合う");
+            Assert.LessOrEqual (Vector3.Distance (line, HandleOnHand (entry, hand)), kGripTolerance, "柄は手の同じ所を通る");
+        }
+
+        [Test]
+        public void TwoHands_TurnBeyondTheWrists_BothHandsKeepTheGrips ()
+        {
+            // S101 の B: 両手で持った物を腕で作れない向きへ回すと、物と両腕を輪として解き、物が譲って両手とも握りに付く。
+            // いちばん届いていない手へ物を合わせ直すだけ（A）だと、片方の手がぴったり、もう片方が最大 78mm・33° 外れた
+            definition_.fullBody.hipsPin = 1;
+            foreach (HumanBodyBones arm in new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm }) {
+                definition_.FindFkControl (arm).limit.x.mode = EditRigDefinition.LimitMode.Locked;
+            }
+            foreach (HumanBodyBones hand in new[] { HumanBodyBones.RightHand, HumanBodyBones.LeftHand }) {
+                EditRigDefinition.JointLimit wrist = definition_.FindFkControl (hand).limit;
+                wrist.x.mode = EditRigDefinition.LimitMode.Range;
+                wrist.x.min = -3;
+                wrist.x.max = 3;
+                wrist.slack = 15;
+            }
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            foreach (Vector3 local in new[] { Vector3.right, Vector3.forward }) {
+                entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                Quaternion dragged = rotation * Quaternion.AngleAxis (60, local);
+                entry.DragTo (position, dragged);
+                session.SolveAfterEdit ();
+                Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, local + ": 右手は握りに付く");
+                Assert.LessOrEqual (HandleGap (session, HumanBodyBones.LeftHand), kGripTolerance, local + ": 左手は握りに付く");
+                // 1 回目（物の右の軸まわり）は腕で作れない。2 回目は 1 回目に譲った姿勢から回すので、腕でほぼ作れる
+                if (local == Vector3.right) Assert.Greater (Quaternion.Angle (entry.editing.rotation, dragged), 5f, "物は譲る");
+            }
+        }
+
+        /// <summary>柄の軸の線（物の原点を通る）の、手首にいちばん近い所を手首から見た場所</summary>
+        static Vector3 HandleOnHand (HeldObjectRig.Entry entry, Transform hand)
+        {
+            Vector3 axis = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+            Vector3 origin = entry.editing.position;
+            Vector3 nearest = origin + axis * Vector3.Dot (hand.position - origin, axis);
+            return Quaternion.Inverse (hand.rotation) * (nearest - hand.position);
+        }
+
+        /// <summary>左手を放して動かし、その場で持つ（持つボタンと同じ順）。持つ前の手首の場所を返す</summary>
+        static Vector3 GrabMovedLeftHand (PoseSession session, out Quaternion turn)
+        {
+            session.Evaluate (0);
+            Entry (session).values.leftHold = 0;
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (30);
+            Point (session, HumanBodyBones.LeftHand).MoveBy (new Vector3 (0, 0.03f, 0.06f));
+            session.SolveAfterEdit ();
+            Vector3 hand = Bone (session, HumanBodyBones.LeftHand).position;
+            turn = Bone (session, HumanBodyBones.LeftHand).rotation;
+            Assert.IsTrue (session.stage.heldObjects.GrabAtCurrent (Entry (session).left, session.stage.fullBody));
+            Entry (session).values.leftHold = 1;
+            session.SolveAfterEdit ();
+            return hand;
+        }
+
+        [Test]
+        public void PoseDocument_GripCurrent_ReadsBack_AndUseSettingsReturns ()
+        {
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            Assert.IsNull (PoseDocument.Write (session, new PoseDocument { frame = 0, objects = new List<PoseObject> { new PoseObject { name = kName, hold = "Right" } } }));
+            PoseDocument rest = PoseDocument.Read (session, 0, out string _);
+            Vector3 moved = rest.Find ("LeftHand").position + new Vector3 (0, 0.03f, 0.06f);
+            // 手を動かして、その手で握るのを 1 つの要求に書く
+            PoseDocument grab = new PoseDocument { frame = 30 };
+            grab.points.Add (new PosePoint { name = "LeftHand", state = "Pin", position = moved });
+            grab.objects.Add (new PoseObject { name = kName, hold = "Both", grip = new List<PoseGrip> { new PoseGrip { hand = "Left", current = true } } });
+            Assert.IsNull (PoseDocument.Write (session, grab), "書ける");
+
+            PoseDocument read = PoseDocument.Read (session, 30, out string _);
+            Assert.LessOrEqual (Vector3.Distance (moved, read.Find ("LeftHand").position), 0.002f, "動かした所で握る");
+            PoseGrip grip = read.objects[0].grip.Single ();
+            Assert.AreEqual ("Left", grip.hand, "キーで握った手だけ返す");
+            Assert.Greater (GripGap (session, HumanBodyBones.LeftHand), 0.03f, "キャラの設定の握りではない");
+
+            Assert.IsNull (PoseDocument.Write (session, new PoseDocument { frame = 60, objects = new List<PoseObject> { new PoseObject { name = kName, grip = new List<PoseGrip> { new PoseGrip { hand = "Left", useSettings = true } } } } }));
+            session.Evaluate (60);
+            Assert.LessOrEqual (GripGap (session, HumanBodyBones.LeftHand), kGripTolerance, "キャラの設定の握りへ戻る");
+            Assert.IsEmpty (PoseDocument.Read (session, 60, out string _).objects[0].grip, "設定の握りの手は返さない");
+            StringAssert.Contains ("Up", PoseDocument.Check (session, new PoseDocument { objects = new List<PoseObject> { new PoseObject { name = kName, grip = new List<PoseGrip> { new PoseGrip { hand = "Up" } } } } }));
         }
 
         [Test]
@@ -870,7 +1074,8 @@ namespace Lilium
             HeldObjectRig.Hand hand = Entry (session).left;
             rig.GetGrip (hand, out Vector3 position, out Quaternion rotation);
             Vector3 placed = position + new Vector3 (0, 0.01f, 0.02f);
-            Quaternion turned = Quaternion.Euler (0, 15, 0) * rotation;
+            // 柄の軸（+Y）まわりは手首に任せるので、軸を傾ける向きに回す
+            Quaternion turned = Quaternion.Euler (15, 0, 0) * rotation;
             rig.SetGrip (hand, placed, turned);
             rig.StoreGrip (hand);
 

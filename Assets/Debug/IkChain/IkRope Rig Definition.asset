@@ -1,0 +1,435 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
+  m_Name: IkRope Rig Definition
+  m_EditorClassIdentifier: 
+  fullBody:
+    iterations: 48
+    pull: 1
+    hipsPin: 0
+  bodyScale: 0
+  fkControls: []
+  extraControls:
+  - name: Root
+    pattern: ^Root$
+    position: 1
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: Joint1
+    pattern: ^Joint1$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  - name: Joint2
+    pattern: ^Joint2$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  - name: Joint3
+    pattern: ^Joint3$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  - name: Joint4
+    pattern: ^Joint4$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  - name: Joint5
+    pattern: ^Joint5$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  - name: End
+    pattern: ^End$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 1
+  bodyPoints:
+  - enabled: 1
+    name: Root
+    bone: 0
+    control: Root
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RootRight
+    bone: 0
+    control: Root
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.15, y: 0, z: 0}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RootFront
+    bone: 0
+    control: Root
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0.15}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Joint1
+    bone: 0
+    control: Joint1
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Joint2
+    bone: 0
+    control: Joint2
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Joint3
+    bone: 0
+    control: Joint3
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Joint4
+    bone: 0
+    control: Joint4
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Joint5
+    bone: 0
+    control: Joint5
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: EndJoint
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: End
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0.15, z: 0}
+    rotation: 1
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: EndRight
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.15, y: 0.15, z: 0}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: EndFront
+    bone: 0
+    control: End
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0.15, z: 0.15}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0

@@ -30,6 +30,20 @@ namespace Lilium
         public float rightSlide;
 
         /// <summary>
+        /// 左手の握りを、キャラの設定の握りでなく leftGripPosition・leftGripRotation にするか（0 か 1。S99）。
+        /// 持つときの手首の場所と向きを残したもの（持つボタンを押した瞬間の手で持つ）。キーの間で補間しない
+        /// </summary>
+        public float leftGripKeyed;
+        /// <summary>左手の握りの場所（物のローカル。メートル）</summary>
+        public Vector3 leftGripPosition;
+        /// <summary>左手の握りの向き（物のローカル。オイラー角。手首の点の目標の向きは「物の向き × これ」）</summary>
+        public Vector3 leftGripRotation;
+        /// <summary>右手の握りを、キャラの設定の握りでなく rightGripPosition・rightGripRotation にするか（0 か 1。S99）</summary>
+        public float rightGripKeyed;
+        public Vector3 rightGripPosition;
+        public Vector3 rightGripRotation;
+
+        /// <summary>
         /// クリップのカーブのプロパティ名
         /// </summary>
         public const string kLeftHoldProperty = "leftHold";
@@ -37,6 +51,12 @@ namespace Lilium
         public const string kSocketProperty = "socket";
         public const string kLeftSlideProperty = "leftSlide";
         public const string kRightSlideProperty = "rightSlide";
+        public const string kLeftGripKeyedProperty = "leftGripKeyed";
+        public const string kLeftGripPositionProperty = "leftGripPosition";
+        public const string kLeftGripRotationProperty = "leftGripRotation";
+        public const string kRightGripKeyedProperty = "rightGripKeyed";
+        public const string kRightGripPositionProperty = "rightGripPosition";
+        public const string kRightGripRotationProperty = "rightGripRotation";
     }
 
 }

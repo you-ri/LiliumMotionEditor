@@ -832,6 +832,14 @@ namespace Lilium
             return kObject + "/" + name;
         }
 
+        /// <summary>
+        /// 持ち物の姿勢の点（S102。Controls/ObjectPose/物の名前）。持っている間、全身 IK の見えない点として物の骨を物の姿勢へ寄せる。キーは打たない
+        /// </summary>
+        public static string ObjectPose (string name)
+        {
+            return kRoot + "/ObjectPose/" + name;
+        }
+
         /// <summary>持ち物の差す場所（Controls/Object/物の名前/場所の名前）。場所ごとに差しているかのカーブを持つ</summary>
         public static string ObjectSocket (string name, string socket)
         {

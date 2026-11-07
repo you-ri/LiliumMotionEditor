@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Mathematics;
+using Unity.Jobs;
 
 namespace Lilium
 {
@@ -1834,6 +1835,49 @@ namespace Lilium
         }
 
         [Test]
+        public void Solver_UnpinnedRoot_UnreachablePullPastLimitBendsTowardTarget ()
+        {
+            // 角度制限のある鎖（曲がり ±60°・ひねり ±5°・遊び 5°）の根を向きごと留め、先端を根の関節から 120° 傾いた向きの届かない所へ引く（S98）。
+            // 根の関節は制限いっぱいで止まり、その先の骨が目標の方へ曲がって、先端は目標の向きへ伸びる（一直線に並べてから制限で切ると、関節から先が
+            // 丸ごと回って制限の向きへまっすぐ伸び、目標と 36° 違う向きになった）
+            const int n = 7;
+            FullBodyIkData data = FullBodyIkData.Create (n, 2, Allocator.Temp);
+            try {
+                quaternion frame = quaternion.LookRotation (new float3 (1, 0, 0), new float3 (0, 0, 1));
+                float3 range = math.radians (new float3 (5, 60, 60));
+                for (int i = 0; i < n; i++) {
+                    data.bones[i] = new FullBodyIkBone {
+                        parent = i - 1, stiffness = 0.2f, ownWeight = 1,
+                        limit = i > 0 ? 1 : 0, limitFrame = frame, limitRest = quaternion.identity,
+                        limitMin = -range, limitMax = range, limitSlack = math.radians (new float3 (5, 5, 5)),
+                    };
+                    data.positions[i] = new float3 (0, i == 0 ? 0 : 0.15f + (i - 1) * 0.2f, 0);
+                    data.rotations[i] = quaternion.identity;
+                }
+                data.iterations = 48;
+                data.rootPin = 0;
+                float3 target = new float3 (1.41f, -0.11f, 0);
+                data.effectors[0] = new FullBodyIkEffector { bone = 0, position = float3.zero, rotation = quaternion.identity, positionWeight = 1, rotationWeight = 1 };
+                data.effectors[1] = new FullBodyIkEffector { bone = n - 1, position = target, rotation = quaternion.identity, positionWeight = 1 };
+                data.effectorCount = 2;
+                FullBodyIk.Solve (ref data);
+
+                Assert.Greater (data.residuals[1], 0.1f, "届かない所（確かめ）");
+                float3 junction = data.positions[1];
+                float angle = math.degrees (math.acos (math.clamp (math.dot (math.normalize (data.positions[n - 1] - junction), math.normalize (target - junction)), -1, 1)));
+                Assert.Less (angle, 10, "根の関節から見て、先端は目標の向きへ伸びる");
+                for (int i = 1; i < n; i++) {
+                    float3 angles = math.degrees (FullBodyIk.LimitAngles (frame, quaternion.identity, math.mul (math.inverse (data.rotations[i - 1]), data.rotations[i])));
+                    Assert.LessOrEqual (math.cmax (math.abs (angles.yz)), 65 + 0.1f, "骨 " + i + " の曲がりは範囲 + 遊びの中: " + angles);
+                    Assert.LessOrEqual (math.abs (angles.x), 10 + 0.1f, "骨 " + i + " のひねりは範囲 + 遊びの中: " + angles);
+                }
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        [Test]
         public void Solver_UnpinnedRoot_UnreachablePullIsStraight ()
         {
             // 反対の端を留めて、届かない所へ斜めに引く（S98）。どちらの端を引いても、留めた端は目標に残り、骨の付け根は一直線に並び、
@@ -2602,6 +2646,122 @@ namespace Lilium
                 Assert.IsFalse (s.body.lastSolveUsedBurst, "マネージドで動く");
                 Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.RightHand), kReach, "マネージドでも届く");
             });
+        }
+
+        // ---- 輪の関節（S101） ----
+
+        /// <summary>
+        /// 根（固定）から左右へ 2 本の腕（3 本の骨）を出し、腕の先を、前に置いた棒（骨格に付いていない剛体）の両端と輪の関節でつなぐ。
+        /// 棒は腕が届かない所（前へ 0.9m）へ柔らかく寄せるので、腕が届く所まで譲る。左右対称
+        /// </summary>
+        static FullBodyIkData CreateLoopData (int iterations)
+        {
+            // ジョブで解くので TempJob（Temp はジョブに渡せない）
+            FullBodyIkData data = FullBodyIkData.Create (8, 1, 0, 2, Allocator.TempJob);
+            data.bones[0] = new FullBodyIkBone { parent = -1 };
+            data.positions[0] = new float3 (0, 1, 0);
+            for (int side = 0; side < 2; side++) {
+                float sign = side == 0 ? 1 : -1;
+                int first = 1 + side * 3;
+                for (int k = 0; k < 3; k++) {
+                    data.bones[first + k] = new FullBodyIkBone { parent = k == 0 ? 0 : first + k - 1, stiffness = 0.2f };
+                    data.positions[first + k] = new float3 (sign * (0.1f + 0.3f * k), 1, 0);
+                }
+                data.loops[side] = new FullBodyIkLoop {
+                    boneA = first + 2,
+                    anchorA = float3.zero,
+                    axisA = new float3 (1, 0, 0),
+                    boneB = 7,
+                    anchorB = new float3 (sign * 0.3f, 0, 0),
+                    axisB = new float3 (1, 0, 0),
+                };
+            }
+            data.bones[7] = new FullBodyIkBone { parent = -1, detached = 1, extent = 0.1f };
+            data.positions[7] = new float3 (0, 1, 0.9f);
+            for (int i = 0; i < 8; i++) data.rotations[i] = quaternion.identity;
+            data.fixedBones[0] = 1;
+            data.effectors[0] = new FullBodyIkEffector { bone = 7, position = new float3 (0, 1, 0.9f), rotation = quaternion.identity, positionWeight = 0.999f, rotationWeight = 0.999f, blendBone = -1 };
+            data.effectorCount = 1;
+            data.loopCount = 2;
+            data.iterations = iterations;
+            data.rootPin = 1;
+            return data;
+        }
+
+        [Test]
+        public void Loop_ClosesBothArms_AndTheBarYieldsEvenly ()
+        {
+            FullBodyIkData data = CreateLoopData (400);
+            try {
+                FullBodyIk.Solve (ref data);
+                for (int l = 0; l < 2; l++) {
+                    Assert.LessOrEqual (data.loopResiduals[l].x, kReach, "輪の関節の点が離れない（" + l + "）");
+                    Assert.LessOrEqual (math.degrees (data.loopResiduals[l].y), 0.5f, "輪の関節の軸がそろう（" + l + "）");
+                }
+                Assert.Less (data.positions[7].z, 0.8f, "届かない棒は、腕が届く所まで譲る");
+                Assert.LessOrEqual (math.abs (data.positions[7].x), 2e-3f, "左右の腕が同じ重さで引く（棒が横へ寄らない）");
+                Assert.LessOrEqual (math.degrees (Angle (data.rotations[7], quaternion.identity)), 0.5f, "左右の腕が同じ重さで引く（棒が回らない）");
+                for (int side = 0; side < 2; side++) {
+                    int first = 1 + side * 3;
+                    Assert.AreEqual (0.3f, math.distance (data.positions[first], data.positions[first + 1]), 1e-4f, "骨の長さ");
+                    Assert.AreEqual (0.3f, math.distance (data.positions[first + 1], data.positions[first + 2]), 1e-4f, "骨の長さ");
+                }
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        /// <summary>
+        /// 反復を増やしても、輪で解いた物が流れない（釣り合った所へ寄っていく）。
+        /// 輪の関節で軸をそろえるとき 2 つの点の真ん中を中心に回していたころは、回すたびに骨が横へずれて積もり、反復を増やすほど物が目標から離れた
+        /// （11-05 実測で 40mm → 360mm）。腕が伸びきる手前ではゆっくり詰まるので、肘の曲がりは反復で少し変わる。物の姿勢で見る
+        /// </summary>
+        [Test]
+        public void Loop_Settles_AsIterationsGrow ()
+        {
+            FullBodyIkData shorter = CreateLoopData (400);
+            FullBodyIkData longer = CreateLoopData (1600);
+            try {
+                FullBodyIk.Solve (ref shorter);
+                FullBodyIk.Solve (ref longer);
+                Assert.LessOrEqual (math.distance (shorter.positions[7], longer.positions[7]), 0.01f, "物の位置");
+                Assert.LessOrEqual (math.degrees (Angle (shorter.rotations[7], longer.rotations[7])), 1f, "物の向き");
+                for (int l = 0; l < 2; l++) Assert.LessOrEqual (longer.loopResiduals[l].x, kReach, "輪の関節の点が離れない（" + l + "）");
+            }
+            finally {
+                shorter.Dispose ();
+                longer.Dispose ();
+            }
+        }
+
+        [Test]
+        public void Loop_BurstMatchesManaged ()
+        {
+            FullBodyIkData managed = CreateLoopData (400);
+            FullBodyIkData burst = CreateLoopData (400);
+            try {
+                FullBodyIk.Solve (ref managed);
+                new FullBodyIkJob { data = burst }.Run ();
+                if (burst.status[FullBodyIkData.kStatusBurst] == 0) Assert.Inconclusive ("Burst がまだコンパイル中か、切れている（Jobs > Burst > Enable Compilation）。マネージドでは動いた");
+                for (int i = 0; i < 8; i++) {
+                    Assert.LessOrEqual (math.distance (managed.positions[i], burst.positions[i]), 1e-4f, "骨 " + i + " の位置（Burst とマネージドの差）");
+                    Assert.LessOrEqual (math.degrees (Angle (managed.rotations[i], burst.rotations[i])), 0.01f, "骨 " + i + " の向き（Burst とマネージドの差）");
+                }
+            }
+            finally {
+                managed.Dispose ();
+                burst.Dispose ();
+            }
+        }
+
+        /// <summary>2 つの向きの差（ラジアン。倍精度で測る。float の内積だと 0.1° より小さい差が丸めで消える）</summary>
+        static double Angle (quaternion a, quaternion b)
+        {
+            double4 p = new double4 (a.value);
+            double4 q = new double4 (b.value);
+            double dot = math.abs (math.dot (p, q)) / math.max (math.length (p) * math.length (q), 1e-12);
+            return 2 * math.acos (math.min (1.0, dot));
         }
 
         [Test]

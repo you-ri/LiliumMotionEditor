@@ -20,7 +20,9 @@ namespace Lilium
         public IEnumerable<BodyPointId> pointIds
         {
             get {
-                foreach (Point point in points_) yield return point.id;
+                foreach (Point point in points_) {
+                    if (!point.hidden) yield return point.id;
+                }
             }
         }
 

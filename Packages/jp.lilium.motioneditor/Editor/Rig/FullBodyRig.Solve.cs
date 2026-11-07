@@ -46,6 +46,13 @@ namespace Lilium
                     data_.fixedBones[body] = 0;
                     for (int p = bodyParents_[body]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
                 }
+                // 輪の関節でつないだ手（両手で持つ物のもう片方の手。S102）は点が効いていなくても、物と一緒に動かす
+                for (int l = 0; l < data_.loopCount; l++) {
+                    FullBodyIkLoop loop = data_.loops[l];
+                    if (data_.fixedBones[loop.boneB] != 0) continue;
+                    data_.fixedBones[loop.boneA] = 0;
+                    for (int p = bodyParents_[loop.boneA]; p >= 0 && childCounts_[p] <= 1; p = bodyParents_[p]) data_.fixedBones[p] = 0;
+                }
             }
         }
 
@@ -93,6 +100,7 @@ namespace Lilium
         {
             if (!data_.isCreated) return false;
             LoadInput ();
+            LoadHeldLoops ();
             GrabKind grab = DetectGrab ();
 
             // 1 回目: つかんでいる軽い点を除いて、ほかの点を全部いつもどおり解く（軽い点をつかんでいなければ、これだけ）。
@@ -109,7 +117,8 @@ namespace Lilium
             // 一番大きいずれを全部の点に使うと、ずれの小さい足首の点がその差だけ動けた。10-28 実測で 1cm）
             lockBases_.Clear ();
             foreach (int e in lockedEffectors_) lockBases_.Add (InputResidual (e));
-            data_.iterations = Mathf.Max (1, settings_.iterations) * (pins ? kLightIterations : 1);
+            // 両手で持った物の輪の関節（S102）がある間も増やす。輪は木の関節の後に解くので、1 倍では閉じきらない（11-07 実測で、テストの人型の両手の物が 48 回で 11cm、96 回で 1cm、192 回で 0.0mm）
+            data_.iterations = Mathf.Max (1, settings_.iterations) * (pins || data_.loopCount > 0 ? kLightIterations : 1);
             data_.rootPin = Mathf.Clamp01 (settings_.hipsPin);
             SetContacts ();
             if (count > 0) RunSolver (count, solvePositions_, solveRotations_);
@@ -145,13 +154,14 @@ namespace Lilium
             for (int i = 0; i < bodies_.Count && !changed; i++) {
                 quaternion rotation = data_.rotations[i];
                 changed = !rotation.Equals ((quaternion)solveRotations_[i])
-                    || (bodyParents_[i] < 0 && !data_.positions[i].Equals ((float3)solvePositions_[i]));
+                    || ((bodyParents_[i] < 0 || attached_[i]) && !data_.positions[i].Equals ((float3)solvePositions_[i]));
             }
             if (!changed) return false;
 
             // 親から順に書く（向きはワールドの値で入れるので、親を先に決める）
             for (int i = 0; i < bodies_.Count; i++) {
-                if (bodyParents_[i] < 0) bodies_[i].position = rootPosition + rootRotation * (Vector3)data_.positions[i];
+                // 持っている物（S102）は骨の階層では手の子でないので、場所も書く
+                if (bodyParents_[i] < 0 || attached_[i]) bodies_[i].position = rootPosition + rootRotation * (Vector3)data_.positions[i];
                 bodies_[i].rotation = rootRotation * Quaternion.Normalize ((Quaternion)data_.rotations[i]);
             }
             return true;

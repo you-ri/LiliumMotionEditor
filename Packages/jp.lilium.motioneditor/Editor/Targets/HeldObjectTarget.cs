@@ -114,6 +114,32 @@ namespace Lilium
             foreach (HeldObjectRig.Socket socket in entry_.sockets) writer.Float (socket.control, typeof (HeldObjectControl), HeldObjectControl.kSocketProperty, socket.values.socket);
             WriteSlide (writer, entry_.left, HeldObjectControl.kLeftSlideProperty);
             WriteSlide (writer, entry_.right, HeldObjectControl.kRightSlideProperty);
+            WriteGrip (writer, entry_.left);
+            WriteGrip (writer, entry_.right);
+        }
+
+        /// <summary>
+        /// キーで持った握り（S99）。その手で持つボタンを使ったクリップにだけカーブを作り、あればどのキーにも打つ
+        /// （使っていないクリップのカーブの組は変えない。キーの間で補間しないので、持ち替えたキーから次のキーまで同じ握り）
+        /// </summary>
+        void WriteGrip (CurveWriter writer, HeldObjectRig.Hand hand)
+        {
+            if (hand == null || (!hand.gripCurved && !hand.gripKeyed)) return;
+            HeldObjectControl values = entry_.values;
+            string keyed = hand.left ? HeldObjectControl.kLeftGripKeyedProperty : HeldObjectControl.kRightGripKeyedProperty;
+            string position = hand.left ? HeldObjectControl.kLeftGripPositionProperty : HeldObjectControl.kRightGripPositionProperty;
+            string rotation = hand.left ? HeldObjectControl.kLeftGripRotationProperty : HeldObjectControl.kRightGripRotationProperty;
+            writer.Float (entry_.control, typeof (HeldObjectControl), keyed, hand.left ? values.leftGripKeyed : values.rightGripKeyed);
+            WriteVector (writer, position, hand.left ? values.leftGripPosition : values.rightGripPosition);
+            WriteVector (writer, rotation, hand.left ? values.leftGripRotation : values.rightGripRotation);
+            hand.gripCurved = true;
+        }
+
+        void WriteVector (CurveWriter writer, string property, Vector3 value)
+        {
+            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".x", value.x);
+            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".y", value.y);
+            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".z", value.z);
         }
 
         /// <summary>握りをずらしたクリップにだけカーブを作る（ずらしていないクリップのカーブの組は変えない）</summary>

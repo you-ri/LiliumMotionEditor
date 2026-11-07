@@ -89,7 +89,10 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今のフレームで、手で持つ・やめるを切り替えて姿勢のキーを打つ。やめた手は今の場所に留まり、持った手は握りへ動く
+        /// 今のフレームで、手で持つ・やめるを切り替えて姿勢のキーを打つ。やめた手は今の場所に留まる。
+        /// 持つ手は、押した瞬間の手首の場所と向きのまま物に拘束する（物から見た握りをキーに残す。S99。11-04 ユーザー指示
+        /// 「オブジェクトの好きな位置で掴めるように。掴むボタンを押した瞬間の位置、姿勢で拘束する。武器にかぎらず共通仕様として」）。
+        /// キャラの設定の握り（リグエディタで決めた握り）で持ち直すのは、CLI の objects の grip の useSettings
         /// </summary>
         public void SetObjectHold (HeldObjectRig.Entry entry, bool left, bool hold)
         {
@@ -100,6 +103,7 @@ namespace Lilium
             }
             CommitHandleKeys ();
             SamplePose ();
+            if (hold && stage_.heldObjects != null) stage_.heldObjects.GrabAtCurrent (left ? entry.left : entry.right, stage_.fullBody);
             if (left) entry.values.leftHold = hold ? 1 : 0;
             else entry.values.rightHold = hold ? 1 : 0;
             SolveAfterManipulate ();

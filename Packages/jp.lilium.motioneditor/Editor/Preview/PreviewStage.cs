@@ -1350,7 +1350,8 @@ namespace Lilium
             if (!span && heldObjects == null) return;
             fullBody.CaptureInput ();
             if (heldObjects != null) heldObjects.Prepare (fullBody, lockedSpanPoints_);
-            if (span) fullBody.SolveOnly (lockedSpanPoints_, weight, true);
+            ICollection<Transform> controls = heldObjects != null ? heldObjects.WithHeldControls (lockedSpanPoints_) : lockedSpanPoints_;
+            if (weight > 0 && controls.Count > 0) fullBody.SolveOnly (controls, weight, true);
             if (heldObjects != null) heldObjects.Finish (fullBody, weight);
         }
 

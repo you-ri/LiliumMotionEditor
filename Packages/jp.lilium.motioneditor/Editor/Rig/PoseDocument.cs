@@ -204,6 +204,7 @@ namespace Lilium
                         socket = entry.sockets.Count == 0 ? "" : entry.socket != null ? entry.socket.definition.name : HeldObjectDefinition.kNoSocketName,
                         handGap = entry.bringGap,
                         slide = ReadSlides (entry),
+                        grip = ReadGrips (entry),
                     });
                 }
             }
@@ -222,6 +223,17 @@ namespace Lilium
             if (entry.right != null && (entry.right.slideKeyed || entry.right.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldRight, value = entry.right.slide });
             if (entry.left != null && (entry.left.slideKeyed || entry.left.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldLeft, value = entry.left.slide });
             return slides;
+        }
+
+        /// <summary>キーで持った握りを使っている手の握り（どちらも使っていなければ空。キャラの設定の握りは返さない）</summary>
+        static List<PoseGrip> ReadGrips (HeldObjectRig.Entry entry)
+        {
+            List<PoseGrip> grips = new List<PoseGrip> ();
+            foreach ((HeldObjectRig.Hand hand, string name) in new[] { (entry.right, kHoldRight), (entry.left, kHoldLeft) }) {
+                if (hand == null || !hand.gripKeyed) continue;
+                grips.Add (new PoseGrip { hand = name, position = hand.heldGripPosition, rotation = hand.heldGripRotation.eulerAngles });
+            }
+            return grips;
         }
 
         static string HoldName (HeldObjectRig.Entry entry)
@@ -377,6 +389,27 @@ namespace Lilium
         public float handGap;
         /// <summary>握りを柄に沿ってずらす手と量。書かない手は今のまま。キーの間は補間するので、手が柄の上を滑る</summary>
         public List<PoseGripSlide> slide;
+        /// <summary>
+        /// 手ごとの握り（S99。物から見た手首の場所と向き）。書かない手は今のまま。キーの間で補間せず、次に握りを書くまで続く。
+        /// 読むときは、キーで持った握り（窓の持つボタン・current）を使っている手だけ
+        /// </summary>
+        public List<PoseGrip> grip;
+    }
+
+    /// <summary>手の握り（S99）</summary>
+    [System.Serializable]
+    public sealed class PoseGrip
+    {
+        /// <summary>Left / Right</summary>
+        public string hand;
+        /// <summary>この要求の点を置いて解いた後の、今の手首の場所と向きを握りにする（窓の持つボタンと同じ。持っても手は動かない）</summary>
+        public bool current;
+        /// <summary>キャラの設定の握り（リグエディタで決めた握り）へ戻す</summary>
+        public bool useSettings;
+        /// <summary>current・useSettings でないとき、握りの場所（物のローカル。メートル）</summary>
+        public Vector3 position;
+        /// <summary>current・useSettings でないとき、握りの向き（物のローカル。オイラー角）</summary>
+        public Vector3 rotation;
     }
 
     /// <summary>握りをずらす手と量</summary>

@@ -5,14 +5,16 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 全身 IK の制御を確かめる・調整するための鎖のキャラ（このリポジトリだけのデバッグ用。パッケージには入れない）の、取り込みの設定・リグ定義・キャラの設定を作る。
+    /// 全身 IK の制御を確かめる・調整するための鎖と紐のキャラ（このリポジトリだけのデバッグ用。パッケージには入れない）の、取り込みの設定・リグ定義・キャラの設定を作る。
     /// 人型の体だと腰・背骨・手足の割り振りが絡んで、解き方の癖が見分けにくいので、Generic の一本の鎖で試す。
-    /// モデルは Blender で作る（make_ik_chain.py。輪 1 つが骨 1 本で、Root・Joint1〜Joint5・End。両端の Root・End は同じ形の台）。FBX を書き出し直したら、メニューから実行し直す
+    /// モデルは Blender で作る（make_ik_chain.py。輪・紐の節 1 つが骨 1 本で、Root・Joint1〜Joint5・End。両端の Root・End は同じ形の台）。
+    /// 鎖（IkChain）は関節ごとに角度制限を入れ、紐（IkRope。make_ik_chain.py に rope を付けて書き出す）は入れない。FBX を書き出し直したら、メニューから実行し直す
     /// </summary>
     static class IkChainSetup
     {
         const string kFolder = "Assets/Debug/IkChain";
-        const string kName = "IkChain";
+        // 作るキャラ: 名前（FBX・定義・設定のファイル名）と、関節に角度制限を入れるか
+        static readonly (string name, bool limited)[] kModels = { ("IkChain", true), ("IkRope", false) };
         // 輪ごとのひねりの範囲（度）。根元より先の 6 本（Joint1〜Joint5・End）で、合わせて (5 + 遊び 5) × 6 = 60° までひねれる
         const float kTwistRange = 5;
         // 輪ごとの曲がり（振りの 2 軸）の範囲（度）。噛み合った輪は、相手の針金に当たるまでしか曲がらない。
@@ -30,7 +32,13 @@ namespace Lilium
         [MenuItem ("Tools/Lilium Motion Editor Debug/Set Up IK Chain")]
         public static void SetUp ()
         {
-            string modelPath = kFolder + "/" + kName + ".fbx";
+            foreach ((string name, bool limited) in kModels) SetUp (name, limited);
+            AssetDatabase.SaveAssets ();
+        }
+
+        static void SetUp (string name, bool limited)
+        {
+            string modelPath = kFolder + "/" + name + ".fbx";
             ModelImporter importer = AssetImporter.GetAtPath (modelPath) as ModelImporter;
             if (importer == null) {
                 Debug.LogError ("IkChainSetup: " + modelPath + " がありません。make_ik_chain.py で書き出してください");
@@ -46,16 +54,14 @@ namespace Lilium
             importer.SaveAndReimport ();
 
             GameObject model = AssetDatabase.LoadAssetAtPath<GameObject> (modelPath);
-            EditRigDefinition definition = SaveDefinition (model);
-            SaveSettings (model, definition);
-            AssetDatabase.SaveAssets ();
-            EditorGUIUtility.PingObject (model);
+            EditRigDefinition definition = SaveDefinition (model, name, limited);
+            SaveSettings (model, definition, name);
         }
 
         /// <summary>リグ定義は無いときだけ骨から作る（作り直しても、直した値を消さない）</summary>
-        static EditRigDefinition SaveDefinition (GameObject model)
+        static EditRigDefinition SaveDefinition (GameObject model, string name, bool limited)
         {
-            string path = kFolder + "/" + kName + " Rig Definition.asset";
+            string path = kFolder + "/" + name + " Rig Definition.asset";
             EditRigDefinition definition = AssetDatabase.LoadAssetAtPath<EditRigDefinition> (path);
             if (definition != null) {
                 // 後から足した点は、前に作った定義にも足す（ほかの値は直したまま残す）
@@ -73,22 +79,23 @@ namespace Lilium
             definition.extraControls.Find (c => c.name == "Root").position = true;
             // 根（Root）を元の場所に留めない。両端は同じ形の台なので、どちらを動かしても同じ動きにする（留めると Root 側だけが残りやすい）
             definition.fullBody.hipsPin = 0;
-            LimitJoints (definition);
+            LimitJoints (definition, limited);
             SetPoints (definition);
             AssetDatabase.CreateAsset (definition, path);
             return definition;
         }
 
         /// <summary>
-        /// 噛み合った輪は、隣の輪に対してほとんどひねれず、曲がりも相手の針金に当たるまで。根元より先の輪ごとに、
-        /// ひねり（骨の向きの上 y 軸まわり）を狭い範囲に、曲がり（右 x・前 z 軸まわり）をそれより広い範囲にする。
-        /// 重さは輪ごとに自分の分だけにする（先の輪を足すと根元の輪が回りにくく、たるませたときに曲がりが End 側に集まる）
+        /// 噛み合った輪は、隣の輪に対してほとんどひねれず、曲がりも相手の針金に当たるまで。limited なら根元より先の輪ごとに、
+        /// ひねり（骨の向きの上 y 軸まわり）を狭い範囲に、曲がり（右 x・前 z 軸まわり）をそれより広い範囲にする（紐は入れない）。
+        /// 重さは鎖も紐も、節ごとに自分の分だけにする（先の節を足すと根元の節が回りにくく、たるませたときに曲がりが End 側に集まる）
         /// </summary>
-        static void LimitJoints (EditRigDefinition definition)
+        static void LimitJoints (EditRigDefinition definition, bool limited)
         {
             foreach (EditRigDefinition.ExtraControl control in definition.extraControls) {
                 if (control.name == "Root") continue;
                 control.ownWeightOnly = true;
+                if (!limited) continue;
                 control.limit.x = Range (kBendRange);
                 control.limit.y = Range (kTwistRange);
                 control.limit.z = Range (kBendRange);
@@ -143,9 +150,9 @@ namespace Lilium
             return added;
         }
 
-        static void SaveSettings (GameObject model, EditRigDefinition definition)
+        static void SaveSettings (GameObject model, EditRigDefinition definition, string name)
         {
-            string path = kFolder + "/" + kName + " Motion Editor.asset";
+            string path = kFolder + "/" + name + " Motion Editor.asset";
             CharacterSettings settings = AssetDatabase.LoadAssetAtPath<CharacterSettings> (path);
             if (settings == null) {
                 settings = ScriptableObject.CreateInstance<CharacterSettings> ();

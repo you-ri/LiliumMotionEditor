@@ -370,6 +370,7 @@
     "RIG_VALUES_OVERLAY_LEFT_SLIDE": "左手の握りをずらす",
     "RIG_VALUES_OVERLAY_RIGHT_SLIDE": "右手の握りをずらす",
     "POSE_DOCUMENT_UNKNOWN_SLIDE_HAND": "持ち物 {0} の slide の手 {1} は使えません（Left / Right）",
+    "POSE_DOCUMENT_UNKNOWN_GRIP_HAND": "持ち物 {0} の grip の手 {1} は使えません（Left / Right）",
     "RIG_EDITOR_SOCKET": "{0} の差す場所 {1}",
     "RIG_EDITOR_ADD_SOCKET": "差す場所を足す",
     "RIG_EDITOR_REMOVE_SOCKET": "差す場所を外す",

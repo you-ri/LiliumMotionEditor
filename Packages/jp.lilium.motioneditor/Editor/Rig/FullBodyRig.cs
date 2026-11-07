@@ -172,6 +172,10 @@ namespace Lilium
             public int body = -1;
             /// <summary>接地の点のまとまり（足）の根の骨の番号。接地の点の乗る骨を、接地の点の乗る親の骨へたどった先（つま先の点は足首の骨）。接地の点でなければ -1</summary>
             public int floorGroup = -1;
+            /// <summary>
+            /// 見えない点か（S102。持った物の姿勢の点）。持ち物の仕組みが値を入れる点で、点の一覧（pointIds）に出さず、キーも持たない
+            /// </summary>
+            public bool hidden;
         }
 
         readonly EditingRig rig_;
@@ -248,7 +252,8 @@ namespace Lilium
 
         /// <summary>
         /// 解く骨（定義で「解く」にした FK の骨のうち、このキャラにあるもの）を剛体の並びにする。
-        /// 親は、骨の階層を上へたどって最初に当たる解く骨（間の解かない骨は、親に付いて動く）
+        /// 親は、骨の階層を上へたどって最初に当たる解く骨（間の解かない骨は、親に付いて動く）。
+        /// 持っている物（S102。heldAttachments_）は、持つ手の骨の子として最後に足す（骨の階層では手の子でないので、親は指定の骨）
         /// </summary>
         void CreateBodies ()
         {
@@ -270,10 +275,15 @@ namespace Lilium
                 return da != db ? da.CompareTo (db) : a.CompareTo (b);
             });
             foreach (int index in order) bodies_.Add (solvedBones[index]);
+            int skeleton = bodies_.Count;
+            foreach (HeldAttachment attachment in heldAttachments_) {
+                if (attachment.body != null && bodies_.Contains (attachment.parent) && !bodies_.Contains (attachment.body)) bodies_.Add (attachment.body);
+            }
             if (bodies_.Count == 0) return;
 
-            // 床との当たり（Floor Clamp）は点の数まで
-            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Allocator.Persistent);
+            // 床との当たり（Floor Clamp）は点の数まで。輪の関節は両手で持つ物 1 つに 1 つ
+            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Mathf.Max (1, heldAttachments_.Count), Allocator.Persistent);
+            attached_ = new bool[bodies_.Count];
             solveRotations_ = new Quaternion[bodies_.Count];
             solvePositions_ = new Vector3[bodies_.Count];
             startPositions_ = new Vector3[bodies_.Count];
@@ -302,6 +312,10 @@ namespace Lilium
             yieldedPositions_ = new Vector3[bodies_.Count];
             yieldedRotations_ = new Quaternion[bodies_.Count];
             for (int i = 0; i < bodies_.Count; i++) {
+                if (i >= skeleton) {
+                    AddHeldBody (i);
+                    continue;
+                }
                 RigBinding.BoneControl fk = solved[order[i]];
                 int parent = -1;
                 for (Transform t = bodies_[i].parent; t != null && t != root && parent < 0; t = t.parent) parent = bodies_.IndexOf (t);
@@ -340,8 +354,8 @@ namespace Lilium
                 data_.bones[point.body] = bone;
             }
             foreach (Point point in points_) {
-                // 動かせない点は重さを使わないので、重い点に数えない
-                point.light = point.weightless && point.blendBone == null && point.body >= 0 && !points_.Any (p => !p.weightless && !p.passive && p.body == point.body);
+                // 動かせない点は重さを使わないので、重い点に数えない。持った物の姿勢の点（見えない点）も、物の定義の点の重さの意味を変えないように数えない
+                point.light = point.weightless && point.blendBone == null && point.body >= 0 && !points_.Any (p => !p.weightless && !p.passive && !p.hidden && p.body == point.body);
             }
             HashSet<int> contactBodies = new HashSet<int> ();
             foreach (Point point in points_) {

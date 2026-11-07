@@ -86,12 +86,13 @@ namespace Lilium
             body.CaptureInput ();
             ICollection<UnityEngine.Transform> locked = stage_.lockedSpanPoints;
             if (held != null) held.Prepare (body, locked);
-            if (weight > 0 && locked.Count > 0) {
-                // Locked の点のある手足だけを IK で動かし、腰・背骨と Pin / Free の手足は骨のキーの補間（FK）のまま
-                body.SolveOnly (locked, weight, true);
+            // 持っている物の姿勢の点は、キーのあるフレームでも効かせる（S25d の例外。物のキーだけ直しても手が外れないように）
+            ICollection<UnityEngine.Transform> controls = held != null ? held.WithHeldControls (locked) : locked;
+            if (weight > 0 && controls.Count > 0) {
+                // Locked の点のある手足と持っている腕だけを IK で動かし、腰・背骨と Pin / Free の手足は骨のキーの補間（FK）のまま
+                body.SolveOnly (controls, weight, true);
             }
             else if (held == null) return;
-            // 持っている手は、キーのあるフレームでも解く（S25d の例外。物のキーだけ直しても手が外れないように）
             if (held != null) held.Finish (body, weight);
             stage_.ShowEditingBody ();
         }

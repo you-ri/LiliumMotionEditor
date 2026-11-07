@@ -1,0 +1,765 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6007696688f94041a6459ee05bf4002, type: 3}
+  m_Name: IkArm Rig Definition
+  m_EditorClassIdentifier: 
+  fullBody:
+    iterations: 48
+    pull: 1
+    hipsPin: 0.6
+  bodyScale: 0
+  fkControls: []
+  extraControls:
+  - name: spine_03
+    pattern: ^spine_03$
+    position: 1
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.6
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -20
+        max: 20
+      y:
+        mode: 1
+        min: -20
+        max: 20
+      z:
+        mode: 1
+        min: -20
+        max: 20
+      slack: 15
+    ownWeightOnly: 0
+  - name: clavicle_r
+    pattern: ^clavicle_r$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.5
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -6
+        max: 12
+      y:
+        mode: 1
+        min: -26
+        max: 4
+      z:
+        mode: 1
+        min: -9
+        max: 31
+      slack: 15
+    ownWeightOnly: 0
+  - name: upperarm_r
+    pattern: ^upperarm_r$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -71
+        max: 38
+      y:
+        mode: 1
+        min: -107
+        max: 78
+      z:
+        mode: 1
+        min: -102
+        max: 59
+      slack: 15
+    ownWeightOnly: 0
+  - name: lowerarm_r
+    pattern: ^lowerarm_r$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.1
+    hinge: 1
+    bendDirection: {x: 0, y: 0, z: -1}
+    limit:
+      x:
+        mode: 1
+        min: -47
+        max: 42
+      y:
+        mode: 1
+        min: -157
+        max: 4
+      z:
+        mode: 1
+        min: -2
+        max: 15
+      slack: 15
+    ownWeightOnly: 0
+  - name: hand_r
+    pattern: ^hand_r$
+    position: 0
+    fullBodyHandle: 0
+    fullBodySolve: 1
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 1
+        min: -3
+        max: 3
+      y:
+        mode: 1
+        min: -40
+        max: 40
+      z:
+        mode: 1
+        min: -80
+        max: 80
+      slack: 15
+    ownWeightOnly: 0
+  - name: index_01_r
+    pattern: ^index_01_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: index_02_r
+    pattern: ^index_02_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: index_03_r
+    pattern: ^index_03_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: index_04_leaf_r
+    pattern: ^index_04_leaf_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: middle_01_r
+    pattern: ^middle_01_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: middle_02_r
+    pattern: ^middle_02_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: middle_03_r
+    pattern: ^middle_03_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: middle_04_leaf_r
+    pattern: ^middle_04_leaf_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: pinky_01_r
+    pattern: ^pinky_01_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: pinky_02_r
+    pattern: ^pinky_02_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: pinky_03_r
+    pattern: ^pinky_03_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: pinky_04_leaf_r
+    pattern: ^pinky_04_leaf_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: ring_01_r
+    pattern: ^ring_01_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: ring_02_r
+    pattern: ^ring_02_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: ring_03_r
+    pattern: ^ring_03_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: ring_04_leaf_r
+    pattern: ^ring_04_leaf_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: thumb_01_r
+    pattern: ^thumb_01_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: thumb_02_r
+    pattern: ^thumb_02_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: thumb_03_r
+    pattern: ^thumb_03_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  - name: thumb_04_leaf_r
+    pattern: ^thumb_04_leaf_r$
+    position: 0
+    fullBodyHandle: 1
+    fullBodySolve: 0
+    stiffness: 0.2
+    hinge: 0
+    bendDirection: {x: 0, y: 0, z: 0}
+    limit:
+      x:
+        mode: 0
+        min: -45
+        max: 45
+      y:
+        mode: 0
+        min: -45
+        max: 45
+      z:
+        mode: 0
+        min: -45
+        max: 45
+      slack: 15
+    ownWeightOnly: 0
+  bodyPoints:
+  - enabled: 1
+    name: RightUpperArm
+    bone: 14
+    control: upperarm_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RightLowerArm
+    bone: 16
+    control: lowerarm_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RightHand
+    bone: 18
+    control: hand_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 1
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: Chest
+    bone: 54
+    control: spine_03
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: -4.463837e-18, y: -0.03644979, z: -0.037100017}
+    rotation: 0
+    weight: 1
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: ChestDirection
+    bone: 54
+    control: spine_03
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0.26159585}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RightPalmIndex
+    bone: 18
+    control: hand_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.11740273, y: -0.00715971, z: 0.040642858}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RightPalmLittle
+    bone: 18
+    control: hand_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0.09854126, y: -0.0060379505, z: -0.03461778}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 0
+  - enabled: 1
+    name: RightShoulder
+    bone: 12
+    control: clavicle_r
+    blendControl: 
+    origin: 55
+    toward: 55
+    along: 0
+    across: 0
+    axes: {x: 1, y: 1, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 1

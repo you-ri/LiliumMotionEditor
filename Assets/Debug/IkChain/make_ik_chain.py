@@ -1,6 +1,8 @@
 # 全身 IK のデバッグ用の鎖を Blender で作って FBX に書き出す（このリポジトリだけのデバッグ用。パッケージには入れない）。
 #
-#   blender --background --factory-startup --python make_ik_chain.py -- <書き出す FBX のパス>
+#   blender --background --factory-startup --python make_ik_chain.py -- <書き出す FBX のパス> [rope]
+#
+# rope を付けると、同じ骨・同じ台で、鎖の代わりに紐（丸い節を玉でつないだもの）を作る（IkRope.fbx。角度制限なしで試す）。
 #
 # 輪 1 つが骨 1 本。根元の台（Root）に立てた U の字の輪から、5 つの輪（Joint1〜Joint5）が真上へ噛み合って並び、反対側の台（End）に吊った U の字の輪で終わる。
 # 両端の台は同じ形で、End は Root を上下に返した物。End の付け根は Joint5 と噛み合う所（そこを中心に回る）。
@@ -27,6 +29,9 @@ BASE_RADIUS = 0.15
 ANCHOR_RISE = 0.1
 SIDES = 12
 ARC_SEGMENTS = 12
+# 紐の太さ（半径）。関節の玉は紐より少し太くして、どれだけ曲げても継ぎ目が開かないようにする
+ROPE_RADIUS = 0.02
+KNOT_RADIUS = 0.024
 
 BONES = ["Root"] + ["Joint%d" % i for i in range (1, JOINT_COUNT + 1)] + ["End"]
 
@@ -199,13 +204,74 @@ def create_chain (armature):
     create_part ("Clasp_End", armature, BONES[end], materials, end_clasp)
 
 
+def faces_of (result, material_index, smooth):
+    """bmesh.ops の作った頂点の面に、材質と滑らかさを入れて返す"""
+    faces = list ({face for vertex in result["verts"] for face in vertex.link_faces})
+    for face in faces:
+        face.material_index = material_index
+        face.smooth = smooth
+    return faces
+
+
+def add_cord (mesh, bottom, top, material_index):
+    """紐の節（Unity の y で bottom から top までの丸い棒）"""
+    result = bmesh.ops.create_cone (mesh, cap_ends=True, cap_tris=False, segments=16, radius1=ROPE_RADIUS, radius2=ROPE_RADIUS, depth=top - bottom)
+    for vertex in result["verts"]:
+        vertex.co.z += (bottom + top) / 2
+    return faces_of (result, material_index, True)
+
+
+def add_knot (mesh, height, material_index):
+    """関節の玉（Unity の y で height の所）"""
+    result = bmesh.ops.create_uvsphere (mesh, u_segments=16, v_segments=8, radius=KNOT_RADIUS)
+    for vertex in result["verts"]:
+        vertex.co.z += height
+    return faces_of (result, material_index, True)
+
+
+def create_rope (armature):
+    """紐。台は鎖と同じ。節は関節から次の関節まで、玉は関節に置いて子の骨に付ける。隣り合う節は色を変える"""
+    materials = [
+        create_material ("M_IkRope_Plate", (0.10, 0.11, 0.13), 0.9, 0.45),
+        create_material ("M_IkRope_Dark", (0.35, 0.22, 0.12), 0.0, 0.8),
+        create_material ("M_IkRope_Light", (0.75, 0.62, 0.42), 0.0, 0.8),
+    ]
+    heights = bone_heights ()
+    end = len (BONES) - 1
+    plate = heights[end] + ANCHOR_RISE
+
+    # 根元の留め金: 台と、台から 1 つめの関節までの紐（足は台に埋める）
+    def root_clasp (mesh):
+        return add_plate (mesh, 0, 0) + add_cord (mesh, BASE_HEIGHT * 0.5, heights[1], 2)
+
+    # 反対側の留め金: 台と、End の付け根（関節の玉）から台までの紐
+    def end_clasp (mesh):
+        return add_plate (mesh, plate, 0) + add_cord (mesh, heights[end], plate + BASE_HEIGHT * 0.5, 2) + add_knot (mesh, heights[end], 2)
+
+    def cord (i):
+        def build (mesh):
+            material = 1 if i % 2 == 1 else 2
+            return add_cord (mesh, heights[i], heights[i + 1], material) + add_knot (mesh, heights[i], material)
+        return build
+
+    create_part ("Clasp_Root", armature, BONES[0], materials, root_clasp)
+    for i in range (1, JOINT_COUNT + 1):
+        create_part ("Rope%d" % i, armature, BONES[i], materials, cord (i))
+    create_part ("Clasp_End", armature, BONES[end], materials, end_clasp)
+
+
 def main ():
-    path = sys.argv[sys.argv.index ("--") + 1]
+    arguments = sys.argv[sys.argv.index ("--") + 1:]
+    path = arguments[0]
+    rope = "rope" in arguments[1:]
     bpy.ops.object.select_all (action='SELECT')
     bpy.ops.object.delete ()
 
     armature = create_armature ()
-    create_chain (armature)
+    if rope:
+        create_rope (armature)
+    else:
+        create_chain (armature)
 
     bpy.ops.export_scene.fbx (
         filepath=path,

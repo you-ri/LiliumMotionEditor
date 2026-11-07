@@ -370,6 +370,7 @@
     "RIG_VALUES_OVERLAY_LEFT_SLIDE": "Slide left grip",
     "RIG_VALUES_OVERLAY_RIGHT_SLIDE": "Slide right grip",
     "POSE_DOCUMENT_UNKNOWN_SLIDE_HAND": "The slide hand {1} of the held object {0} can't be used (Left / Right)",
+    "POSE_DOCUMENT_UNKNOWN_GRIP_HAND": "The grip hand {1} of the held object {0} can't be used (Left / Right)",
     "RIG_EDITOR_SOCKET": "{0} socket {1}",
     "RIG_EDITOR_ADD_SOCKET": "Add socket",
     "RIG_EDITOR_REMOVE_SOCKET": "Remove socket",

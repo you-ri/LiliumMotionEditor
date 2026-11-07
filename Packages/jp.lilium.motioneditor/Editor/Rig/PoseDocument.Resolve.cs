@@ -103,9 +103,19 @@ namespace Lilium
             EditingRig rig = session.stage.editingRig;
             Transform root = session.stage.editingRoot;
             Quaternion toRoot = BodyBasis (rig);
+            // 今の手首で握る（current）なら、この要求の点を置いて解いた後の手で握る（手を動かしてから握るのを 1 つの要求に書ける）
+            if (document.objects.Exists (o => o != null && o.grip != null && o.grip.Exists (g => g != null && g.current))) session.SolveAfterEdit ();
             foreach (PoseObject item in document.objects) {
                 if (item == null) continue;
                 HeldObjectRig.Entry entry = FindObject (session, item.name);
+                foreach (PoseGrip grip in item.grip ?? new List<PoseGrip> ()) {
+                    if (grip == null) continue;
+                    HeldObjectRig.Hand hand = grip.hand == kHoldLeft ? entry.left : entry.right;
+                    if (hand == null) continue;
+                    if (grip.current) session.stage.heldObjects.GrabAtCurrent (hand, session.stage.fullBody);
+                    else hand.SetKeyedGrip (!grip.useSettings, grip.position, grip.rotation);
+                    entry.keysPending = true;
+                }
                 if (!string.IsNullOrEmpty (item.hold)) {
                     entry.values.leftHold = item.hold == kHoldBoth || item.hold == kHoldLeft ? 1 : 0;
                     entry.values.rightHold = item.hold == kHoldBoth || item.hold == kHoldRight ? 1 : 0;
@@ -241,6 +251,9 @@ namespace Lilium
                 HeldObjectRig.Entry entry = FindObject (session, item.name);
                 foreach (PoseGripSlide slide in item.slide ?? new List<PoseGripSlide> ()) {
                     if (slide != null && slide.hand != kHoldLeft && slide.hand != kHoldRight) return Tr ("POSE_DOCUMENT_UNKNOWN_SLIDE_HAND", item.name, slide.hand);
+                }
+                foreach (PoseGrip grip in item.grip ?? new List<PoseGrip> ()) {
+                    if (grip != null && grip.hand != kHoldLeft && grip.hand != kHoldRight) return Tr ("POSE_DOCUMENT_UNKNOWN_GRIP_HAND", item.name, grip.hand);
                 }
                 if (!string.IsNullOrEmpty (item.socket) && item.socket != HeldObjectDefinition.kNoSocketName && !entry.sockets.Exists (s => s.definition.name == item.socket)) {
                     return Tr ("POSE_DOCUMENT_UNKNOWN_SOCKET", item.name, item.socket, string.Join (", ", entry.sockets.Select (s => s.definition.name)));
