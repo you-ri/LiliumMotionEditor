@@ -158,13 +158,26 @@ namespace Lilium
             foreach (RigBinding.BoneControl control in binding.boneControls) {
                 if (control.enabled) CreateControl (control.path, createGameObject);
             }
-            // 全身 IK の点（S25）。初期値は基準姿勢の骨の位置（ルートから見た位置 / humanScale）と、向きの差なし。固定の強さは 0
+            // 全身 IK の点（S25）。初期値は基準姿勢の骨の位置（ルートから見た位置 / humanScale）と、向きの差なし。
+            // 固定の強さは定義の既定の状態（defaultState。Free なら 0）。この値が、キーより前のフレームの状態になる（PreviewStage が基準の値として覚える）
             foreach (RigBinding.Point point in binding.points) {
                 if (!point.enabled) continue;
                 Transform control = CreateControl (point.path, createGameObject);
-                control.gameObject.AddComponent<BodyPoint> ();
+                SetDefaultState (control.gameObject.AddComponent<BodyPoint> (), point.definition);
                 control.localPosition = (GetRestRootPosition (GetEditingBone (point.bone)) + GetPointRestOffset (point)) / humanScale;
             }
+        }
+
+        /// <summary>
+        /// 点の固定の強さを、定義の既定の状態（defaultState）にする。Pin・Locked は位置だけ留める（向きは回したときに留まる。持ち物の姿勢の点と同じ）。
+        /// 動かせない点（passive）は状態を持たないので 0 のまま
+        /// </summary>
+        internal static void SetDefaultState (BodyPoint values, EditRigDefinition.BodyPoint definition)
+        {
+            BodyPointState state = definition != null && !definition.passive ? definition.defaultState : BodyPointState.Free;
+            values.positionWeight = state != BodyPointState.Free ? 1 : 0;
+            values.rotationWeight = 0;
+            values.locked = state == BodyPointState.Locked ? 1 : 0;
         }
 
         /// <summary>

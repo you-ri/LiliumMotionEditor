@@ -512,6 +512,7 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0
+    defaultState: 1
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -530,6 +531,7 @@ MonoBehaviour:
     blend: 0
     contact: 1
     radius: 0
+    defaultState: 1
   - enabled: 1
     name: Neck
     bone: 9

@@ -121,6 +121,8 @@ If the same clip is open in the Motion Editor window, ask the user to reopen the
   (`Hand` / `Foot`) from the same request or the current pose; the bend stays on the side of the written position. The response lists it under `snapped` (`distance`, `position`).
   Without `snap` a pin is never moved
 - **Only the listed points change**. Unlisted points keep their state at that frame. A wrong name or state writes nothing and returns a reason.
+  Before a point's first key its state is the rig definition's default (`defaultState`; in the default definition `LeftFoot` / `RightFoot` are `Pin`, the rest `Free`),
+  so feet stay put when you move the hips on a new clip. List them as `Free` to let them follow the body
   Listing every point you manage (with `Free` for unused ones) on every key avoids surprises from states carried over
 - To reuse a pose on a character of a different size, scale positions by the ratio of `humanScale` (same as `PoseDocument.Rescale`)
 - **Contacts** (a whole planted foot in one entry, next to `points`; also allowed in each key of `motion_write_motion`):

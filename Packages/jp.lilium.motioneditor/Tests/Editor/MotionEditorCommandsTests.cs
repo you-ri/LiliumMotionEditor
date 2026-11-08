@@ -84,6 +84,7 @@ namespace Lilium
             projectBackup_ = EditorJsonUtility.ToJson (ProjectSettings.instance);
             EditRigDefinition definition = ScriptableObject.CreateInstance<EditRigDefinition> ();
             definition.SetDefault ();
+            RigTestFixture.UseFreeDefaults (definition);
             AssetDatabase.CreateAsset (definition, kFolder + "/Rig Definition.asset");
             ProjectSettings.instance.rigDefinition = definition;
             // キャラの prefab（Avatar もアセットにしてから保存する。でないと prefab の Animator から Avatar が外れる）。
@@ -206,6 +207,7 @@ namespace Lilium
             // 窓と同じく、キャラの設定で上書きした定義を使う（プロジェクト設定の定義ではなく）
             EditRigDefinition own = ScriptableObject.CreateInstance<EditRigDefinition> ();
             own.SetDefault ();
+            RigTestFixture.UseFreeDefaults (own);
             own.bodyPoints.RemoveAll (p => p.name == "LeftHand");
             AssetDatabase.CreateAsset (own, kFolder + "/Own Rig Definition.asset");
             CharacterSettings settings = ScriptableObject.CreateInstance<CharacterSettings> ();

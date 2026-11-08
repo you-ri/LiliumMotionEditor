@@ -275,6 +275,14 @@ namespace Lilium
             [Tooltip ("A point that can be selected but not moved, and gets no keys or tracks (drawn gray). It stays fixed on its bone and relative to the parent bone, so away from the bone's root the bone only turns about the axis from the root to the point. Pulls across that axis turn the parent bone.")]
             public bool passive;
 
+            /// <summary>
+            /// 点の既定の状態（Free / Pin / Locked）。クリップにまだこの点のキーが無いフレーム（最初のキーより前）と、
+            /// 姿勢を基準へ戻したとき（Reset）に、この状態になる。Pin・Locked は骨の今の場所に置く（位置だけ。向きは回したときに留まる）。
+            /// 項目の無い古い定義は Free で読まれる。動かせない点（passive）では使わない
+            /// </summary>
+            [Tooltip ("State of the point where the clip has no key for it yet (before its first key), and after resetting the pose: Free, Pin or Locked. A pinned or locked point stays where its bone is (position only). Not used for passive points.")]
+            public BodyPointState defaultState;
+
             /// <summary>乗る骨の付け根そのものの点か（基準の骨も d も無く、ずれも 0）</summary>
             public bool onBoneOrigin
             {
@@ -548,7 +556,11 @@ namespace Lilium
                 // 背骨は下の胸の点 1 つにまとめる
                 if (IsSpineBone (control.bone)) continue;
                 bool foot = control.bone == HumanBodyBones.LeftFoot || control.bone == HumanBodyBones.RightFoot;
-                points.Add (new BodyPoint { name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone), contact = foot });
+                // 足首の点は既定で Pin（11-08 ユーザー指示）。キーの無いフレームで体を引いても、足が留まる
+                points.Add (new BodyPoint {
+                    name = control.bone.ToString (), bone = control.bone, rotation = PointHasRotation (control.bone), contact = foot,
+                    defaultState = foot ? BodyPointState.Pin : BodyPointState.Free,
+                });
             }
             // 胸とお腹の点は、腰と頭の付け根（どちらも Humanoid で必須の骨）を結ぶ線の上に置く（首の骨は無いキャラがある）。
             // 線は腰 → お腹 → 胸とつなぐ。背骨が Spine だけのキャラでは両方が Spine に乗るので、骨の階層からは決められない。

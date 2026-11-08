@@ -42,13 +42,23 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 既定のリグの定義。TearDown で捨てる
+        /// 既定のリグの定義。TearDown で捨てる。点の既定の状態はどれも Free にする（UseFreeDefaults）
         /// </summary>
         protected EditRigDefinition CreateDefinition ()
         {
             EditRigDefinition definition = EditRigDefinition.CreateDefault ();
             created_.Add (definition);
+            UseFreeDefaults (definition);
             return definition;
+        }
+
+        /// <summary>
+        /// 点の既定の状態（defaultState）を、どれも Free にする。既定の定義の足首の点は Pin（11-08）だが、解き方を確かめるテストは
+        /// キーの無い点が Free の前提で書いてある（足首が留まると、腰を引いたときなどの結果が変わる）。既定の状態そのものは PointDefaultStateTests で確かめる
+        /// </summary>
+        internal static void UseFreeDefaults (EditRigDefinition definition)
+        {
+            foreach (EditRigDefinition.BodyPoint point in definition.bodyPoints) point.defaultState = BodyPointState.Free;
         }
 
         /// <summary>膝・肘の Pole の、脛・前腕の向きを混ぜる割合（S34・S43）</summary>

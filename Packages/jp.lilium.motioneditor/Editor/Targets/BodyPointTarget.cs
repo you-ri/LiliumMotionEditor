@@ -85,6 +85,8 @@ namespace Lilium
         readonly bool pulls_;
         /// <summary>動かせない点か（定義の passive。S89）。選べるが、値を変える操作はどれも何もしない</summary>
         readonly bool passive_;
+        /// <summary>定義の既定の状態（defaultState）。Reset でこの状態に戻す</summary>
+        readonly BodyPointState defaultState_;
         readonly HumanBodyBones humanBone_;
         readonly bool onObject_;
         readonly Transform control_;
@@ -435,6 +437,7 @@ namespace Lilium
             offsetPoint_ = rig.GetPointRestOffset (point).sqrMagnitude > 1e-10f;
             pulls_ = point.definition == null || point.definition.weight > 0;
             passive_ = body.IsPassive (human_);
+            defaultState_ = point.definition != null ? point.definition.defaultState : BodyPointState.Free;
             control_ = body.GetControl (human_);
             bone_ = body.GetBone (human_);
             displayBone_ = point.bone;
@@ -1158,7 +1161,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 基準へ戻す（Reset）。点を基準姿勢の骨の上へ戻し、固定を外す
+        /// 基準へ戻す（Reset）。点を基準姿勢の骨の上へ戻し、定義の既定の状態（defaultState）にする（Free なら固定を外す。
+        /// Pin・Locked は基準姿勢の骨の上に位置だけ留める）
         /// </summary>
         public override void ResetPose ()
         {
@@ -1167,8 +1171,11 @@ namespace Lilium
             if (passive_ || !body_.TryGetPointRestValues (human_, out position, out rotation)) return;
             control_.localPosition = position;
             control_.localRotation = rotation;
-            positionDirty_ = positionPinned;
+            positionDirty_ = positionPinned || defaultState_ != BodyPointState.Free;
             Unpin ();
+            if (defaultState_ == BodyPointState.Free) return;
+            body_.SetPositionWeight (human_, 1);
+            SetLockedFlag (defaultState_ == BodyPointState.Locked);
         }
     }
 

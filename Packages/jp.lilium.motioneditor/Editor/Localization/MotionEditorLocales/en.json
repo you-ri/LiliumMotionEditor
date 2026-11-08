@@ -356,7 +356,7 @@
     "HELD_OBJECT_INVALID_POINT_NAME": "The held object \"{0}\" has an empty or repeated point name \"{1}\"",
     "HELD_OBJECT_NO_PARENT_BONE": "This character has no {1} bone to parent the held object \"{0}\"",
     "HELD_OBJECT_PATH_NOT_FOUND": "The path {1} of the held object \"{0}\" wasn't found",
-    "HELD_OBJECT_TARGET_LABEL": "Object {0}",
+    "HELD_OBJECT_TARGET_LABEL": "{0} Center",
     "HELD_OBJECT_CONSTRAINT_NOT_FOUND": "The grip constraint {0} of the held object wasn't found",
     "PREVIEW_STAGE_NO_ANIMATOR": "No Animator: {0}",
     "RIG_BINDING_MULTIPLE_SOLVED_ROOTS": "The full-body IK has several roots: {0}. Solve the top bone too to make it one",

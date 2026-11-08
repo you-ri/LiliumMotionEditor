@@ -356,7 +356,7 @@
     "HELD_OBJECT_INVALID_POINT_NAME": "持ち物「{0}」の点の名前「{1}」が空か重複しています",
     "HELD_OBJECT_NO_PARENT_BONE": "持ち物「{0}」の親の骨 {1} がこのキャラにありません",
     "HELD_OBJECT_PATH_NOT_FOUND": "持ち物「{0}」のパス {1} が見つかりません",
-    "HELD_OBJECT_TARGET_LABEL": "持ち物 {0}",
+    "HELD_OBJECT_TARGET_LABEL": "{0} Center",
     "HELD_OBJECT_CONSTRAINT_NOT_FOUND": "持ち物の握りの拘束 {0} が見つかりません",
     "PREVIEW_STAGE_NO_ANIMATOR": "Animator が無い: {0}",
     "RIG_BINDING_MULTIPLE_SOLVED_ROOTS": "全身 IK の根が複数ある: {0}。一番上の骨も解く骨にすると 1 本になる",

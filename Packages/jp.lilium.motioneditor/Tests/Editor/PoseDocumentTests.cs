@@ -25,6 +25,7 @@ namespace Lilium
         {
             definition_ = EditRigDefinition.CreateDefault ();
             created_.Add (definition_);
+            RigTestFixture.UseFreeDefaults (definition_);
         }
 
         [TearDown]
