@@ -80,6 +80,18 @@ namespace Lilium
                         break;
                 }
             }
+            // 2 軸を回さない骨は、残りの 1 軸まわりにだけ回る骨（動かせない点の骨・持った物の握りと同じ axisLock）にする。
+            // 角度制限だけでは、向けるだけの点が骨を軸の外へ向けてから仕上げで戻され、向けきれない分を親が回して向けなかった（11-08 の軸の骨のテストで 36° 残った）。
+            // 決まりは骨の種類でなく、回れる軸の数で決める
+            int locked = 0, free = -1;
+            for (int k = 0; k < 3; k++) {
+                if (limit[(twist + k) % 3].mode == EditRigDefinition.LimitMode.Locked) locked++;
+                else free = (twist + k) % 3;
+            }
+            if (locked == 2 && bone.hinge == 0 && bone.axisLock == 0) {
+                bone.axisLock = 1;
+                bone.lockAxis = Quaternion.Inverse (rig_.GetRestRootRotation (self)) * BodyAxis (rig_, free);
+            }
             bone.limit = 1;
             bone.limitFrame = frame;
             bone.limitRest = rest;

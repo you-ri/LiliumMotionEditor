@@ -312,6 +312,9 @@ namespace Lilium
             branchShifts_ = new Vector3[points_.Count];
             yieldedPositions_ = new Vector3[bodies_.Count];
             yieldedRotations_ = new Quaternion[bodies_.Count];
+            sidePositions_ = new Vector3[bodies_.Count];
+            sideRotations_ = new Quaternion[bodies_.Count];
+            rootSide_ = new bool[bodies_.Count];
             for (int i = 0; i < bodies_.Count; i++) {
                 if (i >= skeleton) {
                     AddHeldBody (i);

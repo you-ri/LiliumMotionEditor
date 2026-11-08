@@ -97,11 +97,15 @@ namespace Lilium
         {
             System.Array.Copy (solvePositions_, startPositions_, bodies_.Count);
             System.Array.Copy (solveRotations_, startRotations_, bodies_.Count);
-            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = Vector3.zero;
-            SolveHeavyTargets (null, Vector3.zero, 0, false);
+            // つかんだ点と離れの変わらない Pin の点は、初めから、つかんだ点から決まった離れの所へ最小だけ運ぶ（RigidShift。根を留める定義と同じ）
+            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = RigidShift (points_[i], out bool unusedRigid);
+            SolveHeavyTargets (null, Vector3.zero, 1, false);
             Vector3 shift = GrabbedShift ();
             if (shift.sqrMagnitude <= kReachTolerance * kReachTolerance || lockedEffectors_.Count > 0) return;
-            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = shift;
+            for (int i = 0; i < points_.Count; i++) {
+                RigidShift (points_[i], out bool rigid);
+                if (!rigid) branchShifts_[i] = shift;
+            }
             for (int i = 0; i < bodies_.Count; i++) {
                 startPositions_[i] = (Vector3)data_.positions[i] + shift;
                 startRotations_[i] = data_.rotations[i];
@@ -130,7 +134,7 @@ namespace Lilium
             RestoreYielded ();
             float fraction = CarryPins (path, shift);
             if (locks) return;
-            SolveHeavyTargets (path, shift * fraction, fraction, false);
+            SolveHeavyTargets (path, shift * fraction, LeastBranchScale (path, shift * fraction, fraction), false, true, fraction);
             // 背骨を伸ばしきる手前は、反復で解くソルバーが詰めきれず、つかんだ点（首）が届かない（10-29 実測で 1cm）。届かなかった分を腰へ運び足す。
             // 10-29 までは、運ぶ量を伸ばしきった長さの 95% から数えて届かせていたが、元の背骨が丸い姿勢では 95% でも胸・上胸に 35° ずつ曲がりが残った
             // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。届く所では足す量は 0 なので、境目で姿勢は跳ねない
@@ -148,10 +152,45 @@ namespace Lilium
             }
         }
 
-        /// <summary>HeavyEffectors の目標で、解き始める姿勢（startPositions_ / startRotations_）から解く</summary>
-        void SolveHeavyTargets (bool[] path, Vector3 pathShift, float branchScale, bool yield, bool branches = true)
+        /// <summary>LeastBranchScale で、道の外の Pin の点を運ぶ割合を半分ずつ絞って探す回数（1/2^回数 の細かさ）</summary>
+        const int kBranchSearches = 6;
+
+        /// <summary>
+        /// 道の外の Pin の点（手足の先）を BranchShifts の何割だけ運べば、つかんだ点が届くか（0〜scale）。届く一番小さい割合を、半分ずつ絞って探す。
+        /// BranchShifts は、道の外の Pin の点を外して解いた姿勢で手足の付け根の場所を見るので、多すぎることがある: Pin の点を効かせている間は、
+        /// 体が Pin の点のまわりに回って留まっていたのに、外すと体がキーの形へ戻って起き上がり、付け根が Pin の点から遠くなる。
+        /// そのまま運ぶと、Pin の点が引かれ始める 1 回で、マウスの動きの 4 倍跳んだ（11-08 の枝分かれのテストで、マウス 4cm に Pin の点が 15cm）。
+        /// 届く一番小さい割合なら、引かれ始めは 0 から増えるので跳ばない（Pin の決まり「留まれる分は留まり、届かない分だけ引かれる」）。
+        /// scale でも届かなければ scale（届かなかった分は、呼ぶ側が道の上の Pin の点へ運び足す）
+        /// </summary>
+        float LeastBranchScale (bool[] path, Vector3 pathShift, float scale)
         {
-            RunSolver (HeavyEffectors (path, pathShift, branchScale, yield, branches), startPositions_, startRotations_);
+            if (scale <= 0 || !AnyBranchShift ()) return scale;
+            float low = 0, high = scale;
+            SolveHeavyTargets (path, pathShift, 0, false, true, scale);
+            if (GrabbedShift ().sqrMagnitude <= kReachTolerance * kReachTolerance) return 0;
+            for (int k = 0; k < kBranchSearches; k++) {
+                float middle = (low + high) * 0.5f;
+                SolveHeavyTargets (path, pathShift, middle, false, true, scale);
+                if (GrabbedShift ().sqrMagnitude <= kReachTolerance * kReachTolerance) high = middle;
+                else low = middle;
+            }
+            return high;
+        }
+
+        /// <summary>BranchShifts で、運ぶ量が 0 でない道の外の Pin の点があるか</summary>
+        bool AnyBranchShift ()
+        {
+            for (int i = 0; i < points_.Count; i++) {
+                if (branchShifts_[i].sqrMagnitude > kEpsilon * kEpsilon && !RigidToGrabbed (points_[i], out Vector3 unusedTarget, out float unusedDistance)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>HeavyEffectors の目標で、解き始める姿勢（startPositions_ / startRotations_）から解く</summary>
+        void SolveHeavyTargets (bool[] path, Vector3 pathShift, float branchScale, bool yield, bool branches = true, float rigidScale = -1)
+        {
+            RunSolver (HeavyEffectors (path, pathShift, branchScale, yield, branches, rigidScale), startPositions_, startRotations_);
         }
 
         /// <summary>つかんだ点を譲らせて解いた姿勢（保持解き）を控える（Pin の点を運んで解き直したら Lock の点が動いたときに戻す）</summary>
@@ -219,9 +258,10 @@ namespace Lilium
         /// 重い点をつかんで、届かないか Lock の点が動いたときに解き直す目標を、先頭から入れる（S88）。並びは 1 回目と同じで、grabbedEffectors_・lockedEffectors_ も作り直す。
         /// 重さ 0 の Pin の点は入れない（Free の点と同じ）。Lock でない重さ 1 の Pin の点（PullsPin）は、目標を、つかんだ点から根への道の上（path）の骨の点なら pathShift、
         /// 道の外なら branchShifts_（points_ と同じ並び）× branchScale（ルート空間）だけずらす。path が null なら道の外と同じに扱う。branches が false なら、道の外の Pin の点は入れない。
+        /// rigidScale が 0 以上なら、つかんだ点と離れの変わらない Pin の点（RigidShift）には branchScale でなく rigidScale を掛ける（LeastBranchScale が絞るのは手足の先を運ぶ量だけ）。
         /// yield なら、つかんだ点（足の箱を含む）を譲らせる（kLightPull）。入れた数を返す
         /// </summary>
-        int HeavyEffectors (bool[] path, Vector3 pathShift, float branchScale, bool yield, bool branches = true)
+        int HeavyEffectors (bool[] path, Vector3 pathShift, float branchScale, bool yield, bool branches = true, float rigidScale = -1)
         {
             int count = 0;
             grabbedEffectors_.Clear ();
@@ -234,7 +274,7 @@ namespace Lilium
                 PointRole role = HeavyRole (point, out positionWeight, out rotationWeight);
                 if (role == PointRole.Follow) continue;
                 // つかんだ点と離れの変わらない Pin の点は、道の上の骨に乗っていても道の外の点と同じに運ぶ（BranchShifts）
-                bool rigid = role == PointRole.CarriedPin && RigidToGrabbed (point, path, out Vector3 unusedTarget, out float unusedDistance);
+                bool rigid = role == PointRole.CarriedPin && RigidToGrabbed (point, out Vector3 unusedTarget, out float unusedDistance);
                 if (role == PointRole.CarriedPin && !branches && (rigid || !path[point.body])) continue;
                 if (role == PointRole.Grabbed) grabbedEffectors_.Add (count);
                 else if (role == PointRole.Lock) lockedEffectors_.Add (count);
@@ -246,7 +286,8 @@ namespace Lilium
                     rotationWeight = Mathf.Min (rotationWeight, kLightPull);
                 }
                 FullBodyIkEffector effector = PointEffector (point, positionWeight, rotationWeight);
-                if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] && !rigid ? pathShift : branchShifts_[i] * branchScale);
+                if (role == PointRole.Grabbed) effector.position = (float3)ClampToLock (point, effector.position);
+                if (role == PointRole.CarriedPin) effector.position += (float3)(path != null && path[point.body] && !rigid ? pathShift : branchShifts_[i] * (rigid && rigidScale >= 0 ? rigidScale : branchScale));
                 data_.effectors[count] = effector;
                 if (rigid) {
                     rigidEffectors_.Add (count);
@@ -282,7 +323,9 @@ namespace Lilium
             rotationWeight = 0;
             foreach (Point point in points_) {
                 float positionWeight;
-                if (point.body == body && HeavyRole (point, out positionWeight, out rotationWeight) == PointRole.CarriedPin && positionWeight >= 1) return point;
+                // つかんだ点と離れの変わらない Pin の点は、道の長さでなく、つかんだ点からの離れで運ぶ（RigidShift）
+                if (point.body == body && HeavyRole (point, out positionWeight, out rotationWeight) == PointRole.CarriedPin && positionWeight >= 1
+                    && !RigidToGrabbed (point, out Vector3 unusedTarget, out float unusedDistance)) return point;
             }
             rotationWeight = 0;
             return null;
@@ -328,11 +371,10 @@ namespace Lilium
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
                 if (HeavyRole (point, out positionWeight, out rotationWeight) != PointRole.CarriedPin) continue;
-                // つかんだ点と離れの変わらない Pin の点は、つかんだ点の目標から決まった離れの球の上で、一番近い所へ運ぶ（RigidToGrabbed）
-                if (RigidToGrabbed (point, path, out Vector3 grabbedTarget, out float distance)) {
-                    Vector3 toGrabbed = grabbedTarget - TargetPosition (point);
-                    float gap = toGrabbed.magnitude;
-                    if (gap > kEpsilon) branchShifts_[i] = toGrabbed / gap * (gap - distance);
+                // つかんだ点と離れの変わらない Pin の点は、つかんだ点の目標から決まった離れの球の上で、一番近い所へ運ぶ（RigidShift）
+                Vector3 rigidShift = RigidShift (point, out bool rigid);
+                if (rigid) {
+                    branchShifts_[i] = rigidShift;
                     continue;
                 }
                 if (path[point.body]) continue;
@@ -346,36 +388,90 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 重さ 1 の Pin の点が、つかんだ点との離れの変わらない点か（つかんだ点の骨の上の点か、つかんだ点の骨にぶら下がる骨の付け根の点。
-        /// 手首をつかんだときの手のひらの点、持っている物の原点の点など）。そうなら、つかんだ点の目標と、元の姿勢での 2 つの点の離れを返す。
-        /// こうした点は、つかんだ骨を点のまわりに回せば留まり、届かなければ、つかんだ点から決まった離れのまま引かれる（体の点の Pin の決まり「その場を維持する。ただし引っ張ることはできる」）。
-        /// 手足の長さで運ぶ量を決める形（BranchShifts の手足・PathStretch）では、つかんだ骨を回せることを数えず、こうした点は手足の長さが 0 で必ず付いて動くとみなした。
-        /// 一方 1 回目に解いたときは、つかんだ骨を大きく回して届くと留まるので、引くたびに 2 つの姿勢の間を跳んだ
-        /// （11-07 ユーザー報告「手首を動かしていると、たまに棒の姿勢がワープする」。腕のデバッグ用キャラで、持った棒が 1 回 18cm・130°、手のひらの Pin の点が 1 回 22cm）
+        /// 2 つの点の離れが、骨の形だけで決まるか（間に回れる関節が無い）。同じ骨の上の点どうしか、片方が骨の付け根（関節）の点で、
+        /// もう片方がその親の骨の上にあるか、どちらも同じ骨にぶら下がる骨の付け根の点か。付け根の点は、骨の長さが変わらないので親の骨に付いて動く
+        /// （手首の点と前腕に乗る肘の点・手首の点と手のひらの点・持った物の原点の点と手首の点）
         /// </summary>
-        bool RigidToGrabbed (Point point, bool[] path, out Vector3 grabbedTarget, out float distance)
+        bool RigidPair (Point a, Point b)
+        {
+            // 解く骨に乗っていない点（足の箱で運ぶ点など）は数えない
+            if (a.body < 0 || b.body < 0) return false;
+            if (a.body == b.body) return true;
+            int parentA = JointParent (a), parentB = JointParent (b);
+            return parentA == b.body || parentB == a.body || (parentA >= 0 && parentA == parentB);
+        }
+
+        /// <summary>骨の付け根からの離れがこれ以下（m）の点は、付け根の点とみなす（JointParent）</summary>
+        const float kJointOffset = 1e-4f;
+
+        /// <summary>骨の付け根の点なら、その骨の親の骨（付け根の点でないか、根の骨なら -1）</summary>
+        int JointParent (Point point)
+        {
+            return point.offset.sqrMagnitude <= kJointOffset * kJointOffset ? bodyParents_[point.body] : -1;
+        }
+
+        /// <summary>元の姿勢（解く前）での、2 つの点の離れ（m）</summary>
+        float InputDistance (Point a, Point b)
+        {
+            Vector3 from = solvePositions_[a.body] + solveRotations_[a.body] * a.offset;
+            Vector3 to = solvePositions_[b.body] + solveRotations_[b.body] * b.offset;
+            return Vector3.Distance (from, to);
+        }
+
+        /// <summary>
+        /// 点が、つかんだ点との離れの変わらない点か（RigidPair）。そうなら、つかんだ点の目標と、元の姿勢での 2 つの点の離れを返す。
+        /// 重さ 1 の Pin の点なら、つかんだ骨を点のまわりに回せば留まり、届かなければ（離れが遠すぎても近すぎても）、つかんだ点から決まった離れのまま、
+        /// 必要な分だけ引かれる（体の点の Pin の決まり「その場を維持する。ただし引っ張ることはできる」。11-08 ユーザー決定「つかんだ点を届かせ、Pin の点は必要な分だけ引く」）。
+        /// 手足の長さで運ぶ量を決める形（BranchShifts の手足・PathStretch）は、つかんだ骨を回せることを数えず、近すぎる所へ引いたときも運ばなかった。
+        /// そのまま解くと、ソルバーがつかんだ点と Pin の点を取り合い、Pin の点が最小の所から 7cm ずれた所へ押されて、引くたびに 2 つの姿勢の間を跳んだ
+        /// （11-07 ユーザー報告「手首を動かしていると、たまに棒の姿勢がワープする」。11-08 の単純な鎖のテストで 1 回 18cm）。
+        /// 根を留めない定義（S98）でも同じに扱う
+        /// </summary>
+        bool RigidToGrabbed (Point point, out Vector3 grabbedTarget, out float distance)
         {
             grabbedTarget = Vector3.zero;
             distance = 0;
-            // 根を留めない定義（S98）は、Pin の点を全部同じだけ運ぶ（ResolveUnpinnedHeavyGrab）ので、ここでは数えない
-            if (path == null || settings_.hipsPin <= 0) return false;
-            int bone = point.body;
-            if (!path[bone]) {
-                // 道の外の点は、道の上の骨にぶら下がる骨の付け根に乗っていれば、その骨から動かない
-                int root = LimbRoot (point, path, out float length);
-                int parent = bodyParents_[root];
-                if (length > kEpsilon || parent < 0 || !path[parent]) return false;
-                bone = parent;
-            }
             foreach (Point grabbed in grabbed_) {
-                if (grabbed == point || grabbed.body != bone || !GetWeights (grabbed, out float positionWeight, out float rotationWeight)) continue;
+                if (grabbed == point || !RigidPair (point, grabbed) || !GetWeights (grabbed, out float positionWeight, out float rotationWeight)) continue;
                 grabbedTarget = TargetPosition (grabbed);
-                Vector3 from = solvePositions_[grabbed.body] + solveRotations_[grabbed.body] * grabbed.offset;
-                Vector3 to = solvePositions_[point.body] + solveRotations_[point.body] * point.offset;
-                distance = Vector3.Distance (from, to);
+                distance = InputDistance (grabbed, point);
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 運ぶ Pin の点が、つかんだ点と離れの変わらない点なら（rigid）、目標を、つかんだ点の目標から決まった離れの球の上で一番近い所へ運ぶ量（ルート空間）。
+        /// 離れが元のままなら 0（留まる）
+        /// </summary>
+        Vector3 RigidShift (Point point, out bool rigid)
+        {
+            rigid = false;
+            if (HeavyRole (point, out float positionWeight, out float rotationWeight) != PointRole.CarriedPin) return Vector3.zero;
+            if (!RigidToGrabbed (point, out Vector3 grabbedTarget, out float distance)) return Vector3.zero;
+            rigid = true;
+            Vector3 toGrabbed = grabbedTarget - TargetPosition (point);
+            float gap = toGrabbed.magnitude;
+            return gap > kEpsilon ? toGrabbed / gap * (gap - distance) : Vector3.zero;
+        }
+
+        /// <summary>
+        /// つかんだ点の目標 target を、つかんだ点と離れの変わらない Lock の点（RigidPair）から、元の姿勢での離れの球の上で一番近い所にする（ルート空間）。
+        /// Lock の点は動かないので、つかんだ点はそこまでしか行けない。目標のまま解くと、ソルバーが Lock の点と取り合って骨を回しきれず、
+        /// つかんだ点が元の場所に残ったまま、引くたびに別の答えへ跳んだ（11-08 の単純な鎖のテストで 1 回 20cm）。そうした Lock の点が無ければ target のまま
+        /// </summary>
+        Vector3 ClampToLock (Point grabbed, Vector3 target)
+        {
+            foreach (Point point in points_) {
+                if (point == grabbed || !RigidPair (point, grabbed) || HeavyRole (point, out float positionWeight, out float rotationWeight) != PointRole.Lock) continue;
+                Vector3 center = TargetPosition (point);
+                Vector3 away = target - center;
+                if (away.sqrMagnitude <= kEpsilon * kEpsilon) {
+                    away = solvePositions_[grabbed.body] + solveRotations_[grabbed.body] * grabbed.offset - (solvePositions_[point.body] + solveRotations_[point.body] * point.offset);
+                }
+                return center + away.normalized * InputDistance (grabbed, point);
+            }
+            return target;
         }
 
         /// <summary>
@@ -485,12 +581,18 @@ namespace Lilium
             for (int b = 0; b < bodies_.Count; b++) pathTurns_[b] = Quaternion.identity;
             pathTurns_[pinBody] = rootTurn;
             for (int k = 0; k < count; k++) pathTurns_[pathChain_[k]] = aim * segmentTurns_[k] * rootTurn;
+            // Pin の点の骨が根でなければ（Pin の点が根と道の途中の骨に乗る）、その骨の根の方の骨も Pin の点と一緒に運ぶ。
+            // Pin の点の骨だけを運ぶと、親との間の骨が伸びた姿勢から解き始め、ソルバーは解き始めの姿勢で骨の長さを測るので、伸びたまま解いた。
+            // 骨へは向きだけを書き戻すので、Pin の点は元の場所に残り、つかんだ点が届かなかった（11-08 の単純な鎖のテストで 23cm）
+            int top = pinBody;
+            while (bodyParents_[top] >= 0) top = bodyParents_[top];
             // 骨の木を根からたどって置き直す（道の外の骨は親と一緒に動く。つかんだ骨は回しが無いままで、向きを変えない）
             for (int b = 0; b < bodies_.Count; b++) {
                 int parent = bodyParents_[b];
                 if (parent >= 0 && !pathChain_.Contains (b)) pathTurns_[b] = pathTurns_[parent];
                 if (b == pinBody) startPositions_[b] = pinTarget + rootTurn * (solvePositions_[b] - pinPoint);
                 else if (parent >= 0) startPositions_[b] = startPositions_[parent] + pathTurns_[parent] * (solvePositions_[b] - solvePositions_[parent]);
+                else if (b == top) startPositions_[b] = solvePositions_[b] + pathShift;
                 startRotations_[b] = pathTurns_[b] * solveRotations_[b];
             }
         }

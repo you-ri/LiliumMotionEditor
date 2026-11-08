@@ -2033,6 +2033,10 @@ namespace Lilium
             quaternion wanted = ClampToLimit (ref d, p, math.normalizesafe (math.mul (turn, d.rotations[p]), d.rotations[p]));
             quaternion delta = math.mul (wanted, math.inverse (d.rotations[p]));
             if (math.lengthsq (RotationVector (delta)) < 1e-14f) return false;
+            // 回した親は、ここから解いた骨（自分の向きを持つ）。解かなかった骨のままだと、作り直す（Rebuild）たびに親に付いた元の向きへ戻り、
+            // 回した分が消えた（11-08 ユーザー報告「手首が Pin で持ち物が Free のとき、棒の端の点を動かしても棒が付いてこない」。手首の点は付け根の位置だけなので、
+            // 手の骨は解かない骨で、棒が柄の軸まわりに回るだけで先は 0mm だった）
+            d.active[p] = 1;
             RotateSubtree (ref d, n, p, delta);
             Rebuild (ref d, n, false);
             // 手首まわりに回して動いた留めた点を、腕を合わせ直して戻す（手と物の向きはそのまま）
@@ -2056,7 +2060,8 @@ namespace Lilium
         /// <summary>
         /// 向けるだけの点 e が、膝・肘の Pole か。点の骨（太もも・上腕）の子が蝶番（膝・肘）で、その先（足首・手首）の骨か
         /// さらに先に、ほかの点がある。そのときは骨を向ける代わりに、手足の先を動かさずに膝・肘の向きだけ変える（SnapPole）。
-        /// 点の骨と蝶番の骨に、ほかの点（膝の点など）があるときは、膝・肘の場所がその点で決まるので Pole にしない（ふつうに向ける）。
+        /// 蝶番の骨にほかの点（膝の点など）があるか、点の骨の付け根から離れた所にほかの点があるときは、膝・肘の場所がその点で決まるので Pole にしない（ふつうに向ける）。
+        /// 点の骨の付け根の点（肩・股の点）は軸の端にあるので、あっても Pole のまま。
         /// hinge は蝶番の骨、end は手足の先の骨
         /// </summary>
         static bool IsPole (ref FullBodyIkData d, int n, int e, int effectorCount, out int hinge, out int end)
@@ -2072,7 +2077,9 @@ namespace Lilium
             for (int k = 0; k < effectorCount; k++) {
                 int kb = d.effectors[k].bone;
                 if (!IsUsed (ref d, k, n) || IsAim (ref d, k)) continue;
-                if (kb == b || kb == hinge) return false;
+                // 点の骨の付け根の点（肩・股の点）は軸の端にあり、膝・肘の場所を決めないので、Pole のまま回す。
+                // 除くと、付け根を Pin にしたとき Pole がふつうに骨を向け、Pin の手首が 4cm 引かれ、肘が軸から 7.5cm 外れた（11-08 の蝶番の手足のテスト）
+                if ((kb == b && IsOffset (ref d, k)) || kb == hinge) return false;
                 if (end < 0 && IsInside (ref d, kb, hinge)) {
                     for (end = kb; d.bones[end].parent != hinge; end = d.bones[end].parent) { }
                 }

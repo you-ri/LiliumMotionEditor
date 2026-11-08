@@ -151,7 +151,73 @@ namespace Lilium
                 }
             }
             if (grab == GrabKind.Light) SolveLightGrab (count > 0);
+            CarryRootSide ();
             return WriteBack ();
+        }
+
+        // CarryRootSide: 動かす前の姿勢（ルート空間）と、点の掛かった骨をつなぐ木の一番上の骨より根の側の骨か
+        Vector3[] sidePositions_;
+        Quaternion[] sideRotations_;
+        bool[] rootSide_;
+
+        /// <summary>
+        /// 根を留めない定義（rootPin が 0。S98）で、点の掛かった骨をつなぐ木の一番上の骨（top。どの点の骨にも共通の、一番根に近くない親）より根の側の骨は、
+        /// top に付いて、元の姿勢での top との向きのまま動かす（親子は逆向き）。こうした骨は点の間の道の外にぶら下がり（両手を引いたときの腰と脚・
+        /// 枝分かれの片方の先を Pin にしてもう片方を引いたときの根の骨）、向きを決める決まりが無く、反復の途中の形で残った。
+        /// 届かなくなったところで、ぶら下がった向きから道に沿う向きへ 1 回で 45° 回り、22cm 跳んだ（11-08 の枝分かれのテスト）。
+        /// Free の子の骨が親に付いて FK のまま動くのと同じ決まり（11-08 ユーザー決定「A に付いて回る」）。そこにぶら下がる点の無い枝も、親と一緒に回す。
+        /// 点の掛かった骨が 1 本だけのときは何もしない（つかんだ点だけなら、鎖は一直線になって付いてくる。11-03）。根を留める定義では、根が点と同じに留まるので何もしない
+        /// </summary>
+        void CarryRootSide ()
+        {
+            if (data_.rootPin > 0 || solveOnly_ != null) return;
+            int top = -1;
+            bool several = false;
+            for (int e = 0; e < data_.effectorCount; e++) {
+                FullBodyIkEffector effector = data_.effectors[e];
+                if (effector.bone < 0 || effector.bone >= bodies_.Count || (effector.positionWeight <= 0 && effector.rotationWeight <= 0)) continue;
+                if (top < 0) {
+                    top = effector.bone;
+                    continue;
+                }
+                if (effector.bone != top) several = true;
+                top = CommonAncestor (top, effector.bone);
+                // 別の根の骨（持っている物）とつながる点があれば、ここでは扱わない
+                if (top < 0) return;
+            }
+            if (!several || top < 0 || bodyParents_[top] < 0) return;
+
+            int n = bodies_.Count;
+            for (int i = 0; i < n; i++) {
+                sidePositions_[i] = data_.positions[i];
+                sideRotations_[i] = data_.rotations[i];
+                rootSide_[i] = false;
+            }
+            // top から根へたどり、親を、元の姿勢での子との向きと場所のまま子に付ける
+            for (int child = top, parent = bodyParents_[top]; parent >= 0; child = parent, parent = bodyParents_[parent]) {
+                Quaternion rotation = (Quaternion)data_.rotations[child] * Quaternion.Inverse (solveRotations_[child]) * solveRotations_[parent];
+                Vector3 anchor = Quaternion.Inverse (solveRotations_[parent]) * (solvePositions_[child] - solvePositions_[parent]);
+                data_.rotations[parent] = Quaternion.Normalize (rotation);
+                data_.positions[parent] = (Vector3)data_.positions[child] - rotation * anchor;
+                rootSide_[parent] = true;
+            }
+            // 根の側の骨にぶら下がる、ほかの枝（top の下でも根の側でもない骨）は、親と一緒に回す（親を先に並べてあるので、前から順に）
+            for (int i = 0; i < n; i++) {
+                int parent = bodyParents_[i];
+                if (parent < 0 || rootSide_[i] || i == top || IsBelow (i, top)) continue;
+                Quaternion turn = (Quaternion)data_.rotations[parent] * Quaternion.Inverse (sideRotations_[parent]);
+                data_.rotations[i] = Quaternion.Normalize (turn * sideRotations_[i]);
+                data_.positions[i] = (Vector3)data_.positions[parent] + turn * (sidePositions_[i] - sidePositions_[parent]);
+            }
+        }
+
+        /// <summary>骨 a と b の、どちらにも共通の一番根から遠い親（自分を含む）。根が違えば -1</summary>
+        int CommonAncestor (int a, int b)
+        {
+            for (int x = a; x >= 0; x = bodyParents_[x]) {
+                if (x == b || IsBelow (b, x)) return x;
+            }
+            return -1;
         }
 
         /// <summary>元の姿勢（今の編集用の骨）をルート空間の値にして控え、ソルバーへ渡す</summary>
