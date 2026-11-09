@@ -334,6 +334,8 @@ namespace Lilium
             public Vector3 rotation;
             [Tooltip ("Twist: the object turns freely about its grip axis (hands). Fixed: the object does not turn (a hip or the back)")]
             public AttachJoint joint;
+            [Tooltip ("Attach held objects here in clips that have no attachment keys (objects that have a position for this attach point). The default definition uses the hips, so the hands stay free and the character stays in the T-pose")]
+            public bool attachedAtRest;
         }
 
         /// <summary>既定の付ける先（S104）。骨の木の親を選ぶ順（同じ種類なら並びの先）が今までの持ち方と同じになる並び</summary>
@@ -342,7 +344,8 @@ namespace Lilium
             return new List<AttachPoint> {
                 new AttachPoint { name = kRightHandAttach, bone = HumanBodyBones.RightHand, joint = AttachJoint.Twist },
                 new AttachPoint { name = kLeftHandAttach, bone = HumanBodyBones.LeftHand, joint = AttachJoint.Twist },
-                new AttachPoint { name = kHipsAttach, bone = HumanBodyBones.Hips, joint = AttachJoint.Fixed },
+                // キーの無いクリップでは腰に付ける（手は物へ伸びず、キャラは T ポーズのまま。11-09 ユーザー指示「持ち位置のデフォルトを設定できるように。デフォルトは腰」）
+                new AttachPoint { name = kHipsAttach, bone = HumanBodyBones.Hips, joint = AttachJoint.Fixed, attachedAtRest = true },
             };
         }
 

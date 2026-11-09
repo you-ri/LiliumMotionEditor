@@ -23,7 +23,7 @@ MonoBehaviour:
   autoBake: 1
   layers:
     write: EditingRig
-    manipulate: EditingRig
+    manipulate: FullBodyIk
     values:
     - id: EditingRig
       enabled: 1
@@ -55,6 +55,7 @@ MonoBehaviour:
     prefab: {fileID: 919132149155446097, guid: 4d161f212dbd1c644bb3a2ae1b99d7c4, type: 3}
     path: 
     parentBone: 18
+    detachedInWorld: 1
     frame: 2
     restPosition: {x: 0, y: -0.25, z: 0.3}
     restRotation: {x: 35, y: 0, z: 0}
@@ -74,19 +75,16 @@ MonoBehaviour:
     gripAxis: {x: 0, y: 1, z: 0}
     attachments:
     - point: RightHand
-      attached: 1
       position: {x: 0.03, y: 0.026790928, z: -0.057453334}
       rotation: {x: 310, y: 180, z: 89.99998}
       bakeParent: 0
       constraint: 
     - point: LeftHand
-      attached: 1
       position: {x: -0.03, y: -0.123209074, z: -0.057453334}
       rotation: {x: 310, y: 180, z: 270.00003}
       bakeParent: 0
       constraint: 
     - point: Hips
-      attached: 0
       position: {x: -0.17319524, y: 0.24620184, z: -0.016972303}
       rotation: {x: 44.355087, y: 17.033648, z: 192.08897}
       bakeParent: 1

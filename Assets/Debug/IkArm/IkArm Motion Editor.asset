@@ -50,6 +50,7 @@ MonoBehaviour:
     prefab: {fileID: 919132149155446097, guid: 8beab8b997145244c85aa544a6aa78a8, type: 3}
     path: 
     parentBone: 55
+    detachedInWorld: 0
     frame: 0
     restPosition: {x: 0.8099263, y: 1.4188172, z: -0.05029428}
     restRotation: {x: 90, y: 0, z: 0}
@@ -69,7 +70,7 @@ MonoBehaviour:
     gripAxis: {x: 0, y: 1, z: 0}
     attachments:
     - point: RightHand
-      attached: 1
       position: {x: -0.103438795, y: -0.015112049, z: -0.036683206}
       rotation: {x: 270, y: 0, z: 0}
+      bakeParent: 0
       constraint: 

@@ -33,6 +33,14 @@ namespace Lilium
             definition_ = EditRigDefinition.CreateDefault ();
             created_.Add (definition_);
             RigTestFixture.UseFreeDefaults (definition_);
+            // キーの無いクリップでは両手で持つ（既定の定義は腰。腰で持つテストは AttachAtRest で変える）
+            AttachAtRest (kRight, kLeft);
+        }
+
+        /// <summary>リグ定義で、キーの無いクリップで付けておく先をこれだけにする</summary>
+        void AttachAtRest (params string[] points)
+        {
+            foreach (EditRigDefinition.AttachPoint point in definition_.attachPoints) point.attachedAtRest = System.Array.IndexOf (points, point.name) >= 0;
         }
 
         [TearDown]
@@ -66,8 +74,8 @@ namespace Lilium
                 restPosition = frame == HeldObjectFrame.Root ? new Vector3 (0, 1.2f, 0.25f) : new Vector3 (0, -0.1f, 0.3f),
                 restRotation = Vector3.zero,
                 attachments = new List<HeldObjectAttachment> {
-                    new HeldObjectAttachment { point = kRight, attached = true, position = new Vector3 (0, 0.08f, -0.05f), rotation = Vector3.zero },
-                    new HeldObjectAttachment { point = kLeft, attached = true, position = new Vector3 (0, -0.08f, -0.05f), rotation = Vector3.zero },
+                    new HeldObjectAttachment { point = kRight, position = new Vector3 (0, 0.08f, -0.05f), rotation = Vector3.zero },
+                    new HeldObjectAttachment { point = kLeft, position = new Vector3 (0, -0.08f, -0.05f), rotation = Vector3.zero },
                 },
             };
         }
@@ -336,10 +344,37 @@ namespace Lilium
         }
 
         [Test]
+        public void DefaultDefinition_ClipsWithoutKeys_ObjectOnHips_CharacterInTPose ()
+        {
+            // 11-09 ユーザー指示「ディフォルトは腰。あとキャラクターはTポーズにする」。既定の定義のまま（手は付けない）
+            definition_.attachPoints = EditRigDefinition.CreateDefaultAttachPoints ();
+            CollectionAssert.AreEqual (new[] { kHips }, definition_.attachPoints.Where (p => p.attachedAtRest).Select (p => p.name).ToArray (), "既定は腰だけ");
+            PoseSession session = Open (CreateObjectWithHips ());
+            HeldObjectRig.Entry entry = Entry (session);
+            Transform root = session.stage.editingRoot;
+            session.stage.editingRig.ResetBonesToRest ();
+            Dictionary<Transform, (Vector3, Quaternion)> rest = new Dictionary<Transform, (Vector3, Quaternion)> ();
+            foreach (Transform bone in root.GetComponentsInChildren<Transform> (true)) {
+                if (!bone.IsChildOf (entry.editing) && !bone.IsChildOf (session.stage.editingRig.controlsRoot)) rest[bone] = (bone.localPosition, bone.localRotation);
+            }
+            session.Evaluate (0);
+            Assert.IsTrue (Attach (session, kHips).attached, "腰に付ける");
+            Assert.IsFalse (Attach (session, kRight).attached, "手は付けない");
+            Assert.IsFalse (Attach (session, kLeft).attached, "手は付けない");
+            foreach (KeyValuePair<Transform, (Vector3, Quaternion)> pair in rest) {
+                Assert.LessOrEqual (Vector3.Distance (pair.Value.Item1, pair.Key.localPosition), 1e-4f, pair.Key.name + " の場所が T ポーズのまま");
+                Assert.LessOrEqual (Quaternion.Angle (pair.Value.Item2, pair.Key.localRotation), 0.01f, pair.Key.name + " の向きが T ポーズのまま");
+            }
+            session.stage.heldObjects.GetSettingsWorld (Attach (session, kHips), out Vector3 onHips, out Quaternion unused);
+            Assert.LessOrEqual (Vector3.Distance (onHips, entry.editing.position), kGripTolerance, "物は腰の決まった位置");
+        }
+
+        [Test]
         public void RestAttachment_ClipsWithoutKeys_SitOnHipsWithFreeHands ()
         {
+            // キーの無いクリップで付けておく先はリグ定義の付ける先で決める（11-09 ユーザー指示「rig define に持ち位置のデフォルトを設定できるようにする。デフォルトは腰」）
             HeldObjectDefinition definition = CreateObjectWithHips ();
-            foreach (HeldObjectAttachment attachment in definition.attachments) attachment.attached = attachment.point == kHips;
+            AttachAtRest (kHips);
             PoseSession session = Open (definition);
             session.Evaluate (0);
             Assert.IsTrue (Attach (session, kHips).attached);
@@ -1421,7 +1456,7 @@ namespace Lilium
         {
             // 回らない先（腰）のハンドルは物そのもの: 動かすと、腰は動かず物が動く
             HeldObjectDefinition definition = CreateObjectWithHips ();
-            foreach (HeldObjectAttachment attachment in definition.attachments) attachment.attached = attachment.point == kHips;
+            AttachAtRest (kHips);
             PoseSession session = Open (definition);
             session.Evaluate (0);
             HeldObjectRig rig = session.stage.heldObjects;
@@ -1501,6 +1536,90 @@ namespace Lilium
                 Assert.LessOrEqual (Quaternion.Angle (rotation, Quaternion.Normalize (bakedRotation)), 0.1f, frame + " フレームの向き");
             }
             Assert.Greater (Vector3.Distance (entry.editing.localPosition, Bone (session, HumanBodyBones.Hips).InverseTransformPoint (entry.editing.position)), 0.05f, "右手から見た値とは違う");
+        }
+
+        [Test]
+        public void DetachedInWorld_StaysWhenHipsMove_AndDoesNotJumpWhenDetaching ()
+        {
+            // 11-09 ユーザー報告「いまの状態だと hips を動かすと剣がついてくる」。どこにも付けていない間は、枠の骨（胸）でなくワールドに留まる
+            HeldObjectDefinition definition = CreateObject ();
+            definition.detachedInWorld = true;
+            PoseSession session = Open (definition);
+            HeldObjectRig.Entry entry = Entry (session);
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (30);
+            Vector3 before = entry.editing.position;
+            entry.DetachAll ();
+            session.SolveAfterEdit ();
+            Assert.LessOrEqual (Vector3.Distance (before, entry.editing.position), kJumpTolerance, "外しても動かない");
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (30);
+            Vector3 detached = entry.editing.position;
+            Assert.LessOrEqual (Vector3.Distance (before, detached), kGripTolerance, "外したキーで同じ所");
+            session.Evaluate (29);
+            Assert.IsTrue (entry.anyAttached, "前のフレームは付いている");
+            Assert.LessOrEqual (Vector3.Distance (detached, entry.editing.position), 0.01f, "外すキーの前で跳ばない");
+
+            session.Evaluate (30);
+            Assert.IsTrue (entry.inWorld);
+            Point (session, HumanBodyBones.Hips).MoveBy (new Vector3 (0.2f, -0.1f, 0.1f));
+            session.SolveAfterEdit ();
+            Assert.LessOrEqual (Vector3.Distance (detached, entry.editing.position), kGripTolerance, "腰を動かしても物はワールドに留まる");
+        }
+
+        [Test]
+        public void Detached_FollowsTheFrameBone_WithoutDetachedInWorld ()
+        {
+            // 既定（detachedInWorld が切）では、今までどおり枠の骨（胸）に付いて動く
+            PoseSession session = Open (CreateObject ());
+            HeldObjectRig.Entry entry = Entry (session);
+            session.Evaluate (0);
+            entry.DetachAll ();
+            session.SolveAfterEdit ();
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (0);
+            Vector3 detached = entry.editing.position;
+            Point (session, HumanBodyBones.Hips).MoveBy (new Vector3 (0.2f, 0, 0));
+            session.SolveAfterEdit ();
+            Assert.Greater (Vector3.Distance (detached, entry.editing.position), 0.1f, "胸に付いて動く");
+        }
+
+        [Test]
+        public void Bake_WhileDetachedInWorld_CurvesAreInWorld ()
+        {
+            // 11-09 ユーザー指示「どれにもアタッチしてない場合はワールドに」。どこにも付けていない間は Animator の GameObject から見た値
+            HeldObjectDefinition definition = CreateObject ();
+            definition.detachedInWorld = true;
+            PoseSession session = Open (definition);
+            session.Evaluate (0);
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (30);
+            Entry (session).DetachAll ();
+            session.SolveAfterEdit ();
+            Assert.IsNull (session.CommitPose ());
+            AnimationClip baked = NewClip ();
+            using (HumanoidBaker baker = session.stage.CreateHumanoidBaker ()) {
+                baker.afterSolve = () => session.stage.SolveLockedSpan (1);
+                baker.Bake (session.clip, baked);
+            }
+            HeldObjectRig.Entry entry = Entry (session);
+            string path = AnimationUtility.CalculateTransformPath (entry.display, session.stage.animator.transform);
+
+            foreach ((int frame, bool detached) in new[] { (10, false), (40, true) }) {
+                session.Evaluate (frame);
+                Assert.AreEqual (detached, !entry.anyAttached);
+                Transform parent = detached ? session.stage.editingRoot : entry.editing.parent;
+                Vector3 position = parent.InverseTransformPoint (entry.editing.position);
+                Quaternion rotation = Quaternion.Inverse (parent.rotation) * entry.editing.rotation;
+                float time = frame / baked.frameRate;
+                Vector3 bakedPosition = new Vector3 (BakedValue (baked, path, "m_LocalPosition.x", time), BakedValue (baked, path, "m_LocalPosition.y", time), BakedValue (baked, path, "m_LocalPosition.z", time));
+                Quaternion bakedRotation = new Quaternion (BakedValue (baked, path, "m_LocalRotation.x", time), BakedValue (baked, path, "m_LocalRotation.y", time),
+                    BakedValue (baked, path, "m_LocalRotation.z", time), BakedValue (baked, path, "m_LocalRotation.w", time));
+                Assert.LessOrEqual (Vector3.Distance (position, bakedPosition), kGripTolerance, frame + " フレームの場所");
+                Assert.LessOrEqual (Quaternion.Angle (rotation, Quaternion.Normalize (bakedRotation)), 0.1f, frame + " フレームの向き");
+            }
+            Assert.Greater (Vector3.Distance (entry.editing.localPosition, session.stage.editingRoot.InverseTransformPoint (entry.editing.position)), 0.05f, "右手から見た値とは違う");
         }
 
         static float BakedValue (AnimationClip clip, string path, string property, float time)

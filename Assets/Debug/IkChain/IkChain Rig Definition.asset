@@ -202,6 +202,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RootRight
     bone: 0
@@ -223,6 +224,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RootFront
     bone: 0
@@ -244,6 +246,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Joint1
     bone: 0
@@ -265,6 +268,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Joint2
     bone: 0
@@ -286,6 +290,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Joint3
     bone: 0
@@ -307,6 +312,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Joint4
     bone: 0
@@ -328,6 +334,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Joint5
     bone: 0
@@ -349,6 +356,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: EndJoint
     bone: 0
@@ -370,6 +378,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: End
     bone: 0
@@ -391,6 +400,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: EndRight
     bone: 0
@@ -412,6 +422,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: EndFront
     bone: 0
@@ -433,3 +444,6 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
+  attachPoints: []
+  loopJoints: []

@@ -1217,7 +1217,7 @@ namespace Lilium
                             bone = !string.IsNullOrEmpty (a.point.control) ? a.point.control : a.point.bone.ToString (),
                             joint = a.point.joint.ToString (),
                             hasSettings = a.hasSettings,
-                            attachedAtRest = a.settings != null && a.settings.attached,
+                            attachedAtRest = a.rest >= 0.5f,
                             position = a.settings != null ? a.settings.position : Vector3.zero,
                         }),
                     });

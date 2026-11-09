@@ -616,6 +616,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -637,6 +638,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightHand
     bone: 18
@@ -658,6 +660,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Chest
     bone: 54
@@ -679,6 +682,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: ChestDirection
     bone: 54
@@ -700,6 +704,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -721,6 +726,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -742,6 +748,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightShoulder
     bone: 12
@@ -763,6 +770,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 1
+    defaultState: 0
   attachPoints:
   - name: RightHand
     bone: 18
@@ -770,3 +778,5 @@ MonoBehaviour:
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 0
+    attachedAtRest: 0
+  loopJoints: []

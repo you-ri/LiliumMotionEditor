@@ -116,6 +116,8 @@ namespace Lilium
                         else held.SetAttached (attachment, attach);
                     }
                     HeldObjectRig.ApplyConstraintWeights (entry);
+                    // ワールドに留める物は、付け外しで値の基準が変わるので、今の姿勢を変えた後の基準で入れ直す
+                    if (entry.definition.detachedInWorld) held.StoreValues (entry);
                     entry.keysPending = true;
                 }
                 bool place = item.position.sqrMagnitude > kEpsilon;

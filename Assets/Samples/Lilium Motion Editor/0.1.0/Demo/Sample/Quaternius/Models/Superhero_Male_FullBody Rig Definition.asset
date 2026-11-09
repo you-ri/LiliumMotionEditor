@@ -39,6 +39,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 1
     position: 0
     fullBodySolve: 1
@@ -60,6 +61,7 @@ MonoBehaviour:
         min: -62
         max: 62
       slack: 15
+    ownWeightOnly: 0
   - bone: 2
     position: 0
     fullBodySolve: 1
@@ -81,6 +83,7 @@ MonoBehaviour:
         min: -62
         max: 62
       slack: 15
+    ownWeightOnly: 0
   - bone: 3
     position: 0
     fullBodySolve: 1
@@ -102,6 +105,7 @@ MonoBehaviour:
         min: -7
         max: 7
       slack: 15
+    ownWeightOnly: 0
   - bone: 4
     position: 0
     fullBodySolve: 1
@@ -123,6 +127,7 @@ MonoBehaviour:
         min: -7
         max: 7
       slack: 15
+    ownWeightOnly: 0
   - bone: 5
     position: 0
     fullBodySolve: 1
@@ -144,6 +149,7 @@ MonoBehaviour:
         min: -30
         max: 30
       slack: 15
+    ownWeightOnly: 0
   - bone: 6
     position: 0
     fullBodySolve: 1
@@ -165,6 +171,7 @@ MonoBehaviour:
         min: -30
         max: 30
       slack: 15
+    ownWeightOnly: 0
   - bone: 7
     position: 0
     fullBodySolve: 1
@@ -186,6 +193,7 @@ MonoBehaviour:
         min: -40
         max: 40
       slack: 15
+    ownWeightOnly: 0
   - bone: 8
     position: 0
     fullBodySolve: 1
@@ -207,6 +215,7 @@ MonoBehaviour:
         min: -40
         max: 40
       slack: 15
+    ownWeightOnly: 0
   - bone: 9
     position: 0
     fullBodySolve: 1
@@ -228,6 +237,7 @@ MonoBehaviour:
         min: -39
         max: 39
       slack: 15
+    ownWeightOnly: 0
   - bone: 10
     position: 0
     fullBodySolve: 1
@@ -249,6 +259,7 @@ MonoBehaviour:
         min: -40
         max: 40
       slack: 15
+    ownWeightOnly: 0
   - bone: 11
     position: 0
     fullBodySolve: 1
@@ -270,6 +281,7 @@ MonoBehaviour:
         min: -31
         max: 9
       slack: 15
+    ownWeightOnly: 0
   - bone: 12
     position: 0
     fullBodySolve: 1
@@ -291,6 +303,7 @@ MonoBehaviour:
         min: -9
         max: 31
       slack: 15
+    ownWeightOnly: 0
   - bone: 13
     position: 0
     fullBodySolve: 1
@@ -312,6 +325,7 @@ MonoBehaviour:
         min: -59
         max: 102
       slack: 15
+    ownWeightOnly: 0
   - bone: 14
     position: 0
     fullBodySolve: 1
@@ -333,6 +347,7 @@ MonoBehaviour:
         min: -102
         max: 59
       slack: 15
+    ownWeightOnly: 0
   - bone: 15
     position: 0
     fullBodySolve: 1
@@ -354,6 +369,7 @@ MonoBehaviour:
         min: -15
         max: 2
       slack: 15
+    ownWeightOnly: 0
   - bone: 16
     position: 0
     fullBodySolve: 1
@@ -375,6 +391,7 @@ MonoBehaviour:
         min: -2
         max: 15
       slack: 15
+    ownWeightOnly: 0
   - bone: 17
     position: 0
     fullBodySolve: 1
@@ -396,6 +413,7 @@ MonoBehaviour:
         min: -80
         max: 80
       slack: 15
+    ownWeightOnly: 0
   - bone: 18
     position: 0
     fullBodySolve: 1
@@ -417,6 +435,7 @@ MonoBehaviour:
         min: -80
         max: 80
       slack: 15
+    ownWeightOnly: 0
   - bone: 19
     position: 0
     fullBodySolve: 1
@@ -438,6 +457,7 @@ MonoBehaviour:
         min: 0
         max: -0
       slack: 15
+    ownWeightOnly: 0
   - bone: 20
     position: 0
     fullBodySolve: 1
@@ -459,6 +479,7 @@ MonoBehaviour:
         min: 0
         max: -0
       slack: 15
+    ownWeightOnly: 0
   - bone: 21
     position: 0
     fullBodySolve: 0
@@ -480,6 +501,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 22
     position: 0
     fullBodySolve: 0
@@ -501,6 +523,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 23
     position: 0
     fullBodySolve: 0
@@ -522,6 +545,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 24
     position: 0
     fullBodySolve: 0
@@ -543,6 +567,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 25
     position: 0
     fullBodySolve: 0
@@ -564,6 +589,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 26
     position: 0
     fullBodySolve: 0
@@ -585,6 +611,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 27
     position: 0
     fullBodySolve: 0
@@ -606,6 +633,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 28
     position: 0
     fullBodySolve: 0
@@ -627,6 +655,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 29
     position: 0
     fullBodySolve: 0
@@ -648,6 +677,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 30
     position: 0
     fullBodySolve: 0
@@ -669,6 +699,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 31
     position: 0
     fullBodySolve: 0
@@ -690,6 +721,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 32
     position: 0
     fullBodySolve: 0
@@ -711,6 +743,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 33
     position: 0
     fullBodySolve: 0
@@ -732,6 +765,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 34
     position: 0
     fullBodySolve: 0
@@ -753,6 +787,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 35
     position: 0
     fullBodySolve: 0
@@ -774,6 +809,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 36
     position: 0
     fullBodySolve: 0
@@ -795,6 +831,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 37
     position: 0
     fullBodySolve: 0
@@ -816,6 +853,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 38
     position: 0
     fullBodySolve: 0
@@ -837,6 +875,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 39
     position: 0
     fullBodySolve: 0
@@ -858,6 +897,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 40
     position: 0
     fullBodySolve: 0
@@ -879,6 +919,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 41
     position: 0
     fullBodySolve: 0
@@ -900,6 +941,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 42
     position: 0
     fullBodySolve: 0
@@ -921,6 +963,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 43
     position: 0
     fullBodySolve: 0
@@ -942,6 +985,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 44
     position: 0
     fullBodySolve: 0
@@ -963,6 +1007,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 45
     position: 0
     fullBodySolve: 0
@@ -984,6 +1029,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 46
     position: 0
     fullBodySolve: 0
@@ -1005,6 +1051,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 47
     position: 0
     fullBodySolve: 0
@@ -1026,6 +1073,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 48
     position: 0
     fullBodySolve: 0
@@ -1047,6 +1095,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 49
     position: 0
     fullBodySolve: 0
@@ -1068,6 +1117,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 50
     position: 0
     fullBodySolve: 0
@@ -1089,6 +1139,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 51
     position: 0
     fullBodySolve: 0
@@ -1110,6 +1161,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 52
     position: 0
     fullBodySolve: 0
@@ -1131,6 +1183,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 53
     position: 0
     fullBodySolve: 0
@@ -1152,6 +1205,7 @@ MonoBehaviour:
         min: -45
         max: 45
       slack: 15
+    ownWeightOnly: 0
   - bone: 54
     position: 0
     fullBodySolve: 1
@@ -1173,6 +1227,7 @@ MonoBehaviour:
         min: -20
         max: 20
       slack: 15
+    ownWeightOnly: 0
   extraControls: []
   bodyPoints:
   - enabled: 1
@@ -1196,6 +1251,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftUpperLeg
     bone: 1
@@ -1217,6 +1273,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightUpperLeg
     bone: 2
@@ -1238,6 +1295,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftLowerLeg
     bone: 3
@@ -1259,6 +1317,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightLowerLeg
     bone: 4
@@ -1280,6 +1339,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftFoot
     bone: 5
@@ -1301,6 +1361,7 @@ MonoBehaviour:
     contact: 1
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -1322,6 +1383,7 @@ MonoBehaviour:
     contact: 1
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Neck
     bone: 9
@@ -1343,6 +1405,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Head
     bone: 10
@@ -1364,6 +1427,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftUpperArm
     bone: 13
@@ -1385,6 +1449,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightUpperArm
     bone: 14
@@ -1406,6 +1471,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftLowerArm
     bone: 15
@@ -1427,6 +1493,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightLowerArm
     bone: 16
@@ -1448,6 +1515,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftHand
     bone: 17
@@ -1469,6 +1537,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightHand
     bone: 18
@@ -1490,6 +1559,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Chest
     bone: 54
@@ -1511,6 +1581,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: Stomach
     bone: 7
@@ -1532,6 +1603,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: HipsDirection
     bone: 0
@@ -1553,6 +1625,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: ChestDirection
     bone: 54
@@ -1574,6 +1647,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: HeadDirection
     bone: 10
@@ -1595,6 +1669,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: HeadTop
     bone: 10
@@ -1616,6 +1691,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftHeel
     bone: 5
@@ -1637,6 +1713,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftSoleBall
     bone: 5
@@ -1658,6 +1735,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftLittleToeSide
     bone: 5
@@ -1679,6 +1757,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftToeTip
     bone: 19
@@ -1700,6 +1779,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftPalmIndex
     bone: 17
@@ -1721,6 +1801,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftPalmLittle
     bone: 17
@@ -1742,6 +1823,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightHeel
     bone: 6
@@ -1763,6 +1845,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightSoleBall
     bone: 6
@@ -1784,6 +1867,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightLittleToeSide
     bone: 6
@@ -1805,6 +1889,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightToeTip
     bone: 20
@@ -1826,6 +1911,7 @@ MonoBehaviour:
     contact: 1
     radius: 0.02
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightPalmIndex
     bone: 18
@@ -1847,6 +1933,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: RightPalmLittle
     bone: 18
@@ -1868,6 +1955,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 0
+    defaultState: 0
   - enabled: 1
     name: LeftShoulder
     bone: 11
@@ -1889,6 +1977,7 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 1
+    defaultState: 0
   - enabled: 1
     name: RightShoulder
     bone: 12
@@ -1910,22 +1999,27 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 1
+    defaultState: 0
   attachPoints:
   - name: RightHand
     bone: 18
-    control:
+    control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 0
+    attachedAtRest: 0
   - name: LeftHand
     bone: 17
-    control:
+    control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 0
+    attachedAtRest: 0
   - name: Hips
     bone: 0
-    control:
+    control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 1
+    attachedAtRest: 1
+  loopJoints: []

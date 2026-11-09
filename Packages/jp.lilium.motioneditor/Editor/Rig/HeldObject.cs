@@ -26,8 +26,6 @@ namespace Lilium
     {
         [Tooltip ("Name of the attach point in the rig definition")]
         public string point;
-        [Tooltip ("Attach the object here in clips that have no attachment keys")]
-        public bool attached;
         [Tooltip ("Where the attach point's frame is, in the object's local space (meters)")]
         public Vector3 position;
         [Tooltip ("Attach frame orientation in the object's local space (Euler angles). Zero aligns the axes that were body right, up and forward in the T-pose with the object's X, Y and Z")]
@@ -69,6 +67,8 @@ namespace Lilium
         public string path;
         [Tooltip ("Bone that parents the object in the hierarchy. Baked curves are local to this parent, so a hand keeps the object on that hand in the game at any playback speed. Last Bone parents it to the Animator's GameObject, but the game can then play the object away from the body, because the Animator aligns the clip's body orientation and position")]
         public HumanBodyBones parentBone = HumanBodyBones.RightHand;
+        [Tooltip ("While the object is attached nowhere, it stays in the world: it does not follow the frame bone when the body moves, and its curves are baked relative to the Animator's GameObject (the clip's world) instead of the parent bone, for example a sword put down on the ground. The game must take the object off the parent bone while it is attached nowhere")]
+        public bool detachedInWorld;
         [Tooltip ("Bone the object's keyed pose is relative to. Chest keeps the object with the body when the hips move")]
         public HeldObjectFrame frame = HeldObjectFrame.Chest;
         [Tooltip ("Position with no keys, from the frame bone along body right, up and forward (meters)")]
@@ -79,7 +79,7 @@ namespace Lilium
         public List<HeldObjectPoint> points = new List<HeldObjectPoint> ();
         [Tooltip ("The handle axis, in the object's local space. Attach points with the Twist joint (hands) can turn freely around it")]
         public Vector3 gripAxis = Vector3.up;
-        [Tooltip ("Where the object goes on each attach point of the rig definition (optional), whether it is attached there in clips with no keys, and the game constraint to bake")]
+        [Tooltip ("Where the object goes on each attach point of the rig definition (optional), how to bake it there, and the game constraint to bake. Whether it is attached there in clips with no keys is set on the rig definition's attach point")]
         public List<HeldObjectAttachment> attachments = new List<HeldObjectAttachment> ();
 
         /// <summary>この付ける先の決まった位置（無ければ null）</summary>
@@ -153,7 +153,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 物のモデルの空（Grip_R・Grip_L）から、右手・左手の付ける先（既定の定義の名前）の位置を入れ、キーの無いクリップで付けておく。空が無ければ変えない
+        /// 物のモデルの空（Grip_R・Grip_L）から、右手・左手の付ける先（既定の定義の名前）の位置を入れる。空が無ければ変えない。
+        /// キーの無いクリップで付けておくかは、リグ定義の付ける先が決める（AttachPoint.attachedAtRest）
         /// </summary>
         public void LoadGrips (GameObject model)
         {
@@ -167,7 +168,6 @@ namespace Lilium
             Transform empty = model.Find (name);
             if (empty == null) return;
             HeldObjectAttachment attachment = GetOrAddAttachment (point);
-            attachment.attached = true;
             attachment.position = model.InverseTransformPoint (empty.position);
             attachment.rotation = (Quaternion.Inverse (model.rotation) * empty.rotation).eulerAngles;
         }
@@ -420,6 +420,27 @@ namespace Lilium
             }
 
             /// <summary>
+            /// 今、ワールドに留めているか（物の設定で detachedInWorld にして、どこにも付けていない）。物の姿勢の値は、枠の骨から見た値でなく、
+            /// 基準姿勢の枠の骨の場所から見た値（ルートから見て動かない。キーの無いクリップの基準の値も同じ所に出る）
+            /// </summary>
+            public bool inWorld
+            {
+                get { return definition.detachedInWorld && !anyAttached; }
+            }
+
+            /// <summary>
+            /// キーの間で、前後の物のキーの基準（ワールドか枠の骨）が違うか（ApplyAttachKeys が決める。付け外しをまたぐ区間）。
+            /// その間の物の姿勢は、2 つのキーをそれぞれの基準で置いてから補間する
+            /// </summary>
+            internal bool spanMixed;
+            internal bool spanFromWorld;
+            internal Vector3 spanFromPosition;
+            internal Quaternion spanFromRotation = Quaternion.identity;
+            internal Vector3 spanToPosition;
+            internal Quaternion spanToRotation = Quaternion.identity;
+            internal float spanWeight;
+
+            /// <summary>
             /// 物の設定の決まった位置で target に付く所へ、物を動かす（まだ付けない。付けている骨は付いてくる）。全身は引かない。
             /// 寄せる所は、呼んだときの target の骨（解いた姿勢）で決める。物の方が寄り、target の骨は動かない。
             /// 寄せている間は、物を target の骨に回らない関節で付けて解く（物は寄せた所からずれない。届かない骨は届かないまま。S91f の差すときの運び方と同じ）。
@@ -438,6 +459,8 @@ namespace Lilium
             {
                 foreach (Attachment item in attachments) item.values.attached = 0;
                 ApplyConstraintWeights (this);
+                // ワールドに留める物は、値の基準が変わるので今の姿勢を入れ直す（入れ直さないと、枠から見た値をワールドから見た値として読んで跳ぶ）
+                if (definition.detachedInWorld) rig.StoreValues (this);
                 keysPending = true;
             }
 
@@ -592,7 +615,8 @@ namespace Lilium
         /// <summary>
         /// 焼く値をどの骨から見た値にするか: 付けている先のうち、物の設定で bakeParent にした先の骨（腰に差している剣なら腰。11-09 ユーザー指示
         /// 「腰にアタッチした際は、hips を親ボーンにする」）。いくつもあれば、物を子にする先と同じ決まり（回らない先が先、同じ種類ならリグ定義の並び）。
-        /// どれも付けていなければ null（親の骨から見た値）
+        /// どこにも付けていないときは、物の設定で detachedInWorld にしていればワールド（Animator の GameObject。クリップの中のワールド。11-09 ユーザー指示
+        /// 「どれにもアタッチしてない場合はワールドに」）。それ以外は null（親の骨から見た値）
         /// </summary>
         Transform BakeParent (Entry entry, bool fromDisplay)
         {
@@ -601,8 +625,9 @@ namespace Lilium
                 if (attachment.settings == null || !attachment.settings.bakeParent || !attachment.attached) continue;
                 if (found == null || (!attachment.twists && found.twists)) found = attachment;
             }
-            if (found == null) return null;
-            return fromDisplay ? rig_.GetDisplayBone (found.bone) : found.bone;
+            if (found != null) return fromDisplay ? rig_.GetDisplayBone (found.bone) : found.bone;
+            if (entry.inWorld) return fromDisplay ? rig_.displayAnimator.transform : rig_.root.transform;
+            return null;
         }
 
         /// <summary>リグ定義の付ける先ごとに、値のコントロールを作る（キャラに骨の無い先は知らせて飛ばす）</summary>
@@ -629,7 +654,8 @@ namespace Lilium
                     frameRotation = body_ * Quaternion.Euler (point.rotation),
                     gripPosition = settings != null ? settings.position : Vector3.zero,
                     gripRotation = settings != null ? Quaternion.Euler (settings.rotation) : Quaternion.identity,
-                    rest = settings != null && settings.attached ? 1 : 0,
+                    // キーの無いクリップで付けておくのは、リグ定義でそうした先のうち、物の決まった位置がある先（無い先は付ける位置が決まらない）
+                    rest = point.attachedAtRest && settings != null ? 1 : 0,
                 };
                 attachment.values.attached = attachment.rest;
                 entry.attachments.Add (attachment);
@@ -765,6 +791,7 @@ namespace Lilium
                     attachment.values.attached = attachment.rest;
                     attachment.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
                 }
+                entry.spanMixed = false;
                 ApplyConstraintWeights (entry);
             }
         }
@@ -777,22 +804,70 @@ namespace Lilium
         public void ApplyAttachKeys (AnimationClip clip, float time)
         {
             if (clip == null) return;
-            float margin = 0.5f / clip.frameRate;
             foreach (Entry entry in entries_) {
-                bool keyed = TryGetObjectKey (clip, entry, time, out Keyframe last);
-                bool anyObjectKey = EditingClip.TryGetNextStepKey (clip, RigPaths.Object (entry.name), typeof (Transform), kObjectKeyProperty, -1, out Keyframe firstObject);
                 foreach (Attachment attachment in entry.attachments) {
-                    string path = RigPaths.ObjectAttach (entry.name, attachment.name);
-                    bool found = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, time, out Keyframe key);
-                    // 物のキーより後から足した先か（先頭の物のキーにその先のキーが無い）
-                    bool addedLater = anyObjectKey && EditingClip.TryGetNextStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, -1, out Keyframe first)
-                        && first.time > firstObject.time + margin;
-                    if (found && (!addedLater || !keyed || key.time >= last.time - margin)) attachment.values.attached = key.value;
-                    else attachment.values.attached = keyed ? 0 : attachment.rest;
+                    attachment.values.attached = AttachedValue (clip, attachment, time);
                     ApplyGripKeys (clip, attachment, time);
                 }
                 ApplyConstraintWeights (entry);
+                ApplyWorldSpan (clip, entry, time);
             }
+        }
+
+        /// <summary>その時刻の、付けているかの値（ApplyAttachKeys の決まり）</summary>
+        static float AttachedValue (AnimationClip clip, Attachment attachment, float time)
+        {
+            Entry entry = attachment.entry;
+            float margin = 0.5f / clip.frameRate;
+            bool keyed = TryGetObjectKey (clip, entry, time, out Keyframe last);
+            bool anyObjectKey = EditingClip.TryGetNextStepKey (clip, RigPaths.Object (entry.name), typeof (Transform), kObjectKeyProperty, -1, out Keyframe firstObject);
+            string path = RigPaths.ObjectAttach (entry.name, attachment.name);
+            bool found = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, time, out Keyframe key);
+            // 物のキーより後から足した先か（先頭の物のキーにその先のキーが無い）
+            bool addedLater = anyObjectKey && EditingClip.TryGetNextStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, -1, out Keyframe first)
+                && first.time > firstObject.time + margin;
+            if (found && (!addedLater || !keyed || key.time >= last.time - margin)) return key.value;
+            return keyed ? 0 : attachment.rest;
+        }
+
+        /// <summary>その時刻に、どこかに付けているか</summary>
+        static bool AnyAttachedAt (AnimationClip clip, Entry entry, float time)
+        {
+            foreach (Attachment attachment in entry.attachments) {
+                if (AttachedValue (clip, attachment, time) >= 0.5f) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// どこにも付けていない間をワールドに留める物（detachedInWorld）で、前後の物のキーの片方だけがどこにも付けていないキーなら、
+        /// キーの間は 2 つのキーをそれぞれの基準（ワールドか枠の骨）で置いた姿勢から補間する（GetPose）。
+        /// キーの値は基準ごとに違う所から見た値なので、カーブのまま補間すると、外す・付ける前のキーの間で物が別の所を通る
+        /// </summary>
+        static void ApplyWorldSpan (AnimationClip clip, Entry entry, float time)
+        {
+            entry.spanMixed = false;
+            if (!entry.definition.detachedInWorld) return;
+            string path = RigPaths.Object (entry.name);
+            if (!TryGetObjectKey (clip, entry, time, out Keyframe from)) return;
+            if (!EditingClip.TryGetNextStepKey (clip, path, typeof (Transform), kObjectKeyProperty, time, out Keyframe to) || to.time <= from.time) return;
+            bool fromWorld = !AnyAttachedAt (clip, entry, from.time);
+            bool toWorld = !AnyAttachedAt (clip, entry, to.time);
+            if (fromWorld == toWorld) return;
+            entry.spanMixed = true;
+            entry.spanFromWorld = fromWorld;
+            ReadObjectKey (clip, path, from.time, out entry.spanFromPosition, out entry.spanFromRotation);
+            ReadObjectKey (clip, path, to.time, out entry.spanToPosition, out entry.spanToRotation);
+            entry.spanWeight = SpanWeight (clip, path, from.time, to.time, time);
+        }
+
+        /// <summary>物の姿勢のキーの値（キーの時刻ちょうど。コントロールのローカルの値）</summary>
+        static void ReadObjectKey (AnimationClip clip, string path, float time, out Vector3 position, out Quaternion rotation)
+        {
+            System.Func<string, float> read = name => EditingClip.GetStepValue (clip, path, typeof (Transform), name, time, 0);
+            position = new Vector3 (read (CurveEdit.kPosition + ".x"), read (CurveEdit.kPosition + ".y"), read (CurveEdit.kPosition + ".z"));
+            Quaternion value = new Quaternion (read (CurveEdit.kRotation + ".x"), read (CurveEdit.kRotation + ".y"), read (CurveEdit.kRotation + ".z"), read (CurveEdit.kRotation + ".w"));
+            rotation = value.x == 0 && value.y == 0 && value.z == 0 && value.w == 0 ? Quaternion.identity : Quaternion.Normalize (value);
         }
 
         /// <summary>物の姿勢のカーブ（物のキーの印。どのキーにもある）の、time 以前で一番近いキー</summary>
@@ -920,17 +995,44 @@ namespace Lilium
                 rotation = entry.dragRotation;
                 return;
             }
-            GetFrame (entry, out Vector3 origin, out Quaternion turn);
-            position = origin + turn * entry.control.localPosition * rig_.humanScale;
-            rotation = turn * entry.control.localRotation;
+            if (entry.spanMixed) {
+                // 付け外しをまたぐキーの間: 2 つのキーをそれぞれの基準で置いてから補間する（ApplyWorldSpan）
+                KeyPose (entry, entry.spanFromWorld, entry.spanFromPosition, entry.spanFromRotation, out Vector3 fromPosition, out Quaternion fromRotation);
+                KeyPose (entry, !entry.spanFromWorld, entry.spanToPosition, entry.spanToRotation, out Vector3 toPosition, out Quaternion toRotation);
+                position = Vector3.Lerp (fromPosition, toPosition, entry.spanWeight);
+                rotation = Quaternion.Normalize (Quaternion.Slerp (fromRotation, toRotation, entry.spanWeight));
+                return;
+            }
+            KeyPose (entry, entry.inWorld, entry.control.localPosition, entry.control.localRotation, out position, out rotation);
         }
 
-        /// <summary>枠の今の付け根と、基準姿勢からの回り（ルート空間）</summary>
+        /// <summary>物の姿勢の値（コントロールのローカルの値）を、ワールドか枠の骨を基準に置いた姿勢（ルート空間）</summary>
+        void KeyPose (Entry entry, bool world, Vector3 value, Quaternion valueRotation, out Vector3 position, out Quaternion rotation)
+        {
+            GetFrame (entry, world, out Vector3 origin, out Quaternion turn);
+            position = origin + turn * value * rig_.humanScale;
+            rotation = turn * valueRotation;
+        }
+
+        /// <summary>今の値の基準（ワールドに留めている間はワールド）の、付け根と基準姿勢からの回り（ルート空間）</summary>
         void GetFrame (Entry entry, out Vector3 origin, out Quaternion turn)
+        {
+            GetFrame (entry, entry.inWorld, out origin, out turn);
+        }
+
+        /// <summary>
+        /// 値の基準の付け根と、基準姿勢からの回り（ルート空間）。枠の骨なら今の姿勢、ワールドなら基準姿勢の枠の骨の場所で回りなし
+        /// （ルートから見て動かない。T ポーズではどちらも同じ所なので、キーの無いクリップの基準の値はどちらでも同じ所に出る）
+        /// </summary>
+        void GetFrame (Entry entry, bool world, out Vector3 origin, out Quaternion turn)
         {
             origin = Vector3.zero;
             turn = Quaternion.identity;
             if (entry.frameBone == null) return;
+            if (world) {
+                origin = rig_.GetRestRootPosition (entry.frameBone);
+                return;
+            }
             Transform root = rig_.root.transform;
             origin = root.InverseTransformPoint (entry.frameBone.position);
             turn = Quaternion.Inverse (root.rotation) * entry.frameBone.rotation * Quaternion.Inverse (entry.frameRest);
@@ -1332,9 +1434,10 @@ namespace Lilium
             return origin + rig_.BodyToRoot (entry.definition.restPosition);
         }
 
-        /// <summary>今の物の姿勢を、今の枠から見た値へ入れる</summary>
-        void StoreValues (Entry entry)
+        /// <summary>今の物の姿勢を、今の枠（ワールドに留めている間はワールド）から見た値へ入れる。入れた値がキーの間の補間より優先する</summary>
+        internal void StoreValues (Entry entry)
         {
+            entry.spanMixed = false;
             GetFrame (entry, out Vector3 origin, out Quaternion turn);
             Quaternion inverse = Quaternion.Inverse (turn);
             entry.control.localPosition = inverse * (entry.position - origin) / rig_.humanScale;
@@ -1442,8 +1545,9 @@ namespace Lilium
             if (attachment == null) return;
             Entry entry = attachment.entry;
             if (attach) GrabAtCurrent (attachment);
-            else StoreValues (entry);
             attachment.values.attached = attach ? 1 : 0;
+            // 値は付け外しを変えた後の基準で入れる（ワールドに留める物は、付けると枠の骨から、外すとワールドから見た値になる）
+            StoreValues (entry);
             ApplyConstraintWeights (entry);
             entry.keysPending = true;
         }

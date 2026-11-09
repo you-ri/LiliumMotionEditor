@@ -28,6 +28,8 @@ namespace Lilium
         const float kWidth = 208;
 
         SpinnerElement spinner_;
+        /// <summary>選んでいる物のクラス名（名前はスピナーの下に出る。何をつかんでいるかの見分け。11-09 ユーザー指示「クラス名も追加する」）</summary>
+        Label targetType_;
         Button[] modes_;
         Toggle floorClamp_;
         ValueRow[] rows_;
@@ -81,6 +83,12 @@ namespace Lilium
 
             spinner_ = new SpinnerElement (window_);
             root.Add (spinner_);
+            targetType_ = new Label ();
+            targetType_.style.unityTextAlign = TextAnchor.MiddleCenter;
+            targetType_.style.fontSize = 9;
+            targetType_.style.opacity = 0.7f;
+            targetType_.pickingMode = PickingMode.Ignore;
+            root.Add (targetType_);
 
             rows_ = new ValueRow[3];
             rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("CONTROLLER_OVERLAY_POSITION_TOOLTIP"));
@@ -278,6 +286,9 @@ namespace Lilium
             floorClamp_.style.display = window_.hasBodyPoints ? DisplayStyle.Flex : DisplayStyle.None;
             floorClamp_.SetValueWithoutNotify (window_.floorClamp);
             spinner_.Refresh ();
+            PoseTarget target = window_.selectedTarget;
+            targetType_.text = target != null ? target.GetType ().Name : "";
+            targetType_.style.display = target != null ? DisplayStyle.Flex : DisplayStyle.None;
 
             string warning = window_.spinOverrideWarning;
             warning_.text = warning ?? "";

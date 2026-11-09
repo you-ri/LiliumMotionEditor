@@ -275,7 +275,6 @@ namespace Lilium
             held.gripAxis = axis;
             held.attachments.Add (new HeldObjectAttachment {
                 point = EditRigDefinition.kRightHandAttach,
-                attached = true,
                 position = Quaternion.Inverse (rotation) * (root.InverseTransformPoint (hand.position) - position),
                 rotation = Quaternion.Inverse (rotation).eulerAngles,
             });

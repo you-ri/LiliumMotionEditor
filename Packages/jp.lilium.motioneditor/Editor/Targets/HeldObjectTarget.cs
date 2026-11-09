@@ -218,6 +218,7 @@ namespace Lilium
         {
             if ((channels & TransformChannels.Position) != 0) entry_.control.localPosition = position / rig_.humanScale;
             if ((channels & TransformChannels.Rotation) != 0) entry_.control.localRotation = Quaternion.Normalize (rotation);
+            entry_.spanMixed = false;
             entry_.keysPending = true;
         }
 
@@ -226,6 +227,7 @@ namespace Lilium
             HeldObjectDefinition definition = entry_.definition;
             if ((channels & TransformChannels.Position) != 0) entry_.control.localPosition = rig_.BodyToRoot (definition.restPosition) / rig_.humanScale;
             if ((channels & TransformChannels.Rotation) != 0) entry_.control.localRotation = Quaternion.LookRotation (rig_.bodyForward, rig_.bodyUp) * Quaternion.Euler (definition.restRotation);
+            entry_.spanMixed = false;
             entry_.keysPending = true;
         }
 

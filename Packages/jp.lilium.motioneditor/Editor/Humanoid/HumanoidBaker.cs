@@ -421,7 +421,9 @@ namespace Lilium
                 // ゲームの Animator はクリップの体の向きと場所を揃えて再生するので、ルートの子の物だけ体からずれる（10-31 実測で 45〜60cm）
                 if (baked.parent == displayRoot) context.notes.Add (Tr ("HUMANOID_BAKER_HELD_OBJECT_UNDER_ROOT", baked.name));
                 string path = AnimationUtility.CalculateTransformPath (baked, displayRoot);
-                // 付けている先で親を替える物（腰に差した剣など。bakeParent）は、その間その先の骨から見た値を焼く（ゲームがその間、物をその骨に付ける）
+                // 付けている先で親を替える物（腰に差した剣など。bakeParent）は、その間その先の骨から見た値を焼く（ゲームがその間、物をその骨に付ける）。
+                // どこにも付けていない間をワールドにする物（detachedInWorld）は、Animator の GameObject から見た値
+
                 Transform display = baked;
                 Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, BakedLocalRotation (display, editing)));
                 Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, BakedLocalPosition (display, editing)));
