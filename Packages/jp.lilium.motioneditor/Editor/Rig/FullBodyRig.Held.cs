@@ -35,20 +35,27 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 両手で持つ物の、もう片方の手と物をつなぐ輪の関節 1 つ（S101 の FullBodyIkLoop）。握りを柄の軸へ落とした点を離さず、柄の軸まわりにだけ回る
+        /// 何か所にも付けた物の、親でない付ける先の骨と物をつなぐ輪の関節 1 つ（S101 の FullBodyIkLoop。S104 で手に限らなくした）。
+        /// 付けた位置を柄の軸へ落とした点を離さず、柄の軸まわりにだけ回る
         /// </summary>
         public struct HeldLoop
         {
-            /// <summary>手首の点（手の骨とその上の点の場所を引く）</summary>
-            public BodyPointId hand;
+            /// <summary>付ける先の骨</summary>
+            public Transform bone;
+            /// <summary>骨の上の枠の場所（骨の付け根から。基準姿勢の骨の枠・メートル。点の offset と同じ）</summary>
+            public Vector3 offset;
+            /// <summary>骨の基準姿勢の向き（ルート空間）</summary>
+            public Quaternion restRotation;
             /// <summary>物の骨</summary>
             public Transform body;
-            /// <summary>握りの場所（物のローカル。柄に沿ってずらした後）</summary>
+            /// <summary>枠の場所（物のローカル）</summary>
             public Vector3 grip;
             /// <summary>柄の軸（物のローカル）</summary>
             public Vector3 axis;
-            /// <summary>手首の点の向き（コントロールの向き）から物の向きへの差: 物の向き = 手首の点の向き × toObject</summary>
+            /// <summary>骨の基準姿勢からの回り（ルート空間）から物の向きへの差: 物の向き = 骨の回り × toObject</summary>
             public Quaternion toObject;
+            /// <summary>骨が届かなくても物を骨の方へ寄せない（物を決まった位置へ寄せている間。FullBodyIkLoop.holdB）</summary>
+            public bool holdObject;
         }
 
         /// <summary>
@@ -70,6 +77,9 @@ namespace Lilium
         /// 葉の骨のまま（握りから物の原点までの 3 割。数 cm）だと手よりずっと軽く、重い点を引くと物が先に回った
         /// </summary>
         const float kHeldExtent = 0.1f;
+
+        /// <summary>付けた物 1 つあたりの、輪の関節の数の上限（親でない付ける先の数。これを超える先は輪でつながない）</summary>
+        const int kHeldLoopsPerObject = 8;
 
         readonly List<HeldAttachment> heldAttachments_ = new List<HeldAttachment> ();
         readonly List<HeldLoop> heldLoops_ = new List<HeldLoop> ();
@@ -227,22 +237,21 @@ namespace Lilium
             };
         }
 
-        /// <summary>両手で持つ物の輪の関節を、計算用のデータへ入れる（解く前）</summary>
-        void LoadHeldLoops ()
+        /// <summary>両手で持つ物の輪の関節を、計算用のデータの first 番目から入れる（解く前。LoadLoops から）。入れ終わった数を返す</summary>
+        int LoadHeldLoops (int first)
         {
-            int loops = 0;
+            int loops = first;
             foreach (HeldLoop loop in heldLoops_) {
-                Point point = Find (loop.hand);
-                int hand = point != null ? point.body : -1;
+                int hand = loop.bone != null ? bodies_.IndexOf (loop.bone) : -1;
                 int body = bodies_.IndexOf (loop.body);
                 if (hand < 0 || body < 0 || loops >= data_.loops.Length) continue;
                 Vector3 axis = loop.axis.sqrMagnitude > 1e-8f ? loop.axis.normalized : Vector3.up;
                 Vector3 onAxis = axis * Vector3.Dot (loop.grip, axis);
                 // 握ったときの手の骨の向き q は、物の向き R から q = R × toObject⁻¹ × 点の基準の向き。手の骨の枠で見た柄の軸と、軸の上の握りの点
-                Quaternion handFromObject = Quaternion.Inverse (point.restRootRotation) * loop.toObject;
+                Quaternion handFromObject = Quaternion.Inverse (loop.restRotation) * loop.toObject;
                 data_.loops[loops++] = new FullBodyIkLoop {
                     boneA = hand,
-                    anchorA = point.offset - handFromObject * (loop.grip - onAxis),
+                    anchorA = loop.offset - handFromObject * (loop.grip - onAxis),
                     axisA = handFromObject * axis,
                     boneB = body,
                     anchorB = onAxis,
@@ -250,9 +259,10 @@ namespace Lilium
                     stiffness = kLoopGripStiffness,
                     // 柄の軸まわりの硬さの基準は握りの向き（手の骨の向き⁻¹ × 物の向き。手を握りに合わせたとき）
                     rest = Quaternion.Normalize (handFromObject),
+                    holdB = loop.holdObject ? 1 : 0,
                 };
             }
-            data_.loopCount = loops;
+            return loops;
         }
     }
 

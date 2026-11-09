@@ -87,6 +87,12 @@ namespace Lilium
         /// 持った物では握りの向きを渡す（元の姿勢の手は、持つ前のキーの手のことがある）
         /// </summary>
         public quaternion rest;
+        /// <summary>
+        /// 1 なら、仕上げで a（手）が届かなくても、b（物）を a の方へ寄せない（物を持ち物の決まった位置へ寄せている間。物が寄る側で、届かない手は届かないまま）。
+        /// 寄せている間の物は寄せる先の骨に固定してあるので、物を手の方へ寄せると寄せる先の骨ごと戻り、物でなく体の方が寄った
+        /// （11-09 ユーザー指示「寄せる ボタンは object 側が寄るように」。Pin の左手で持った物を右手へ寄せると、右手が左手の方へ 38cm 引かれた）
+        /// </summary>
+        public int holdB;
     }
 
     /// <summary>
@@ -236,6 +242,8 @@ namespace Lilium
         /// <summary>角度制限の範囲（limitMin / limitMax を、元の姿勢の値まで広げた物）と、範囲へ戻すばねの力</summary>
         internal NativeArray<float3> limitLow;
         internal NativeArray<float3> limitHigh;
+        /// <summary>元の姿勢（キーの姿勢）での、角度制限の値（SolveLimit が、動いていない軸をこの値に留める）</summary>
+        internal NativeArray<float3> limitKey;
         internal NativeArray<float> limitLambda;
         internal NativeArray<float2> rootLambda;
         internal NativeArray<float2> effectorLambda;
@@ -317,6 +325,7 @@ namespace Lilium
             d.limitReference = new NativeArray<quaternion> (boneCount, allocator);
             d.limitLow = new NativeArray<float3> (boneCount, allocator);
             d.limitHigh = new NativeArray<float3> (boneCount, allocator);
+            d.limitKey = new NativeArray<float3> (boneCount, allocator);
             d.limitLambda = new NativeArray<float> (boneCount, allocator);
             d.rootLambda = new NativeArray<float2> (boneCount, allocator);
             d.effectorLambda = new NativeArray<float2> (math.max (1, maxEffectors), allocator);
@@ -374,6 +383,7 @@ namespace Lilium
             limitReference.Dispose ();
             limitLow.Dispose ();
             limitHigh.Dispose ();
+            limitKey.Dispose ();
             limitLambda.Dispose ();
             rootLambda.Dispose ();
             effectorLambda.Dispose ();
@@ -454,6 +464,8 @@ namespace Lilium
         const int kContactPasses = 16;
         /// <summary>角度制限の外とみなす量（ラジアン）。元の姿勢ちょうどの値を、正規化の丸めの差で外と見て回さない</summary>
         const float kLimitTolerance = 1e-5f;
+        /// <summary>角度制限のある骨で、元の姿勢（キーの姿勢）の値からこれ（ラジアン）以内しか動いていない軸は、元の値に留める（SolveLimit）</summary>
+        const float kLimitHold = 1e-3f;
         /// <summary>固定の骨の目標が元の姿勢から動いたとみなす差（m・ラジアン。CarryFromMoved）</summary>
         const float kCarryTolerance = 1e-5f;
         /// <summary>点が届かないとみなす、届く長さを超えた分（m。StraightenUnreachable）</summary>
@@ -882,6 +894,14 @@ namespace Lilium
             float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, reference);
             d.limitLow[i] = math.min (bone.limitMin, angles);
             d.limitHigh[i] = math.max (bone.limitMax, angles);
+            d.limitKey[i] = angles;
+            // 解き始めの姿勢で親から見た向き（解かない骨が親に付いて動くときの向き・硬さのばねが戻す向き）も、範囲 + 遊びに収める。
+            // 解き始めの姿勢は元の姿勢（キー）とは限らない（重い点を引いて解き直すときは、道を伸ばした姿勢。FullBodyRig.StraightenPath）。
+            // 伸ばした姿勢では、引いた骨が向きを変えずに親だけが回るので、点で向きの決まらない先の骨（解かない骨）が、親から見て制限を越えたまま付いて動いた
+            // （11-08 の鎖のテストの狭い制限で、先端の骨が 71°。制限は 45°。仕上げの ClampLimits は解かない骨を回さない）
+            float3 start = LimitAngles (bone.limitFrame, bone.limitRest, d.restRelative[i]);
+            float3 hard = ClampHard (ref d, i, start);
+            if (math.any (math.abs (hard - start) > kLimitTolerance)) d.restRelative[i] = LimitRelative (bone.limitFrame, bone.limitRest, hard);
         }
 
         /// <summary>軸まわりにだけ回る関節（axisLock）の軸を、元の姿勢で親から見た向きにする</summary>
@@ -1210,6 +1230,12 @@ namespace Lilium
             float3 slack = math.max (bone.limitSlack, 0);
             float3 angles = LimitAngles (bone.limitFrame, bone.limitRest, math.mul (math.inverse (d.rotations[p]), d.rotations[i]));
             float3 hard = ClampHard (ref d, i, angles);
+            // 元の姿勢から動いていない軸は、元の値に留める。軸ごとの制限は、ほかの軸が止めに当たっても残りの軸は範囲の中なら逆らわないので、
+            // 止めに当たった関節が丸めの誤差で少しでも平面の外へ傾くと、反復のたびにその傾きが育ち、引く回ごとに手前・奥・平面のどれかの答えへ跳んだ
+            // （11-08 の枝分かれのテストの狭い制限で、枝の付け根が平面の外へ ±40° 振れ、Pin の点が 1 回 19cm〜61cm 跳んだ。Fable の見立て）
+            // 留めるのは、どれかの軸が範囲を越えている（遊びか止めに当たっている）関節だけ。当たっていない間は、制限の無いときと同じ答えにする
+            float3 key = d.limitKey[i];
+            if (math.any (angles < low - kLimitTolerance | angles > high + kLimitTolerance)) hard = math.select (hard, key, math.abs (hard - key) <= kLimitHold);
             if (math.any (math.abs (hard - angles) > kLimitTolerance)) {
                 float lambda = 0;
                 ApplyAngular (ref d, i, p, LimitCorrection (ref d, i, p, hard), 0, ref lambda);
@@ -1426,9 +1452,11 @@ namespace Lilium
             }
             d.rotations[anchor] = anchorRotation;
             float3 at = anchorOrigin + math.rotate (anchorRotation, JunctionLocal (ref d, anchor, first));
+            bool whole = true;
             for (int x = first, from = anchor; x >= 0; from = x, x = d.pathPrevious[x]) {
                 if (x == b && !leadTurns) {
                     if (leadHeld) d.rotations[b] = math.normalizesafe (effector.rotation, d.rotations[b]);
+                    whole = false;
                     break;
                 }
                 float3 inLocal = JunctionLocal (ref d, x, from);
@@ -1438,6 +1466,16 @@ namespace Lilium
                 quaternion turned = math.lengthsq (aim) > 1e-12f ? math.normalizesafe (math.mul (FromTo (segment, aim), d.rotations[x]), d.rotations[x]) : d.rotations[x];
                 d.rotations[x] = ClampToNeighbor (ref d, x, from, turned);
                 at += math.rotate (d.rotations[x], outLocal - inLocal);
+            }
+            // 制限で切った鎖は、先が目標の向きからそれる。留めた骨が回せれば、鎖を丸ごと留めた点まわりに回して、先を目標へ向ける（関節どうしの向きは変わらない）。
+            // 最初の骨を目標へ向けたまま後ろを切ると、制限で曲がったままの鎖が、届かなくなった回に 34° 回った形へ跳んだ（11-08 の枝分かれのテストの狭い制限、根を留めない定義で
+            // Pin の点が 61cm。Fable の見立て）。制限に当たらなければ、回す量は 0
+            if (anchorTurns && whole && math.lengthsq (at - start) > 1e-12f) {
+                quaternion fix = FromTo (at - start, toTarget);
+                d.rotations[anchor] = math.normalizesafe (math.mul (fix, d.rotations[anchor]), d.rotations[anchor]);
+                for (int x = first; x >= 0; x = d.pathPrevious[x]) d.rotations[x] = math.normalizesafe (math.mul (fix, d.rotations[x]), d.rotations[x]);
+                anchorRotation = d.rotations[anchor];
+                anchorOrigin = anchorPoint - math.rotate (anchorRotation, anchorLocal);
             }
             // 留めた骨が目標の場所に来るよう、木ごとずらす（道が根を通るときは、根の場所も変わる）
             int root = anchor;
@@ -1916,7 +1954,9 @@ namespace Lilium
                     }
                 }
                 SnapLoopHand (ref d, n, loop);
-                // 手が届かなければ（腕が伸びきった）、持った物の方を手へ寄せて（物を子にした腕を合わせ直す）、もう一度手を合わせる
+                // 手が届かなければ（腕が伸びきった）、持った物の方を手へ寄せて（物を子にした腕を合わせ直す）、もう一度手を合わせる。
+                // 物を動かさない輪（holdB。寄せている間）は寄せない
+                if (loop.holdB != 0) continue;
                 float3 pointA = d.positions[a] + math.rotate (d.rotations[a], loop.anchorA);
                 float3 pointB = d.positions[b] + math.rotate (d.rotations[b], loop.anchorB);
                 if (math.distancesq (pointA, pointB) < kLoopCloseTolerance * kLoopCloseTolerance || !IsHeldBody (ref d, b)) continue;

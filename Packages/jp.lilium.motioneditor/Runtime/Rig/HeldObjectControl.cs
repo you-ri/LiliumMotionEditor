@@ -4,59 +4,35 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 持ち物のコントロール（Controls/Object/&lt;名前&gt;）に付ける数値。クリップのカーブ（float）で、手ごとに持っているかと、差しているかを持つ（0 か 1）。
-    /// 物の位置と向きは、この GameObject の Transform が持つ（親の枠から見た値。HeldObjectRig）。
+    /// 物を付ける先 1 つ分の値（Controls/Object/&lt;物の名前&gt;/&lt;付ける先の名前&gt;。S104）。クリップのカーブ（float）で、付けているかと、付けた位置を持つ。
+    /// 物の位置と向きは、物のコントロール（Controls/Object/&lt;物の名前&gt;）の Transform が持つ（親の枠から見た値。HeldObjectRig）。
     /// 編集用の体（プレビューシーン）にだけ付く。
     /// GameObject に付けるので Editor アセンブリには置けない（Unity が Editor のスクリプトを付けさせない）
     /// </summary>
     [AddComponentMenu ("")]
     public sealed class HeldObjectControl : MonoBehaviour
     {
-        /// <summary>左手で持っているか（0 か 1）</summary>
+        /// <summary>この先に付けているか（0 か 1）</summary>
         [Range (0, 1)]
-        public float leftHold;
-
-        /// <summary>右手で持っているか（0 か 1）</summary>
-        [Range (0, 1)]
-        public float rightHold;
-
-        /// <summary>今この場所に差しているか（0 か 1。差す場所のコントロール Controls/Object/&lt;名前&gt;/&lt;場所&gt; でだけ使う）</summary>
-        public float socket;
-
-        /// <summary>左手の握りを、設定の場所から柄に沿ってずらす量（メートル）。キーの間も補間する</summary>
-        public float leftSlide;
-
-        /// <summary>右手の握りを、設定の場所から柄に沿ってずらす量（メートル）。キーの間も補間する</summary>
-        public float rightSlide;
+        public float attached;
 
         /// <summary>
-        /// 左手の握りを、キャラの設定の握りでなく leftGripPosition・leftGripRotation にするか（0 か 1。S99）。
-        /// 持つときの手首の場所と向きを残したもの（持つボタンを押した瞬間の手で持つ）。キーの間で補間しない
+        /// 付けた位置を、物の設定の位置でなく gripPosition・gripRotation にするか（0 か 1。S99）。
+        /// 付けるボタンを押した瞬間の、付ける先の枠の場所と向きを残したもの。前後のキーで同じ先に付いていれば、キーの間は位置を補間する
         /// </summary>
-        public float leftGripKeyed;
-        /// <summary>左手の握りの場所（物のローカル。メートル）</summary>
-        public Vector3 leftGripPosition;
-        /// <summary>左手の握りの向き（物のローカル。オイラー角。手首の点の目標の向きは「物の向き × これ」）</summary>
-        public Vector3 leftGripRotation;
-        /// <summary>右手の握りを、キャラの設定の握りでなく rightGripPosition・rightGripRotation にするか（0 か 1。S99）</summary>
-        public float rightGripKeyed;
-        public Vector3 rightGripPosition;
-        public Vector3 rightGripRotation;
+        public float gripKeyed;
+        /// <summary>付ける先の枠の場所（物のローカル。メートル）</summary>
+        public Vector3 gripPosition;
+        /// <summary>付ける先の枠の向き（物のローカル。オイラー角。枠の向きは「物の向き × これ」）</summary>
+        public Vector3 gripRotation;
 
         /// <summary>
         /// クリップのカーブのプロパティ名
         /// </summary>
-        public const string kLeftHoldProperty = "leftHold";
-        public const string kRightHoldProperty = "rightHold";
-        public const string kSocketProperty = "socket";
-        public const string kLeftSlideProperty = "leftSlide";
-        public const string kRightSlideProperty = "rightSlide";
-        public const string kLeftGripKeyedProperty = "leftGripKeyed";
-        public const string kLeftGripPositionProperty = "leftGripPosition";
-        public const string kLeftGripRotationProperty = "leftGripRotation";
-        public const string kRightGripKeyedProperty = "rightGripKeyed";
-        public const string kRightGripPositionProperty = "rightGripPosition";
-        public const string kRightGripRotationProperty = "rightGripRotation";
+        public const string kAttachedProperty = "attached";
+        public const string kGripKeyedProperty = "gripKeyed";
+        public const string kGripPositionProperty = "gripPosition";
+        public const string kGripRotationProperty = "gripRotation";
     }
 
 }

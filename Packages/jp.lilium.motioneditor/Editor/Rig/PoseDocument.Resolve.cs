@@ -61,71 +61,61 @@ namespace Lilium
                 if (!placement.rotation) placement.target.ReleaseRotation ();
                 placement.target.SetState (placement.state);
             }
-            MoveObjectsToSockets (session, document);
+            SnapObjects (session, document);
             PlaceObjects (session, document);
             session.SolveAfterEdit ();
             return null;
         }
 
         /// <summary>
-        /// 差す場所を切り替える（S91f）。窓の SetObjectSocket と同じに、差すときは持っている手を差す場所まで動かしてから放す
+        /// 物の設定の位置で付ける先に付く所へ、物を動かす（S104。窓の SnapObject と同じ）。付けている骨は付いてくる
         /// </summary>
-        static void MoveObjectsToSockets (PoseSession session, PoseDocument document)
+        static void SnapObjects (PoseSession session, PoseDocument document)
         {
             if (document.objects == null) return;
             foreach (PoseObject item in document.objects) {
-                if (item == null || string.IsNullOrEmpty (item.socket)) continue;
-                HeldObjectRig.Entry entry = FindObject (session, item.name);
-                if (item.socket == HeldObjectDefinition.kNoSocketName) {
-                    if (entry.socket == null) continue;
-                    entry.LeaveSocket ();
-                    entry.HoldByDefaultIfFree ();
-                    continue;
-                }
-                HeldObjectRig.Socket socket = entry.sockets.Find (s => s.definition.name == item.socket);
-                if (socket == entry.socket) continue;
-                // 同じ要求で置いた点（腰など）を先に効かせる。差す場所は骨に付いて動く
+                if (item == null || string.IsNullOrEmpty (item.snap)) continue;
+                HeldObjectRig.Attachment attachment = FindObject (session, item.name).FindAttachment (item.snap);
+                // 同じ要求で置いた点（腰など）を先に効かせる。付ける先は骨に付いて動く
                 session.SolveAfterEdit ();
-                entry.BringTo (socket);
+                attachment.owner.SnapTo (attachment);
                 session.SolveAfterEdit ();
-                entry.EnterSocket (socket);
-                // Pin の点を残すと、抜いたフレームで物が留めた場所へ戻る
-                foreach (BodyPointTarget point in session.targets.OfType<BodyPointTarget> ()) {
-                    if (point.heldObject == entry) point.SetState (BodyPointState.Free);
-                }
             }
         }
 
-        /// <summary>持ち物を置く（S91）。つかんで動かしたのと同じに、持っている手と体が付いてくる。手が届かない所へは物が寄る</summary>
+        /// <summary>持ち物を置く（S91）。つかんで動かしたのと同じに、付けている骨と体が付いてくる。骨が届かない所へは物が寄る</summary>
         static void PlaceObjects (PoseSession session, PoseDocument document)
         {
             if (document.objects == null) return;
             EditingRig rig = session.stage.editingRig;
             Transform root = session.stage.editingRoot;
             Quaternion toRoot = BodyBasis (rig);
-            // 今の手首で握る（current）なら、この要求の点を置いて解いた後の手で握る（手を動かしてから握るのを 1 つの要求に書ける）
-            if (document.objects.Exists (o => o != null && o.grip != null && o.grip.Exists (g => g != null && g.current))) session.SolveAfterEdit ();
+            HeldObjectRig held = session.stage.heldObjects;
+            // 今の場所で付ける（current・新しく付ける先）なら、この要求の点を置いて解いた後の骨で付ける（骨を動かしてから付けるのを 1 つの要求に書ける）
+            if (document.objects.Exists (o => o != null && (!string.IsNullOrEmpty (o.attach) || (o.grip != null && o.grip.Exists (g => g != null && g.current))))) session.SolveAfterEdit ();
             foreach (PoseObject item in document.objects) {
                 if (item == null) continue;
                 HeldObjectRig.Entry entry = FindObject (session, item.name);
+                HashSet<string> gripped = new HashSet<string> ();
                 foreach (PoseGrip grip in item.grip ?? new List<PoseGrip> ()) {
                     if (grip == null) continue;
-                    HeldObjectRig.Hand hand = grip.hand == kHoldLeft ? entry.left : entry.right;
-                    if (hand == null) continue;
-                    if (grip.current) session.stage.heldObjects.GrabAtCurrent (hand, session.stage.fullBody);
-                    else hand.SetKeyedGrip (!grip.useSettings, grip.position, grip.rotation);
+                    HeldObjectRig.Attachment attachment = entry.FindAttachment (grip.point);
+                    if (attachment == null) continue;
+                    gripped.Add (attachment.name);
+                    if (grip.current) held.GrabAtCurrent (attachment);
+                    else attachment.SetKeyedGrip (!grip.useSettings, grip.position, grip.rotation);
                     entry.keysPending = true;
                 }
-                if (!string.IsNullOrEmpty (item.hold)) {
-                    entry.values.leftHold = item.hold == kHoldBoth || item.hold == kHoldLeft ? 1 : 0;
-                    entry.values.rightHold = item.hold == kHoldBoth || item.hold == kHoldRight ? 1 : 0;
-                    entry.keysPending = true;
-                }
-                foreach (PoseGripSlide slide in item.slide ?? new List<PoseGripSlide> ()) {
-                    if (slide == null) continue;
-                    HeldObjectRig.Hand hand = slide.hand == kHoldLeft ? entry.left : entry.right;
-                    if (hand == null) continue;
-                    hand.slide = slide.value;
+                if (!string.IsNullOrEmpty (item.attach)) {
+                    HashSet<string> names = ParseAttachNames (item.attach);
+                    foreach (HeldObjectRig.Attachment attachment in entry.attachments) {
+                        bool attach = names.Contains (attachment.name);
+                        if (attach == attachment.attached) continue;
+                        // 新しく付ける先は、位置を書かなければ今の場所で付ける（窓の付けるボタンと同じ）
+                        if (attach && gripped.Contains (attachment.name)) attachment.values.attached = 1;
+                        else held.SetAttached (attachment, attach);
+                    }
+                    HeldObjectRig.ApplyConstraintWeights (entry);
                     entry.keysPending = true;
                 }
                 bool place = item.position.sqrMagnitude > kEpsilon;
@@ -142,6 +132,17 @@ namespace Lilium
                 }
                 entry.DragTo (position, rotation);
             }
+        }
+
+        /// <summary>PoseObject.attach の名前の集まり（None なら空）</summary>
+        static HashSet<string> ParseAttachNames (string attach)
+        {
+            HashSet<string> names = new HashSet<string> ();
+            foreach (string part in attach.Split (',')) {
+                string name = part.Trim ();
+                if (name.Length > 0 && name != kAttachNone) names.Add (name);
+            }
+            return names;
         }
 
         static HeldObjectRig.Entry FindObject (PoseSession session, string name)
@@ -165,9 +166,9 @@ namespace Lilium
                 if (item == null) continue;
                 PoseObject placed = solved.objects.FirstOrDefault (o => o.name == item.name);
                 if (placed == null) continue;
-                // 差している物は書いた場所を使わない。差す場所まで手が届かなければ、差すフレームで跳ぶ
-                if (!string.IsNullOrEmpty (placed.socket) && placed.socket != HeldObjectDefinition.kNoSocketName) {
-                    if (placed.handGap > tolerance) names.Add (item.name);
+                // 寄せた物は書いた場所を使わない。付けている骨が届かなければ、付け替えるフレームで跳ぶ
+                if (!string.IsNullOrEmpty (item.snap)) {
+                    if (placed.gap > tolerance) names.Add (item.name);
                     continue;
                 }
                 if (item.position.sqrMagnitude > kEpsilon && Vector3.Distance (item.position, placed.position) > tolerance) names.Add (item.name);
@@ -245,18 +246,18 @@ namespace Lilium
                     HeldObjectRig held = session.stage.heldObjects;
                     return Tr ("POSE_DOCUMENT_UNKNOWN_OBJECT", item.name, held != null ? string.Join (", ", held.entries.Select (e => e.name)) : "");
                 }
-                if (!string.IsNullOrEmpty (item.hold) && item.hold != kHoldBoth && item.hold != kHoldLeft && item.hold != kHoldRight && item.hold != kHoldNone) {
-                    return Tr ("POSE_DOCUMENT_UNKNOWN_HOLD", item.name, item.hold);
-                }
                 HeldObjectRig.Entry entry = FindObject (session, item.name);
-                foreach (PoseGripSlide slide in item.slide ?? new List<PoseGripSlide> ()) {
-                    if (slide != null && slide.hand != kHoldLeft && slide.hand != kHoldRight) return Tr ("POSE_DOCUMENT_UNKNOWN_SLIDE_HAND", item.name, slide.hand);
+                string known = string.Join (", ", entry.attachments.Select (a => a.name));
+                foreach (string name in !string.IsNullOrEmpty (item.attach) ? ParseAttachNames (item.attach) : new HashSet<string> ()) {
+                    if (entry.FindAttachment (name) == null) return Tr ("POSE_DOCUMENT_UNKNOWN_ATTACH", item.name, name, known);
                 }
                 foreach (PoseGrip grip in item.grip ?? new List<PoseGrip> ()) {
-                    if (grip != null && grip.hand != kHoldLeft && grip.hand != kHoldRight) return Tr ("POSE_DOCUMENT_UNKNOWN_GRIP_HAND", item.name, grip.hand);
+                    if (grip != null && entry.FindAttachment (grip.point) == null) return Tr ("POSE_DOCUMENT_UNKNOWN_ATTACH", item.name, grip.point, known);
                 }
-                if (!string.IsNullOrEmpty (item.socket) && item.socket != HeldObjectDefinition.kNoSocketName && !entry.sockets.Exists (s => s.definition.name == item.socket)) {
-                    return Tr ("POSE_DOCUMENT_UNKNOWN_SOCKET", item.name, item.socket, string.Join (", ", entry.sockets.Select (s => s.definition.name)));
+                if (!string.IsNullOrEmpty (item.snap)) {
+                    HeldObjectRig.Attachment target = entry.FindAttachment (item.snap);
+                    if (target == null) return Tr ("POSE_DOCUMENT_UNKNOWN_ATTACH", item.name, item.snap, known);
+                    if (!target.hasSettings) return Tr ("POSE_DOCUMENT_SNAP_NO_SETTINGS", item.name, item.snap);
                 }
             }
             return null;

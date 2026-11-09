@@ -306,6 +306,68 @@ namespace Lilium
             }
         }
 
+        /// <summary>付ける先の関節の種類（S104）</summary>
+        public enum AttachJoint
+        {
+            /// <summary>物の柄の軸（HeldObjectDefinition.gripAxis）まわりにだけ回る（手で握る）</summary>
+            Twist,
+            /// <summary>回らない（腰・背中に差す）</summary>
+            Fixed,
+        }
+
+        /// <summary>
+        /// 物を付ける先（S104）。付けた物は、この骨の子の骨として全身 IK で一緒に解く。窓では、この一覧だけを付ける先として出す
+        /// （どの骨にでも付けられる形にすると、選ぶ UI が使いにくい。11-09 ユーザー指示）
+        /// </summary>
+        [System.Serializable]
+        public sealed class AttachPoint
+        {
+            [Tooltip ("Name. Clips key each object's attachment by this name (Controls/Object/object name/name), so renaming it loses those keys")]
+            public string name;
+            [Tooltip ("Bone the object is attached to")]
+            public HumanBodyBones bone;
+            [Tooltip ("Optional. Extra control the object is attached to, by name (bones that are not Humanoid). Used instead of Bone when set")]
+            public string control;
+            [Tooltip ("Where the attach frame is, from the bone along body right, up and forward in the T-pose (fraction of the human scale)")]
+            public Vector3 position;
+            [Tooltip ("Attach frame rotation, in body right, up and forward axes in the T-pose (Euler angles)")]
+            public Vector3 rotation;
+            [Tooltip ("Twist: the object turns freely about its grip axis (hands). Fixed: the object does not turn (a hip or the back)")]
+            public AttachJoint joint;
+        }
+
+        /// <summary>既定の付ける先（S104）。骨の木の親を選ぶ順（同じ種類なら並びの先）が今までの持ち方と同じになる並び</summary>
+        public static List<AttachPoint> CreateDefaultAttachPoints ()
+        {
+            return new List<AttachPoint> {
+                new AttachPoint { name = kRightHandAttach, bone = HumanBodyBones.RightHand, joint = AttachJoint.Twist },
+                new AttachPoint { name = kLeftHandAttach, bone = HumanBodyBones.LeftHand, joint = AttachJoint.Twist },
+                new AttachPoint { name = kHipsAttach, bone = HumanBodyBones.Hips, joint = AttachJoint.Fixed },
+            };
+        }
+
+        /// <summary>
+        /// 輪の関節（S105）。骨（bone・control）の付け根を、親のほかにもう 1 本の骨（to・toControl）にもつなぐ。つなぐ場所は基準姿勢での付け根の場所
+        /// （もう 1 本の骨から見て）で、そこを中心に自由に回る。全身 IK は骨の親子をたどらずに関節を解くので、骨の木を輪にできる
+        /// （両手で 1 本の骨をつかむ・鎖の先を体に戻す。11-09 ユーザー指示「IK が解く処理は親子関係ないはず。持ち物なしでも動くように」）
+        /// </summary>
+        [System.Serializable]
+        public sealed class LoopJoint
+        {
+            [Tooltip ("Bone whose root is also joined to the other bone (besides its parent)")]
+            public HumanBodyBones bone = HumanBodyBones.LastBone;
+            [Tooltip ("Optional. Extra control by name (bones that are not Humanoid). Used instead of Bone when set")]
+            public string control;
+            [Tooltip ("The other bone. The joint stays where the root is in the T-pose, as seen from this bone, and turns freely")]
+            public HumanBodyBones to = HumanBodyBones.LastBone;
+            [Tooltip ("Optional. Extra control by name for the other bone. Used instead of To when set")]
+            public string toControl;
+        }
+
+        public const string kRightHandAttach = "RightHand";
+        public const string kLeftHandAttach = "LeftHand";
+        public const string kHipsAttach = "Hips";
+
         public const float kDefaultStiffness = 0.2f;
 
         public FullBodySettings fullBody = new FullBodySettings ();
@@ -320,6 +382,10 @@ namespace Lilium
         public List<ExtraControl> extraControls = new List<ExtraControl> ();
         /// <summary>全身 IK の点</summary>
         public List<BodyPoint> bodyPoints = new List<BodyPoint> ();
+        /// <summary>物を付ける先（S104）</summary>
+        public List<AttachPoint> attachPoints = new List<AttachPoint> ();
+        /// <summary>輪の関節（S105）</summary>
+        public List<LoopJoint> loopJoints = new List<LoopJoint> ();
 
         /// <summary>パッケージに入れた既定の定義のアセット。中身は SetDefault と同じ</summary>
         public const string kPackageDefaultPath = "Packages/jp.lilium.motioneditor/Editor/Rig/Default Rig Definition.asset";
@@ -364,6 +430,8 @@ namespace Lilium
             }
             fullBody = new FullBodySettings ();
             bodyPoints = CreateDefaultBodyPoints (fkControls);
+            attachPoints = CreateDefaultAttachPoints ();
+            loopJoints = new List<LoopJoint> ();
         }
 
         /// <summary>
@@ -376,6 +444,8 @@ namespace Lilium
             extraControls.Clear ();
             fullBody = new FullBodySettings ();
             bodyPoints = new List<BodyPoint> ();
+            attachPoints = new List<AttachPoint> ();
+            loopJoints = new List<LoopJoint> ();
             if (animator == null) return;
             foreach (Transform bone in FindBones (animator)) {
                 bool top = !IsBelowBone (bone, animator);
@@ -698,6 +768,20 @@ namespace Lilium
         /// <summary>
         /// 定義の誤り（名前の重複・パスに使えない名前・範囲外の値など）。空なら使える
         /// </summary>
+        /// <summary>骨を名前の追加コントロールか人型の骨で指していて、その先が定義にあるか（輪の関節）</summary>
+        bool KnownBone (HumanBodyBones bone, string control)
+        {
+            if (!string.IsNullOrEmpty (control)) return extraControls.Any (c => c.name == control);
+            return bone >= 0 && bone < HumanBodyBones.LastBone;
+        }
+
+        static string LoopJointLabel (LoopJoint joint)
+        {
+            string from = !string.IsNullOrEmpty (joint.control) ? joint.control : joint.bone.ToString ();
+            string to = !string.IsNullOrEmpty (joint.toControl) ? joint.toControl : joint.to.ToString ();
+            return from + " - " + to;
+        }
+
         public List<string> Validate ()
         {
             List<string> errors = new List<string> ();
@@ -715,6 +799,21 @@ namespace Lilium
                 if (fullBody.iterations < 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_ITERATIONS_TOO_LOW"));
                 if (fullBody.pull < 0 || fullBody.pull > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_PULL_OUT_OF_RANGE"));
                 if (fullBody.hipsPin < 0 || fullBody.hipsPin > 1) errors.Add (Tr ("EDIT_RIG_DEFINITION_HIPS_PIN_OUT_OF_RANGE"));
+            }
+            if (attachPoints != null) {
+                HashSet<string> names = new HashSet<string> ();
+                foreach (AttachPoint point in attachPoints) {
+                    if (point == null) continue;
+                    if (!RigPaths.IsValidName (point.name) || point.name == PoseDocument.kAttachNone || !names.Add (point.name)) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_ATTACH_POINT", point.name));
+                }
+            }
+            if (loopJoints != null) {
+                foreach (LoopJoint joint in loopJoints) {
+                    if (joint == null) continue;
+                    bool known = KnownBone (joint.bone, joint.control) && KnownBone (joint.to, joint.toControl);
+                    bool same = !string.IsNullOrEmpty (joint.control) ? joint.control == joint.toControl : string.IsNullOrEmpty (joint.toControl) && joint.bone == joint.to;
+                    if (!known || same) errors.Add (Tr ("EDIT_RIG_DEFINITION_INVALID_LOOP_JOINT", LoopJointLabel (joint)));
+                }
             }
             if (bodyPoints != null) {
                 foreach (IGrouping<string, BodyPoint> group in bodyPoints.Where (p => p != null).GroupBy (p => p.name)) {
@@ -852,10 +951,10 @@ namespace Lilium
             return kRoot + "/ObjectPose/" + name;
         }
 
-        /// <summary>持ち物の差す場所（Controls/Object/物の名前/場所の名前）。場所ごとに差しているかのカーブを持つ</summary>
-        public static string ObjectSocket (string name, string socket)
+        /// <summary>物を付ける先ごとの値（Controls/Object/物の名前/付ける先の名前。S104）。付けているか・付けた位置のカーブを持つ</summary>
+        public static string ObjectAttach (string name, string attach)
         {
-            return Object (name) + "/" + socket;
+            return Object (name) + "/" + attach;
         }
 
         /// <summary>

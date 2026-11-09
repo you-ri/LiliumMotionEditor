@@ -421,8 +421,10 @@ namespace Lilium
                 // ゲームの Animator はクリップの体の向きと場所を揃えて再生するので、ルートの子の物だけ体からずれる（10-31 実測で 45〜60cm）
                 if (baked.parent == displayRoot) context.notes.Add (Tr ("HUMANOID_BAKER_HELD_OBJECT_UNDER_ROOT", baked.name));
                 string path = AnimationUtility.CalculateTransformPath (baked, displayRoot);
-                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, editing.localRotation));
-                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, editing.localPosition));
+                // 付けている先で親を替える物（腰に差した剣など。bakeParent）は、その間その先の骨から見た値を焼く（ゲームがその間、物をその骨に付ける）
+                Transform display = baked;
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kRotation, 4), true, v => Write (v, BakedLocalRotation (display, editing)));
+                Add (channels, context, hooks, frameCount, TransformBindings (path, CurveEdit.kPosition, 3), false, v => Write (v, BakedLocalPosition (display, editing)));
             }
 
             // ゲームの Rig の値（代理 → ゲーム prefab のパス）。Rig を通した後の姿勢を焼くときは焼かない（S21）
@@ -447,6 +449,20 @@ namespace Lilium
                 }
             }
             return channels;
+        }
+
+        /// <summary>持ち物の焼く向き。今の姿勢で親を替えていれば（GetBakedParent）、その骨から見た向き</summary>
+        Quaternion BakedLocalRotation (Transform display, Transform bone)
+        {
+            Transform parent = rig_.GetBakedParent (display, readFromDisplay);
+            return parent != null ? Quaternion.Normalize (Quaternion.Inverse (parent.rotation) * bone.rotation) : bone.localRotation;
+        }
+
+        /// <summary>持ち物の焼く場所。今の姿勢で親を替えていれば（GetBakedParent）、その骨から見た場所</summary>
+        Vector3 BakedLocalPosition (Transform display, Transform bone)
+        {
+            Transform parent = rig_.GetBakedParent (display, readFromDisplay);
+            return parent != null ? parent.InverseTransformPoint (bone.position) : bone.localPosition;
         }
 
         /// <summary>

@@ -103,7 +103,7 @@ namespace Lilium
         {
             if (!data_.isCreated) return false;
             LoadInput ();
-            LoadHeldLoops ();
+            LoadLoops ();
             GrabKind grab = DetectGrab ();
 
             // 1 回目: つかんでいる軽い点を除いて、ほかの点を全部いつもどおり解く（軽い点をつかんでいなければ、これだけ）。

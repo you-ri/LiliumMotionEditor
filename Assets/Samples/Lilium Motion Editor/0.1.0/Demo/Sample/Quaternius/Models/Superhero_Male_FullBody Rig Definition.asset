@@ -1910,3 +1910,22 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 1
+  attachPoints:
+  - name: RightHand
+    bone: 18
+    control:
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    joint: 0
+  - name: LeftHand
+    bone: 17
+    control:
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    joint: 0
+  - name: Hips
+    bone: 0
+    control:
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    joint: 1

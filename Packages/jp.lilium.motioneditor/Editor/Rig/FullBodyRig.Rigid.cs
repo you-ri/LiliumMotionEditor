@@ -10,9 +10,9 @@ namespace Lilium
         const float kJointOffset = 1e-4f;
 
         /// <summary>
-        /// 2 つの点の離れが、骨の形だけで決まるか（間に回れる関節が無い）。同じ骨の上の点どうしか、片方が骨の付け根（関節）の点で、
-        /// もう片方がその親の骨の上にあるか、どちらも同じ骨にぶら下がる骨の付け根の点か。付け根の点は、骨の長さが変わらないので親の骨に付いて動く
-        /// （手首の点と前腕に乗る肘の点・手首の点と手のひらの点・持った物の原点の点と手首の点）
+        /// 2 つの点の離れが、骨の形だけで決まるか（間に回れる関節が無い）。点が固く付く骨（乗る骨・付け根の点なら親の骨・輪の関節の付け根の点なら
+        /// つないだ先の骨）に、同じ骨があるか。付け根の点は、骨の長さが変わらないので親の骨に付いて動く
+        /// （手首の点と前腕に乗る肘の点・手首の点と手のひらの点・持った物の原点の点と手首の点）。輪の関節（S105）の付け根の点も、つないだ先の骨に付いて動く
         /// </summary>
         bool RigidPair (Point a, Point b)
         {
@@ -20,7 +20,26 @@ namespace Lilium
             if (a.body < 0 || b.body < 0) return false;
             if (a.body == b.body) return true;
             int parentA = JointParent (a), parentB = JointParent (b);
-            return parentA == b.body || parentB == a.body || (parentA >= 0 && parentA == parentB);
+            int loopA = LoopParent (a), loopB = LoopParent (b);
+            return parentA == b.body || parentB == a.body || (parentA >= 0 && parentA == parentB)
+                || (loopA >= 0 && (loopA == b.body || loopA == parentB || loopA == loopB))
+                || (loopB >= 0 && (loopB == a.body || loopB == parentA));
+        }
+
+        /// <summary>離れの変わらない 2 点で、どちらかが輪の関節（S105）でつないだ骨の付け根の点か</summary>
+        bool LoopPair (Point a, Point b)
+        {
+            return a.body >= 0 && b.body >= 0 && (LoopParent (a) >= 0 || LoopParent (b) >= 0) && RigidPair (a, b);
+        }
+
+        /// <summary>リグ定義の輪の関節（S105）でつないだ骨の付け根の点なら、つないだ先の骨（そうでなければ -1）</summary>
+        int LoopParent (Point point)
+        {
+            if (point.offset.sqrMagnitude > kJointOffset * kJointOffset) return -1;
+            foreach (LoopJoint joint in loopJoints_) {
+                if (bodies_[point.body] == joint.bone) return bodies_.IndexOf (joint.to);
+            }
+            return -1;
         }
 
         /// <summary>骨の付け根の点なら、その骨の親の骨（付け根の点でないか、根の骨なら -1）</summary>

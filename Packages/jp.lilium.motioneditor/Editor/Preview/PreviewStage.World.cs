@@ -170,7 +170,7 @@ namespace Lilium
             if (editingRig.binding.points.Count > 0) {
                 fullBody = new FullBodyRig (editingRig, definition_);
             }
-            if (heldObjects != null) heldObjects.BindHands (fullBody);
+            if (heldObjects != null) heldObjects.BindBody (fullBody);
             clipSampler_ = new ClipSampler (editingRig.animator);
             genericSampler_ = new ClipSampler (editingRig.animator);
             // コントロールの初期値は基準姿勢から取る（FK の差分は 0）

@@ -92,7 +92,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 持ち物（S91）。手ごとに、今のフレームで持っているかを押された状態で出し、押すと今のフレームで切り替える
+        /// 持ち物（S91・S104）。リグ定義の付ける先ごとに、今のフレームで付けているかを押された状態で出し、押すと今のフレームで付け外しする。
+        /// 物の設定に決まった位置がある先には「寄せる」を出す（物をその位置へ動かす）
         /// </summary>
         void DrawHeldObjects ()
         {
@@ -100,47 +101,18 @@ namespace Lilium
             using (new EditorGUI.DisabledScope (window_.heldObjectBlockReason != null)) {
                 foreach (HeldObjectRig.Entry entry in window_.heldObjects) {
                     EditorGUILayout.LabelField (Tr ("RIG_VALUES_OVERLAY_HELD_OBJECT", entry.name), EditorStyles.boldLabel);
-                    EditorGUILayout.BeginHorizontal ();
-                    HoldToggle (entry, true, entry.values.leftHold >= 0.5f, Tr ("RIG_VALUES_OVERLAY_LEFT_HAND"));
-                    HoldToggle (entry, false, entry.values.rightHold >= 0.5f, Tr ("RIG_VALUES_OVERLAY_RIGHT_HAND"));
-                    EditorGUILayout.EndHorizontal ();
-                    SlideField (entry.left, Tr ("RIG_VALUES_OVERLAY_LEFT_SLIDE"));
-                    SlideField (entry.right, Tr ("RIG_VALUES_OVERLAY_RIGHT_SLIDE"));
-                    SocketToolbar (entry);
+                    foreach (HeldObjectRig.Attachment attachment in entry.attachments) {
+                        EditorGUILayout.BeginHorizontal ();
+                        bool attached = attachment.attached;
+                        if (GUILayout.Toggle (attached, attachment.name, EditorStyles.miniButton) != attached) window_.SetObjectAttached (attachment, !attached);
+                        using (new EditorGUI.DisabledScope (!attachment.hasSettings)) {
+                            if (GUILayout.Button (new GUIContent (Tr ("RIG_VALUES_OVERLAY_SNAP"), Tr ("RIG_VALUES_OVERLAY_SNAP_TOOLTIP")), EditorStyles.miniButton, GUILayout.ExpandWidth (false))) window_.SnapObject (attachment);
+                        }
+                        EditorGUILayout.EndHorizontal ();
+                    }
                 }
             }
-            // スライダーを離したときにキーを打つ（動かしている間に毎回打たない）
-            if (GUIUtility.hotControl == 0) window_.EndObjectSlide ();
             EditorGUILayout.Space (4);
-        }
-
-        /// <summary>手が握りを柄に沿ってずらす量のスライダー（持っている手だけ）</summary>
-        void SlideField (HeldObjectRig.Hand hand, string label)
-        {
-            if (hand == null || !hand.held) return;
-            EditorGUI.BeginChangeCheck ();
-            float value = EditorGUILayout.Slider (label, hand.slide, -kSlideRange, kSlideRange);
-            if (EditorGUI.EndChangeCheck ()) window_.SetObjectSlide (hand, value);
-        }
-
-        /// <summary>握りのずれのスライダーの範囲（メートル）</summary>
-        const float kSlideRange = 0.4f;
-
-        void HoldToggle (HeldObjectRig.Entry entry, bool left, bool holding, string label)
-        {
-            if (GUILayout.Toggle (holding, label, EditorStyles.miniButton) != holding) window_.SetObjectHold (entry, left, !holding);
-        }
-
-        /// <summary>差す場所（S91f）。今の場所を押された状態で出し、押すと今のフレームで切り替える。差さないを先頭に出す</summary>
-        void SocketToolbar (HeldObjectRig.Entry entry)
-        {
-            if (entry.sockets.Count == 0) return;
-            string[] labels = new string[entry.sockets.Count + 1];
-            labels[0] = Tr ("RIG_VALUES_OVERLAY_NO_SOCKET");
-            for (int i = 0; i < entry.sockets.Count; i++) labels[i + 1] = entry.sockets[i].definition.name;
-            int current = entry.sockets.IndexOf (entry.socket) + 1;
-            int chosen = GUILayout.Toolbar (current, labels, EditorStyles.miniButton);
-            if (chosen != current) window_.SetObjectSocket (entry, chosen > 0 ? entry.sockets[chosen - 1] : null);
         }
 
         /// <summary>

@@ -763,3 +763,10 @@ MonoBehaviour:
     contact: 0
     radius: 0
     passive: 1
+  attachPoints:
+  - name: RightHand
+    bone: 18
+    control: hand_r
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    joint: 0

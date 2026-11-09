@@ -250,19 +250,20 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 持ち物か握りを選んでいる間は、物を持った姿勢を解いて見せる（書き込まない）。それ以外は T ポーズのまま物を基準の場所に置く
+        /// 持ち物か付ける先の位置を選んでいる間は、物を付けた姿勢を解いて見せる（書き込まない）。それ以外は T ポーズのまま物を基準の場所に置く。
+        /// 付ける先を選んでいれば、キーの無いクリップで付けている先にその先を足して見せる（回らない先なら、その先だけ）
         /// </summary>
         void UpdateHeldPreview ()
         {
             if (stage == null || stage.heldObjects == null) return;
             RigControlEntry selected = selectedEntry;
             stage.editingRig.ResetBonesToRest ();
-            stage.heldObjects.ResetHolds ();
+            stage.heldObjects.ResetAttachments ();
             holdPreview_ = selected != null && selected.kind == RigControlKind.Object && stage.fullBody != null;
-            // 差す場所を選んでいる間は、物をそこへ差して見せる。物そのものを選んでいる間は、差さない基準の場所を見せる
-            if (holdPreview_) {
-                foreach (HeldObjectRig.Entry entry in stage.heldObjects.entries) entry.ClearSockets ();
-                if (selected.heldSocket != null) selected.held.EnterSocket (selected.heldSocket);
+            HeldObjectRig.Attachment chosen = holdPreview_ ? selected.attachment : null;
+            if (chosen != null && !chosen.attached) {
+                if (!chosen.twists) chosen.owner.DetachAll ();
+                chosen.values.attached = 1;
             }
             stage.heldObjects.Refresh ();
             if (holdPreview_) {
@@ -274,7 +275,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 持ち物を足す。キャラの設定が無ければ作る。モデルに空の Grip_R・Grip_L があれば握りの初期値にする
+        /// 持ち物を足す。キャラの設定が無ければ作る。モデルに空の Grip_R・Grip_L があれば右手・左手の位置の初期値にする
         /// </summary>
         internal void AddHeldObject (GameObject model)
         {
@@ -308,29 +309,26 @@ namespace Lilium
             Rebuild ();
         }
 
-        /// <summary>差す場所を足す。場所は腰の左前で、柄を前、切っ先を後ろ下へ向けた所（リグエディタのハンドルで直す）</summary>
-        internal void AddHeldSocket (HeldObjectDefinition held)
+        /// <summary>付ける先の決まった位置を物の設定に足す（S104。位置はリグエディタのハンドルで直す）</summary>
+        internal void AddHeldAttachment (HeldObjectDefinition held, string point)
         {
             CharacterSettings target = settings;
-            if (target == null) return;
-            string name = "Hip";
-            for (int i = 2; held.sockets.Exists (s => s != null && s.name == name); i++) name = "Hip " + i;
-            Undo.RecordObject (target, "Add Held Object Socket");
-            held.sockets.Add (new HeldObjectSocket { name = name, bone = HumanBodyBones.Hips, position = new Vector3 (-0.13f, 0.16f, 0.22f), rotation = new Vector3 (0, 282.09f, 134.36f) });
+            if (target == null || held.FindAttachment (point) != null) return;
+            Undo.RecordObject (target, "Add Held Object Attachment");
+            held.GetOrAddAttachment (point);
             SaveHeldObjects (target);
-            selectedId_ = "Object/" + held.name + "/Socket/" + name;
+            selectedId_ = RigControlList.AttachmentId (held.name, point);
             Rebuild ();
         }
 
-        internal void RemoveHeldSocket (HeldObjectDefinition held, HeldObjectSocket socket)
+        internal void RemoveHeldAttachment (HeldObjectDefinition held, HeldObjectAttachment attachment)
         {
             CharacterSettings target = settings;
-            if (target == null || !held.sockets.Contains (socket)) return;
-            Undo.RecordObject (target, "Remove Held Object Socket");
-            held.sockets.Remove (socket);
-            if (held.restSocket == socket.name) held.restSocket = "";
+            if (target == null || held.attachments == null || !held.attachments.Contains (attachment)) return;
+            Undo.RecordObject (target, "Remove Held Object Attachment");
+            held.attachments.Remove (attachment);
             SaveHeldObjects (target);
-            selectedId_ = "Object/" + held.name;
+            selectedId_ = RigControlList.AttachmentId (held.name, attachment.point);
             Rebuild ();
         }
 
@@ -342,7 +340,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 選んでいる持ち物か握りのハンドル。動かす間は定義へ書かず、物を持った姿勢で見せる。離したときに Undo つきで定義へ書く
+        /// 選んでいる持ち物か付ける先の位置のハンドル。動かす間は定義へ書かず、物を持った姿勢で見せる。離したときに Undo つきで定義へ書く
         /// （ドラッグの途中で定義を書くと、作り直しが走ってつかんだ物を失う）
         /// </summary>
         void DoHeldHandles ()
@@ -352,8 +350,7 @@ namespace Lilium
             HeldObjectRig rig = stage.heldObjects;
             Vector3 position;
             Quaternion rotation;
-            if (selected.hand != null) rig.GetGrip (selected.hand, out position, out rotation);
-            else if (selected.heldSocket != null) rig.GetSocketWorld (selected.heldSocket, out position, out rotation);
+            if (selected.attachment != null) rig.GetSettingsHandle (selected.attachment, out position, out rotation);
             else selected.held.GetWorldPose (out position, out rotation);
             if (selected.heldPoint != null) position = rig.GetPointWorld (selected.heldPoint);
             Handles.color = KindColor (RigControlKind.Object);
@@ -363,8 +360,7 @@ namespace Lilium
             else Handles.TransformHandle (ref position, ref rotation);
             if (EditorGUI.EndChangeCheck ()) {
                 if (selected.heldPoint != null) rig.SetPointWorld (selected.heldPoint, position);
-                else if (selected.hand != null) rig.SetGrip (selected.hand, position, rotation);
-                else if (selected.heldSocket != null) rig.SetSocketWorld (selected.heldSocket, position, rotation);
+                else if (selected.attachment != null) rig.SetSettingsHandle (selected.attachment, position, rotation);
                 else selected.held.DragTo (position, rotation);
                 heldHandleDirty_ = true;
                 stage.editingRig.ResetBonesToRest ();
@@ -381,8 +377,7 @@ namespace Lilium
                 if (target == null) return;
                 Undo.RecordObject (target, "Move Held Object");
                 if (selected.heldPoint != null) rig.StorePoint (selected.heldPoint);
-                else if (selected.hand != null) rig.StoreGrip (selected.hand);
-                else if (selected.heldSocket != null) rig.StoreSocket (selected.heldSocket);
+                else if (selected.attachment != null) rig.StoreSettings (selected.attachment);
                 else rig.StoreRest (selected.held);
                 SaveHeldObjects (target);
                 QueueRebuild ();

@@ -393,24 +393,30 @@ namespace Lilium
             });
         }
 
-        /// <summary>持ち物か握りの欄（キャラの設定の項目）と、持ち物を外すボタン</summary>
+        /// <summary>持ち物か付ける先の位置の欄（キャラの設定の項目）と、足す・外すボタン</summary>
         void BuildHeldObjectFields (RigControlEntry selected)
         {
             CharacterSettings settings = SettingsLookup.Find (window_.model);
             if (settings == null) return;
+            HeldObjectDefinition held = selected.held.definition;
+            HeldObjectRig.Attachment attachment = selected.attachment;
+            // 決まった位置の無い付ける先は、足すボタンだけ（ハンドルで動かしても足す）
+            if (attachment != null && attachment.settings == null) {
+                fields_.Add (new Label (Tr ("RIG_EDITOR_ATTACHMENT_NO_SETTINGS")) { style = { whiteSpace = WhiteSpace.Normal } });
+                fields_.Add (new Button (() => window_.AddHeldAttachment (held, attachment.name)) { text = Tr ("RIG_EDITOR_ADD_ATTACHMENT") });
+                return;
+            }
             SerializedObject serialized = new SerializedObject (settings);
             SerializedProperty property = serialized.FindProperty (selected.settingsPath);
             if (property == null) return;
             property.isExpanded = true;
             fields_.Add (new PropertyField (property, selected.label));
             fields_.Bind (serialized);
-            HeldObjectDefinition held = selected.held.definition;
-            if (selected.heldSocket != null) {
-                HeldObjectSocket socket = selected.heldSocket.definition;
-                fields_.Add (new Button (() => window_.RemoveHeldSocket (held, socket)) { text = Tr ("RIG_EDITOR_REMOVE_SOCKET") });
+            if (attachment != null) {
+                HeldObjectAttachment item = attachment.settings;
+                fields_.Add (new Button (() => window_.RemoveHeldAttachment (held, item)) { text = Tr ("RIG_EDITOR_REMOVE_ATTACHMENT") });
             }
-            else if (selected.hand == null && selected.heldPoint == null) {
-                fields_.Add (new Button (() => window_.AddHeldSocket (held)) { text = Tr ("RIG_EDITOR_ADD_SOCKET") });
+            else if (selected.heldPoint == null) {
                 fields_.Add (new Button (() => window_.RemoveHeldObject (held)) { text = Tr ("RIG_EDITOR_REMOVE_OBJECT") });
             }
         }

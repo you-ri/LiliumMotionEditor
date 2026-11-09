@@ -18,18 +18,23 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 物を持つ手の握り。手首の点の場所と向きを、物のローカルで持つ
+    /// 物の、付ける先ごとの決まった位置（S104）。リグ定義の付ける先（EditRigDefinition.AttachPoint）を名前で指す。
+    /// 無い先にも付けられる（付けるボタンを押した瞬間の位置で付く）。キーの無いクリップ・窓の「寄せる」・CLI の useSettings でここを使う
     /// </summary>
     [System.Serializable]
-    public sealed class HeldObjectGrip
+    public sealed class HeldObjectAttachment
     {
-        [Tooltip ("Hold the object with this hand in clips that have no hold keys")]
-        public bool hold = true;
-        [Tooltip ("Where the wrist goes, in the object's local space (meters)")]
+        [Tooltip ("Name of the attach point in the rig definition")]
+        public string point;
+        [Tooltip ("Attach the object here in clips that have no attachment keys")]
+        public bool attached;
+        [Tooltip ("Where the attach point's frame is, in the object's local space (meters)")]
         public Vector3 position;
-        [Tooltip ("Hand orientation in the object's local space (Euler angles). Zero aligns the axes that were body right, up and forward in the T-pose with the object's X, Y and Z")]
+        [Tooltip ("Attach frame orientation in the object's local space (Euler angles). Zero aligns the axes that were body right, up and forward in the T-pose with the object's X, Y and Z")]
         public Vector3 rotation;
-        [Tooltip ("Optional. Game rig constraint weight that gets this hand's hold when baking, written as <Rig name>/<path below the rig>")]
+        [Tooltip ("While the object is attached here, bake its curves relative to this attach point's bone instead of the parent bone (for example a sword sheathed on the hips). The game must keep the object on this bone while it is attached here, for example with the constraint below")]
+        public bool bakeParent;
+        [Tooltip ("Optional. Game rig constraint weight that is 1 while the object is attached here when baking, written as <Rig name>/<path below the rig>")]
         public string constraint;
     }
 
@@ -48,24 +53,6 @@ namespace Lilium
         public int weight;
         [Tooltip ("Whether the point also has a rotation (pinning it fixes the object's rotation)")]
         public bool rotation;
-    }
-
-    /// <summary>
-    /// 持ち物を差す場所（S91f。腰・背中など）。差している間、物は骨に固定して動く
-    /// </summary>
-    [System.Serializable]
-    public sealed class HeldObjectSocket
-    {
-        [Tooltip ("Name. Clips key each socket by this name (Controls/Object/object name/name), so renaming it loses its keys")]
-        public string name;
-        [Tooltip ("Bone the object stays on while it's in this socket")]
-        public HumanBodyBones bone = HumanBodyBones.Hips;
-        [Tooltip ("Where the object goes, from the bone along body right, up and forward in the T-pose (meters)")]
-        public Vector3 position;
-        [Tooltip ("Object rotation, in body right, up and forward axes in the T-pose (Euler angles)")]
-        public Vector3 rotation;
-        [Tooltip ("Optional. Game rig constraint weight that is 1 while the object is in this socket when baking, written as <Rig name>/<path below the rig>")]
-        public string constraint;
     }
 
     /// <summary>
@@ -88,21 +75,31 @@ namespace Lilium
         public Vector3 restPosition = new Vector3 (0, -0.25f, 0.3f);
         [Tooltip ("Rotation with no keys, in body right, up and forward axes (Euler angles)")]
         public Vector3 restRotation = new Vector3 (35, 0, 0);
-        public HeldObjectGrip rightGrip = new HeldObjectGrip ();
-        public HeldObjectGrip leftGrip = new HeldObjectGrip ();
         [Tooltip ("Full-body IK points on the object. They work like the rig definition's points")]
         public List<HeldObjectPoint> points = new List<HeldObjectPoint> ();
-        [Tooltip ("The handle axis, in the object's local space. Holding hands can twist freely around it, and a clip that shifts a grip slides the hand along it")]
+        [Tooltip ("The handle axis, in the object's local space. Attach points with the Twist joint (hands) can turn freely around it")]
         public Vector3 gripAxis = Vector3.up;
-        [Tooltip ("Places the object can sit in (a hip, the back, etc.). Clips switch to them with keys")]
-        public List<HeldObjectSocket> sockets = new List<HeldObjectSocket> ();
-        [Tooltip ("Socket the object sits in, with no hand holding it, in clips that have no socket keys. Empty: not in a socket")]
-        public string restSocket;
+        [Tooltip ("Where the object goes on each attach point of the rig definition (optional), whether it is attached there in clips with no keys, and the game constraint to bake")]
+        public List<HeldObjectAttachment> attachments = new List<HeldObjectAttachment> ();
 
-        /// <summary>差していないことを表す名前（CLI）。差す場所の名前には使えない</summary>
-        public const string kNoSocketName = "None";
+        /// <summary>この付ける先の決まった位置（無ければ null）</summary>
+        public HeldObjectAttachment FindAttachment (string point)
+        {
+            return attachments != null ? attachments.Find (a => a != null && a.point == point) : null;
+        }
 
-        /// <summary>FBX の空の名前。あれば握りの初期値にする</summary>
+        /// <summary>この付ける先の決まった位置。無ければ足す</summary>
+        public HeldObjectAttachment GetOrAddAttachment (string point)
+        {
+            HeldObjectAttachment found = FindAttachment (point);
+            if (found != null) return found;
+            attachments ??= new List<HeldObjectAttachment> ();
+            found = new HeldObjectAttachment { point = point };
+            attachments.Add (found);
+            return found;
+        }
+
+        /// <summary>FBX の空の名前。あれば右手・左手の位置の初期値にする</summary>
         public const string kRightGripName = "Grip_R";
         public const string kLeftGripName = "Grip_L";
         /// <summary>FBX の空の名前の頭。あれば点の初期値にする（Point_Tip なら点 Tip）</summary>
@@ -155,20 +152,24 @@ namespace Lilium
             points.Add (new HeldObjectPoint { name = name, position = position, weight = center ? 1 : 0, rotation = center });
         }
 
-        /// <summary>物のモデルの空（Grip_R・Grip_L）から、握りの場所と向きを入れる。空が無ければ変えない</summary>
+        /// <summary>
+        /// 物のモデルの空（Grip_R・Grip_L）から、右手・左手の付ける先（既定の定義の名前）の位置を入れ、キーの無いクリップで付けておく。空が無ければ変えない
+        /// </summary>
         public void LoadGrips (GameObject model)
         {
             if (model == null) return;
-            LoadGrip (model.transform, kRightGripName, rightGrip);
-            LoadGrip (model.transform, kLeftGripName, leftGrip);
+            LoadGrip (model.transform, kRightGripName, EditRigDefinition.kRightHandAttach);
+            LoadGrip (model.transform, kLeftGripName, EditRigDefinition.kLeftHandAttach);
         }
 
-        static void LoadGrip (Transform model, string name, HeldObjectGrip grip)
+        void LoadGrip (Transform model, string name, string point)
         {
             Transform empty = model.Find (name);
             if (empty == null) return;
-            grip.position = model.InverseTransformPoint (empty.position);
-            grip.rotation = (Quaternion.Inverse (model.rotation) * empty.rotation).eulerAngles;
+            HeldObjectAttachment attachment = GetOrAddAttachment (point);
+            attachment.attached = true;
+            attachment.position = model.InverseTransformPoint (empty.position);
+            attachment.rotation = (Quaternion.Inverse (model.rotation) * empty.rotation).eulerAngles;
         }
 
         /// <summary>定義の誤り。空なら使える</summary>
@@ -183,10 +184,10 @@ namespace Lilium
                     if (point == null || !RigPaths.IsValidName (point.name) || !names.Add (point.name)) errors.Add (Tr ("HELD_OBJECT_INVALID_POINT_NAME", name, point != null ? point.name : ""));
                 }
             }
-            if (sockets != null) {
+            if (attachments != null) {
                 HashSet<string> names = new HashSet<string> ();
-                foreach (HeldObjectSocket socket in sockets) {
-                    if (socket == null || !RigPaths.IsValidName (socket.name) || socket.name == kNoSocketName || !names.Add (socket.name)) errors.Add (Tr ("HELD_OBJECT_INVALID_SOCKET_NAME", name, socket != null ? socket.name : ""));
+                foreach (HeldObjectAttachment attachment in attachments) {
+                    if (attachment == null || !RigPaths.IsValidName (attachment.point) || !names.Add (attachment.point)) errors.Add (Tr ("HELD_OBJECT_INVALID_ATTACHMENT", name, attachment != null ? attachment.point : ""));
                 }
             }
             return errors;
@@ -194,113 +195,124 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 持ち物を編集用の体に当てたもの（S91）。物が導き、手が従う: 物の姿勢をキーに持ち、持っている間は物の姿勢を全身 IK の見えない点の目標にする。
+    /// 物を編集用の体に当てたもの（S91・S104）。物の姿勢をキーに持ち、付けている間は物の姿勢を全身 IK の見えない点の目標にする。
     ///
     /// 物の姿勢の値（＝編集用クリップに保存する値。Controls/Object/名前 の Transform）:
     /// - localRotation = 枠の骨の基準姿勢からの回りを戻した、ルートから見た物の向き
     /// - localPosition = 枠の骨から物までの向き（同じ回りを戻した） / humanScale
     /// 枠が Chest なら、腰や胸が動いても物は胸に付いて動く。
     ///
+    /// 付ける先（S104）はリグ定義の一覧（EditRigDefinition.attachPoints）で、どの先も同じ決まりで解く（11-09 ユーザー指示「任意のボーンにアタッチする機能として汎用化する」）。
+    /// 付けているかと付けた位置は、物 × 付ける先ごとの値（Controls/Object/物の名前/付ける先の名前 の HeldObjectControl）。
+    ///
     /// 解き方は Prepare → 全身 IK → Finish の順（S102。11-07 ユーザー指示「持ったときに IK 構造を再構築する。いままで同じ IK 構造を解くだけでよくなる」）。
-    /// Prepare は、持っている物を持つ手の骨の子として全身 IK の骨の組みに入れ（両手なら右手の子、左手は輪の関節）、物を手 × 握りへ置く。
-    /// 物を動かせば物の姿勢の点がつかんだ点になって全身を引き、物の上の点を動かせばその点がつかんだ点になる。手を握りへ合わせ直す特別な処理は無い。
-    /// Finish は、解いた物の骨から物の姿勢を読む。
+    /// Prepare は、付けている物を付ける先の骨の子として全身 IK の骨の組みに入れ（親は 1 つ。ほかの先は輪の関節）、物を骨の枠 × 付けた位置へ置く。
+    /// 関節は付ける先の種類で決まる: Twist は柄の軸まわりにだけ回り、Fixed は回らない。
+    /// 物を動かせば物の姿勢の点がつかんだ点になって、付けた骨（手でも腰でも）を引く。Finish は、解いた物の骨から物の姿勢を読む。
     ///
-    /// 物の上の点（S91e）はふつうの全身 IK の点で、状態・キー・選び方・ハンドルは変わらない。持っている間は物の骨の上の点として解き、重さの意味も体の点と同じ。
-    /// 持っていない物は骨の組みに入れず、ここで物の点から物の姿勢を決める（FitToPoints）
-    ///
-    /// 差している間（S91f）は、物の姿勢を差す場所の骨から決める。キーの値は使わないが、差したフレームと抜いたフレームには差す場所の姿勢を物の値として打つ。
-    /// 枠の違う値をカーブへ混ぜないので、差す前後のキーの間で物は手と一緒に差す場所へ動き、切り替えのフレームで跳ばない
+    /// 物の上の点（S91e）はふつうの全身 IK の点で、状態・キー・選び方・ハンドルは変わらない。付けている間は物の骨の上の点として解き、重さの意味も体の点と同じ。
+    /// 付けていない物は骨の組みに入れず、ここで物の点から物の姿勢を決める（FitToPoints）
     /// </summary>
     public sealed class HeldObjectRig
     {
-        /// <summary>物を持つ手 1 つ</summary>
-        public sealed class Hand
+        /// <summary>物 1 つと、付ける先 1 つの組（S104）</summary>
+        public sealed class Attachment
         {
             internal Entry entry;
-            internal bool left;
-            public BodyPointId id;
-            public Transform control;
-            /// <summary>乗っている骨</summary>
+            /// <summary>リグ定義の付ける先</summary>
+            public EditRigDefinition.AttachPoint point;
+            /// <summary>物の設定の、この先の決まった位置（無ければ null）</summary>
+            public HeldObjectAttachment settings;
+            /// <summary>付けているか・付けた位置の値（Controls/Object/物の名前/付ける先の名前）</summary>
+            public HeldObjectControl values;
+            /// <summary>付ける骨（編集用の体）</summary>
             public Transform bone;
+            internal Quaternion boneRest = Quaternion.identity;
+            /// <summary>骨の基準姿勢での、骨の付け根から枠までの差（ルート空間。メートル）</summary>
+            internal Vector3 frameOffset;
+            /// <summary>骨の基準姿勢での枠の向き（ルート空間）</summary>
+            internal Quaternion frameRotation = Quaternion.identity;
+            /// <summary>物の設定の位置（物のローカル。リグエディタで動かす間は設定より先に変わる）</summary>
             internal Vector3 gripPosition;
-            internal Quaternion gripRotation;
-            /// <summary>同じ骨の上のほかの点（持っている間は効かせない）</summary>
-            internal List<BodyPointId> others = new List<BodyPointId> ();
-            /// <summary>このクリップに握りのずれのキーがあるか（あれば、どのキーにも打つ）</summary>
-            internal bool slideKeyed;
-            /// <summary>このクリップにキーの握り（S99）のカーブがあるか（あれば、どのキーにも打つ）</summary>
+            internal Quaternion gripRotation = Quaternion.identity;
+            /// <summary>キーの無いクリップでの、付けているかの値</summary>
+            internal float rest;
+            /// <summary>このクリップにキーの位置（S99）のカーブがあるか（あれば、どのキーにも打つ）</summary>
             internal bool gripCurved;
+            internal RigProxies.Weight constraint;
 
-            /// <summary>今の握りが、キーで持った握り（持つボタンを押した瞬間の手。S99）か。違えばキャラの設定の握り（gripPosition・gripRotation）</summary>
-            public bool gripKeyed
-            {
-                get { return (left ? entry.values.leftGripKeyed : entry.values.rightGripKeyed) >= 0.5f; }
-            }
-
-            /// <summary>今の握りの場所（物のローカル。柄に沿ってずらす前）</summary>
-            internal Vector3 heldGripPosition
-            {
-                get { return gripKeyed ? (left ? entry.values.leftGripPosition : entry.values.rightGripPosition) : gripPosition; }
-            }
-
-            /// <summary>今の握りの向き（物のローカル）</summary>
-            internal Quaternion heldGripRotation
-            {
-                get { return gripKeyed ? Quaternion.Euler (left ? entry.values.leftGripRotation : entry.values.rightGripRotation) : gripRotation; }
-            }
-
-            /// <summary>キーの握りにする（keyed が false ならキャラの設定の握りへ戻す）</summary>
-            internal void SetKeyedGrip (bool keyed, Vector3 position, Vector3 rotation)
-            {
-                HeldObjectControl values = entry.values;
-                if (left) {
-                    values.leftGripKeyed = keyed ? 1 : 0;
-                    values.leftGripPosition = position;
-                    values.leftGripRotation = rotation;
-                }
-                else {
-                    values.rightGripKeyed = keyed ? 1 : 0;
-                    values.rightGripPosition = position;
-                    values.rightGripRotation = rotation;
-                }
-            }
-
-            /// <summary>握りを柄に沿ってずらす量（メートル）</summary>
-            public float slide
-            {
-                get { return left ? entry.values.leftSlide : entry.values.rightSlide; }
-                set {
-                    if (left) entry.values.leftSlide = value;
-                    else entry.values.rightSlide = value;
-                }
-            }
-
-            /// <summary>今の握りの場所（物のローカル。設定かキーの握りから、柄に沿ってずらした所）</summary>
-            internal Vector3 gripAt
-            {
-                get { return heldGripPosition + entry.definition.gripAxis.normalized * slide; }
-            }
-
-            /// <summary>握りの柄の軸まわりの回り（ルート空間。Finish が解いた手首から決める。持っている間だけ使う）</summary>
+            /// <summary>柄の軸まわりの回り（ルート空間。Finish が解いた骨から決める。Twist の先で付けている間だけ使う）</summary>
             internal Quaternion twist = Quaternion.identity;
-
             /// <summary>
-            /// 前に解いた姿勢での、手から見た物の柄の軸まわりの回り（物のローカル。手首に合わせた物の向き⁻¹ × 物の向き）。
-            /// Finish が解いた手首と物から決める。hasRoll が false なら、まだ解いていない
+            /// 前に解いた姿勢での、枠から見た物の柄の軸まわりの回り（物のローカル。枠に合わせた物の向き⁻¹ × 物の向き）。
+            /// Finish が解いた骨と物から決める。hasRoll が false なら、まだ解いていない
             /// </summary>
             internal Quaternion roll = Quaternion.identity;
             internal bool hasRoll;
 
-            /// <summary>今のフレームで持っているか</summary>
-            public bool held
+            public string name
             {
-                get { return (left ? entry.values.leftHold : entry.values.rightHold) >= 0.5f; }
+                get { return point.name; }
             }
 
             public Entry owner
             {
                 get { return entry; }
+            }
+
+            internal Transform control
+            {
+                get { return values.transform; }
+            }
+
+            /// <summary>今のフレームで付けているか</summary>
+            public bool attached
+            {
+                get { return values.attached >= 0.5f; }
+            }
+
+            /// <summary>柄の軸まわりに回る先か（手）。違えば回らない（腰・背中）</summary>
+            public bool twists
+            {
+                get { return point.joint == EditRigDefinition.AttachJoint.Twist; }
+            }
+
+            /// <summary>物の設定に決まった位置があるか（窓の「寄せる」）</summary>
+            public bool hasSettings
+            {
+                get { return settings != null; }
+            }
+
+            /// <summary>今の位置が、キーで付けた位置（付けるボタンを押した瞬間の位置。S99）か。違えば物の設定の位置（gripPosition・gripRotation）</summary>
+            public bool gripKeyed
+            {
+                get { return values.gripKeyed >= 0.5f; }
+            }
+
+            /// <summary>今の位置の場所（物のローカル）</summary>
+            internal Vector3 heldGripPosition
+            {
+                get { return gripKeyed ? values.gripPosition : gripPosition; }
+            }
+
+            /// <summary>今の位置の向き（物のローカル）</summary>
+            internal Quaternion heldGripRotation
+            {
+                get { return gripKeyed ? Quaternion.Euler (values.gripRotation) : gripRotation; }
+            }
+
+            /// <summary>キーの位置にする（keyed が false なら物の設定の位置へ戻す）</summary>
+            internal void SetKeyedGrip (bool keyed, Vector3 position, Vector3 rotation)
+            {
+                values.gripKeyed = keyed ? 1 : 0;
+                values.gripPosition = position;
+                values.gripRotation = rotation;
+            }
+
+            /// <summary>柄の軸（物のローカル）。回らない先は 0</summary>
+            internal Vector3 axis
+            {
+                get { return twists ? entry.definition.gripAxis : Vector3.zero; }
             }
         }
 
@@ -316,60 +328,33 @@ namespace Lilium
             internal bool heavy;
         }
 
-        /// <summary>物を差す場所 1 つ</summary>
-        public sealed class Socket
-        {
-            internal Entry entry;
-            public HeldObjectSocket definition;
-            internal HeldObjectControl values;
-            internal Transform control
-            {
-                get { return values.transform; }
-            }
-            /// <summary>キーの無いクリップでの、差しているかの値</summary>
-            internal float rest;
-            internal Transform bone;
-            internal Quaternion boneRest = Quaternion.identity;
-            /// <summary>骨の基準姿勢から見た物の場所と向き（ルート空間。リグエディタで動かす間は定義より先に変わる）</summary>
-            internal Vector3 offset;
-            internal Quaternion rotation = Quaternion.identity;
-            internal RigProxies.Weight constraint;
-        }
-
         /// <summary>物 1 つ</summary>
         public sealed class Entry
         {
             internal HeldObjectRig rig;
             public HeldObjectDefinition definition;
             public Transform control;
-            public HeldObjectControl values;
             /// <summary>編集用の体の中の物</summary>
             public Transform editing;
             /// <summary>表示モデルの物</summary>
             public Transform display;
             internal Transform frameBone;
             internal Quaternion frameRest = Quaternion.identity;
-            internal float restLeftHold;
-            internal float restRightHold;
-            public Hand left;
-            public Hand right;
+            /// <summary>付ける先（リグ定義の並び。キャラに骨の無い先は入らない）</summary>
+            public readonly List<Attachment> attachments = new List<Attachment> ();
             /// <summary>物の上の全身 IK の点（S91e）</summary>
             public readonly List<ObjectPoint> points = new List<ObjectPoint> ();
-            /// <summary>物を差す場所（S91f。キャラに骨の無い場所は入らない）</summary>
-            public readonly List<Socket> sockets = new List<Socket> ();
-            /// <summary>差す場所へ運んでいる間か（手が届かなくても物を寄せない。差す場所はずれない）</summary>
-            internal bool bringing;
-            /// <summary>運んでいる先の差す場所（bringing の間だけ）</summary>
-            internal Socket bringTarget;
-            /// <summary>差す場所へ運んだとき、握りに届かなかった手の差（メートル）。届かない分は差すフレームで手か物が跳ぶ</summary>
-            public float bringGap;
-            internal RigProxies.Weight leftConstraint;
-            internal RigProxies.Weight rightConstraint;
+            /// <summary>決まった位置へ寄せた（SnapTo）とき、付けている先に届かなかった差（メートル）。届かない分は、付けている骨か物が跳ぶ</summary>
+            public float snapGap;
+            /// <summary>寄せている間か（解いた後に snapGap を測る）</summary>
+            internal bool snapping;
+            /// <summary>寄せている先（snapping の間だけ）</summary>
+            internal Attachment snapTarget;
             /// <summary>つかんで動かしている間の、物の姿勢（ルート空間）</summary>
             internal bool dragging;
             /// <summary>動かしている間、全身を引くか（重い点をつかんだ・物そのものを動かした。軽い点では引かない）</summary>
             internal bool pulling;
-            /// <summary>物そのものを動かしているか（物の FK・手の点・CLI）。置いた姿勢が優先で、Pin の点には戻らない</summary>
+            /// <summary>物そのものを動かしているか（物の FK・CLI）。置いた姿勢が優先で、Pin の点には戻らない</summary>
             internal bool direct;
             internal Vector3 dragPosition;
             internal Quaternion dragRotation;
@@ -379,7 +364,7 @@ namespace Lilium
             /// <summary>今の姿勢を物の上の点で決めたか（Prepare から Finish の間だけ）</summary>
             internal bool fitted;
             /// <summary>
-            /// 物の姿勢の点（S102）のコントロールと名前と値。持っている間、物の骨の原点を物の姿勢へ寄せる全身 IK の点（点の一覧には出ない）。
+            /// 物の姿勢の点（S102）のコントロールと名前と値。付けている間、物の骨の原点を物の姿勢へ寄せる全身 IK の点（点の一覧には出ない）。
             /// 状態（Free / Pin / Lock）は体の点と同じで、持ち物の対象（HeldObjectTarget）で切り替え、キーを打つ（11-07 ユーザー指示「持ち物 Stick も制御点に」）
             /// </summary>
             internal Transform poseControl;
@@ -412,7 +397,7 @@ namespace Lilium
                 }
                 keysPending = true;
             }
-            /// <summary>今の解き方で、物を骨の組み（持つ手の子）に入れたか（Prepare から Finish の間だけ）</summary>
+            /// <summary>今の解き方で、物を骨の組み（付ける先の骨の子）に入れたか（Prepare から Finish の間だけ）</summary>
             internal bool attached;
             /// <summary>動かしたがまだキーを打っていないか</summary>
             public bool keysPending;
@@ -422,43 +407,38 @@ namespace Lilium
                 get { return definition.name; }
             }
 
-            /// <summary>今のフレームで差している場所（差していなければ null）</summary>
-            public Socket socket
+            /// <summary>付ける先を名前で引く（無ければ null）</summary>
+            public Attachment FindAttachment (string point)
             {
-                get {
-                    foreach (Socket item in sockets) {
-                        if (item.values.socket >= 0.5f) return item;
-                    }
-                    return null;
-                }
+                return attachments.Find (a => a.name == point);
+            }
+
+            /// <summary>今のフレームで、どこかに付けているか</summary>
+            public bool anyAttached
+            {
+                get { return attachments.Exists (a => a.attached); }
             }
 
             /// <summary>
-            /// 差す場所へ物を動かして、持っている手を付いて来させる（まだ差さない）。腰が動くと差す場所も動くので、全身は引かない。
-            /// 持っている手がここまで来てから放すので、差す前のキーの間で手が物に付いたまま動き、放すフレームで手が跳ばない
+            /// 物の設定の決まった位置で target に付く所へ、物を動かす（まだ付けない。付けている骨は付いてくる）。全身は引かない。
+            /// 寄せる所は、呼んだときの target の骨（解いた姿勢）で決める。物の方が寄り、target の骨は動かない。
+            /// 寄せている間は、物を target の骨に回らない関節で付けて解く（物は寄せた所からずれない。届かない骨は届かないまま。S91f の差すときの運び方と同じ）。
+            /// 付けている骨がここまで来てから付け替えれば、前のキーの間で骨が物に付いたまま動き、付け替えのフレームで跳ばない
             /// </summary>
-            public void BringTo (Socket target)
+            public void SnapTo (Attachment target)
             {
-                rig.GetSocketPose (target, out Vector3 position, out Quaternion rotation);
-                ClearSockets ();
+                rig.GetSettingsPose (target, out Vector3 position, out Quaternion rotation);
                 PlaceWithoutPulling (position, rotation);
-                bringing = true;
-                bringTarget = target;
+                snapping = true;
+                snapTarget = target;
             }
 
-            /// <summary>今の場所のまま差すのをやめる。今の姿勢を物の値に残すので、次のキーまでここから動く</summary>
-            public void LeaveSocket ()
+            /// <summary>どこにも付けていない値にする（姿勢は動かさない）</summary>
+            public void DetachAll ()
             {
-                rig.GetPose (this, out Vector3 position, out Quaternion rotation);
-                ClearSockets ();
-                PlaceWithoutPulling (position, rotation);
-            }
-
-            /// <summary>どの場所にも差していない値にする（姿勢は動かさない）</summary>
-            public void ClearSockets ()
-            {
-                foreach (Socket item in sockets) item.values.socket = 0;
+                foreach (Attachment item in attachments) item.values.attached = 0;
                 ApplyConstraintWeights (this);
+                keysPending = true;
             }
 
             void PlaceWithoutPulling (Vector3 position, Quaternion rotation)
@@ -471,37 +451,13 @@ namespace Lilium
                 keysPending = true;
             }
 
-            /// <summary>どちらの手も持っていなければ、定義の握りで持つ（差すのをやめて宙に残さない）</summary>
-            public void HoldByDefaultIfFree ()
-            {
-                if (values.leftHold >= 0.5f || values.rightHold >= 0.5f) return;
-                values.leftHold = definition.leftGrip != null && definition.leftGrip.hold ? 1 : 0;
-                values.rightHold = definition.rightGrip != null && definition.rightGrip.hold ? 1 : 0;
-                ApplyConstraintWeights (this);
-            }
-
-            /// <summary>差す場所へ入れて両手を放す（BringTo の解いた後に呼ぶ）</summary>
-            public void EnterSocket (Socket target)
-            {
-                foreach (Socket item in sockets) item.values.socket = item == target ? 1 : 0;
-                values.leftHold = 0;
-                values.rightHold = 0;
-                dragging = false;
-                pulling = false;
-                direct = false;
-                bringing = false;
-                keysPending = true;
-                ApplyConstraintWeights (this);
-            }
-
             /// <summary>
-            /// 物のワールドの姿勢を置いて、つかんだ状態にする。解くまで骨は動かない。差している間は動かない（場所はリグエディタで直す）。
+            /// 物のワールドの姿勢を置いて、つかんだ状態にする。解くまで骨は動かない。
             /// 体の点と同じく、動かした分だけ固定する: 場所を変えたら物の姿勢の点の位置の強さを、向きを変えたら向きの強さを 1 にする（Pin）。
             /// 場所だけ動かしたときに向きまで固定すると、手首を Pin にして物を動かしても手首の角度が変わらなかった（11-07 ユーザー報告「通常の IK 制御では回転するはず」）
             /// </summary>
             public void DragTo (Vector3 worldPosition, Quaternion worldRotation)
             {
-                if (socket != null) return;
                 Transform root = rig.rig_.root.transform;
                 GetWorldPose (out Vector3 currentPosition, out Quaternion currentRotation);
                 if (Vector3.Distance (currentPosition, worldPosition) > 1e-6f) poseValues.positionWeight = 1;
@@ -533,7 +489,6 @@ namespace Lilium
 
         readonly EditingRig rig_;
         readonly List<Entry> entries_ = new List<Entry> ();
-        readonly List<Hand> hands_ = new List<Hand> ();
         readonly Quaternion body_;
 
         public IReadOnlyList<Entry> entries
@@ -619,51 +574,76 @@ namespace Lilium
                 rig = this,
                 definition = definition,
                 control = control,
-                values = control.gameObject.AddComponent<HeldObjectControl> (),
                 editing = editing,
                 display = display,
             };
-            AddSockets (entry, createGameObject);
-            // 差した物をキーの無いクリップで持たせると、手が腰へ引かれる
-            bool free = entry.socket == null;
-            entry.restLeftHold = free && definition.leftGrip != null && definition.leftGrip.hold ? 1 : 0;
-            entry.restRightHold = free && definition.rightGrip != null && definition.rightGrip.hold ? 1 : 0;
+            AddAttachments (entry, createGameObject);
             entry.frameBone = FindFrameBone (definition.frame);
             if (entry.frameBone != null) entry.frameRest = rig_.GetRestRootRotation (entry.frameBone);
             // 基準の値（キーの無いクリップで物を置く所）。枠の骨の付け根から、体の向きで書いた所
             control.localPosition = rig_.BodyToRoot (definition.restPosition) / rig_.humanScale;
             control.localRotation = body_ * Quaternion.Euler (definition.restRotation);
-            entry.values.leftHold = entry.restLeftHold;
-            entry.values.rightHold = entry.restRightHold;
             BindConstraints (entry);
             entries_.Add (entry);
-            rig_.AddBakedBone (display);
+            rig_.AddBakedBone (display, fromDisplay => BakeParent (entry, fromDisplay));
             AddPoints (entry, createGameObject);
         }
 
-        void AddSockets (Entry entry, System.Func<string, GameObject> createGameObject)
+        /// <summary>
+        /// 焼く値をどの骨から見た値にするか: 付けている先のうち、物の設定で bakeParent にした先の骨（腰に差している剣なら腰。11-09 ユーザー指示
+        /// 「腰にアタッチした際は、hips を親ボーンにする」）。いくつもあれば、物を子にする先と同じ決まり（回らない先が先、同じ種類ならリグ定義の並び）。
+        /// どれも付けていなければ null（親の骨から見た値）
+        /// </summary>
+        Transform BakeParent (Entry entry, bool fromDisplay)
         {
-            if (entry.definition.sockets == null) return;
-            foreach (HeldObjectSocket source in entry.definition.sockets) {
-                Transform bone = rig_.GetEditingBone (source.bone);
+            Attachment found = null;
+            foreach (Attachment attachment in entry.attachments) {
+                if (attachment.settings == null || !attachment.settings.bakeParent || !attachment.attached) continue;
+                if (found == null || (!attachment.twists && found.twists)) found = attachment;
+            }
+            if (found == null) return null;
+            return fromDisplay ? rig_.GetDisplayBone (found.bone) : found.bone;
+        }
+
+        /// <summary>リグ定義の付ける先ごとに、値のコントロールを作る（キャラに骨の無い先は知らせて飛ばす）</summary>
+        void AddAttachments (Entry entry, System.Func<string, GameObject> createGameObject)
+        {
+            HashSet<string> names = new HashSet<string> ();
+            foreach (EditRigDefinition.AttachPoint point in rig_.binding.attachPoints) {
+                if (!RigPaths.IsValidName (point.name) || !names.Add (point.name)) continue;
+                Transform bone = FindAttachBone (point);
                 if (bone == null) {
-                    rig_.binding.notes.Add (Tr ("HELD_OBJECT_NO_SOCKET_BONE", entry.name, source.name, source.bone));
+                    rig_.binding.notes.Add (Tr ("HELD_OBJECT_NO_ATTACH_BONE", entry.name, point.name));
                     continue;
                 }
-                Transform control = rig_.CreateControl (RigPaths.ObjectSocket (entry.name, source.name), createGameObject);
-                Socket socket = new Socket {
+                HeldObjectAttachment settings = entry.definition.FindAttachment (point.name);
+                Transform control = rig_.CreateControl (RigPaths.ObjectAttach (entry.name, point.name), createGameObject);
+                Attachment attachment = new Attachment {
                     entry = entry,
-                    definition = source,
+                    point = point,
+                    settings = settings,
                     values = control.gameObject.AddComponent<HeldObjectControl> (),
-                    rest = source.name == entry.definition.restSocket ? 1 : 0,
                     bone = bone,
                     boneRest = rig_.GetRestRootRotation (bone),
-                    offset = body_ * source.position,
-                    rotation = body_ * Quaternion.Euler (source.rotation),
+                    frameOffset = rig_.BodyToRoot (point.position) * rig_.humanScale,
+                    frameRotation = body_ * Quaternion.Euler (point.rotation),
+                    gripPosition = settings != null ? settings.position : Vector3.zero,
+                    gripRotation = settings != null ? Quaternion.Euler (settings.rotation) : Quaternion.identity,
+                    rest = settings != null && settings.attached ? 1 : 0,
                 };
-                socket.values.socket = socket.rest;
-                entry.sockets.Add (socket);
+                attachment.values.attached = attachment.rest;
+                entry.attachments.Add (attachment);
             }
+        }
+
+        /// <summary>付ける先の骨（追加コントロールの名前があればその骨。編集用の体）</summary>
+        Transform FindAttachBone (EditRigDefinition.AttachPoint point)
+        {
+            if (!string.IsNullOrEmpty (point.control)) {
+                RigBinding.Extra extra = rig_.binding.extras.Find (e => e.control.name == point.control);
+                return extra != null && extra.bone != null ? rig_.GetEditingBone (extra.bone) : null;
+            }
+            return point.bone == HumanBodyBones.LastBone ? null : rig_.GetEditingBone (point.bone);
         }
 
         /// <summary>
@@ -728,45 +708,11 @@ namespace Lilium
             }
         }
 
-        /// <summary>全身 IK の点へ手を結び付ける（全身 IK を作った後）。手首の点が無い手は持てない</summary>
-        public void BindHands (FullBodyRig body)
+        /// <summary>全身 IK へ物の姿勢の点を足す（全身 IK を作った後）</summary>
+        public void BindBody (FullBodyRig body)
         {
-            hands_.Clear ();
             if (body == null) return;
-            foreach (Entry entry in entries_) {
-                entry.right = CreateHand (entry, body, HumanBodyBones.RightHand, entry.definition.rightGrip, false);
-                entry.left = CreateHand (entry, body, HumanBodyBones.LeftHand, entry.definition.leftGrip, true);
-                body.AddHeldPosePoint (entry.poseId, entry.poseControl, entry.editing);
-            }
-        }
-
-        Hand CreateHand (Entry entry, FullBodyRig body, HumanBodyBones bone, HeldObjectGrip grip, bool left)
-        {
-            BodyPointId id = bone;
-            if (grip == null || !body.HasPoint (id)) return null;
-            Hand hand = new Hand {
-                entry = entry,
-                left = left,
-                id = id,
-                control = body.GetControl (id),
-                bone = body.GetBone (id),
-                gripPosition = grip.position,
-                gripRotation = Quaternion.Euler (grip.rotation),
-            };
-            foreach (BodyPointId other in body.pointIds) {
-                if (!other.Equals (id) && body.GetBone (other) == hand.bone) hand.others.Add (other);
-            }
-            hands_.Add (hand);
-            return hand;
-        }
-
-        /// <summary>手首の点の持ち主の手（持ち物が持たない手なら null）</summary>
-        public Hand FindHand (BodyPointId id)
-        {
-            foreach (Hand hand in hands_) {
-                if (hand.id.Equals (id)) return hand;
-            }
-            return null;
+            foreach (Entry entry in entries_) body.AddHeldPosePoint (entry.poseId, entry.poseControl, entry.editing);
         }
 
         /// <summary>点が乗っている物（物の上の点でなければ null）</summary>
@@ -781,14 +727,12 @@ namespace Lilium
         }
 
         /// <summary>
-        /// ゲームの拘束の重みへつなぐ（S91c）。持っているかの値を拘束の重みへ写し、焼くとゲームのパスへ行く。
-        /// 手で打った重みより優先する（手が物から外れないようにする拘束なので、持っている間だけ効かせる）
+        /// ゲームの拘束の重みへつなぐ（S91c）。付けているかの値を拘束の重みへ写し、焼くとゲームのパスへ行く。
+        /// 手で打った重みより優先する（物が骨から外れないようにする拘束なので、付けている間だけ効かせる）
         /// </summary>
         void BindConstraints (Entry entry)
         {
-            entry.leftConstraint = FindWeight (entry.definition.leftGrip != null ? entry.definition.leftGrip.constraint : null);
-            entry.rightConstraint = FindWeight (entry.definition.rightGrip != null ? entry.definition.rightGrip.constraint : null);
-            foreach (Socket socket in entry.sockets) socket.constraint = FindWeight (socket.definition.constraint);
+            foreach (Attachment attachment in entry.attachments) attachment.constraint = FindWeight (attachment.settings != null ? attachment.settings.constraint : null);
             ApplyConstraintWeights (entry);
         }
 
@@ -805,99 +749,125 @@ namespace Lilium
             return null;
         }
 
-        static void ApplyConstraintWeights (Entry entry)
+        /// <summary>付けているかの値を、ゲームの拘束の重みへ写す</summary>
+        internal static void ApplyConstraintWeights (Entry entry)
         {
-            if (entry.leftConstraint != null) entry.leftConstraint.value = entry.values.leftHold;
-            if (entry.rightConstraint != null) entry.rightConstraint.value = entry.values.rightHold;
-            Socket current = entry.socket;
-            foreach (Socket socket in entry.sockets) {
-                if (socket.constraint != null) socket.constraint.value = socket == current ? 1 : 0;
+            foreach (Attachment attachment in entry.attachments) {
+                if (attachment.constraint != null) attachment.constraint.value = attachment.values.attached;
             }
         }
 
-        /// <summary>持っているか・差しているかの値を基準へ戻す</summary>
-        public void ResetHolds ()
+        /// <summary>付けているかの値と付けた位置を基準へ戻す</summary>
+        public void ResetAttachments ()
         {
             foreach (Entry entry in entries_) {
-                entry.values.leftHold = entry.restLeftHold;
-                entry.values.rightHold = entry.restRightHold;
-                foreach (Socket socket in entry.sockets) socket.values.socket = socket.rest;
-                entry.values.leftSlide = 0;
-                entry.values.rightSlide = 0;
-                entry.left?.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
-                entry.right?.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
+                foreach (Attachment attachment in entry.attachments) {
+                    attachment.values.attached = attachment.rest;
+                    attachment.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
+                }
                 ApplyConstraintWeights (entry);
             }
         }
 
         /// <summary>
-        /// 持っているかの値を、その時刻以前でいちばん近いキーの値にする（キーの間で補間しない。キーが無ければ基準の値）
+        /// 付けているかの値を、その時刻以前でいちばん近いキーの値にする（キーの間で補間しない。物のキーがどれも無ければ基準の値）。
+        /// 付ける先を足す前に打った物のキーにはその先のカーブが無いので、そこでは付けていない: その先のカーブが物のキー（物の姿勢のカーブはどのキーにもある）より
+        /// 後から始まるなら、カーブの無い物のキー（その先のカーブのキーより後ろの物のキーも）では付けていない
         /// </summary>
-        public void ApplyHoldKeys (AnimationClip clip, float time)
+        public void ApplyAttachKeys (AnimationClip clip, float time)
         {
             if (clip == null) return;
+            float margin = 0.5f / clip.frameRate;
             foreach (Entry entry in entries_) {
-                string path = RigPaths.Object (entry.name);
-                entry.values.leftHold = EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), HeldObjectControl.kLeftHoldProperty, time, entry.restLeftHold);
-                entry.values.rightHold = EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), HeldObjectControl.kRightHoldProperty, time, entry.restRightHold);
-                ApplySocketKeys (clip, entry, path, time);
-                ApplySlideKeys (clip, entry, path, time);
-                ApplyGripKeys (clip, entry.left, path, time);
-                ApplyGripKeys (clip, entry.right, path, time);
+                bool keyed = TryGetObjectKey (clip, entry, time, out Keyframe last);
+                bool anyObjectKey = EditingClip.TryGetNextStepKey (clip, RigPaths.Object (entry.name), typeof (Transform), kObjectKeyProperty, -1, out Keyframe firstObject);
+                foreach (Attachment attachment in entry.attachments) {
+                    string path = RigPaths.ObjectAttach (entry.name, attachment.name);
+                    bool found = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, time, out Keyframe key);
+                    // 物のキーより後から足した先か（先頭の物のキーにその先のキーが無い）
+                    bool addedLater = anyObjectKey && EditingClip.TryGetNextStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, -1, out Keyframe first)
+                        && first.time > firstObject.time + margin;
+                    if (found && (!addedLater || !keyed || key.time >= last.time - margin)) attachment.values.attached = key.value;
+                    else attachment.values.attached = keyed ? 0 : attachment.rest;
+                    ApplyGripKeys (clip, attachment, time);
+                }
                 ApplyConstraintWeights (entry);
             }
         }
 
-        /// <summary>
-        /// 差しているかの値を、物の最後のキー（手のカーブはどのキーにもある）の時点の値にする。場所を足す前に打った物のキーには場所のカーブが無いので、そこでは差していない。
-        /// 物のキーがどれも無ければ基準の値
-        /// </summary>
-        static void ApplySocketKeys (AnimationClip clip, Entry entry, string path, float time)
+        /// <summary>物の姿勢のカーブ（物のキーの印。どのキーにもある）の、time 以前で一番近いキー</summary>
+        static bool TryGetObjectKey (AnimationClip clip, Entry entry, float time, out Keyframe key)
         {
-            bool keyed = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kLeftHoldProperty, time, out Keyframe last);
-            float margin = 0.5f / clip.frameRate;
-            foreach (Socket socket in entry.sockets) {
-                bool found = EditingClip.TryGetStepKey (clip, RigPaths.ObjectSocket (entry.name, socket.definition.name), typeof (HeldObjectControl), HeldObjectControl.kSocketProperty, time, out Keyframe key);
-                if (found && (!keyed || key.time >= last.time - margin)) socket.values.socket = key.value;
-                else socket.values.socket = keyed ? 0 : socket.rest;
+            return EditingClip.TryGetStepKey (clip, RigPaths.Object (entry.name), typeof (Transform), kObjectKeyProperty, time, out key);
+        }
+
+        const string kObjectKeyProperty = "m_LocalPosition.x";
+
+        /// <summary>
+        /// キーで付けた位置（S99）を当てる。値は、その時刻以前でいちばん近いキーの値（キーが無ければ物の設定の位置）。
+        /// 前後のキーでこの先に付けていれば、キーの間は前のキーの位置から次のキーの位置へ補間する（手が柄の上を滑る）。
+        /// 補間しないと、キーの間は前の位置のまま物だけが次のキーの姿勢へ動くので、骨が物に引かれ、次のキーで位置が変わって骨が跳んだ
+        /// （11-08 ユーザー報告「棒の持ち位置をずらした状態で 0 と 30 にキーを打ったら、再生すると動きが変」。腕のデバッグ用キャラで手首が 9cm 流れて戻った）。
+        /// 付け替えた（前後のキーで付けているかが違う）区間は補間しない
+        /// </summary>
+        static void ApplyGripKeys (AnimationClip clip, Attachment attachment, float time)
+        {
+            string path = RigPaths.ObjectAttach (attachment.entry.name, attachment.name);
+            attachment.gripCurved = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kGripKeyedProperty, float.PositiveInfinity, out Keyframe _);
+            if (!attachment.gripCurved) {
+                attachment.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
+                return;
             }
+            ReadGrip (clip, attachment, path, time, out bool gripKeyed, out Vector3 position, out Quaternion rotation);
+            if (EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, time, out Keyframe from) && from.value >= 0.5f
+                && EditingClip.TryGetNextStepKey (clip, path, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, time, out Keyframe to) && to.value >= 0.5f) {
+                ReadGrip (clip, attachment, path, to.time, out bool nextKeyed, out Vector3 nextPosition, out Quaternion nextRotation);
+                float weight = SpanWeight (clip, RigPaths.Object (attachment.entry.name), from.time, to.time, time);
+                // キーのフレームちょうど（weight 0）は、そのキーの位置のまま
+                if ((gripKeyed || nextKeyed) && weight > 0) {
+                    position = Vector3.Lerp (position, nextPosition, weight);
+                    rotation = Quaternion.Slerp (rotation, nextRotation, weight);
+                    gripKeyed = true;
+                }
+            }
+            attachment.SetKeyedGrip (gripKeyed, position, rotation.eulerAngles);
         }
 
-        /// <summary>握りのずれの値を当てる。キーの間も補間するので、手が柄の上を滑る</summary>
-        static void ApplySlideKeys (AnimationClip clip, Entry entry, string path, float time)
+        /// <summary>その時刻の位置（キーで付けた位置か、物の設定の位置。物のローカル）</summary>
+        static void ReadGrip (AnimationClip clip, Attachment attachment, string path, float time, out bool keyed, out Vector3 position, out Quaternion rotation)
         {
-            entry.values.leftSlide = EditingClip.GetEasedValue (clip, path, typeof (HeldObjectControl), HeldObjectControl.kLeftSlideProperty, HeldObjectControl.kLeftHoldProperty, time, out bool leftKeyed);
-            entry.values.rightSlide = EditingClip.GetEasedValue (clip, path, typeof (HeldObjectControl), HeldObjectControl.kRightSlideProperty, HeldObjectControl.kLeftHoldProperty, time, out bool rightKeyed);
-            if (entry.left != null) entry.left.slideKeyed = leftKeyed;
-            if (entry.right != null) entry.right.slideKeyed = rightKeyed;
-        }
-
-        /// <summary>
-        /// キーで持った握り（S99）を当てる。持っているかと同じく、その時刻以前でいちばん近いキーの値（キーの間で補間しない。持ち替えたフレームで握りが変わる）。
-        /// キーが無ければキャラの設定の握り
-        /// </summary>
-        static void ApplyGripKeys (AnimationClip clip, Hand hand, string path, float time)
-        {
-            if (hand == null) return;
-            string keyed = hand.left ? HeldObjectControl.kLeftGripKeyedProperty : HeldObjectControl.kRightGripKeyedProperty;
-            string position = hand.left ? HeldObjectControl.kLeftGripPositionProperty : HeldObjectControl.kRightGripPositionProperty;
-            string rotation = hand.left ? HeldObjectControl.kLeftGripRotationProperty : HeldObjectControl.kRightGripRotationProperty;
-            hand.gripCurved = EditingClip.TryGetStepKey (clip, path, typeof (HeldObjectControl), keyed, float.PositiveInfinity, out Keyframe _);
-            if (!hand.gripCurved) {
-                hand.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
+            keyed = EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), HeldObjectControl.kGripKeyedProperty, time, 0) >= 0.5f;
+            if (!keyed) {
+                position = attachment.gripPosition;
+                rotation = attachment.gripRotation;
                 return;
             }
             System.Func<string, Vector3> read = name => new Vector3 (
                 EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), name + ".x", time, 0),
                 EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), name + ".y", time, 0),
                 EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), name + ".z", time, 0));
-            hand.SetKeyedGrip (EditingClip.GetStepValue (clip, path, typeof (HeldObjectControl), keyed, time, 0) >= 0.5f, read (position), read (rotation));
+            position = read (HeldObjectControl.kGripPositionProperty);
+            rotation = Quaternion.Euler (read (HeldObjectControl.kGripRotationProperty));
         }
 
-        /// <summary>time より後ろに物のキーがあるか（切り替えはそのキーまでしか続かない）</summary>
+        /// <summary>
+        /// キーの間（from〜to 秒）の time での、前のキーから次のキーへの進み（0〜1）。物の場所のカーブと同じ補間にする
+        /// （止める区間は 0、直線は等速、曲線は緩急を付ける）
+        /// </summary>
+        static float SpanWeight (AnimationClip clip, string path, float from, float to, float time)
+        {
+            float rate = Mathf.InverseLerp (from, to, time);
+            AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, EditorCurveBinding.FloatCurve (path, typeof (Transform), kObjectKeyProperty));
+            int index = curve != null ? System.Array.FindLastIndex (curve.keys, k => k.time <= from + 0.01f / clip.frameRate) : -1;
+            KeyInterpolation? mode = KeyInterpolations.Get (curve, index);
+            if (mode == KeyInterpolation.Constant) return 0;
+            return mode == KeyInterpolation.Linear ? rate : Mathf.SmoothStep (0, 1, rate);
+        }
+
+        /// <summary>time より後ろに物のキーがあるか（付け替えはそのキーまでしか続かない）</summary>
         public static bool HasLaterKey (AnimationClip clip, Entry entry, float time)
         {
-            return EditingClip.TryGetStepKey (clip, RigPaths.Object (entry.name), typeof (HeldObjectControl), HeldObjectControl.kLeftHoldProperty, float.PositiveInfinity, out Keyframe last) && last.time > time + 0.5f / clip.frameRate;
+            return TryGetObjectKey (clip, entry, float.PositiveInfinity, out Keyframe last) && last.time > time + 0.5f / clip.frameRate;
         }
 
         /// <summary>つかんで動かすのをやめる（クリップから姿勢を当て直したとき）</summary>
@@ -907,29 +877,44 @@ namespace Lilium
                 entry.dragging = false;
                 entry.pulling = false;
                 entry.direct = false;
-                entry.bringing = false;
-                entry.bringGap = 0;
+                entry.snapping = false;
+                entry.snapTarget = null;
+                entry.snapGap = 0;
             }
         }
 
-        /// <summary>差す場所の今の姿勢（ルート空間）。骨の基準姿勢からの動きに乗せる</summary>
-        internal void GetSocketPose (Socket socket, out Vector3 position, out Quaternion rotation)
+        /// <summary>付ける先の枠の今の姿勢（ルート空間）。骨の基準姿勢からの動きに乗せる</summary>
+        internal void GetAttachFrame (Attachment attachment, out Vector3 position, out Quaternion rotation)
         {
             Transform root = rig_.root.transform;
-            Vector3 origin = root.InverseTransformPoint (socket.bone.position);
-            Quaternion turn = Quaternion.Inverse (root.rotation) * socket.bone.rotation * Quaternion.Inverse (socket.boneRest);
-            position = origin + turn * socket.offset;
-            rotation = turn * socket.rotation;
+            Vector3 origin = root.InverseTransformPoint (attachment.bone.position);
+            Quaternion turn = Quaternion.Inverse (root.rotation) * attachment.bone.rotation * Quaternion.Inverse (attachment.boneRest);
+            position = origin + turn * attachment.frameOffset;
+            rotation = Quaternion.Normalize (turn * attachment.frameRotation);
         }
 
-        /// <summary>物の姿勢（ルート空間）。差していれば差す場所、つかんでいれば置いた姿勢、そうでなければキーの値を今の枠の骨に乗せた姿勢</summary>
+        /// <summary>物の設定の位置で付けたときの物の姿勢（ルート空間。今の骨の枠に乗せる）</summary>
+        internal void GetSettingsPose (Attachment attachment, out Vector3 position, out Quaternion rotation)
+        {
+            GetPoseOnFrame (attachment, attachment.gripPosition, attachment.gripRotation, out position, out rotation);
+        }
+
+        /// <summary>今の位置（キーの位置か物の設定の位置）で付けたときの物の姿勢（ルート空間。今の骨の枠に乗せる）</summary>
+        void GetAttachedPose (Attachment attachment, out Vector3 position, out Quaternion rotation)
+        {
+            GetPoseOnFrame (attachment, attachment.heldGripPosition, attachment.heldGripRotation, out position, out rotation);
+        }
+
+        void GetPoseOnFrame (Attachment attachment, Vector3 gripPosition, Quaternion gripRotation, out Vector3 position, out Quaternion rotation)
+        {
+            GetAttachFrame (attachment, out Vector3 frame, out Quaternion frameRotation);
+            rotation = Quaternion.Normalize (frameRotation * Quaternion.Inverse (gripRotation));
+            position = frame - rotation * gripPosition;
+        }
+
+        /// <summary>物の姿勢（ルート空間）。つかんでいれば置いた姿勢、そうでなければキーの値を今の枠の骨に乗せた姿勢</summary>
         void GetPose (Entry entry, out Vector3 position, out Quaternion rotation)
         {
-            Socket socket = entry.socket;
-            if (socket != null) {
-                GetSocketPose (socket, out position, out rotation);
-                return;
-            }
             if (entry.dragging) {
                 position = entry.dragPosition;
                 rotation = entry.dragRotation;
@@ -951,22 +936,22 @@ namespace Lilium
             turn = Quaternion.Inverse (root.rotation) * entry.frameBone.rotation * Quaternion.Inverse (entry.frameRest);
         }
 
-        /// <summary>物の原点から、今の握り（柄の軸まわりに回した後）までの差（ルート空間。rotation は物の向き）</summary>
-        Vector3 GripOffset (Hand hand, Quaternion rotation)
+        /// <summary>物の原点から、今の位置（柄の軸まわりに回した後）までの差（ルート空間。rotation は物の向き）</summary>
+        static Vector3 GripOffset (Attachment attachment, Quaternion rotation)
         {
-            Vector3 at = hand.gripAt;
-            Vector3 axis = hand.entry.definition.gripAxis;
+            Vector3 at = attachment.heldGripPosition;
+            Vector3 axis = attachment.axis;
             if (axis.sqrMagnitude < 1e-8f) return rotation * at;
             axis.Normalize ();
             Vector3 onAxis = axis * Vector3.Dot (at, axis);
-            return rotation * onAxis + hand.twist * (rotation * (at - onAxis));
+            return rotation * onAxis + attachment.twist * (rotation * (at - onAxis));
         }
 
         /// <summary>
-        /// 全身 IK を解く前に呼ぶ（S102）。持っている物は、持つ手の骨の子として骨の組みに入れ（持つ・離す・差すが変わったときだけ組み直す）、
-        /// 物を手の今の姿勢 × 握りへ置いて、物の姿勢（キー・つかんで置いた姿勢・差す場所）を物の姿勢の点の目標にする。
-        /// 両手で持つ物は右手の子にし、左手は輪の関節でつなぐ。持っている手の点もふつうの点（11-07 ユーザー指示。物は握りの関節で手に付き、物と手の点の状態どおりに解く）。
-        /// 持っていない物は組みに入れない（Finish で物の点から姿勢を決める）
+        /// 全身 IK を解く前に呼ぶ（S102・S104）。付けている物は、付ける先の骨の子として骨の組みに入れ（付け外しが変わったときだけ組み直す）、
+        /// 物を骨の今の枠 × 付けた位置へ置いて、物の姿勢（キー・つかんで置いた姿勢）を物の姿勢の点の目標にする。
+        /// 何か所にも付けていれば、骨の木の親は 1 つ（ParentAttachment）で、ほかの先は輪の関節でつなぐ。付けている骨の点もふつうの点（11-07 ユーザー指示）。
+        /// 付けていない物は組みに入れない（Finish で物の点から姿勢を決める）
         /// </summary>
         /// <param name="only">物の上の点のうち、効かせる点（キーの間の Locked の点。null なら動かした後で、固定している点を全部効かせる）</param>
         public void Prepare (FullBodyRig body, ICollection<Transform> only = null)
@@ -976,25 +961,22 @@ namespace Lilium
             attachments_.Clear ();
             loops_.Clear ();
             foreach (Entry entry in entries_) {
-                Hand primary = PrimaryHand (body, entry);
-                if (primary == null) continue;
-                // 差している・差す場所へ運んでいる物は動かさない（動かない剛体にして、持っている手を全部輪でつなぐ。手だけが物へ伸びる）
-                bool fixedPose = Fixed (entry);
-                Socket socket = entry.socket ?? entry.bringTarget;
-                Transform parent = !fixedPose ? primary.bone : socket != null && body.IsSolvedBody (socket.bone) ? socket.bone : null;
+                Attachment parent = ParentAttachment (body, entry);
+                if (parent == null) continue;
+                bool fixedJoint = Welded (entry, parent);
                 attachments_.Add (new FullBodyRig.HeldAttachment {
                     body = entry.editing,
-                    parent = parent,
-                    axis = entry.definition.gripAxis,
-                    fixedPose = fixedPose,
-                    // 差す骨から見た物の向き（GetSocketPose の物の向き = 骨 × 骨の基準⁻¹ × 差す向き）
-                    weld = fixedPose && parent != null ? Quaternion.Normalize (Quaternion.Inverse (socket.boneRest) * socket.rotation) : Quaternion.identity,
+                    parent = parent.bone,
+                    axis = fixedJoint ? Vector3.zero : parent.axis,
+                    fixedPose = fixedJoint,
+                    // 骨から見た物の向き（物の向き = 骨の向き × 骨の基準⁻¹ × 枠の基準の向き × 位置の向き⁻¹）
+                    weld = fixedJoint ? Quaternion.Normalize (Quaternion.Inverse (parent.boneRest) * parent.frameRotation * Quaternion.Inverse (GripRotation (entry, parent))) : Quaternion.identity,
                 });
             }
             body.SetHeldAttachments (attachments_);
             foreach (Entry entry in entries_) {
-                Hand primary = PrimaryHand (body, entry);
-                entry.attached = primary != null && body.IsHeldAttached (entry.editing);
+                Attachment parent = ParentAttachment (body, entry);
+                entry.attached = parent != null && body.IsHeldAttached (entry.editing);
                 if (!entry.attached) {
                     body.SetPositionWeight (entry.poseId, 0);
                     body.SetRotationWeight (entry.poseId, 0);
@@ -1002,17 +984,35 @@ namespace Lilium
                     continue;
                 }
                 GetPose (entry, out entry.position, out entry.rotation);
-                bool fixedPose = Fixed (entry);
-                if (fixedPose) Place (entry);
-                else PlaceOnHand (body, entry, primary);
-                foreach (Hand hand in new[] { entry.right, entry.left }) {
-                    if (hand == null || !hand.held || (hand == primary && !fixedPose)) continue;
+                // 回らない先（腰）に付けている間は、物の姿勢は骨で決まる（関節に自由が無いので、キーの値は足すことが無い）。物そのものを動かせば、置いた姿勢が骨を引く。
+                // キーの値を物の姿勢の点の目標にすると、キーの間で枠（胸）の補間した姿勢へ点が物を引き、腰に付いた物から伸びる手と腕が S91f までの答えからずれた
+                // （11-09 実測。デモの剣を納めるクリップの腰に付けている 130〜149 フレームで、右腕が最大 22mm）
+                if (Snapping (entry, parent)) {
+                    // 骨から見た物の場所（関節）は、解く前の骨の決まった位置で決める。物の目標は、押した瞬間（解いた後の骨）の決まった位置（SnapTo が置いた姿勢）。
+                    // 目標も解く前の骨（キーの FK）で決めると、寄せる先の手を IK で動かしていたとき、物の目標が動かす前の手の所になり、
+                    // 物は手まで来ずに手の方が引き戻された（11-09 ユーザー指示「寄せる ボタンは object 側が寄るように」。右手を 10cm 動かして寄せると、右手が 9.6cm 戻った）
+                    GetSettingsPose (parent, out entry.position, out entry.rotation);
+                    Place (entry);
+                    GetPose (entry, out entry.position, out entry.rotation);
+                }
+                else {
+                    if (!parent.twists && !entry.dragging) GetAttachedPose (parent, out entry.position, out entry.rotation);
+                    PlaceOnParent (entry, parent);
+                }
+                bool snapping = Snapping (entry, parent);
+                foreach (Attachment attachment in entry.attachments) {
+                    if (attachment == parent || !attachment.attached || !body.IsSolvedBody (attachment.bone)) continue;
+                    // 寄せている間は物が動かないので、付けている骨だけが物へ伸びる（届かなくても物を骨の方へ戻さない）
                     loops_.Add (new FullBodyRig.HeldLoop {
-                        hand = hand.id,
+                        holdObject = snapping,
+                        bone = attachment.bone,
+                        offset = Quaternion.Inverse (attachment.boneRest) * attachment.frameOffset,
+                        restRotation = attachment.boneRest,
                         body = entry.editing,
-                        grip = hand.gripAt,
+                        grip = attachment.heldGripPosition,
+                        // 輪の関節は柄の軸まわりに回る。回らない先を輪でつなぐときも柄の軸を使う（輪のばねが位置の向きへ戻す）
                         axis = entry.definition.gripAxis,
-                        toObject = Quaternion.Normalize (body_ * Quaternion.Inverse (hand.heldGripRotation)),
+                        toObject = Quaternion.Normalize (attachment.frameRotation * Quaternion.Inverse (attachment.heldGripRotation)),
                     });
                 }
                 SetPosePoint (body, entry);
@@ -1023,46 +1023,65 @@ namespace Lilium
         readonly List<FullBodyRig.HeldAttachment> attachments_ = new List<FullBodyRig.HeldAttachment> ();
         readonly List<FullBodyRig.HeldLoop> loops_ = new List<FullBodyRig.HeldLoop> ();
 
-        /// <summary>動かさない物か（差している・差す場所へ運んでいる）</summary>
-        static bool Fixed (Entry entry)
+        /// <summary>
+        /// 物を子にする付ける先: 付けている先のうち、回らない先（Fixed）が回る先（Twist）より先、同じ種類ならリグ定義の並びで先のもの。
+        /// 既定の並び（右手・左手・腰）では、両手なら右手の子、腰に付ければ腰の子になる（S91f までの持ち方と同じ）。付けていない・骨を解かなければ null。
+        /// 寄せている間（SnapTo）は寄せる先（付けていなくても）
+        /// </summary>
+        static Attachment ParentAttachment (FullBodyRig body, Entry entry)
         {
-            return entry.socket != null || entry.bringing;
+            if (entry.snapping && entry.snapTarget != null && body.IsSolvedBody (entry.snapTarget.bone)) return entry.snapTarget;
+            Attachment found = null;
+            foreach (Attachment attachment in entry.attachments) {
+                if (!attachment.attached || !body.IsSolvedBody (attachment.bone)) continue;
+                if (found == null || (!attachment.twists && found.twists)) found = attachment;
+            }
+            return found;
         }
 
-        /// <summary>物を子にする手（右手で持っていれば右手、そうでなければ左手）。持っていない・手の骨を解かなければ null</summary>
-        static Hand PrimaryHand (FullBodyRig body, Entry entry)
+        /// <summary>寄せている先を親にしているか</summary>
+        static bool Snapping (Entry entry, Attachment parent)
         {
-            foreach (Hand hand in new[] { entry.right, entry.left }) {
-                if (hand != null && hand.held && body.IsSolvedBody (hand.bone)) return hand;
-            }
-            return null;
+            return entry.snapping && parent == entry.snapTarget;
+        }
+
+        /// <summary>親の関節が回らないか（回らない先・寄せている間）</summary>
+        static bool Welded (Entry entry, Attachment parent)
+        {
+            return !parent.twists || Snapping (entry, parent);
+        }
+
+        /// <summary>親の付けた位置の向き（寄せている間は物の設定の位置）</summary>
+        static Quaternion GripRotation (Entry entry, Attachment parent)
+        {
+            return Snapping (entry, parent) ? parent.gripRotation : parent.heldGripRotation;
         }
 
         /// <summary>
-        /// 物を、手の今の姿勢（解く前の姿勢）× 握りへ置く。柄の軸は手に合わせ、軸まわりは物の目標の向きに一番近くする（軸まわりは関節が自由に回す）。
-        /// 解く前に置いた所が、手から見た物の場所と向き（ソルバーの関節）になる
+        /// 物を、付ける先の今の枠（解く前の姿勢）× 付けた位置へ置く。回る先なら柄の軸は枠に合わせ、軸まわりは物の目標の向きに一番近くする（軸まわりは関節が自由に回す）。
+        /// 解く前に置いた所が、骨から見た物の場所と向き（ソルバーの関節）になる
         /// </summary>
-        void PlaceOnHand (FullBodyRig body, Entry entry, Hand hand)
+        void PlaceOnParent (Entry entry, Attachment attachment)
         {
-            if (!body.TryGetCapturedValues (hand.control, out Vector3 local, out Quaternion wrist)) return;
-            // 物の向き × 握りの向き × 体の向き⁻¹ が手首の向きになる物の向き（柄の軸まわりも手首に合わせた向き）
-            Quaternion exact = Quaternion.Normalize (wrist * body_ * Quaternion.Inverse (hand.heldGripRotation));
-            Vector3 axis = entry.definition.gripAxis;
-            Vector3 at = hand.gripAt;
+            GetAttachFrame (attachment, out Vector3 frame, out Quaternion frameRotation);
+            // 枠が今の枠の向きになる物の向き（柄の軸まわりも枠に合わせた向き）
+            Quaternion exact = Quaternion.Normalize (frameRotation * Quaternion.Inverse (attachment.heldGripRotation));
+            Vector3 axis = attachment.axis;
+            Vector3 at = attachment.heldGripPosition;
             Quaternion rotation = exact;
             Vector3 onAxis = Vector3.zero;
             if (axis.sqrMagnitude > 1e-8f) {
                 axis.Normalize ();
-                // 物そのもの・物の点をつかんで動かしている間、向きを留めていなければ、前に解いた姿勢の手の中の回りのままにする。
-                // つかんでいる間の物の向き（置いた姿勢）は前に解いた後の向きで、解き直しはキーの手から始まる。前に解いた手に対する回りを
-                // キーの手に一番近い向きで当てはめると、手がキーからねじれた分だけ解くたびに回りが足され、丸い棒が手の中で柄の軸まわりに回り続けた
+                // 物そのもの・物の点をつかんで動かしている間、向きを留めていなければ、前に解いた姿勢の枠の中の回りのままにする。
+                // つかんでいる間の物の向き（置いた姿勢）は前に解いた後の向きで、解き直しはキーの骨から始まる。前に解いた骨に対する回りを
+                // キーの骨に一番近い向きで当てはめると、骨がキーからねじれた分だけ解くたびに回りが足され、丸い棒が手の中で柄の軸まわりに回り続けた
                 // （11-07 ユーザー報告「表示しているボーンが回転しまくる。見た目は回転していないのに」。60 回動かす間に ±170°）
-                if (entry.dragging && hand.hasRoll && entry.poseValues.rotationWeight <= 0) rotation = Quaternion.Normalize (exact * hand.roll);
+                if (entry.dragging && attachment.hasRoll && entry.poseValues.rotationWeight <= 0) rotation = Quaternion.Normalize (exact * attachment.roll);
                 else rotation = Quaternion.Normalize (Quaternion.FromToRotation (entry.rotation * axis, exact * axis) * entry.rotation);
                 onAxis = axis * Vector3.Dot (at, axis);
             }
-            // 握りの場所: 柄の軸の上の分は物と一緒に、柄から離れた分は手と一緒に回る
-            Vector3 position = local * rig_.humanScale - rotation * onAxis - exact * (at - onAxis);
+            // 位置の場所: 柄の軸の上の分は物と一緒に、柄から離れた分は枠と一緒に回る
+            Vector3 position = frame - rotation * onAxis - exact * (at - onAxis);
             Transform root = rig_.root.transform;
             entry.editing.SetPositionAndRotation (root.TransformPoint (position), root.rotation * rotation);
         }
@@ -1070,7 +1089,7 @@ namespace Lilium
         /// <summary>
         /// 物の姿勢の点の目標を入れる。状態（強さ・Lock）は、ほかの点と同じくキーと持ち物の対象で決めた値のまま（11-07 ユーザー指示「汎用的な制御にすることが重要、体の点の決まりどおりに」）。
         /// 物そのものを動かしていればつかんだ点にする（強さは動かした分だけ DragTo が入れる。体の点をつかんで動かしたときと同じ。Lock は今のまま）。
-        /// 引かずに置くだけ（差す場所から抜いた所に残す）なら、つかんだ点にしない
+        /// 引かずに置くだけ（寄せる）なら、つかんだ点にしない
         /// </summary>
         void SetPosePoint (FullBodyRig body, Entry entry)
         {
@@ -1079,7 +1098,7 @@ namespace Lilium
             bool direct = entry.dragging && entry.direct;
             bool grabbed = direct && entry.pulling;
             entry.fitted = !direct && AnyPointActive (body, entry);
-            // 引かずに置くだけ（差す場所から抜いた所に残す）は、場所も向きもそこに留める
+            // 引かずに置くだけ（寄せる）は、場所も向きもそこに留める
             if (direct && !entry.pulling) {
                 entry.poseValues.positionWeight = 1;
                 entry.poseValues.rotationWeight = 1;
@@ -1091,7 +1110,6 @@ namespace Lilium
         /// <summary>物の上の点をつかんでいるか、効かせる点（fitOnly_）に強さが入っているか</summary>
         bool AnyPointActive (FullBodyRig body, Entry entry)
         {
-            if (entry.socket != null) return false;
             foreach (ObjectPoint point in entry.points) {
                 if (body.IsGrabbed (point.id)) return true;
                 if (fitOnly_ != null && !fitOnly_.Contains (point.control)) continue;
@@ -1101,7 +1119,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 持っている物の姿勢の点のコントロール（キーのあるフレームでも、持っている手を物に合わせて解く）を controls に足した集まり。足す物が無ければ controls
+        /// 付けている物の姿勢の点のコントロール（キーのあるフレームでも、付けている骨を物に合わせて解く）を controls に足した集まり。足す物が無ければ controls
         /// </summary>
         public ICollection<Transform> WithHeldControls (ICollection<Transform> controls)
         {
@@ -1122,7 +1140,6 @@ namespace Lilium
         /// <summary>物の上の点をつかんでいれば、今の姿勢からつかんだ状態にする。全身を引くのは重い点をつかんだときだけ</summary>
         void BeginPointDrag (FullBodyRig body, Entry entry)
         {
-            if (entry.socket != null) return;
             bool grabbed = false;
             bool heavy = false;
             foreach (ObjectPoint point in entry.points) {
@@ -1169,7 +1186,7 @@ namespace Lilium
         /// </summary>
         bool FitToPoints (FullBodyRig body, Entry entry)
         {
-            if (entry.points.Count == 0 || entry.socket != null) return false;
+            if (entry.points.Count == 0) return false;
             fit_.Clear ();
             bool grabbing = body.anyGrabbed || entry.dragging;
             bool lightGrab = entry.dragging && !entry.pulling && !entry.direct;
@@ -1237,8 +1254,8 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 全身 IK を解いた後に呼ぶ。持っている物は、解いた物の骨から物の姿勢を読む（手は物の骨の親なので、握りから外れない）。
-        /// 持っていない物は、決まった枠で物の姿勢を求めて物の点を効かせる。つかんでいた物は、解いた後の姿勢を値に残す
+        /// 全身 IK を解いた後に呼ぶ。付けている物は、解いた物の骨から物の姿勢を読む（骨は物の骨の親なので、付けた位置から外れない）。
+        /// 付けていない物は、決まった枠で物の姿勢を求めて物の点を効かせる。つかんでいた物は、解いた後の姿勢を値に残す
         /// </summary>
         public void Finish (FullBodyRig body, float weight)
         {
@@ -1254,60 +1271,56 @@ namespace Lilium
                     entry.position = root.InverseTransformPoint (entry.editing.position);
                     entry.rotation = Quaternion.Normalize (Quaternion.Inverse (root.rotation) * entry.editing.rotation);
                 }
-                foreach (Hand hand in new[] { entry.right, entry.left }) {
-                    if (hand != null && hand.held) UpdateTwist (body, hand);
+                foreach (Attachment attachment in entry.attachments) {
+                    if (attachment.attached) UpdateTwist (attachment);
                 }
             }
             Place ();
             foreach (Entry entry in entries_) {
-                if (entry.bringing) entry.bringGap = GetHandGap (body, entry);
+                if (entry.snapping) entry.snapGap = GetAttachGap (entry);
             }
             // 点で決めた姿勢も、動かした後なら値に残す（打つキーは解いた姿勢。キーの間で Lock の点に留めた姿勢はクリップの値を変えない）
-            // 差している間の値は使わないが、抜いたフレームと差す前のキーの間で物がここへ向かうように、打つ値は差す場所の姿勢にする
-            // 持っている物は、物の上の点で姿勢を決めても値に残さない（キーを打つときに SyncToBodies で解いた物の骨の姿勢へ合わせ直す。体の骨と同じ）。
+            // 付けている物は、物の上の点で姿勢を決めても値に残さない（キーを打つときに SyncToBodies で解いた物の骨の姿勢へ合わせ直す。体の骨と同じ）。
             // 解くたびに残すと、次に解くときの元の姿勢（キー）が前の答えになり、手首を引く間に物が手の中で柄の軸まわりに回り続けた
             // （11-08 ユーザー報告「手首を動かしていると、たまに棒の姿勢がワープする」。物の上の点を Pin にした棒が 1 回 20° 回った）
             foreach (Entry entry in entries_) {
-                if (entry.dragging || (edited && ((entry.fitted && !entry.attached) || entry.socket != null))) StoreValues (entry);
+                if (entry.dragging || (edited && entry.fitted && !entry.attached)) StoreValues (entry);
             }
             fitOnly_ = null;
         }
 
         /// <summary>
-        /// 握りの柄の軸まわりの回り（ルート空間。twist）を、解いた手首と物の姿勢から決め直す。手首の向き = twist × 物の向き × 握りの向き × 体の向き⁻¹
+        /// 柄の軸まわりの回り（ルート空間。twist）を、解いた骨と物の姿勢から決め直す。枠の向き = twist × 物の向き × 位置の向き
         /// </summary>
-        void UpdateTwist (FullBodyRig body, Hand hand)
+        void UpdateTwist (Attachment attachment)
         {
-            hand.twist = Quaternion.identity;
-            hand.hasRoll = false;
-            if (!body.TryGetCapturedValues (hand.control, out Vector3 unused, out Quaternion wrist)) return;
-            Quaternion exact = Quaternion.Normalize (wrist * body_ * Quaternion.Inverse (hand.heldGripRotation));
-            hand.twist = Quaternion.Normalize (exact * Quaternion.Inverse (hand.entry.rotation));
-            hand.roll = Quaternion.Normalize (Quaternion.Inverse (exact) * hand.entry.rotation);
-            hand.hasRoll = true;
+            GetAttachFrame (attachment, out Vector3 unused, out Quaternion frameRotation);
+            Quaternion exact = Quaternion.Normalize (frameRotation * Quaternion.Inverse (attachment.heldGripRotation));
+            attachment.twist = Quaternion.Normalize (exact * Quaternion.Inverse (attachment.entry.rotation));
+            attachment.roll = Quaternion.Normalize (Quaternion.Inverse (exact) * attachment.entry.rotation);
+            attachment.hasRoll = true;
         }
 
         /// <summary>
-        /// キーを打つ前に呼ぶ（体の点の BodyPointTarget.SyncToBone と同じ）。持っている物の値（物のキー・物の姿勢の点の目標）を、解いた物の骨の姿勢へ合わせ直す。
-        /// 物は手の子の骨なので、ほかの骨と同じく解いた姿勢をキーにする。物の上の点が効いているときだけ値に残していたため、手首を引いて離すと、
-        /// 元の場所の物の姿勢の点（Pin）が手首を引き戻した（11-07 ユーザー報告「手首を動かすと、ドラッグを離すと元の位置に戻っている」。IkArm で 7〜20cm）。
-        /// 差している・差す場所へ運んでいる物は骨に固定なので、そのまま
+        /// キーを打つ前に呼ぶ（体の点の BodyPointTarget.SyncToBone と同じ）。付けている物の値（物のキー・物の姿勢の点の目標）を、解いた物の骨の姿勢へ合わせ直す。
+        /// 物は骨の子の骨なので、ほかの骨と同じく解いた姿勢をキーにする。物の上の点が効いているときだけ値に残していたため、手首を引いて離すと、
+        /// 元の場所の物の姿勢の点（Pin）が手首を引き戻した（11-07 ユーザー報告「手首を動かすと、ドラッグを離すと元の位置に戻っている」。IkArm で 7〜20cm）
         /// </summary>
         public void SyncToBodies ()
         {
             foreach (Entry entry in entries_) {
-                if (entry.attached && !Fixed (entry)) StoreValues (entry);
+                if (entry.attached) StoreValues (entry);
             }
         }
 
-        /// <summary>持っている手のうち、いちばん握りに届いていない差（メートル）</summary>
-        float GetHandGap (FullBodyRig body, Entry entry)
+        /// <summary>付けている先のうち、いちばん付けた位置に届いていない差（メートル）</summary>
+        float GetAttachGap (Entry entry)
         {
             float gap = 0;
-            Transform root = rig_.root.transform;
-            foreach (Hand hand in new[] { entry.right, entry.left }) {
-                if (hand == null || !hand.held || !body.TryGetBonePointWorld (hand.id, out Vector3 reached)) continue;
-                gap = Mathf.Max (gap, Vector3.Distance (root.InverseTransformPoint (reached), entry.position + GripOffset (hand, entry.rotation)));
+            foreach (Attachment attachment in entry.attachments) {
+                if (!attachment.attached) continue;
+                GetAttachFrame (attachment, out Vector3 reached, out Quaternion unused);
+                gap = Mathf.Max (gap, Vector3.Distance (reached, entry.position + GripOffset (attachment, entry.rotation)));
             }
             return gap;
         }
@@ -1341,48 +1354,98 @@ namespace Lilium
             entry.definition.restRotation = (inverse * entry.rotation).eulerAngles;
         }
 
-        /// <summary>手の握りを、ワールドの姿勢で置き直す（リグエディタで動かす間。定義へは StoreGrip で書く）</summary>
-        public void SetGrip (Hand hand, Vector3 worldPosition, Quaternion worldRotation)
+        /// <summary>
+        /// 付ける先の物の設定の位置を、物を置くワールドの姿勢で置き直す（リグエディタで動かす間。定義へは StoreSettings で書く）。
+        /// 付ける先の枠は動かさず、物がそこへ付いたときの物の姿勢から位置を決める
+        /// </summary>
+        public void SetSettingsPose (Attachment attachment, Vector3 worldPosition, Quaternion worldRotation)
         {
             Transform root = rig_.root.transform;
-            Quaternion inverse = Quaternion.Inverse (root.rotation * hand.entry.rotation);
-            hand.gripPosition = Quaternion.Inverse (hand.entry.rotation) * (root.InverseTransformPoint (worldPosition) - hand.entry.position);
-            hand.gripRotation = Quaternion.Normalize (inverse * worldRotation);
+            GetAttachFrame (attachment, out Vector3 frame, out Quaternion frameRotation);
+            Vector3 position = root.InverseTransformPoint (worldPosition);
+            Quaternion inverse = Quaternion.Inverse (Quaternion.Inverse (root.rotation) * worldRotation);
+            attachment.gripPosition = inverse * (frame - position);
+            attachment.gripRotation = Quaternion.Normalize (inverse * frameRotation);
         }
 
-        /// <summary>手の、キャラの設定の握りのワールドの姿勢（リグエディタで直す握り。キーで持った握りではない）</summary>
-        public void GetGrip (Hand hand, out Vector3 worldPosition, out Quaternion worldRotation)
+        /// <summary>物の設定の位置で付けたときの物の、ワールドの姿勢</summary>
+        public void GetSettingsWorld (Attachment attachment, out Vector3 worldPosition, out Quaternion worldRotation)
         {
+            GetSettingsPose (attachment, out Vector3 position, out Quaternion rotation);
             Transform root = rig_.root.transform;
-            Vector3 at = hand.gripPosition + hand.entry.definition.gripAxis.normalized * hand.slide;
-            worldPosition = root.TransformPoint (hand.entry.position + hand.entry.rotation * at);
-            worldRotation = root.rotation * hand.entry.rotation * hand.gripRotation;
+            worldPosition = root.TransformPoint (position);
+            worldRotation = root.rotation * rotation;
         }
 
         /// <summary>
-        /// 手の今の手首（骨の上の手首の点）を、物から見た握りにして、キーで持った握りにする（S99。持つボタンを押した瞬間の手で持つ）。
-        /// 握りのずれは 0 に戻す（ずれの分は握りの場所に入る）。手首の点の目標は「物の姿勢 × 握り」なので、持っても手は動かない。作れたら true
+        /// リグエディタのハンドルの姿勢: 回る先（手）は物の上の枠（動かすと、物は動かず骨が付いてくる。手首を置く所）、
+        /// 回らない先（腰・背中）は物そのもの（動かすと、骨は動かず物が動く。差す所）
         /// </summary>
-        public bool GrabAtCurrent (Hand hand, FullBodyRig body)
+        public void GetSettingsHandle (Attachment attachment, out Vector3 worldPosition, out Quaternion worldRotation)
         {
-            if (hand == null || body == null || !body.TryGetCapturedValues (hand.control, out Vector3 local, out Quaternion localRotation)) return false;
-            // 値から作った姿勢ではなく、Finish が決めた今の姿勢（届かない手へ寄せた分も入る。見えている物）から見て、その姿勢を値にも残す。
-            // 値のままだと、持った後に解き直したとき物が寄せる前の場所へ戻り、手も一緒に動く
-            Vector3 position = hand.entry.position;
-            Quaternion inverse = Quaternion.Inverse (hand.entry.rotation);
-            if (hand.entry.socket == null) StoreValues (hand.entry);
-            hand.slide = 0;
-            hand.SetKeyedGrip (true, inverse * (local * rig_.humanScale - position), Quaternion.Normalize (inverse * localRotation * body_).eulerAngles);
-            hand.entry.keysPending = true;
+            if (!attachment.twists) {
+                GetSettingsWorld (attachment, out worldPosition, out worldRotation);
+                return;
+            }
+            Transform root = rig_.root.transform;
+            Entry entry = attachment.entry;
+            worldPosition = root.TransformPoint (entry.position + entry.rotation * attachment.gripPosition);
+            worldRotation = root.rotation * entry.rotation * attachment.gripRotation;
+        }
+
+        /// <summary>リグエディタのハンドルで、物の設定の位置を置き直す（GetSettingsHandle と同じ姿勢。定義へは StoreSettings で書く）</summary>
+        public void SetSettingsHandle (Attachment attachment, Vector3 worldPosition, Quaternion worldRotation)
+        {
+            if (!attachment.twists) {
+                SetSettingsPose (attachment, worldPosition, worldRotation);
+                return;
+            }
+            Transform root = rig_.root.transform;
+            Entry entry = attachment.entry;
+            Quaternion inverse = Quaternion.Inverse (entry.rotation);
+            attachment.gripPosition = inverse * (root.InverseTransformPoint (worldPosition) - entry.position);
+            attachment.gripRotation = Quaternion.Normalize (Quaternion.Inverse (root.rotation * entry.rotation) * worldRotation);
+        }
+
+        /// <summary>今の位置を物の設定へ書く（項目が無ければ足す）。Undo と保存は呼ぶ側</summary>
+        public void StoreSettings (Attachment attachment)
+        {
+            HeldObjectAttachment settings = attachment.entry.definition.GetOrAddAttachment (attachment.name);
+            settings.position = attachment.gripPosition;
+            settings.rotation = attachment.gripRotation.eulerAngles;
+            attachment.settings = settings;
+        }
+
+        /// <summary>
+        /// 付ける先の今の枠を、物から見た位置にして、キーで付けた位置にする（S99。付けるボタンを押した瞬間の位置で付ける。11-04 ユーザー指示
+        /// 「掴むボタンを押した瞬間の位置、姿勢で拘束する。武器にかぎらず共通仕様として」）。物も骨も動かない。作れたら true
+        /// </summary>
+        public bool GrabAtCurrent (Attachment attachment)
+        {
+            if (attachment == null) return false;
+            GetAttachFrame (attachment, out Vector3 frame, out Quaternion frameRotation);
+            // 値から作った姿勢ではなく、Finish が決めた今の姿勢（見えている物）から見て、その姿勢を値にも残す。
+            // 値のままだと、付けた後に解き直したとき物が値の場所へ戻り、骨も一緒に動く
+            Entry entry = attachment.entry;
+            Quaternion inverse = Quaternion.Inverse (entry.rotation);
+            StoreValues (entry);
+            attachment.SetKeyedGrip (true, inverse * (frame - entry.position), Quaternion.Normalize (inverse * frameRotation).eulerAngles);
+            entry.keysPending = true;
             return true;
         }
 
-        /// <summary>今の握りを定義へ書く。Undo と保存は呼ぶ側</summary>
-        public void StoreGrip (Hand hand)
+        /// <summary>
+        /// 付けるか外す。付けるときは今の位置で付ける（GrabAtCurrent）。今の物の姿勢を値に残すので、外しても物は跳ばない
+        /// </summary>
+        public void SetAttached (Attachment attachment, bool attach)
         {
-            HeldObjectGrip grip = hand.left ? hand.entry.definition.leftGrip : hand.entry.definition.rightGrip;
-            grip.position = hand.gripPosition;
-            grip.rotation = hand.gripRotation.eulerAngles;
+            if (attachment == null) return;
+            Entry entry = attachment.entry;
+            if (attach) GrabAtCurrent (attachment);
+            else StoreValues (entry);
+            attachment.values.attached = attach ? 1 : 0;
+            ApplyConstraintWeights (entry);
+            entry.keysPending = true;
         }
 
         /// <summary>物の上の点の場所（ワールド。骨の上の点の場所と同じく、今の物の姿勢に乗せた所）</summary>
@@ -1401,34 +1464,6 @@ namespace Lilium
         public void StorePoint (ObjectPoint point)
         {
             point.definition.position = point.offset;
-        }
-
-        /// <summary>差す場所の、ワールドの姿勢</summary>
-        public void GetSocketWorld (Socket socket, out Vector3 worldPosition, out Quaternion worldRotation)
-        {
-            GetSocketPose (socket, out Vector3 position, out Quaternion rotation);
-            Transform root = rig_.root.transform;
-            worldPosition = root.TransformPoint (position);
-            worldRotation = root.rotation * rotation;
-        }
-
-        /// <summary>差す場所を、ワールドの姿勢で置き直す（リグエディタで動かす間。定義へは StoreSocket で書く）</summary>
-        public void SetSocketWorld (Socket socket, Vector3 worldPosition, Quaternion worldRotation)
-        {
-            Transform root = rig_.root.transform;
-            Vector3 origin = root.InverseTransformPoint (socket.bone.position);
-            Quaternion turn = Quaternion.Inverse (root.rotation) * socket.bone.rotation * Quaternion.Inverse (socket.boneRest);
-            Quaternion inverse = Quaternion.Inverse (turn);
-            socket.offset = inverse * (root.InverseTransformPoint (worldPosition) - origin);
-            socket.rotation = Quaternion.Normalize (inverse * Quaternion.Inverse (root.rotation) * worldRotation);
-        }
-
-        /// <summary>今の差す場所を定義へ書く。Undo と保存は呼ぶ側</summary>
-        public void StoreSocket (Socket socket)
-        {
-            Quaternion inverse = Quaternion.Inverse (body_);
-            socket.definition.position = inverse * socket.offset;
-            socket.definition.rotation = (inverse * socket.rotation).eulerAngles;
         }
 
         /// <summary>今の値と枠で物の姿勢を求め直す（全身 IK を通さない姿勢。編集用リグを解いた直後）</summary>

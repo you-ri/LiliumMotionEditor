@@ -854,7 +854,7 @@ namespace Lilium
         {
             carriedPoints_.Clear ();
             lockedSpanPoints_.Clear ();
-            if (heldObjects != null) heldObjects.ApplyHoldKeys (clip, time);
+            if (heldObjects != null) heldObjects.ApplyAttachKeys (clip, time);
             if (bodyPoints_.Length == 0 || editingRig == null || editingRig.root == null) return;
             EnsureBodyPointPaths ();
             // 外部の補間（AI）の区間でも、点の状態は曲線・リニアの区間と同じ決まりで扱う（10-26 ユーザー指示）。
@@ -884,7 +884,7 @@ namespace Lilium
             if (span == null || buildingKeyPoseGaps_) return;
             KeyPoseGaps gaps = GetKeyPoseGaps (clip);
             // 測り直しは全部のキーを当てるので、持ち物の持ち方が最後のキーのまま残る（その 1 フレームだけ物が最後のキーの持ち方へ跳んだ）
-            if (heldObjects != null) heldObjects.ApplyHoldKeys (clip, time);
+            if (heldObjects != null) heldObjects.ApplyAttachKeys (clip, time);
             if (gaps == null) return;
             MoveLockedSpanRigidly (clip, time, span, gaps);
             foreach (int i in span) AddKeyPoseGap (clip, i, time, gaps);
@@ -1163,7 +1163,7 @@ namespace Lilium
             }
             WritePointValues (bodyPointRest_);
             WriteProxyWeights (weightProxyRest_);
-            if (heldObjects != null) heldObjects.ResetHolds ();
+            if (heldObjects != null) heldObjects.ResetAttachments ();
         }
 
         /// <summary>

@@ -1037,42 +1037,6 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: leftHold
-    path: Controls/Object/TwoHandedSword
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: rightHold
-    path: Controls/Object/TwoHandedSword
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: socket
-    path: Controls/Object/TwoHandedSword/Hip
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
     attribute: positionWeight
     path: Controls/Body/TwoHandedSword.Center
     classID: 114
@@ -1179,6 +1143,42 @@ AnimationClip:
     path: Controls/ObjectPose/TwoHandedSword
     classID: 114
     script: {fileID: 11500000, guid: 14a51cb97deaab84583019d5e017b087, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/LeftHand
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/RightHand
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/Hips
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
     flags: 16
   m_PPtrCurves: []
   m_SampleRate: 60
@@ -5300,42 +5300,6 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: leftHold
-    path: Controls/Object/TwoHandedSword
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: rightHold
-    path: Controls/Object/TwoHandedSword
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: socket
-    path: Controls/Object/TwoHandedSword/Hip
-    classID: 114
-    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
-    flags: 16
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
     attribute: m_LocalPosition.x
     path: Controls/Body/TwoHandedSword.Center
     classID: 4
@@ -5514,6 +5478,42 @@ AnimationClip:
     path: Controls/ObjectPose/TwoHandedSword
     classID: 114
     script: {fileID: 11500000, guid: 14a51cb97deaab84583019d5e017b087, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/LeftHand
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/RightHand
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: attached
+    path: Controls/Object/TwoHandedSword/Hips
+    classID: 114
+    script: {fileID: 11500000, guid: 097a27f4b19df45468fd0a58f6966c72, type: 3}
     flags: 16
   m_EulerEditorCurves:
   - serializedVersion: 2

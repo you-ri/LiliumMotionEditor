@@ -241,6 +241,7 @@ namespace Lilium
                 // 同じ深さは定義の順（List.Sort は安定でないので、順番も比べる）
                 List<Point> order = new List<Point> (points_);
                 points_.Sort ((a, b) => a.depth != b.depth ? a.depth.CompareTo (b.depth) : order.IndexOf (a).CompareTo (order.IndexOf (b)));
+                ResolveLoopJoints (definition);
                 CreateBodies ();
             }
             bones_ = bones.ToArray ();
@@ -283,7 +284,9 @@ namespace Lilium
             if (bodies_.Count == 0) return;
 
             // 床との当たり（Floor Clamp）は点の数まで。輪の関節は両手で持つ物 1 つに 1 つ
-            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Mathf.Max (1, heldAttachments_.Count), Allocator.Persistent);
+            // 輪の関節は、付けた物ごとに親でない付ける先の数だけ（S104。腰と両手なら 2 つ）。1 つ分しか取らないと、2 つ目の手が物から外れた。
+            // リグ定義の輪の関節（S105）はその前に入れる
+            data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Mathf.Max (1, loopJoints_.Count + heldAttachments_.Count * kHeldLoopsPerObject), Allocator.Persistent);
             attached_ = new bool[bodies_.Count];
             solveRotations_ = new Quaternion[bodies_.Count];
             solvePositions_ = new Vector3[bodies_.Count];

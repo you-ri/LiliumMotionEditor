@@ -75,7 +75,7 @@ namespace Lilium
                 AppendVector (json, item.aim.forward, 3);
                 json.Append (",\"up\":");
                 AppendVector (json, item.aim.up, 3);
-                json.Append ("},\"hold\":\"").Append (item.hold).Append ("\"}");
+                json.Append ("},\"attach\":\"").Append (item.attach).Append ("\"}");
             }
             json.Append (']');
         }
@@ -200,10 +200,8 @@ namespace Lilium
                         name = entry.name,
                         position = toBody * root.InverseTransformPoint (position),
                         aim = new PoseAim { forward = local * Vector3.forward, up = local * Vector3.up },
-                        hold = HoldName (entry),
-                        socket = entry.sockets.Count == 0 ? "" : entry.socket != null ? entry.socket.definition.name : HeldObjectDefinition.kNoSocketName,
-                        handGap = entry.bringGap,
-                        slide = ReadSlides (entry),
+                        attach = AttachNames (entry),
+                        gap = entry.snapGap,
                         grip = ReadGrips (entry),
                     });
                 }
@@ -211,36 +209,25 @@ namespace Lilium
             return document;
         }
 
-        const string kHoldBoth = "Both";
-        const string kHoldLeft = "Left";
-        const string kHoldRight = "Right";
-        const string kHoldNone = "None";
+        /// <summary>どこにも付けていないことを表す名前（PoseObject.attach）。付ける先の名前には使えない</summary>
+        public const string kAttachNone = "None";
 
-        /// <summary>握りをずらした手か、ずらすキーのある手の値（どちらも無ければ空）</summary>
-        static List<PoseGripSlide> ReadSlides (HeldObjectRig.Entry entry)
-        {
-            List<PoseGripSlide> slides = new List<PoseGripSlide> ();
-            if (entry.right != null && (entry.right.slideKeyed || entry.right.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldRight, value = entry.right.slide });
-            if (entry.left != null && (entry.left.slideKeyed || entry.left.slide != 0)) slides.Add (new PoseGripSlide { hand = kHoldLeft, value = entry.left.slide });
-            return slides;
-        }
-
-        /// <summary>キーで持った握りを使っている手の握り（どちらも使っていなければ空。キャラの設定の握りは返さない）</summary>
+        /// <summary>キーで付けた位置を使っている先の位置（どれも使っていなければ空。物の設定の位置は返さない）</summary>
         static List<PoseGrip> ReadGrips (HeldObjectRig.Entry entry)
         {
             List<PoseGrip> grips = new List<PoseGrip> ();
-            foreach ((HeldObjectRig.Hand hand, string name) in new[] { (entry.right, kHoldRight), (entry.left, kHoldLeft) }) {
-                if (hand == null || !hand.gripKeyed) continue;
-                grips.Add (new PoseGrip { hand = name, position = hand.heldGripPosition, rotation = hand.heldGripRotation.eulerAngles });
+            foreach (HeldObjectRig.Attachment attachment in entry.attachments) {
+                if (!attachment.gripKeyed) continue;
+                grips.Add (new PoseGrip { point = attachment.name, position = attachment.heldGripPosition, rotation = attachment.heldGripRotation.eulerAngles });
             }
             return grips;
         }
 
-        static string HoldName (HeldObjectRig.Entry entry)
+        /// <summary>付けている先の名前をカンマでつないだもの（どこにも付けていなければ None）</summary>
+        static string AttachNames (HeldObjectRig.Entry entry)
         {
-            bool left = entry.values.leftHold >= 0.5f;
-            bool right = entry.values.rightHold >= 0.5f;
-            return left && right ? kHoldBoth : left ? kHoldLeft : right ? kHoldRight : kHoldNone;
+            List<string> names = entry.attachments.FindAll (a => a.attached).ConvertAll (a => a.name);
+            return names.Count > 0 ? string.Join (",", names) : kAttachNone;
         }
 
         /// <summary>
@@ -363,7 +350,7 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 持ち物 1 つ（PoseDocument.objects。S91）。物が導き、手が従うので、持っている手の点は書かない（書いても物を動かす）。
+    /// 持ち物 1 つ（PoseDocument.objects。S91・S104）。付けている骨は物に付いてくる。
     /// 枠が胸の物は、キーの間は胸に付いて動く
     /// </summary>
     [System.Serializable]
@@ -378,48 +365,39 @@ namespace Lilium
         /// forward の代わりに target（場所）でもよい。どちらも 0 なら今の向きのまま
         /// </summary>
         public PoseAim aim;
-        /// <summary>持っている手（Both / Left / Right / None）。空なら今のまま。次にこの物のキーを打つまで段差で続く</summary>
-        public string hold;
         /// <summary>
-        /// 差す場所の名前（None で差すのをやめる）。空なら今のまま。次にこの物のキーを打つまで段差で続く。
-        /// 差すと、持っている手を差す場所まで動かしてから放す（position・aim は使わない）
+        /// 付けている先（リグ定義の付ける先の名前をカンマでつなぐ。例 "RightHand,LeftHand"。None でどこにも付けない）。空なら今のまま。
+        /// 次にこの物のキーを打つまで段差で続く。新しく付ける先は、grip を書かなければ今の場所のまま付く（窓の付けるボタンと同じ）
         /// </summary>
-        public string socket;
-        /// <summary>読むときだけ。差す場所まで運んだときに、握りに届かなかった手の差（メートル）</summary>
-        public float handGap;
-        /// <summary>握りを柄に沿ってずらす手と量。書かない手は今のまま。キーの間は補間するので、手が柄の上を滑る</summary>
-        public List<PoseGripSlide> slide;
+        public string attach;
         /// <summary>
-        /// 手ごとの握り（S99。物から見た手首の場所と向き）。書かない手は今のまま。キーの間で補間せず、次に握りを書くまで続く。
-        /// 読むときは、キーで持った握り（窓の持つボタン・current）を使っている手だけ
+        /// 物の設定の位置で、この付ける先に付く所へ物を動かす（窓の「寄せる」。position・aim は使わない）。付けている骨は付いてくる。
+        /// 付けるのは attach で書く（寄せてから付け替えると、前のキーの間で骨が物に付いたまま動く）
+        /// </summary>
+        public string snap;
+        /// <summary>読むときだけ。寄せたときに、付けている先に届かなかった差（メートル）</summary>
+        public float gap;
+        /// <summary>
+        /// 付ける先ごとの位置（S99。物から見た付ける先の場所と向き）。書かない先は今のまま。次に位置を書くまで続く。前後のキーで同じ先に付けていれば、キーの間は位置を補間する（手が柄の上を滑る）。
+        /// 読むときは、キーで付けた位置（窓の付けるボタン・current）を使っている先だけ
         /// </summary>
         public List<PoseGrip> grip;
     }
 
-    /// <summary>手の握り（S99）</summary>
+    /// <summary>付ける先 1 つの位置（S99・S104）</summary>
     [System.Serializable]
     public sealed class PoseGrip
     {
-        /// <summary>Left / Right</summary>
-        public string hand;
-        /// <summary>この要求の点を置いて解いた後の、今の手首の場所と向きを握りにする（窓の持つボタンと同じ。持っても手は動かない）</summary>
+        /// <summary>付ける先の名前（リグ定義の付ける先。RightHand など）</summary>
+        public string point;
+        /// <summary>この要求の点を置いて解いた後の、今の付ける先の場所と向きを位置にする（窓の付けるボタンと同じ。付けても骨は動かない）</summary>
         public bool current;
-        /// <summary>キャラの設定の握り（リグエディタで決めた握り）へ戻す</summary>
+        /// <summary>物の設定の位置（リグエディタで決めた位置）へ戻す</summary>
         public bool useSettings;
-        /// <summary>current・useSettings でないとき、握りの場所（物のローカル。メートル）</summary>
+        /// <summary>current・useSettings でないとき、位置の場所（物のローカル。メートル）</summary>
         public Vector3 position;
-        /// <summary>current・useSettings でないとき、握りの向き（物のローカル。オイラー角）</summary>
+        /// <summary>current・useSettings でないとき、位置の向き（物のローカル。オイラー角）</summary>
         public Vector3 rotation;
-    }
-
-    /// <summary>握りをずらす手と量</summary>
-    [System.Serializable]
-    public sealed class PoseGripSlide
-    {
-        /// <summary>Left / Right</summary>
-        public string hand;
-        /// <summary>キャラの設定の握りから、柄の向き（gripAxis）に沿ってずらす量（メートル）</summary>
-        public float value;
     }
 
     /// <summary>snap で寄せた点（S60）</summary>

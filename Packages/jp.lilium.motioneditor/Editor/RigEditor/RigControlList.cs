@@ -11,7 +11,7 @@ namespace Lilium
         Fk,
         Extra,
         Point,
-        /// <summary>持ち物とその握り（S91）。リグ定義ではなくキャラの設定の項目</summary>
+        /// <summary>持ち物と、付ける先ごとの位置（S91・S104）。リグ定義ではなくキャラの設定の項目</summary>
         Object,
     }
 
@@ -41,13 +41,11 @@ namespace Lilium
         public float scale = 1;
         /// <summary>使えない理由。null なら使える</summary>
         public string disabledReason;
-        /// <summary>持ち物（kind が Object のとき）。hand があれば、その手の握り</summary>
+        /// <summary>持ち物（kind が Object のとき）。attachment があれば、その付ける先の位置</summary>
         public HeldObjectRig.Entry held;
-        public HeldObjectRig.Hand hand;
+        public HeldObjectRig.Attachment attachment;
         /// <summary>持ち物の上の点（kind が Object のとき）。全身 IK の点だが、項目はリグ定義でなくキャラの設定にある</summary>
         public HeldObjectRig.ObjectPoint heldPoint;
-        /// <summary>持ち物の差す場所（S91f）</summary>
-        public HeldObjectRig.Socket heldSocket;
         /// <summary>キャラの設定のどの項目か（SerializedObject のパス。持ち物のとき）</summary>
         public string settingsPath;
 
@@ -119,7 +117,7 @@ namespace Lilium
             return entries;
         }
 
-        /// <summary>持ち物と握りを一覧へ足す（S91）。場所は今の物の姿勢</summary>
+        /// <summary>持ち物と、付ける先ごとの位置を一覧へ足す（S91・S104）。場所は今の物の姿勢</summary>
         public static void AddHeldObjects (List<RigControlEntry> entries, HeldObjectRig rig, CharacterSettings settings)
         {
             if (rig == null || settings == null) return;
@@ -129,8 +127,6 @@ namespace Lilium
                 string path = "heldObjects.Array.data[" + index + "]";
                 entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
                 entries.Add (new RigControlEntry { id = "Object/" + entry.name, kind = RigControlKind.Object, label = entry.name, position = position, held = entry, settingsPath = path });
-                AddGrip (entries, rig, entry, entry.right, Tr ("RIG_EDITOR_RIGHT_GRIP", entry.name), path + ".rightGrip");
-                AddGrip (entries, rig, entry, entry.left, Tr ("RIG_EDITOR_LEFT_GRIP", entry.name), path + ".leftGrip");
                 foreach (HeldObjectRig.ObjectPoint point in entry.points) {
                     entries.Add (new RigControlEntry {
                         id = "Object/" + entry.name + "/Point/" + point.id,
@@ -143,26 +139,26 @@ namespace Lilium
                         scale = point.definition.weight <= 0 ? BodyPointTarget.kAimScale : 1,
                     });
                 }
-                foreach (HeldObjectRig.Socket socket in entry.sockets) {
-                    rig.GetSocketWorld (socket, out Vector3 at, out Quaternion unused);
+                foreach (HeldObjectRig.Attachment attachment in entry.attachments) {
+                    rig.GetSettingsHandle (attachment, out Vector3 at, out Quaternion unused);
+                    int settingsIndex = attachment.settings != null ? entry.definition.attachments.IndexOf (attachment.settings) : -1;
                     entries.Add (new RigControlEntry {
-                        id = "Object/" + entry.name + "/Socket/" + socket.definition.name,
+                        id = AttachmentId (entry.name, attachment.name),
                         kind = RigControlKind.Object,
-                        label = Tr ("RIG_EDITOR_SOCKET", entry.name, socket.definition.name),
+                        label = Tr ("RIG_EDITOR_ATTACHMENT", entry.name, attachment.name),
                         position = at,
                         held = entry,
-                        heldSocket = socket,
-                        settingsPath = path + ".sockets.Array.data[" + entry.definition.sockets.IndexOf (socket.definition) + "]",
+                        attachment = attachment,
+                        settingsPath = settingsIndex >= 0 ? path + ".attachments.Array.data[" + settingsIndex + "]" : null,
                     });
                 }
             }
         }
 
-        static void AddGrip (List<RigControlEntry> entries, HeldObjectRig rig, HeldObjectRig.Entry entry, HeldObjectRig.Hand hand, string label, string path)
+        /// <summary>付ける先の位置の項目の名前（選択を覚えておく）</summary>
+        public static string AttachmentId (string objectName, string point)
         {
-            if (hand == null) return;
-            rig.GetGrip (hand, out Vector3 position, out Quaternion rotation);
-            entries.Add (new RigControlEntry { id = "Object/" + entry.name + "/" + hand.id, kind = RigControlKind.Object, label = label, position = position, held = entry, hand = hand, settingsPath = path });
+            return "Object/" + objectName + "/Attach/" + point;
         }
 
         static string ElementPath (EditRigDefinition definition, string list, int index)

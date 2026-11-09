@@ -53,16 +53,6 @@ MonoBehaviour:
     frame: 0
     restPosition: {x: 0.8099263, y: 1.4188172, z: -0.05029428}
     restRotation: {x: 90, y: 0, z: 0}
-    rightGrip:
-      hold: 1
-      position: {x: -0.103438795, y: -0.015112049, z: -0.036683206}
-      rotation: {x: 270, y: -0, z: 0}
-      constraint: 
-    leftGrip:
-      hold: 0
-      position: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 0, z: 0}
-      constraint: 
     points:
     - name: Front
       position: {x: 0, y: 0.39999995, z: 0}
@@ -77,5 +67,9 @@ MonoBehaviour:
       weight: 1
       rotation: 1
     gripAxis: {x: 0, y: 1, z: 0}
-    sockets: []
-    restSocket: 
+    attachments:
+    - point: RightHand
+      attached: 1
+      position: {x: -0.103438795, y: -0.015112049, z: -0.036683206}
+      rotation: {x: 270, y: 0, z: 0}
+      constraint: 

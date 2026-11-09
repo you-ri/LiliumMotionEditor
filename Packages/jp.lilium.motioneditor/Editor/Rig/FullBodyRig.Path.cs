@@ -32,6 +32,37 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 運んだ目標で解いてもつかんだ点が届かなかったとき（more は届かなかった分）、道の上の Pin の点（腰）へ運び足す量（ルート空間。SpanShift）
+        /// </summary>
+        Vector3 PathRefine (Vector3 pathShift, Vector3 more)
+        {
+            if (grabbedEffectors_.Count == 0) return more;
+            Point pin = null;
+            for (int b = data_.effectors[grabbedEffectors_[0]].bone; pin == null && bodyParents_[b] >= 0; b = bodyParents_[b]) pin = FullPinOn (bodyParents_[b], out float unusedRotation);
+            return pin != null ? SpanShift (pin, TargetPosition (pin) + pathShift, more) : more;
+        }
+
+        /// <summary>
+        /// つかんだ点が届かなかった分（more）を、Pin の点 pin（今の目標 pinTarget）へ運び足す量（ルート空間）。ふつうは more（伸ばしきって届かない分）。
+        /// ただし、つかんだ点の目標が、Pin の点から今の姿勢の離れ（間の骨の開き）より近いとき（角度制限で間の関節を曲げきれず、縮められない）は、
+        /// Pin の点を目標から離れる向きへ、離れがその開きになる所まで運ぶ（必要な分だけ引かれる。11-09 ユーザー決定）。
+        /// more のまま運ぶと、つかんだ点から目標への向き（横）へ Pin の点が動き、必要な量の倍近く動いた（11-08 の蝶番の腕のテストの狭い制限で、最小 49mm の所を 85mm）
+        /// </summary>
+        Vector3 SpanShift (Point pin, Vector3 pinTarget, Vector3 more)
+        {
+            if (grabbedEffectors_.Count == 0) return more;
+            Vector3 target = Vector3.zero;
+            foreach (int e in grabbedEffectors_) target += (Vector3)data_.effectors[e].position;
+            target /= grabbedEffectors_.Count;
+            Vector3 reached = target - more;
+            Vector3 pinAt = (Vector3)data_.positions[pin.body] + (Quaternion)data_.rotations[pin.body] * pin.offset;
+            float span = Vector3.Distance (pinAt, reached);
+            Vector3 away = pinTarget - target;
+            if (away.magnitude >= span || away.sqrMagnitude <= kEpsilon * kEpsilon) return more;
+            return target + away.normalized * span - pinTarget;
+        }
+
+        /// <summary>
         /// 道の上の Lock でない重さ 1 の Pin の点（腰）を運ぶ量（ルート空間）。つかんだ点の骨から根へたどって最初に当たる、そうした Pin の点から、
         /// つかんだ点の目標までが、間の骨を伸ばしきった長さを超えた分だけ、つかんだ点の方へ。超えなければ 0。道の上にそうした Pin の点が無ければ 0。
         /// </summary>

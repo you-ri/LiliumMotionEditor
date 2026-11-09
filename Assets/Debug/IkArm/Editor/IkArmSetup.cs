@@ -182,6 +182,14 @@ namespace Lilium
             foreach (EditRigDefinition.BodyPoint point in definition.bodyPoints) {
                 if (!string.IsNullOrEmpty (point.link) && !definition.bodyPoints.Exists (p => p.name == point.link)) point.link = "";
             }
+            // 付ける先（S104）も、この腕で解く骨に乗るものだけを、その骨のコントロールで写す（右手）
+            definition.attachPoints.Clear ();
+            foreach (EditRigDefinition.AttachPoint from in source.attachPoints) {
+                if (from == null || !controls.TryGetValue (from.bone, out string control)) continue;
+                EditRigDefinition.AttachPoint point = JsonUtility.FromJson<EditRigDefinition.AttachPoint> (JsonUtility.ToJson (from));
+                point.control = control;
+                definition.attachPoints.Add (point);
+            }
         }
 
         /// <summary>
@@ -265,12 +273,12 @@ namespace Lilium
             held.restPosition = position;
             held.restRotation = rotation.eulerAngles;
             held.gripAxis = axis;
-            held.rightGrip = new HeldObjectGrip {
-                hold = true,
+            held.attachments.Add (new HeldObjectAttachment {
+                point = EditRigDefinition.kRightHandAttach,
+                attached = true,
                 position = Quaternion.Inverse (rotation) * (root.InverseTransformPoint (hand.position) - position),
                 rotation = Quaternion.Inverse (rotation).eulerAngles,
-            };
-            held.leftGrip = new HeldObjectGrip { hold = false };
+            });
             settings.heldObjects.Add (held);
             EditorUtility.SetDirty (settings);
             AssetDatabase.SaveAssetIfDirty (settings);

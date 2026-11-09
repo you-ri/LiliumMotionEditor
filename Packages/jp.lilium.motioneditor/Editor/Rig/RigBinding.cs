@@ -118,6 +118,8 @@ namespace Lilium
         public readonly List<Extra> extras = new List<Extra> ();
         /// <summary>全身 IK の点（S25）</summary>
         public readonly List<Point> points = new List<Point> ();
+        /// <summary>物を付ける先（S104。定義の一覧そのまま。骨は HeldObjectRig が引く）</summary>
+        public readonly List<EditRigDefinition.AttachPoint> attachPoints = new List<EditRigDefinition.AttachPoint> ();
         /// <summary>
         /// キャラ全体の問題（Avatar が人型でない・定義の誤りなど）
         /// </summary>
@@ -164,6 +166,7 @@ namespace Lilium
                 return binding;
             }
             binding.errors.AddRange (definition.Validate ());
+            if (definition.attachPoints != null) binding.attachPoints.AddRange (definition.attachPoints.Where (a => a != null));
 
             bool isHuman = animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman;
             string humanReason = animator == null ? Tr ("RIG_BINDING_NO_ANIMATOR")

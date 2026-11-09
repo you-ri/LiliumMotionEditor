@@ -89,12 +89,12 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 今のフレームで、手で持つ・やめるを切り替えて姿勢のキーを打つ。やめた手は今の場所に留まる。
-        /// 持つ手は、押した瞬間の手首の場所と向きのまま物に拘束する（物から見た握りをキーに残す。S99。11-04 ユーザー指示
+        /// 今のフレームで、物を付ける先に付ける・外すを切り替えて姿勢のキーを打つ（S104）。物も骨も今の場所に留まる。
+        /// 付けるときは、押した瞬間の付ける先の場所と向きのまま物に拘束する（物から見た位置をキーに残す。S99。11-04 ユーザー指示
         /// 「オブジェクトの好きな位置で掴めるように。掴むボタンを押した瞬間の位置、姿勢で拘束する。武器にかぎらず共通仕様として」）。
-        /// キャラの設定の握り（リグエディタで決めた握り）で持ち直すのは、CLI の objects の grip の useSettings
+        /// 物の設定の位置へ物を動かすのは SnapObject、CLI では objects の grip の useSettings
         /// </summary>
-        public void SetObjectHold (HeldObjectRig.Entry entry, bool left, bool hold)
+        public void SetObjectAttached (HeldObjectRig.Attachment attachment, bool attach)
         {
             string blocked = heldObjectBlockReason;
             if (blocked != null) {
@@ -103,77 +103,43 @@ namespace Lilium
             }
             CommitHandleKeys ();
             SamplePose ();
-            if (hold && stage_.heldObjects != null) stage_.heldObjects.GrabAtCurrent (left ? entry.left : entry.right, stage_.fullBody);
-            if (left) entry.values.leftHold = hold ? 1 : 0;
-            else entry.values.rightHold = hold ? 1 : 0;
+            stage_.heldObjects.SetAttached (attachment, attach);
             SolveAfterManipulate ();
             CommitFullBodyPose ();
+            NotifyLaterObjectKey (attachment.owner);
         }
 
         /// <summary>
-        /// 今のフレームで物を差す場所へ入れて、姿勢のキーを打つ（index が負なら差すのをやめる）。
-        /// 差すときは、持っている手を物と一緒に差す場所まで動かしてから放す（前のキーの間で手が物に付いたまま動き、跳ばない）。
-        /// やめたときに持っている手が無ければ、キャラの設定の握りで持つ。
-        /// 手が届かない場所と、後ろに物のキーが残っているとき（そのキーの持ち方へ跳ぶ）は知らせる
+        /// 今のフレームで、物を物の設定の位置で付ける先に付く所へ動かして（寄せる）、姿勢のキーを打つ。全身は引かず、付けている骨は物に付いてくる。
+        /// 付けている骨が届かないときと、後ろに物のキーが残っているとき（そのキーの姿勢へ動く）は知らせる
         /// </summary>
-        public void SetObjectSocket (HeldObjectRig.Entry entry, HeldObjectRig.Socket socket)
+        public void SnapObject (HeldObjectRig.Attachment attachment)
         {
             string blocked = heldObjectBlockReason;
             if (blocked != null) {
                 ShowNotification (new GUIContent (blocked), 1.5);
                 return;
             }
+            if (!attachment.hasSettings) return;
             CommitHandleKeys ();
             SamplePose ();
-            string note = null;
-            if (socket != null) {
-                entry.BringTo (socket);
-                SolveAfterManipulate ();
-                if (entry.bringGap > kSocketReachTolerance) note = Tr ("HELD_OBJECT_SOCKET_OUT_OF_REACH", entry.name, socket.definition.name);
-                entry.EnterSocket (socket);
-                // Pin の点を残すと、抜いたフレームで物が留めた場所へ戻る
-                foreach (PoseTarget target in targets_) {
-                    if (target is BodyPointTarget point && point.heldObject == entry) point.SetState (BodyPointState.Free);
-                }
-            }
-            else {
-                entry.LeaveSocket ();
-                entry.HoldByDefaultIfFree ();
-            }
+            HeldObjectRig.Entry entry = attachment.owner;
+            entry.SnapTo (attachment);
             SolveAfterManipulate ();
+            string note = entry.snapGap > kSnapReachTolerance ? Tr ("HELD_OBJECT_SNAP_OUT_OF_REACH", entry.name, attachment.name) : null;
             CommitFullBodyPose ();
-            if (note == null && HeldObjectRig.HasLaterKey (editingClip_, entry, currentFrame / editingClip_.frameRate)) note = Tr ("HELD_OBJECT_SOCKET_LATER_KEY", entry.name);
             if (note != null) ShowNotification (new GUIContent (note), 2.5);
+            else NotifyLaterObjectKey (entry);
         }
 
-        bool slideEditing_;
-
-        /// <summary>
-        /// 今のフレームで、握りを柄に沿ってずらす（スライダーを動かす間）。動かす間は物と体を解くだけで、キーは EndObjectSlide で打つ
-        /// </summary>
-        public void SetObjectSlide (HeldObjectRig.Hand hand, float value)
+        /// <summary>後ろに物のキーがあれば知らせる（切り替えはそのキーまでしか続かない）</summary>
+        void NotifyLaterObjectKey (HeldObjectRig.Entry entry)
         {
-            if (heldObjectBlockReason != null) return;
-            if (!slideEditing_) {
-                CommitHandleKeys ();
-                SamplePose ();
-                slideEditing_ = true;
-            }
-            hand.slide = value;
-            SolveAfterManipulate ();
-            RepaintView ();
+            if (HeldObjectRig.HasLaterKey (editingClip_, entry, currentFrame / editingClip_.frameRate)) ShowNotification (new GUIContent (Tr ("HELD_OBJECT_LATER_KEY", entry.name)), 2.5);
         }
 
-        /// <summary>握りをずらすのを終えて、姿勢のキーを打つ</summary>
-        public void EndObjectSlide ()
-        {
-            if (!slideEditing_) return;
-            slideEditing_ = false;
-            CommitFullBodyPose ();
-        }
-
-        /// <summary>差す場所へ運ぶ手の差を知らせる大きさ（メートル）</summary>
-        const float kSocketReachTolerance = 0.01f;
+        /// <summary>寄せたときに、付けている骨が届かなかった差を知らせる大きさ（メートル）</summary>
+        const float kSnapReachTolerance = 0.01f;
     }
 
 }

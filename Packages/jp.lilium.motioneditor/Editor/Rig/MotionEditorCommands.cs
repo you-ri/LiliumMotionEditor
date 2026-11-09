@@ -1212,9 +1212,14 @@ namespace Lilium
                         frame = definition.frame.ToString (),
                         rest = toBody * stage.heldObjects.GetRestPosition (entry),
                         restRotation = definition.restRotation,
-                        rightGrip = definition.rightGrip != null ? definition.rightGrip.position : Vector3.zero,
-                        leftGrip = definition.leftGrip != null ? definition.leftGrip.position : Vector3.zero,
-                        sockets = entry.sockets.ConvertAll (s => s.definition.name),
+                        attachments = entry.attachments.ConvertAll (a => new MotionEditorAttachInfo {
+                            name = a.name,
+                            bone = !string.IsNullOrEmpty (a.point.control) ? a.point.control : a.point.bone.ToString (),
+                            joint = a.point.joint.ToString (),
+                            hasSettings = a.hasSettings,
+                            attachedAtRest = a.settings != null && a.settings.attached,
+                            position = a.settings != null ? a.settings.position : Vector3.zero,
+                        }),
                     });
                 }
             }
@@ -1484,11 +1489,25 @@ namespace Lilium
         public Vector3 rest;
         /// <summary>キーの無いときの向き（体の向き基準のオイラー角。度）</summary>
         public Vector3 restRotation;
-        /// <summary>手首が来る場所（物のローカル・メートル）</summary>
-        public Vector3 rightGrip;
-        public Vector3 leftGrip;
-        /// <summary>差す場所の名前（姿勢の objects の socket に書く）</summary>
-        public List<string> sockets;
+        /// <summary>付ける先（リグ定義の一覧。S104。姿勢の objects の attach・snap・grip に名前を書く）</summary>
+        public List<MotionEditorAttachInfo> attachments;
+    }
+
+    /// <summary>物を付ける先 1 つの説明（S104）</summary>
+    [System.Serializable]
+    public sealed class MotionEditorAttachInfo
+    {
+        public string name;
+        /// <summary>付ける骨（HumanBodyBones の名前か、追加コントロールの名前）</summary>
+        public string bone;
+        /// <summary>Twist（柄の軸まわりに回る）/ Fixed（回らない）</summary>
+        public string joint;
+        /// <summary>物の設定に決まった位置があるか（snap で寄せられる）</summary>
+        public bool hasSettings;
+        /// <summary>キーの無いクリップで付けているか</summary>
+        public bool attachedAtRest;
+        /// <summary>決まった位置の、付ける先の枠の場所（物のローカル・メートル。手なら手首が来る場所）</summary>
+        public Vector3 position;
     }
 
     [System.Serializable]

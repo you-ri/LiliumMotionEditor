@@ -7,8 +7,8 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 持ち物の FK（S91）。骨の FK と同じく View の Bones で出す。動かすと持っている手と体が付いてくる。
-    /// キーは物の姿勢（Controls/Object/名前）と、手ごとの持っているか。離すと姿勢全体のキーを打つ。
+    /// 持ち物の FK（S91）。骨の FK と同じく View の Bones で出す。動かすと付けている骨と体が付いてくる。
+    /// キーは物の姿勢（Controls/Object/名前）と、付ける先ごとの付けているか（S104）。離すと姿勢全体のキーを打つ。
     /// 持っている間の物の姿勢は全身 IK の点（S102）で、体の点と同じ状態（Free / Pin / Lock）を持つ。状態は Controller の点の状態のボタンで変え、
     /// 物の姿勢の点（Controls/ObjectPose/名前）の強さと Lock の値をキーに打つ。
     /// 物の上の点（重心・先など）はふつうの全身 IK の点（BodyPointTarget。S91e）
@@ -104,8 +104,7 @@ namespace Lilium
         public override void OnHandleGUI (bool selected)
         {
             Transform display = entry_.display;
-            // 差している物は骨に固定で動かせない（場所はリグエディタで直す）
-            if (display == null || entry_.socket != null) return;
+            if (display == null) return;
             // 体の点（BodyPointTarget.OnHandleGUI）と同じ出し方: 丸は状態の色、選んでいることは丸の外の輪、
             // 選んでいる間のギズモは Controller パネルのモード（Rot なら回転、それ以外は移動）。
             // 前は Rig のターゲットと同じ物のハンドルで、回転は向きの棒を押したときだけ出て、Rot にしても回転のギズモが出なかった（11-07 ユーザー報告）。
@@ -165,53 +164,40 @@ namespace Lilium
             writer.Float (entry_.poseControl, typeof (BodyPoint), BodyPoint.kRotationWeightProperty, entry_.poseValues.rotationWeight);
             writer.Float (entry_.poseControl, typeof (BodyPoint), BodyPoint.kLockedProperty, entry_.poseValues.locked);
             entry_.keysPending = false;
-            // 持っているかは元のクリップだけから読む（Override の段へ書く間は打たない。切り替えは元のクリップに打つ）
+            // 付けているかは元のクリップだけから読む（Override の段へ書く間は打たない。切り替えは元のクリップに打つ）
             if (writer.storePosition != null) return;
-            writer.Float (entry_.control, typeof (HeldObjectControl), HeldObjectControl.kLeftHoldProperty, entry_.values.leftHold);
-            writer.Float (entry_.control, typeof (HeldObjectControl), HeldObjectControl.kRightHoldProperty, entry_.values.rightHold);
-            foreach (HeldObjectRig.Socket socket in entry_.sockets) writer.Float (socket.control, typeof (HeldObjectControl), HeldObjectControl.kSocketProperty, socket.values.socket);
-            WriteSlide (writer, entry_.left, HeldObjectControl.kLeftSlideProperty);
-            WriteSlide (writer, entry_.right, HeldObjectControl.kRightSlideProperty);
-            WriteGrip (writer, entry_.left);
-            WriteGrip (writer, entry_.right);
+            foreach (HeldObjectRig.Attachment attachment in entry_.attachments) {
+                writer.Float (attachment.values.transform, typeof (HeldObjectControl), HeldObjectControl.kAttachedProperty, attachment.values.attached);
+                WriteGrip (writer, attachment);
+            }
         }
 
         /// <summary>
-        /// キーで持った握り（S99）。その手で持つボタンを使ったクリップにだけカーブを作り、あればどのキーにも打つ
-        /// （使っていないクリップのカーブの組は変えない。キーの間で補間しないので、持ち替えたキーから次のキーまで同じ握り）
+        /// キーで付けた位置（S99）。その先で付けるボタンを使ったクリップにだけカーブを作り、あればどのキーにも打つ
+        /// （使っていないクリップのカーブの組は変えない。前後のキーで同じ先に付けていれば、キーの間は位置を補間する。HeldObjectRig.ApplyGripKeys）
         /// </summary>
-        void WriteGrip (CurveWriter writer, HeldObjectRig.Hand hand)
+        static void WriteGrip (CurveWriter writer, HeldObjectRig.Attachment attachment)
         {
-            if (hand == null || (!hand.gripCurved && !hand.gripKeyed)) return;
-            HeldObjectControl values = entry_.values;
-            string keyed = hand.left ? HeldObjectControl.kLeftGripKeyedProperty : HeldObjectControl.kRightGripKeyedProperty;
-            string position = hand.left ? HeldObjectControl.kLeftGripPositionProperty : HeldObjectControl.kRightGripPositionProperty;
-            string rotation = hand.left ? HeldObjectControl.kLeftGripRotationProperty : HeldObjectControl.kRightGripRotationProperty;
-            writer.Float (entry_.control, typeof (HeldObjectControl), keyed, hand.left ? values.leftGripKeyed : values.rightGripKeyed);
-            WriteVector (writer, position, hand.left ? values.leftGripPosition : values.rightGripPosition);
-            WriteVector (writer, rotation, hand.left ? values.leftGripRotation : values.rightGripRotation);
-            hand.gripCurved = true;
+            if (!attachment.gripCurved && !attachment.gripKeyed) return;
+            HeldObjectControl values = attachment.values;
+            writer.Float (values.transform, typeof (HeldObjectControl), HeldObjectControl.kGripKeyedProperty, values.gripKeyed);
+            WriteVector (writer, values.transform, HeldObjectControl.kGripPositionProperty, values.gripPosition);
+            WriteVector (writer, values.transform, HeldObjectControl.kGripRotationProperty, values.gripRotation);
+            attachment.gripCurved = true;
         }
 
-        void WriteVector (CurveWriter writer, string property, Vector3 value)
+        static void WriteVector (CurveWriter writer, Transform control, string property, Vector3 value)
         {
-            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".x", value.x);
-            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".y", value.y);
-            writer.Float (entry_.control, typeof (HeldObjectControl), property + ".z", value.z);
-        }
-
-        /// <summary>握りをずらしたクリップにだけカーブを作る（ずらしていないクリップのカーブの組は変えない）</summary>
-        void WriteSlide (CurveWriter writer, HeldObjectRig.Hand hand, string property)
-        {
-            if (hand == null || (!hand.slideKeyed && hand.slide == 0)) return;
-            writer.Float (entry_.control, typeof (HeldObjectControl), property, hand.slide);
+            writer.Float (control, typeof (HeldObjectControl), property + ".x", value.x);
+            writer.Float (control, typeof (HeldObjectControl), property + ".y", value.y);
+            writer.Float (control, typeof (HeldObjectControl), property + ".z", value.z);
         }
 
         public override void CollectKeyedPaths (ICollection<string> result)
         {
             result.Add (RigPaths.Object (entry_.name));
             result.Add (RigPaths.ObjectPose (entry_.name));
-            foreach (HeldObjectRig.Socket socket in entry_.sockets) result.Add (RigPaths.ObjectSocket (entry_.name, socket.definition.name));
+            foreach (HeldObjectRig.Attachment attachment in entry_.attachments) result.Add (RigPaths.ObjectAttach (entry_.name, attachment.name));
         }
 
         /// <summary>物のメッシュをクリックしたら選ぶ</summary>

@@ -59,7 +59,6 @@ namespace Lilium
         static readonly Color kLockedColor = new Color (1f, 0.2f, 0.15f, 0.85f);
         /// <summary>動かせない点（定義の passive。S89）の丸の色。状態を持たないので、状態の色と見分けられる灰色。リグエディタも同じ色で描く</summary>
         internal static readonly Color kPassiveColor = new Color (0.6f, 0.6f, 0.6f, 0.6f);
-        /// <summary>持ち物を持っている手の丸の色（S91。状態を持たない）</summary>
         /// <summary>
         /// 丸の外に出す輪。丸との隙間（ハンドルの大きさの何倍か）と線の太さ（ピクセル）。
         /// 色で選び方を表す（丸の色は状態のためにとってある）: 選ぼうとしている（マウスが乗っている・枠に入っている）/ 選んで動かせる
@@ -103,18 +102,6 @@ namespace Lilium
         /// <summary>完全固定を切り替えたがまだキーを打っていない</summary>
         bool lockedDirty_;
         bool contextClicked_;
-
-        /// <summary>持ち物を持つ手か（S91。手首の点だけ。持っていないフレームではふつうの点）</summary>
-        public HeldObjectRig.Hand holder;
-
-        /// <summary>
-        /// 今のフレームで持ち物を持っている手か。持っている間もふつうの点（S102。11-07 ユーザー指示: 持っている手の点の特別な扱いをやめる）。
-        /// 物は握りの関節で手に付き、物の状態（Free / Pin / Lock）どおりに動く
-        /// </summary>
-        public bool held
-        {
-            get { return holder != null && holder.held; }
-        }
 
         /// <summary>乗っている持ち物（S91e。物の上の点だけ）。扱いはほかの点と同じで、乗る骨の代わりに物へ乗る</summary>
         public HeldObjectRig.Entry heldObject;

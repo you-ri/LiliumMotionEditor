@@ -94,12 +94,74 @@ namespace Lilium
             for (int i = 0; i < points_.Count; i++) branchShifts_[i] = RigidShift (points_[i]);
             SolveHeavyTargets (null, Vector3.zero, 1, false);
             Vector3 shift = GrabbedShift ();
-            if (IsReached (shift) || lockedEffectors_.Count > 0) return;
-            for (int i = 0; i < points_.Count; i++) {
-                if (!CarriedRigid (points_[i])) branchShifts_[i] = shift;
+            if (lockedEffectors_.Count > 0) return;
+            if (!HeldLoopsClosed ()) {
+                CarryLoopPins ();
+                return;
             }
-            StartFromSolved (shift);
+            if (IsReached (shift)) return;
+            // Pin の点ごとに、届かなかった分を運ぶ（間の関節を角度制限で縮めきれないときは、目標から離れる向きへ必要な分だけ。SpanShift）。
+            // 解き始める姿勢は、運んだ量の平均だけずらす
+            Vector3 start = Vector3.zero;
+            int carried = 0;
+            for (int i = 0; i < points_.Count; i++) {
+                if (HeavyRole (points_[i], out _, out _) != PointRole.CarriedPin || CarriedRigid (points_[i])) continue;
+                branchShifts_[i] = SpanShift (points_[i], TargetPosition (points_[i]), shift);
+                carried++;
+            }
+            ShareLoopShifts ();
+            for (int i = 0; i < points_.Count; i++) {
+                if (HeavyRole (points_[i], out _, out _) == PointRole.CarriedPin && !CarriedRigid (points_[i])) start += branchShifts_[i];
+            }
+            StartFromSolved (carried > 0 ? start / carried : shift);
             SolveHeavyTargets (null, Vector3.zero, 1, false);
+        }
+
+        /// <summary>
+        /// 根を留めない定義で、Pin の点を留めて解くと輪の関節（S105）が開いたとき（つかんだ点が、輪を開いて届いた）。運ぶ量は、根を留める定義の道の外の Pin の点と同じく長さで決める:
+        /// 道の外の Pin の点を外して解いた姿勢で、手足の付け根から目標までが手足の長さを超えた分（BranchShifts）。輪でつながった Pin の点どうしはそろえ（ShareLoopShifts）、
+        /// 届かない分は運び足す（kCarryRefines）。伸びきるまでは 0 なので、境目で跳ばない。
+        /// つかんだ点を譲らせて届かなかった分で測ると、譲らせた点では鎖を伸ばしきれず、伸びきる前から Pin の点を運んだ。Pin の点を譲らせて引かれた量で測ると、
+        /// 伸びきった所で、輪を体のまわりに傾けた方が引かれる量の少ない答えへ移って跳んだ（11-09 の輪のテストで、両手を Pin にして体を引き上げると肩が 1 回 350mm 前後）
+        /// </summary>
+        void CarryLoopPins ()
+        {
+            bool[] path = PathToRoot ();
+            StartFrom (solvePositions_, solveRotations_);
+            SolveHeavyTargets (path, Vector3.zero, 0, false, branches: false);
+            BranchShifts (path);
+            ShareLoopShifts ();
+            for (int k = 0; k <= kCarryRefines; k++) {
+                // 解き始める姿勢は、元の姿勢を運ぶ量の平均だけずらした所
+                Vector3 start = Vector3.zero;
+                int carried = 0;
+                for (int i = 0; i < points_.Count; i++) {
+                    if (!SharesShift (points_[i])) continue;
+                    start += branchShifts_[i];
+                    carried++;
+                }
+                StartFrom (solvePositions_, solveRotations_);
+                if (carried > 0) {
+                    for (int i = 0; i < bodies_.Count; i++) startPositions_[i] += start / carried;
+                }
+                SolveHeavyTargets (null, Vector3.zero, 1, false);
+                if (k == kCarryRefines || (IsReached (GrabbedShift ()) && HeldLoopsClosed ())) break;
+                Vector3 more = LoopShortfall (null, Vector3.zero);
+                for (int i = 0; i < points_.Count; i++) {
+                    if (SharesShift (points_[i])) branchShifts_[i] += more;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 今の目標で解いた答え（data_）でつかんだ点が届かなかった分。輪の関節（S105）が開いていれば、つかんだ点を譲らせて同じ目標で解き直し、その届かなかった分にする。
+        /// 輪が開くと、つかんだ点は届いてしまうので、運び足す量が 0 のまま輪が 2mm ほど開いて残った（11-09 の輪のテストで、両手を Pin にして体を引き上げたとき）
+        /// </summary>
+        Vector3 LoopShortfall (bool[] path, Vector3 pathShift)
+        {
+            if (HeldLoopsClosed ()) return GrabbedShift ();
+            SolveHeavyTargets (path, pathShift, 1, true);
+            return GrabbedShift ();
         }
 
         /// <summary>解き直しの本体: 届かなかった分だけ、道の上・道の外の Pin の点の目標を運んで解く</summary>
@@ -120,6 +182,7 @@ namespace Lilium
             // 道の外の Pin の点を運ぶ量は、腰を運んで道の外の Pin の点を外して解いた姿勢で決める（BranchShifts）
             SolveHeavyTargets (path, shift, 0, locks, branches: false);
             BranchShifts (path);
+            ShareLoopShifts ();
             RestoreYielded ();
             float fraction = CarryPins (path, shift);
             if (locks) return;
@@ -129,9 +192,15 @@ namespace Lilium
             // 10-29 までは、運ぶ量を伸ばしきった長さの 95% から数えて届かせていたが、元の背骨が丸い姿勢では 95% でも胸・上胸に 35° ずつ曲がりが残った
             // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」）。届く所では足す量は 0 なので、境目で姿勢は跳ねない
             for (int k = 0; k < kCarryRefines; k++) {
-                Vector3 more = GrabbedShift ();
-                if (IsReached (more)) break;
-                shift += more;
+                if (IsReached (GrabbedShift ()) && HeldLoopsClosed ()) break;
+                Vector3 more = LoopShortfall (path, shift);
+                shift += PathRefine (shift, more);
+                // 引かれている道の外の Pin の点（手足の先）にも、届かなかった分を運び足す。手足の付け根から目標までの長さで決めた量（BranchShifts）は、
+                // 関節の角度制限を数えないので、制限で手足を目標の方へ向けきれないと足りず、体ごと運べなかった
+                // （11-08 の枝分かれのテストの狭い制限で、もう片方の枝の Pin の点が付いてこず、つかんだ点が 26mm 届かなかった）
+                for (int i = 0; i < points_.Count; i++) {
+                    if (branchShifts_[i].sqrMagnitude > kEpsilon * kEpsilon && !CarriedRigid (points_[i])) branchShifts_[i] += more;
+                }
                 // 前の答えから続けて解く（元の姿勢から解き直すと、詰まった分がまた初めからになる）
                 StartFromSolved (Vector3.zero);
                 SolveHeavyTargets (path, shift, 1, false);
@@ -179,12 +248,13 @@ namespace Lilium
         {
             if (fraction <= 0 || !AnyBranchShift ()) return fraction;
             float low = 0, high = fraction;
+            // 輪の関節（S105）を開いて届いた答えは数えない（開けば手足の先を運ばずに届くので、運ぶ割合が 0 になった。11-09 の輪のテストで 85mm 開いた）
             SolveHeavyTargets (path, pathShift, fraction, false, 0);
-            if (IsReached (GrabbedShift ())) return 0;
+            if (IsReached (GrabbedShift ()) && HeldLoopsClosed ()) return 0;
             for (int k = 0; k < kBranchSearches; k++) {
                 float middle = (low + high) * 0.5f;
                 SolveHeavyTargets (path, pathShift, fraction, false, middle);
-                if (IsReached (GrabbedShift ())) high = middle;
+                if (IsReached (GrabbedShift ()) && HeldLoopsClosed ()) high = middle;
                 else low = middle;
             }
             return high;
@@ -222,6 +292,38 @@ namespace Lilium
                 float over = toRoot.magnitude - length;
                 if (over > 0) branchShifts_[i] = toRoot.normalized * over;
             }
+        }
+
+        /// <summary>
+        /// 輪の関節（S105）でつながって離れの変わらない、運ぶ Pin の点どうし（つかんだ点とは離れの変わる点）は、同じ量だけ運ぶ（運ぶ量の平均。branchShifts_）。
+        /// 点ごとに手足の付け根の方へ運ぶと、運んだ目標どうしの離れが変わり、必ず満たす輪の関節と取り合って輪が開いた
+        /// （11-09 の輪のテストで、両手を Pin にして体を引き上げると、腕が伸びきった所で 85mm）。届かない分は運び足し（kCarryRefines）でそろえて足す
+        /// </summary>
+        void ShareLoopShifts ()
+        {
+            if (loopJoints_.Count == 0) return;
+            if (sharedShifts_.Length != points_.Count) sharedShifts_ = new Vector3[points_.Count];
+            for (int i = 0; i < points_.Count; i++) {
+                sharedShifts_[i] = branchShifts_[i];
+                if (!SharesShift (points_[i])) continue;
+                Vector3 sum = branchShifts_[i];
+                int count = 1;
+                for (int j = 0; j < points_.Count; j++) {
+                    if (j == i || !SharesShift (points_[j]) || !LoopPair (points_[i], points_[j])) continue;
+                    sum += branchShifts_[j];
+                    count++;
+                }
+                sharedShifts_[i] = sum / count;
+            }
+            for (int i = 0; i < points_.Count; i++) branchShifts_[i] = sharedShifts_[i];
+        }
+
+        Vector3[] sharedShifts_ = new Vector3[0];
+
+        /// <summary>運ぶ量をそろえる Pin の点か（運ぶ Pin の点で、つかんだ点とは離れの変わる点）</summary>
+        bool SharesShift (Point point)
+        {
+            return HeavyRole (point, out _, out _) == PointRole.CarriedPin && !CarriedRigid (point);
         }
 
         /// <summary>HeavyEffectors の目標で、解き始める姿勢（startPositions_ / startRotations_）から解く</summary>
@@ -300,8 +402,10 @@ namespace Lilium
         bool Solved ()
         {
             // つかんだ点と離れの変わらない Pin の点（RigidToGrabbed）も、留まっていなければ解き直す。つかんだ点が届いても、その点を外して届いた答えは、
-            // 届かなかったときに運ぶ量（BranchShifts）と食い違い、引くたびに 2 つの姿勢の間を跳んだ
-            return Reached (grabbedEffectors_) && LocksHeld () && Held (rigidEffectors_, rigidBases_);
+            // 届かなかったときに運ぶ量（BranchShifts）と食い違い、引くたびに 2 つの姿勢の間を跳んだ。
+            // 輪の関節（S105）が開いた答えも解き直す。Pin の点と必ず満たす輪の関節が取り合うと輪の方が開き、つかんだ点が届いて Pin の点が留まったまま
+            // 運ぶ処理へ進まなかった（11-09 の輪のテストで、両手を Pin にして体を引き上げると 85mm 開いた）
+            return Reached (grabbedEffectors_) && LocksHeld () && Held (rigidEffectors_, rigidBases_) && HeldLoopsClosed ();
         }
 
         /// <summary>Lock の点がどれも、元の姿勢でのずれ（lockBases_）から kReachTolerance より大きくは動いていないか</summary>

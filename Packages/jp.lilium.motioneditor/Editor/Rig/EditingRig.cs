@@ -272,9 +272,23 @@ namespace Lilium
             get { return bakedBones_; }
         }
 
-        internal void AddBakedBone (Transform displayBone)
+        /// <param name="parent">
+        /// 焼く値を、親の骨でなく別の骨から見た値にするとき、その骨を返す関数（引数は表示モデルの骨を返すか。null を返せば親の骨から見た値）。
+        /// 腰に差している間の剣など、ゲーム側でその間だけ親を替える物（S104）
+        /// </param>
+        internal void AddBakedBone (Transform displayBone, System.Func<bool, Transform> parent = null)
         {
             bakedBones_.Add (displayBone);
+            if (parent != null) bakedParents_[displayBone] = parent;
+        }
+
+        readonly Dictionary<Transform, System.Func<bool, Transform>> bakedParents_ = new Dictionary<Transform, System.Func<bool, Transform>> ();
+
+        /// <summary>今の姿勢で、焼く骨の値をどの骨から見た値にするか（親の骨のままなら null）</summary>
+        /// <param name="fromDisplay">表示モデルの骨を返す（表示モデルから読む焼き方）。false なら編集用の骨</param>
+        internal Transform GetBakedParent (Transform displayBone, bool fromDisplay)
+        {
+            return displayBone != null && bakedParents_.TryGetValue (displayBone, out System.Func<bool, Transform> parent) ? parent (fromDisplay) : null;
         }
 
         /// <summary>
@@ -336,6 +350,15 @@ namespace Lilium
         {
             Transform bone;
             return displayBone != null && editingByDisplay_.TryGetValue (displayBone, out bone) ? bone : null;
+        }
+
+        /// <summary>
+        /// 編集用の骨に対応する、表示モデルの骨
+        /// </summary>
+        public Transform GetDisplayBone (Transform editingBone)
+        {
+            int index;
+            return editingBone != null && indexByEditing_.TryGetValue (editingBone, out index) ? bones_[index].display : null;
         }
 
         /// <summary>
