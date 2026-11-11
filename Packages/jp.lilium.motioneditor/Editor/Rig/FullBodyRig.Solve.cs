@@ -128,6 +128,8 @@ namespace Lilium
             if (count > 0 || data_.loopCount > 0) RunSolver (count, solvePositions_, solveRotations_);
 
             if (pins && !Solved ()) ResolveHeavyGrab ();
+            // 伸ばしきる手前の鎖の Pin の点は、少しずつ付いてこさせる（伸びきる所で膝・肘が跳ばない。11-10）
+            if (pins) SoftenStretch ();
             // 両手で持った物をつかんで輪の関節が閉じなければ、まず前の答えから続けて解く（腕が伸びた姿勢から解き始めると、届く所でも輪が 1cm 開いたまま残った。11-07 実測）。
             // それでも閉じなければ（届かない所へ引いた）、つかんだ点を輪より少し弱くして解き直す（S102）。どちらも必ず満たす拘束のままだと取り合って、
             // 体が折れ、もう片方の手が物から 1.5m 外れた（11-07 実測）。届く間は弱くしない（弱くすると、仕上げでつかんだ点を合わせ直さないので、物が少しずれる）
@@ -145,6 +147,7 @@ namespace Lilium
                     count = HeavyEffectors (null, Vector3.zero, 0, false);
                     RunSolver (count, solvePositions_, solveRotations_);
                     if (pins && !Solved ()) ResolveHeavyGrab ();
+                    if (pins) SoftenStretch ();
                 }
                 finally {
                     yieldToLoops_ = false;
@@ -226,7 +229,8 @@ namespace Lilium
             Quaternion rootInverse = Quaternion.Inverse (rootTransform.rotation);
             Vector3 rootPosition = rootTransform.position;
             for (int i = 0; i < bodies_.Count; i++) {
-                solvePositions_[i] = rootInverse * (bodies_[i].position - rootPosition);
+                // 付け根をずらした骨（Hinge の先に付けた物）は、ずらした所を骨の付け根にする
+                solvePositions_[i] = rootInverse * (bodies_[i].position + bodies_[i].rotation * origins_[i] - rootPosition);
                 solveRotations_[i] = rootInverse * bodies_[i].rotation;
                 data_.positions[i] = solvePositions_[i];
                 data_.rotations[i] = solveRotations_[i];
@@ -253,8 +257,8 @@ namespace Lilium
             // 親から順に書く（向きはワールドの値で入れるので、親を先に決める）
             for (int i = 0; i < bodies_.Count; i++) {
                 // 持っている物（S102）は骨の階層では手の子でないので、場所も書く
-                if (bodyParents_[i] < 0 || attached_[i]) bodies_[i].position = rootPosition + rootRotation * (Vector3)data_.positions[i];
                 bodies_[i].rotation = rootRotation * Quaternion.Normalize ((Quaternion)data_.rotations[i]);
+                if (bodyParents_[i] < 0 || attached_[i]) bodies_[i].position = rootPosition + rootRotation * (Vector3)data_.positions[i] - bodies_[i].rotation * origins_[i];
             }
             return true;
         }

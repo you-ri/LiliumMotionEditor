@@ -313,6 +313,11 @@ namespace Lilium
             Twist,
             /// <summary>回らない（腰・背中に差す）</summary>
             Fixed,
+            /// <summary>
+            /// 付ける先の枠の軸（AttachPoint.hingeAxis）まわりにだけ、±hingeRange 度回る（握った手の中で物が手の甲から見て傾く）。柄の軸まわりには回らない。
+            /// 回る中心は、柄の軸の上で枠に一番近い点（握りの中）。11-09 ユーザー指示「手首のひねり（roll）は固定だが、手の甲から見た yaw 角は ±45° の制限に」
+            /// </summary>
+            Hinge,
         }
 
         /// <summary>
@@ -332,8 +337,13 @@ namespace Lilium
             public Vector3 position;
             [Tooltip ("Attach frame rotation, in body right, up and forward axes in the T-pose (Euler angles)")]
             public Vector3 rotation;
-            [Tooltip ("Twist: the object turns freely about its grip axis (hands). Fixed: the object does not turn (a hip or the back)")]
+            [Tooltip ("Twist: the object turns freely about its grip axis (hands). Fixed: the object does not turn (a hip or the back). Hinge: the object does not turn about its grip axis, and turns up to Hinge Range about Hinge Axis, around the grip point on the grip axis (hands)")]
             public AttachJoint joint;
+            [Tooltip ("Hinge only. Axis the object turns about, in the attach frame's axes (body right, up and forward in the T-pose). Up is the back of the hand when the palm faces down in the T-pose")]
+            public Vector3 hingeAxis = Vector3.up;
+            [Tooltip ("Hinge only. How far the object turns about Hinge Axis each way from the attached position (degrees)")]
+            [Range (0, 180)]
+            public float hingeRange = 45;
             [Tooltip ("Attach held objects here in clips that have no attachment keys (objects that have a position for this attach point). The default definition uses the hips, so the hands stay free and the character stays in the T-pose")]
             public bool attachedAtRest;
         }

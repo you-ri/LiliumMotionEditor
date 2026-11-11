@@ -32,9 +32,9 @@ namespace Lilium
     /// </summary>
 #if UNITY_6000_6_OR_NEWER
     [EditorToolOwner (typeof (PoseToolContext))]
-    public partial class PreviewWindow : EditorWindow, IEditorHost, ILayerHost, ISupportsOverlays, ISupportsEditorTools
+    public partial class PreviewWindow : EditorWindow, IEditorHost, ILayerHost, ISupportsOverlays, ISupportsEditorTools, IHasCustomMenu
 #else
-    public partial class PreviewWindow : EditorWindow, IEditorHost, ILayerHost, ISupportsOverlays
+    public partial class PreviewWindow : EditorWindow, IEditorHost, ILayerHost, ISupportsOverlays, IHasCustomMenu
 #endif
     {
         public enum ViewPreset
@@ -75,6 +75,10 @@ namespace Lilium
         const float kMinLayersWidth = 200;
         /// <summary>タイムラインのトラック一覧の最小の高さ</summary>
         const float kMinTimelineTracksHeight = 60;
+        /// <summary>パネルの大きさの既定（初めて開いたとき・レイアウトを戻したとき）</summary>
+        const float kDefaultTimelineTracksHeight = 118;
+        const float kDefaultLayersHeight = 420;
+        const float kDefaultLayersWidth = 240;
         static readonly int kViewportHash = "MktPreviewViewport".GetHashCode ();
         /// <summary>浮かせて置くパネルの既定の場所（OverlayWindows.PlaceDefaults）</summary>
         static readonly KeyValuePair<string, Vector2>[] kFloatingDefaults = {
@@ -99,7 +103,7 @@ namespace Lilium
         [SerializeField] bool showFloor_ = true;
         [SerializeField] ShowTracksFlag showTracks_ = ShowTracksFlag.Selected;
         /// <summary>タイムライン オーバーレイのトラック一覧の高さ。下端のハンドルで変える</summary>
-        [SerializeField] float timelineTracksHeight_ = 118;
+        [SerializeField] float timelineTracksHeight_ = kDefaultTimelineTracksHeight;
         /// <summary>キーの間を補間せずに見せる（コマ送り。タイムラインの Interpolate を切ったとき）</summary>
         [SerializeField] bool stepped_;
         /// <summary>タイムラインの目盛りの拡大率（1 フレームあたりのピクセル数）</summary>
@@ -107,8 +111,8 @@ namespace Lilium
         /// <summary>タイムラインの目盛りの左端のフレーム</summary>
         [SerializeField] float timelineFirstFrame_ = -2;
         /// <summary>Layers オーバーレイの一覧の高さ。下端のハンドルで変える</summary>
-        [SerializeField] float layersHeight_ = 420;
-        [SerializeField] float layersWidth_ = 240;
+        [SerializeField] float layersHeight_ = kDefaultLayersHeight;
+        [SerializeField] float layersWidth_ = kDefaultLayersWidth;
         [SerializeField] OrbitCamera camera_ = new OrbitCamera ();
         /// <summary>
         /// カメラを合わせたモデル。再読み込みで作り直したときは視点を保つ
@@ -194,6 +198,25 @@ namespace Lilium
         static void Open ()
         {
             GetWindow<PreviewWindow> ().Show ();
+        }
+
+        /// <summary>窓のタブの ⋮ メニュー</summary>
+        public void AddItemsToMenu (GenericMenu menu)
+        {
+            menu.AddItem (new GUIContent (Tr ("RESET_LAYOUT")), false, ResetLayout);
+        }
+
+        /// <summary>
+        /// パネルの置き場所・表示と大きさを、初めて開いたときに戻す。パネルを窓の外へ見失ったときや、並べ直したくなったときのため。
+        /// 大きさはパネルの中身を作るときに読むので、パネルを作り直す（OverlayWindows.ResetLayout）前に戻しておく
+        /// </summary>
+        public void ResetLayout ()
+        {
+            timelineTracksHeight_ = kDefaultTimelineTracksHeight;
+            layersHeight_ = kDefaultLayersHeight;
+            layersWidth_ = kDefaultLayersWidth;
+            if (OverlayWindows.ResetLayout (this)) overlayDefaultsChecked_ = false;
+            Repaint ();
         }
 
         public PreviewStage stage

@@ -28,8 +28,12 @@ namespace Lilium
         const float kWidth = 208;
 
         SpinnerElement spinner_;
-        /// <summary>選んでいる物のクラス名（名前はスピナーの下に出る。何をつかんでいるかの見分け。11-09 ユーザー指示「クラス名も追加する」）</summary>
+        /// <summary>一番上の 1 行。選んでいる物の名前とクラス名（何をつかんでいるかの見分け。11-09 ユーザー指示「クラス名も追加する」「一番上に配置」「1 行に。はみ出すならクラス名を省き、マウスを乗せると全部出す」）</summary>
+        VisualElement targetRow_;
+        Label targetName_;
+        Label targetOpen_;
         Label targetType_;
+        Label targetClose_;
         Button[] modes_;
         Toggle floorClamp_;
         ValueRow[] rows_;
@@ -61,6 +65,22 @@ namespace Lilium
             window_ = ResolveWindow ();
             if (window_ == null) return root;
 
+            // 名前・クラス名の順に 1 行に並べ、真ん中に寄せる。文字はテーマの大きさ（Floor Clamp・ボタンと同じ）。
+            // 入らないときはクラス名だけ縮めて省く。全部はマウスを乗せると出る（行が受けるので、ラベルは素通し）
+            targetRow_ = new VisualElement ();
+            targetRow_.style.flexDirection = FlexDirection.Row;
+            targetRow_.style.justifyContent = Justify.Center;
+            targetRow_.style.alignItems = Align.Center;
+            targetRow_.style.overflow = Overflow.Hidden;
+            targetRow_.style.marginBottom = 2;
+            // "{名前} ({クラス名})"。かっこは別のラベルにして、クラス名を省いても閉じかっこが残るようにする
+            targetName_ = AddTargetLabel (0);
+            targetOpen_ = AddTargetLabel (0);
+            targetOpen_.style.marginLeft = 4;
+            targetType_ = AddTargetLabel (1);
+            targetClose_ = AddTargetLabel (0);
+            root.Add (targetRow_);
+
             VisualElement modes = new VisualElement ();
             modes.style.flexDirection = FlexDirection.Row;
             modes_ = new Button[3];
@@ -83,12 +103,6 @@ namespace Lilium
 
             spinner_ = new SpinnerElement (window_);
             root.Add (spinner_);
-            targetType_ = new Label ();
-            targetType_.style.unityTextAlign = TextAnchor.MiddleCenter;
-            targetType_.style.fontSize = 9;
-            targetType_.style.opacity = 0.7f;
-            targetType_.pickingMode = PickingMode.Ignore;
-            root.Add (targetType_);
 
             rows_ = new ValueRow[3];
             rows_[0] = AddRow (root, TransformChannels.Position, "Pos", Tr ("CONTROLLER_OVERLAY_POSITION_TOOLTIP"));
@@ -169,6 +183,29 @@ namespace Lilium
             }
         }
 
+        /// <param name="shrink">0 なら縮めない（名前・かっこ）。1 なら入らない分を縮めて省く（クラス名）</param>
+        Label AddTargetLabel (float shrink)
+        {
+            Label label = new Label ();
+            label.style.unityTextAlign = TextAnchor.MiddleCenter;
+            // 何も選んでいなくても行の高さは残す（選ぶたびに下の操作盤が上下しないように）
+            label.style.minHeight = 16;
+            label.style.flexShrink = shrink;
+            // 名前だけで幅を超えるときは名前も省く
+            label.style.maxWidth = Length.Percent (100);
+            label.style.minWidth = 0;
+            label.style.marginLeft = 0;
+            label.style.marginRight = 0;
+            label.style.paddingLeft = 0;
+            label.style.paddingRight = 0;
+            label.style.overflow = Overflow.Hidden;
+            label.style.textOverflow = TextOverflow.Ellipsis;
+            label.style.whiteSpace = WhiteSpace.NoWrap;
+            label.pickingMode = PickingMode.Ignore;
+            targetRow_.Add (label);
+            return label;
+        }
+
         /// <param name="shortcut">切り替えるショートカットの名前（説明の後ろに今のキーを付ける）</param>
         Button AddModeButton (VisualElement parent, PreviewWindow.SpinnerMode mode, string text, string tooltip, string shortcut)
         {
@@ -195,9 +232,9 @@ namespace Lilium
             row.root.style.alignItems = Align.Center;
             row.root.style.marginTop = 1;
 
+            // 見出しはテーマの大きさ（Floor Clamp と同じ）。幅は「Scale」が収まる分
             Label label = new Label (title);
-            label.style.width = 34;
-            label.style.fontSize = 10;
+            label.style.width = 38;
             label.style.unityTextAlign = TextAnchor.MiddleLeft;
             label.style.paddingLeft = 2;
             row.root.Add (label);
@@ -287,8 +324,13 @@ namespace Lilium
             floorClamp_.SetValueWithoutNotify (window_.floorClamp);
             spinner_.Refresh ();
             PoseTarget target = window_.selectedTarget;
-            targetType_.text = target != null ? target.GetType ().Name : "";
-            targetType_.style.display = target != null ? DisplayStyle.Flex : DisplayStyle.None;
+            string targetName = target != null ? window_.spinTargetLabel ?? "" : "";
+            string targetType = target != null ? target.GetType ().Name : "";
+            targetName_.text = targetName;
+            targetOpen_.text = target != null ? "(" : "";
+            targetType_.text = targetType;
+            targetClose_.text = target != null ? ")" : "";
+            targetRow_.tooltip = target != null ? targetName + " (" + targetType + ")" : null;
 
             string warning = window_.spinOverrideWarning;
             warning_.text = warning ?? "";

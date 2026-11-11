@@ -164,6 +164,199 @@ namespace Lilium
             return GrabbedShift ();
         }
 
+        /// <summary>
+        /// 伸ばしきる所の手前で Pin の点が付いてき始める幅（Pin の点からつかんだ点・手足の付け根までの、骨を伸ばしきった長さに対する割合。SoftenStretch）
+        /// </summary>
+        internal const float kSoftStretch = 0.03f;
+        /// <summary>SoftenStretch で、運び足して解き直す回数の上限（Pin の点を運ぶと手足の付け根も動くので、測り直す）</summary>
+        const int kSoftPasses = 3;
+        // 重い点をつかんでいる間の、目標（data_.effectors の並び）ごとの点（points_ の並び。足の箱は -1。HeavyEffectors が入れる）
+        readonly List<int> effectorPoints_ = new List<int> ();
+        // SoftenStretch で、目標ごとに運び足す量（data_.effectors と同じ並び。ルート空間）
+        Vector3[] softShifts_ = new Vector3[0];
+        Vector3[] softShared_ = new Vector3[0];
+
+        /// <summary>
+        /// 伸ばしきった長さ length の鎖で、distance 離れた 2 点を結ぶときに、鎖が実際に伸びる長さ。付いてき始める所 start（length の kSoftStretch 手前と、
+        /// 元の姿勢での離れ rest の遠い方）までは distance のまま、そこから幅の 2 倍先（length + 幅）でちょうど length になる 2 次の曲線で伸び、その先は length。
+        /// distance との差だけ Pin の点が付いてくる。残り（length − 伸びる長さ）が (1 − x)² で減るので、関節の一直線からのずれ（√(残り × 骨の長さ)）は
+        /// 一定の速さで詰まり、有限の所で一直線になる（11-10 の Fable のレビュー。指数で近づけると、いつまでも伸びきらず、脚が曲がったまま付いてきた）。
+        /// 元の姿勢から数えるのは、キーの姿勢ですでに伸びきりに近い手足（T ポーズの脚）で、何も引いていないのに Pin の点が付いてこないため
+        /// （11-10 実測で、全部の点を回すと腰が 4.8mm ずれた）。元から伸びきっていれば、関節は初めから一直線の上にあり、跳ばない
+        /// </summary>
+        static float SoftReach (float distance, float length, float rest)
+        {
+            float start = Mathf.Max (length * (1 - kSoftStretch), rest);
+            float soft = length - start;
+            if (distance <= start || soft <= kEpsilon) return Mathf.Min (distance, length);
+            float x = (distance - start) / (2 * soft);
+            if (x >= 1) return length;
+            return length - soft * (1 - x) * (1 - x);
+        }
+
+        /// <summary>
+        /// 重い点をつかんで解いた後、伸ばしきる手前の鎖の Pin の点を、伸びきるまでの残りに応じて少しずつ付いてこさせる（11-10 ユーザー決定「伸びきる手前から付いてくる」）。
+        /// 伸びきるまで Pin の点を留めると、伸びきる直前に鎖の途中の関節（膝・肘）が、つかんだ点の動きよりずっと速く一直線へ詰まった
+        /// （伸びきるまでの残りが δ のとき、関節は鎖の両端を結ぶ線から √(δ × 骨の長さ) くらい離れている。11-10 ユーザー報告「腰を持ち上げると、
+        /// 一定以上上に動かすと、足が変に動く」。デモのキャラで、腰を 10mm 上げる 1 回で膝が 56mm）。
+        /// 鎖が伸びる長さを SoftReach にして、両端の離れとの差を Pin の点の目標へ運び足す（今までの運ぶ量より少なければ何もしない）。
+        /// 道の外の Pin の点（手足の先）は、手足の付け根から目標まで（BranchShifts と同じ数え方）、道の上の Pin の点（腰）は、一番近い点からつかんだ点の目標まで
+        /// （PathStretch と同じ数え方）で、道の上の Pin の点全部に同じだけ足す（HeavyEffectors と同じ）。輪でつながった Pin の点どうしは運び足す量をそろえる（ShareLoopShifts と同じ）。
+        /// 運び足して解くとつかんだ点が届かなくなるときは、届く一番多い割合まで絞る。Lock の点があるときは何もしない（Lock の点を守る絞り込みの答えを崩さない）
+        /// </summary>
+        void SoftenStretch ()
+        {
+            if (lockedEffectors_.Count > 0 || effectorPoints_.Count != data_.effectorCount) return;
+            bool[] path = PathToRoot ();
+            int count = data_.effectorCount;
+            if (softShifts_.Length < count) softShifts_ = new Vector3[count];
+            PathPinStretch (out Point pathPin, out Vector3 toGrabbed, out float reach, out float pathRest);
+            for (int pass = 0; pass < kSoftPasses; pass++) {
+                if (!SoftShifts (path, pathPin, toGrabbed, reach, pathRest, count)) break;
+                bool reachedBefore = IsReached (GrabbedShift ()) && HeldLoopsClosed ();
+                KeepSoftened ();
+                if (SolveSoftened (count, 1) || !reachedBefore) continue;
+                // 一直線に近い鎖を縮めるのは、反復で解くソルバーが苦手で、つかんだ点が届かなくなることがある（背骨のように骨の多い道）。
+                // そのときは、届く一番多い割合まで運び足す量を絞る（全部か 0 かで切り替えると、境目で Pin の点が跳ぶ。11-10 の Fable のレビュー）
+                float low = 0, high = 1;
+                for (int k = 0; k < kSoftSearches; k++) {
+                    float middle = (low + high) * 0.5f;
+                    if (SolveSoftened (count, middle)) low = middle;
+                    else high = middle;
+                }
+                if (low > 0) SolveSoftened (count, low);
+                else RestoreSoftened ();
+                break;
+            }
+        }
+
+        /// <summary>SoftenStretch で、運び足す量を半分ずつ絞って探す回数（1/2^回数 の細かさ）</summary>
+        const int kSoftSearches = 4;
+
+        /// <summary>
+        /// 今の答えで、目標ごとに運び足す量を softShifts_ に入れる（SoftenStretch）。運び足す目標があれば true
+        /// </summary>
+        bool SoftShifts (bool[] path, Point pathPin, Vector3 toGrabbed, float reach, float pathRest, int count)
+        {
+            // 道の上の Pin の点に足す量は、一番近い点（pathPin）で決める
+            Vector3 pathMore = Vector3.zero;
+            for (int e = 0; e < count; e++) {
+                if (pathPin != null && effectorPoints_[e] >= 0 && points_[effectorPoints_[e]] == pathPin) pathMore = SoftMore (e, toGrabbed, reach, pathRest);
+            }
+            for (int e = 0; e < count; e++) {
+                softShifts_[e] = Vector3.zero;
+                int i = effectorPoints_[e];
+                if (i < 0) continue;
+                Point point = points_[i];
+                if (HeavyRole (point, out _, out _) != PointRole.CarriedPin || CarriedRigid (point)) continue;
+                if (path[point.body]) softShifts_[e] = pathMore;
+                else {
+                    int root = LimbRoot (point, path, out float length);
+                    Vector3 pointAtRest = solvePositions_[point.body] + solveRotations_[point.body] * point.offset;
+                    softShifts_[e] = SoftMore (e, (Vector3)data_.positions[root] - TargetPosition (point), length, Vector3.Distance (solvePositions_[root], pointAtRest));
+                }
+            }
+            // 輪でつながった Pin の点どうしは、運び足す量の平均にそろえる（点ごとに運ぶと、必ず満たす輪の関節と取り合って輪が開く）
+            if (loopJoints_.Count > 0) {
+                if (softShared_.Length < count) softShared_ = new Vector3[count];
+                for (int e = 0; e < count; e++) {
+                    softShared_[e] = softShifts_[e];
+                    int i = effectorPoints_[e];
+                    if (i < 0 || !SharesShift (points_[i])) continue;
+                    Vector3 sum = softShifts_[e];
+                    int pairs = 1;
+                    for (int f = 0; f < count; f++) {
+                        int j = effectorPoints_[f];
+                        if (f == e || j < 0 || !SharesShift (points_[j]) || !LoopPair (points_[i], points_[j])) continue;
+                        sum += softShifts_[f];
+                        pairs++;
+                    }
+                    softShared_[e] = sum / pairs;
+                }
+                for (int e = 0; e < count; e++) softShifts_[e] = softShared_[e];
+            }
+            for (int e = 0; e < count; e++) {
+                if (softShifts_[e].sqrMagnitude > kEpsilon * kEpsilon) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 控えた答え（KeepSoftened）の目標へ softShifts_ × scale を運び足し、控えた答えから続けて解く。つかんだ点が届き、輪も閉じたら true
+        /// </summary>
+        bool SolveSoftened (int count, float scale)
+        {
+            RestoreSoftened ();
+            for (int e = 0; e < count; e++) {
+                if (softShifts_[e].sqrMagnitude <= kEpsilon * kEpsilon) continue;
+                FullBodyIkEffector effector = data_.effectors[e];
+                effector.position += (float3)(softShifts_[e] * scale);
+                data_.effectors[e] = effector;
+            }
+            StartFromSolved (Vector3.zero);
+            RunSolver (count, startPositions_, startRotations_);
+            return IsReached (GrabbedShift ()) && HeldLoopsClosed ();
+        }
+
+        // SoftenStretch で、運び足す前の答え（data_ の骨の姿勢と目標）
+        Vector3[] softPositions_ = new Vector3[0];
+        Quaternion[] softRotations_ = new Quaternion[0];
+        FullBodyIkEffector[] softEffectors_ = new FullBodyIkEffector[0];
+        float[] softResiduals_ = new float[0];
+        float2[] softLoopResiduals_ = new float2[0];
+
+        /// <summary>今の答え（骨の姿勢・目標・残り）を控える（SoftenStretch）</summary>
+        void KeepSoftened ()
+        {
+            if (softPositions_.Length < bodies_.Count) {
+                softPositions_ = new Vector3[bodies_.Count];
+                softRotations_ = new Quaternion[bodies_.Count];
+            }
+            if (softEffectors_.Length < data_.effectorCount) {
+                softEffectors_ = new FullBodyIkEffector[data_.effectorCount];
+                softResiduals_ = new float[data_.effectorCount];
+            }
+            if (softLoopResiduals_.Length < data_.loopCount) softLoopResiduals_ = new float2[data_.loopCount];
+            for (int i = 0; i < bodies_.Count; i++) {
+                softPositions_[i] = data_.positions[i];
+                softRotations_[i] = data_.rotations[i];
+            }
+            for (int e = 0; e < data_.effectorCount; e++) {
+                softEffectors_[e] = data_.effectors[e];
+                softResiduals_[e] = data_.residuals[e];
+            }
+            for (int l = 0; l < data_.loopCount; l++) softLoopResiduals_[l] = data_.loopResiduals[l];
+        }
+
+        /// <summary>控えた答えへ戻す</summary>
+        void RestoreSoftened ()
+        {
+            for (int i = 0; i < bodies_.Count; i++) {
+                data_.positions[i] = softPositions_[i];
+                data_.rotations[i] = softRotations_[i];
+            }
+            for (int e = 0; e < data_.effectorCount; e++) {
+                data_.effectors[e] = softEffectors_[e];
+                data_.residuals[e] = softResiduals_[e];
+            }
+            for (int l = 0; l < data_.loopCount; l++) data_.loopResiduals[l] = softLoopResiduals_[l];
+        }
+
+        /// <summary>
+        /// 目標 e（運ぶ Pin の点）を、伸ばしきった長さ length の鎖が SoftReach で伸びる所まで運ぶのに、今の目標では足りない量（足りていれば 0）。
+        /// span は、点の元の目標から鎖のもう片方の端（手足の付け根・つかんだ点の目標）へのベクトルで、運ぶ向きもその向き
+        /// </summary>
+        Vector3 SoftMore (int e, Vector3 span, float length, float rest)
+        {
+            float distance = span.magnitude;
+            if (distance <= kEpsilon) return Vector3.zero;
+            float need = distance - SoftReach (distance, length, rest);
+            if (need <= kEpsilon) return Vector3.zero;
+            Vector3 direction = span / distance;
+            float along = Vector3.Dot ((Vector3)data_.effectors[e].position - TargetPosition (points_[effectorPoints_[e]]), direction);
+            return need > along + kEpsilon ? direction * (need - along) : Vector3.zero;
+        }
+
         /// <summary>解き直しの本体: 届かなかった分だけ、道の上・道の外の Pin の点の目標を運んで解く</summary>
         void CarryPinsToGrabbed (bool[] path)
         {
@@ -347,6 +540,7 @@ namespace Lilium
             lockedEffectors_.Clear ();
             rigidEffectors_.Clear ();
             rigidBases_.Clear ();
+            effectorPoints_.Clear ();
             for (int i = 0; i < points_.Count; i++) {
                 Point point = points_[i];
                 float positionWeight, rotationWeight;
@@ -368,6 +562,7 @@ namespace Lilium
                 if (role == PointRole.Grabbed) effector.position = (float3)ClampToLock (point, effector.position);
                 if (role == PointRole.CarriedPin) effector.position += (float3)(onPath ? pathShift : branchShifts_[i] * (rigid ? fraction : branchScale));
                 data_.effectors[count] = effector;
+                effectorPoints_.Add (i);
                 if (rigid) {
                     rigidEffectors_.Add (count);
                     rigidBases_.Add (InputResidual (count));
@@ -377,6 +572,7 @@ namespace Lilium
             int boxes = count;
             count = AddFootBoxes (count);
             for (int e = boxes; e < count; e++) {
+                effectorPoints_.Add (-1);
                 grabbedEffectors_.Add (e);
                 if (!yield) continue;
                 FullBodyIkEffector effector = data_.effectors[e];

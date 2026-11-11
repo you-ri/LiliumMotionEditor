@@ -27,10 +27,24 @@ namespace Lilium
             public bool fixedPose;
             /// <summary>fixedPose で parent があるときの、parent から見た物の向き（ルート空間の向きで、parent⁻¹ × 物）</summary>
             public Quaternion weld;
+            /// <summary>
+            /// 回る軸（物のローカル。EditRigDefinition.AttachJoint.Hinge の先だけ。0 なら Hinge でない）。物は parent の子として、この軸まわりに ±hingeRange 度だけ回る
+            /// </summary>
+            public Vector3 hingeAxis;
+            /// <summary>
+            /// 回る中心（物のローカル。Hinge の先だけ）。全身 IK では、物の骨の付け根をここに置く（木の関節は骨の付け根まわりにしか回らず、
+            /// 物の原点は回る中心とは限らない）。物の上の点の場所も、ここから測り直す
+            /// </summary>
+            public Vector3 origin;
+            /// <summary>回る範囲（度。片側）</summary>
+            public float hingeRange;
+            /// <summary>回りの基準（範囲の真ん中）: 付けた位置での、parent から見た物の向き（ルート空間の向きで、parent⁻¹ × 物）</summary>
+            public Quaternion hingeRest;
 
             public bool Equals (HeldAttachment other)
             {
-                return body == other.body && parent == other.parent && axis == other.axis && fixedPose == other.fixedPose && weld == other.weld;
+                return body == other.body && parent == other.parent && axis == other.axis && fixedPose == other.fixedPose && weld == other.weld
+                    && hingeAxis == other.hingeAxis && origin == other.origin && hingeRange == other.hingeRange && hingeRest == other.hingeRest;
             }
         }
 
@@ -50,8 +64,12 @@ namespace Lilium
             public Transform body;
             /// <summary>枠の場所（物のローカル）</summary>
             public Vector3 grip;
-            /// <summary>柄の軸（物のローカル）</summary>
+            /// <summary>回る軸（物のローカル。柄の軸か、Hinge の先の回る軸）</summary>
             public Vector3 axis;
+            /// <summary>回る中心（物のローカル。axis の上）</summary>
+            public Vector3 pivot;
+            /// <summary>0 より大きければ、axis まわりの回りを ±range 度に収める（Hinge の先）</summary>
+            public float range;
             /// <summary>骨の基準姿勢からの回り（ルート空間）から物の向きへの差: 物の向き = 骨の回り × toObject</summary>
             public Quaternion toObject;
             /// <summary>骨が届かなくても物を骨の方へ寄せない（物を決まった位置へ寄せている間。FullBodyIkLoop.holdB）</summary>
@@ -70,6 +88,11 @@ namespace Lilium
         /// 必ず満たす物どうしで取り合わないよう 1 未満にする
         /// </summary>
         const float kLoopGripStiffness = 0.9f;
+        /// <summary>
+        /// Hinge の先に付けた物の、回る軸まわりの硬さ。手首（硬さ 0.2 前後）より硬いばねにして、握りの中の回りは手首で向けきれないときだけ使う
+        /// （11-09 ユーザー決定「要るときだけ」）。0 にすると、手首の自由な手で物を 30° 回したとき、握りの中で 30° 回った（11-10 実測）
+        /// </summary>
+        const float kHingeStiffness = 0.9f;
 
         /// <summary>
         /// 持った物の大きさ（メートル。体の大きさ 1 のとき）。重さと回しにくさはここから決まる。手と同じくらいにする（S101 の kChainExtent と同じ値）:
@@ -85,6 +108,8 @@ namespace Lilium
         readonly List<HeldLoop> heldLoops_ = new List<HeldLoop> ();
         // 解く骨ごとの、持っている物の骨か（骨の階層では手の子でないので、場所も書き戻す）
         bool[] attached_ = new bool[0];
+        // 解く骨ごとの、骨の付け根の骨の原点からのずれ（骨の枠・メートル。Hinge の先に付けた物の回る中心。ほかは 0）
+        Vector3[] origins_ = new Vector3[0];
 
         /// <summary>
         /// 持ち物の姿勢の点（見えない点。S102）を足す。物の骨の原点に乗り、位置と向きを持つ重い点。値と強さは持ち物の仕組みが解く前に入れる。
@@ -101,6 +126,7 @@ namespace Lilium
             points_.Add (new Point {
                 id = id,
                 offset = Vector3.zero,
+                boneOffset = Vector3.zero,
                 control = control,
                 values = values,
                 bone = bone,
@@ -194,6 +220,7 @@ namespace Lilium
             bodies_.Clear ();
             bodyParents_.Clear ();
             attached_ = new bool[0];
+            origins_ = new Vector3[0];
             if (rig_ == null || rig_.root == null) return;
             CreateBodies ();
         }
@@ -201,9 +228,13 @@ namespace Lilium
         /// <summary>持っている物の骨（解く骨の i 番目。CreateBodies が並びの最後に足した物）の関節を作る</summary>
         void AddHeldBody (int i)
         {
-            HeldAttachment attachment = heldAttachments_.Find (a => a.body == bodies_[i]);
             attached_[i] = true;
+            HeldAttachment attachment = heldAttachments_.Find (a => a.body == bodies_[i]);
             int parent = bodies_.IndexOf (attachment.parent);
+            if (!attachment.fixedPose && parent >= 0 && attachment.hingeAxis.sqrMagnitude > kEpsilon) {
+                AddHingeBody (i, attachment);
+                return;
+            }
             if (attachment.fixedPose && parent < 0) {
                 // 動かない剛体（骨格に付いていない根。MarkFixedBones が動かさない骨にする）
                 bodyParents_.Add (-1);
@@ -237,6 +268,34 @@ namespace Lilium
             };
         }
 
+        /// <summary>
+        /// Hinge の先に付けた物の関節: 付ける骨の子として、回る中心（物の骨の付け根）を通る回る軸まわりにだけ（axisLock）、±hingeRange 度だけ（角度制限。遊びなし）回る。
+        /// 硬さは kHingeStiffness（手首で向けきれないときだけ回る）
+        /// </summary>
+        void AddHingeBody (int i, HeldAttachment attachment)
+        {
+            int parent = bodies_.IndexOf (attachment.parent);
+            bodyParents_.Add (parent);
+            childCounts_[parent]++;
+            Vector3 axis = attachment.hingeAxis.sqrMagnitude > kEpsilon ? attachment.hingeAxis.normalized : Vector3.up;
+            Quaternion rest = Quaternion.Normalize (attachment.hingeRest);
+            float range = Mathf.Max (0, attachment.hingeRange) * Mathf.Deg2Rad;
+            data_.bones[i] = new FullBodyIkBone {
+                parent = parent,
+                stiffness = kHingeStiffness,
+                axisLock = 1,
+                lockAxis = axis,
+                limit = 1,
+                // 制限の枠の x（ひねりの軸）を、付ける骨の枠で見た回る軸にする。振り（y・z）は axisLock で回らないので、制限では自由にする。
+                // 振りを範囲 0 にすると、いつも止めに当たった関節になり、動いていない軸をキーの値に留める決まり（SolveLimit）で、回る軸まわりも動き出せなかった
+                limitFrame = Quaternion.FromToRotation (Vector3.right, rest * axis),
+                limitRest = rest,
+                limitMin = new float3 (-range, -kFreeLimit, -kFreeLimit),
+                limitMax = new float3 (range, kFreeLimit, kFreeLimit),
+                extent = kHeldExtent * humanScale,
+            };
+        }
+
         /// <summary>両手で持つ物の輪の関節を、計算用のデータの first 番目から入れる（解く前。LoadLoops から）。入れ終わった数を返す</summary>
         int LoadHeldLoops (int first)
         {
@@ -246,16 +305,20 @@ namespace Lilium
                 int body = bodies_.IndexOf (loop.body);
                 if (hand < 0 || body < 0 || loops >= data_.loops.Length) continue;
                 Vector3 axis = loop.axis.sqrMagnitude > 1e-8f ? loop.axis.normalized : Vector3.up;
-                Vector3 onAxis = axis * Vector3.Dot (loop.grip, axis);
-                // 握ったときの手の骨の向き q は、物の向き R から q = R × toObject⁻¹ × 点の基準の向き。手の骨の枠で見た柄の軸と、軸の上の握りの点
+                // 握ったときの手の骨の向き q は、物の向き R から q = R × toObject⁻¹ × 点の基準の向き。手の骨の枠で見た回る軸と、軸の上の回る中心
                 Quaternion handFromObject = Quaternion.Inverse (loop.restRotation) * loop.toObject;
+                float range = loop.range * Mathf.Deg2Rad;
                 data_.loops[loops++] = new FullBodyIkLoop {
                     boneA = hand,
-                    anchorA = loop.offset - handFromObject * (loop.grip - onAxis),
+                    anchorA = loop.offset - handFromObject * (loop.grip - loop.pivot),
                     axisA = handFromObject * axis,
                     boneB = body,
-                    anchorB = onAxis,
+                    // 物の骨の付け根をずらしていれば（Hinge の先を親にした物）、ずらした付け根から測る
+                    anchorB = loop.pivot - origins_[body],
                     axisB = axis,
+                    twistLimit = loop.range > 0 ? 1 : 0,
+                    twistMin = -range,
+                    twistMax = range,
                     stiffness = kLoopGripStiffness,
                     // 柄の軸まわりの硬さの基準は握りの向き（手の骨の向き⁻¹ × 物の向き。手を握りに合わせたとき）
                     rest = Quaternion.Normalize (handFromObject),

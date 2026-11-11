@@ -93,6 +93,13 @@ namespace Lilium
         /// （11-09 ユーザー指示「寄せる ボタンは object 側が寄るように」。Pin の左手で持った物を右手へ寄せると、右手が左手の方へ 38cm 引かれた）
         /// </summary>
         public int holdB;
+        /// <summary>
+        /// 1 なら、軸まわりの回り（rest からの、骨 a から見た骨 b の回り）を twistMin〜twistMax（ラジアン）に収める（必ず満たす拘束）。
+        /// 手の甲の向きまわりにだけ回る握り（EditRigDefinition.AttachJoint.Hinge）の、もう片方の手
+        /// </summary>
+        public int twistLimit;
+        public float twistMin;
+        public float twistMax;
     }
 
     /// <summary>
@@ -244,6 +251,7 @@ namespace Lilium
         internal NativeArray<float3> limitHigh;
         /// <summary>元の姿勢（キーの姿勢）での、角度制限の値（SolveLimit が、動いていない軸をこの値に留める）</summary>
         internal NativeArray<float3> limitKey;
+        /// <summary>角度制限の遊びのばねの、反復をまたいで持ち越す伸び（λ × 柔らかさ。SolveLimit）</summary>
         internal NativeArray<float> limitLambda;
         internal NativeArray<float2> rootLambda;
         internal NativeArray<float2> effectorLambda;
@@ -628,7 +636,34 @@ namespace Lilium
             int b = loop.boneB;
             if (a < 0 || a >= n || b < 0 || b >= n || a == b) return;
             AlignLoop (ref d, loop, a, b);
+            if (loop.twistLimit != 0) ClampLoopTwist (ref d, l, loop, a, b);
             if (loop.stiffness > 0) SolveLoopTwist (ref d, l, loop, a, b);
+        }
+
+        /// <summary>骨 a から見た骨 b の、輪の関節の軸まわりの回り（rest から。ラジアン）と、その軸（ワールド）</summary>
+        static float LoopTwist (ref FullBodyIkData d, int l, FullBodyIkLoop loop, int a, int b, out float3 axis)
+        {
+            axis = math.normalize (math.rotate (d.rotations[b], math.normalize (loop.axisB)));
+            quaternion target = math.mul (d.rotations[a], d.loopRest[l]);
+            return -math.dot (RotationVector (math.mul (target, math.inverse (d.rotations[b]))), axis);
+        }
+
+        /// <summary>
+        /// 輪の関節の軸まわりの回りを範囲に収める（twistLimit。必ず満たす拘束）。軸をそろえるときと同じく、それぞれの骨を重心まわりに回すだけ
+        /// </summary>
+        static void ClampLoopTwist (ref FullBodyIkData d, int l, FullBodyIkLoop loop, int a, int b)
+        {
+            if (math.lengthsq (loop.axisB) <= 1e-12f) return;
+            float twist = LoopTwist (ref d, l, loop, a, b, out float3 axis);
+            float correction = math.clamp (twist, loop.twistMin, loop.twistMax) - twist;
+            if (math.abs (correction) <= kEpsilon) return;
+            float weightA = d.inverseInertia[a];
+            float weightB = d.inverseInertia[b];
+            float sum = weightA + weightB;
+            if (sum <= kEpsilon) return;
+            float delta = math.clamp (correction, -kMaxStepAngle, kMaxStepAngle) / sum;
+            d.rotations[b] = Rotate (d.rotations[b], axis * (delta * weightB));
+            d.rotations[a] = Rotate (d.rotations[a], axis * (-delta * weightA));
         }
 
         /// <summary>輪の関節の 2 つの点を寄せ、2 つの軸をそろえる（必ず満たす拘束）</summary>
@@ -1249,9 +1284,13 @@ namespace Lilium
                 d.limitLambda[i] = 0;
                 return;
             }
-            float spring = d.limitLambda[i];
-            ApplyAngular (ref d, i, p, LimitCorrection (ref d, i, p, inside), StiffnessCompliance (stiffness) * (d.inverseInertia[i] + d.inverseInertia[p]), ref spring);
-            d.limitLambda[i] = spring;
+            // 反復をまたいで持ち越すのは、ばねの伸び（λ × 柔らかさ）。ばねの硬さは今の角度で決まるので、λ のまま持ち越すと、柔らかくなった回に
+            // 前の回までにためた λ を一度に逆向きに吐き出し、骨を遊びの外へ弾き返した。根の位置のばねとの間で行き来し、反復の回数で答えが変わって跳んだ
+            // （11-10 の 5-1 のテストの狭い制限で、根 A が 1 回 83mm。Fable の見立て）。伸びは、硬さが変わっても今の角度との間で動くので、逆向きに吐き出さない
+            float compliance = StiffnessCompliance (stiffness) * (d.inverseInertia[i] + d.inverseInertia[p]);
+            float spring = compliance > kEpsilon ? d.limitLambda[i] / compliance : 0;
+            ApplyAngular (ref d, i, p, LimitCorrection (ref d, i, p, inside), compliance, ref spring);
+            d.limitLambda[i] = spring * compliance;
         }
 
         /// <summary>骨 i を、親 p から見た回りが angles（制限の枠の値）になるまで回す回転（軸 × 角度。ワールド）</summary>
@@ -1952,6 +1991,15 @@ namespace Lilium
                         RotateSubtree (ref d, n, a, FromTo (axisA, axisB));
                         Rebuild (ref d, n, false);
                     }
+                    if (loop.twistLimit != 0) {
+                        // 範囲の外なら、手（a）を軸まわりに回して範囲の端へ戻す（a の回りを足すと、a から見た b の回りは同じだけ減る）
+                        float twist = LoopTwist (ref d, l, loop, a, b, out float3 axis);
+                        float correction = math.clamp (twist, loop.twistMin, loop.twistMax) - twist;
+                        if (math.abs (correction) > kEpsilon) {
+                            RotateSubtree (ref d, n, a, quaternion.AxisAngle (axis, -correction));
+                            Rebuild (ref d, n, false);
+                        }
+                    }
                 }
                 SnapLoopHand (ref d, n, loop);
                 // 手が届かなければ（腕が伸びきった）、持った物の方を手へ寄せて（物を子にした腕を合わせ直す）、もう一度手を合わせる。
@@ -2023,7 +2071,9 @@ namespace Lilium
             int hinge, end;
             if (IsPole (ref d, n, e, effectorCount, out hinge, out end)) return false;
             float3 pivotLocal = AimPivot (ref d, b);
-            if (math.lengthsq (pivotLocal) > 1e-12f) return false;
+            // 付け根から離れた所に位置を留めた点があると、付け根まわりに回すとその点が外れるので回さない。
+            // 持った物（握りの中の回る中心を付け根にした物。EditRigDefinition.AttachJoint.Hinge）は、親の手を留めた点まわりに回して向ける
+            if (math.lengthsq (pivotLocal) > 1e-12f) return d.lockOn[b] != 0 && IsHeldBody (ref d, b) && AimWithParent (ref d, n, e, b);
             quaternion wanted = AimRotation (ref d, e, d.positions[b], pivotLocal);
             quaternion turn = math.mul (wanted, math.inverse (d.rotations[b]));
             bool turned = math.lengthsq (RotationVector (turn)) >= 1e-14f;

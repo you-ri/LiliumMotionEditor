@@ -90,7 +90,7 @@ namespace Lilium
 
         static Vector3 BonePointWorld (Point point)
         {
-            return point.bone.position + point.bone.rotation * PointOffset (point, point.bone.rotation, point.blendBone != null ? point.blendBone.rotation : point.bone.rotation);
+            return point.bone.position + point.bone.rotation * (point.bodyOrigin + PointOffset (point, point.bone.rotation, point.blendBone != null ? point.blendBone.rotation : point.bone.rotation));
         }
 
         /// <summary>

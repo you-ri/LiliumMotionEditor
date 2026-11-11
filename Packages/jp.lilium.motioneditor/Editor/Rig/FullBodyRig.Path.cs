@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 namespace Lilium
 {
@@ -68,7 +69,22 @@ namespace Lilium
         /// </summary>
         Vector3 PathStretch ()
         {
-            if (grabbedEffectors_.Count == 0) return Vector3.zero;
+            if (!PathPinStretch (out _, out Vector3 toGrabbed, out float reach, out _)) return Vector3.zero;
+            float over = toGrabbed.magnitude - reach;
+            return over > 0 ? toGrabbed.normalized * over : Vector3.zero;
+        }
+
+        /// <summary>
+        /// つかんだ点の骨から根へたどって最初に当たる、道の上の Lock でない重さ 1 の Pin の点 pin と、その点（向きも留めていれば、間の骨の付け根）から
+        /// つかんだ点の目標（つかんだ骨の付け根が行く所）までのベクトル toGrabbed と、間の骨を伸ばしきった長さ reach と、元の姿勢での同じ離れ rest。そうした点が無ければ false
+        /// </summary>
+        bool PathPinStretch (out Point pin, out Vector3 toGrabbed, out float reach, out float rest)
+        {
+            pin = null;
+            toGrabbed = Vector3.zero;
+            reach = 0;
+            rest = 0;
+            if (grabbedEffectors_.Count == 0) return false;
             FullBodyIkEffector grabbed = data_.effectors[grabbedEffectors_[0]];
             Vector3 target = Vector3.zero;
             foreach (int e in grabbedEffectors_) target += (Vector3)data_.effectors[e].position;
@@ -85,17 +101,18 @@ namespace Lilium
                 float rotationWeight;
                 Point point = FullPinOn (parent, out rotationWeight);
                 if (point != null) {
-                    Vector3 pin = TargetPosition (point);
+                    Vector3 pinTarget = TargetPosition (point);
                     Vector3 pinPoint = solvePositions_[parent] + solveRotations_[parent] * point.offset;
                     // 向きも留めた Pin の点なら、その骨は回れないので、鎖は骨 b の付け根から始まる（Pin の点と一緒に動く）。
                     // 向きを留めていなければ、骨はその点まわりに回れるので、鎖は Pin の点から始まり、点から骨 b の付け根までは骨の中の決まった距離
                     // （腰の向きまで Pin のとき、腰の点から数えると届く距離を長めに見て、背骨が伸びきらないまま首が 1cm 届かなかった）
-                    Vector3 anchor = rotationWeight > 0 ? solvePositions_[b] + (pin - pinPoint) : pin;
+                    Vector3 anchor = rotationWeight > 0 ? solvePositions_[b] + (pinTarget - pinPoint) : pinTarget;
                     // 伸ばしきる手前でソルバーが詰めきれず届かなかった分は、解いてから運び足す（SolveBodies の kCarryRefines）
-                    float reach = rotationWeight > 0 ? length : length + Vector3.Distance (pinPoint, solvePositions_[b]);
-                    Vector3 toGrabbed = target - anchor;
-                    float over = toGrabbed.magnitude - reach;
-                    return over > 0 ? toGrabbed.normalized * over : Vector3.zero;
+                    reach = rotationWeight > 0 ? length : length + Vector3.Distance (pinPoint, solvePositions_[b]);
+                    toGrabbed = target - anchor;
+                    rest = Vector3.Distance (solvePositions_[grabbed.bone], rotationWeight > 0 ? solvePositions_[b] : pinPoint);
+                    pin = point;
+                    return true;
                 }
                 // 動かせない点で軸まわりにしか回れない骨（S89 の axisLock。鎖骨など）は、親と一緒の 1 つの塊として、子の付け根から親の付け根までを数える
                 // （骨ごとに足すと、曲がったまま回れない鎖骨の所を伸ばしきれる長さに数え、届かない所まで背骨を伸ばそうとして背骨が曲がり、手も 2.5cm 届かなかった）
@@ -103,7 +120,7 @@ namespace Lilium
                 if (child >= 0 && data_.bones[b].axisLock != 0) length += AxisLockedReach (b, child, parent) - Vector3.Distance (solvePositions_[child], solvePositions_[b]);
                 else length += Vector3.Distance (solvePositions_[b], solvePositions_[parent]);
             }
-            return Vector3.zero;
+            return false;
         }
 
         /// <summary>
@@ -260,19 +277,84 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 点の手足の付け根の骨（点の骨から根へたどり、つかんだ点から根への道 path に出る手前の骨。肩・股）と、付け根から点までの手足の長さ（骨を伸ばしきった長さ）
+        /// 点の手足の付け根の骨（点の骨から根へたどり、つかんだ点から根への道 path に出る手前の骨。肩・股）と、付け根から点までの手足の長さ
+        /// （角度制限の中で一番伸ばした長さ。LimitedReach）
         /// </summary>
         int LimbRoot (Point point, bool[] path, out float length)
         {
             int root = point.body;
-            length = point.offset.magnitude;
             // 軸まわりにだけ回る骨（S89。鎖骨）は手足の方へ向けないので、その子の付け根から数える。鎖骨も伸ばせる長さに数えると、手の目標が届かない所に置かれ、
             // 手に引かれて上胸が 21° 曲がったまま残った（10-30 実測）
-            while (bodyParents_[root] >= 0 && !path[bodyParents_[root]] && data_.bones[bodyParents_[root]].axisLock == 0) {
-                length += Vector3.Distance (startPositions_[root], startPositions_[bodyParents_[root]]);
-                root = bodyParents_[root];
-            }
+            while (bodyParents_[root] >= 0 && !path[bodyParents_[root]] && data_.bones[bodyParents_[root]].axisLock == 0) root = bodyParents_[root];
+            length = LimitedReach (point, root);
             return root;
+        }
+
+        /// <summary>LimitedReach で、関節ごとに伸ばせる割合を半分ずつ絞って探す回数</summary>
+        const int kReachSearches = 12;
+        // LimitedReach: 付け根から点の骨までの骨の並び
+        readonly List<int> reachChain_ = new List<int> ();
+
+        /// <summary>
+        /// 骨 root の付け根から点 point までの手足を、角度制限（範囲 + 遊び。元の姿勢がその外なら元の姿勢まで）の中で一番伸ばしたときの長さ。
+        /// 関節ごとに、元の姿勢（キー）で親から見た向きから、子の骨を親の骨の向きへそろえる向きへ、制限の中で回せる所まで回して測る（曲がる面はキーのまま）。
+        /// 制限の無い関節は伸ばしきるので、制限が無ければ骨の長さの和。
+        /// 手足の先の Pin の点を運ぶ量（BranchShifts・SoftenStretch）は、この長さで決める。骨の長さの和で決めると、膝が制限で止まった後も届かない所に目標が残り、
+        /// 強さ 1 どうしの Pin の点とつかんだ点が取り合って、股の遊びのばねが決める所まで足首が後ろへ滑った（11-10 の両脚のテストの狭い制限で 24cm。
+        /// 11-10 ユーザー決定「足首は必要な分だけ付いてくる」）
+        /// </summary>
+        float LimitedReach (Point point, int root)
+        {
+            reachChain_.Clear ();
+            for (int b = point.body; ; b = bodyParents_[b]) {
+                reachChain_.Insert (0, b);
+                if (b == root || bodyParents_[b] < 0) break;
+            }
+            // 骨の長さはどの姿勢でも同じなので、元の姿勢で測る（解き始めの姿勢は、解き直しを通らないと入っていない。SoftenStretch）
+            int last = reachChain_.Count - 1;
+            Quaternion world = solveRotations_[reachChain_[0]];
+            Vector3 parentLocal = Vector3.zero;
+            Vector3 sum = Vector3.zero;
+            for (int k = 0; k <= last; k++) {
+                int b = reachChain_[k];
+                Vector3 local = k < last ? Quaternion.Inverse (solveRotations_[b]) * (solvePositions_[reachChain_[k + 1]] - solvePositions_[b]) : point.offset;
+                if (k > 0) world *= StraightestRelative (b, Quaternion.Inverse (solveRotations_[reachChain_[k - 1]]) * solveRotations_[b], local, parentLocal);
+                sum += world * local;
+                if (local.sqrMagnitude > kEpsilon * kEpsilon) parentLocal = local;
+            }
+            return sum.magnitude;
+        }
+
+        /// <summary>
+        /// 骨 b の、親から見た向き relative（元の姿勢）を、自分の骨のベクトル local（自分の枠）が親の骨のベクトル parentLocal（親の枠）の向きにそろう方へ、
+        /// 角度制限の中で回せる所まで回した向き（LimitedReach）
+        /// </summary>
+        Quaternion StraightestRelative (int b, Quaternion relative, Vector3 local, Vector3 parentLocal)
+        {
+            if (local.sqrMagnitude <= kEpsilon * kEpsilon || parentLocal.sqrMagnitude <= kEpsilon * kEpsilon) return relative;
+            Quaternion straight = Quaternion.FromToRotation (relative * local, parentLocal) * relative;
+            FullBodyIkBone bone = data_.bones[b];
+            if (bone.limit == 0 || InsideHardLimit (bone, relative, straight)) return straight;
+            float low = 0, high = 1;
+            for (int k = 0; k < kReachSearches; k++) {
+                float middle = (low + high) * 0.5f;
+                if (InsideHardLimit (bone, relative, Quaternion.Slerp (relative, straight, middle))) low = middle;
+                else high = middle;
+            }
+            return Quaternion.Slerp (relative, straight, low);
+        }
+
+        /// <summary>
+        /// 親から見た向き relative が、骨 bone の必ず守る範囲（範囲 + 遊びと、元の姿勢 key の値の広い方。FullBodyIk.ClampHard と同じ）に入るか
+        /// </summary>
+        static bool InsideHardLimit (FullBodyIkBone bone, Quaternion key, Quaternion relative)
+        {
+            float3 keyAngles = FullBodyIk.LimitAngles (bone.limitFrame, bone.limitRest, key);
+            float3 angles = FullBodyIk.LimitAngles (bone.limitFrame, bone.limitRest, relative);
+            float3 slack = math.max (bone.limitSlack, 0);
+            float3 low = math.min (bone.limitMin - slack, math.min (bone.limitMin, keyAngles));
+            float3 high = math.max (bone.limitMax + slack, math.max (bone.limitMax, keyAngles));
+            return math.all (angles >= low - 1e-4f) && math.all (angles <= high + 1e-4f);
         }
 
         /// <summary>つかんだ点の骨から根（腰）へたどる道の上の骨（足の箱で動かす足は、足の根の骨から）</summary>

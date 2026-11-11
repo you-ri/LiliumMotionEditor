@@ -86,8 +86,8 @@ namespace Lilium
         }
 
         /// <param name="keyObjectRotation">
-        /// 物の姿勢の点を、位置も向きも固定した Pin にするキーをクリップの頭に打つ（デモのクリップと同じ。S102 から、キーの無い物は位置だけの Pin なので、
-        /// 物の向きのキーが効かない）。false ならキーの無い物
+        /// 物の姿勢の点を、位置も向きも固定した Pin にするキーをクリップの頭に打つ（デモのクリップと同じ。キーの無い物は Free なので、
+        /// 物の位置と向きのキーが効かない）。false ならキーの無い物
         /// </param>
         PoseSession Open (bool keyObjectRotation, params HeldObjectDefinition[] objects)
         {
@@ -496,6 +496,38 @@ namespace Lilium
             Assert.LessOrEqual (Vector3.Distance (hand, Bone (session, HumanBodyBones.RightHand).position), kGripTolerance, "右手は動かない");
             Assert.LessOrEqual (Vector3.Distance (settings, entry.editing.position), kGripTolerance, "物が右手の決まった位置へ来る");
             Assert.Greater (entry.snapGap, 0.05f, "左手が届かない差を知らせる");
+        }
+
+        [Test]
+        public void SnappingToHand_HeldAtAKeyedGrip_MovesOnlyTheObject ()
+        {
+            // 11-09 ユーザー報告「右手の寄せるを押すと届かないと出て姿勢が崩れる。この場合は剣が右手に移動するだけ」。
+            // 離れた所で右手に付けた（キーで付けた位置）物を右手に寄せると、寄せた後もその位置が残り、右手がその位置まで引かれた
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            SetAttached (session, kLeft, false);
+            SetAttached (session, kRight, false);
+            session.SolveAfterEdit ();
+            HeldObjectRig.Entry entry = Entry (session);
+            entry.GetWorldPose (out Vector3 start, out Quaternion rotation);
+            entry.DragTo (start + new Vector3 (0.3f, -0.4f, 0.2f), rotation);
+            session.SolveAfterEdit ();
+            Assert.IsNull (session.CommitPose ());
+            Vector3 hand = Bone (session, HumanBodyBones.RightHand).position;
+            session.stage.heldObjects.SetAttached (Attach (session, kRight), true);
+            session.SolveAfterEdit ();
+            Assert.IsTrue (Attach (session, kRight).gripKeyed, "離れた所で付けた");
+            Assert.IsNull (session.CommitPose ());
+
+            session.stage.heldObjects.GetSettingsWorld (Attach (session, kRight), out Vector3 settings, out Quaternion unused);
+            entry.SnapTo (Attach (session, kRight));
+            session.SolveAfterEdit ();
+            Assert.LessOrEqual (entry.snapGap, kGripTolerance, "届かないと知らせない");
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (0);
+            Assert.IsFalse (Attach (session, kRight).gripKeyed, "物の設定の位置で付く");
+            Assert.LessOrEqual (Vector3.Distance (hand, Bone (session, HumanBodyBones.RightHand).position), kGripTolerance, "右手は動かない");
+            Assert.LessOrEqual (Vector3.Distance (settings, entry.editing.position), kGripTolerance, "物が右手の決まった位置へ来る");
         }
 
         [Test]
@@ -1042,6 +1074,190 @@ namespace Lilium
             }
         }
 
+        // ---- 握りの中で回る先（AttachJoint.Hinge。11-09 ユーザー指示「手首のひねり（roll）は固定だが、手の甲から見た yaw 角は ±45° の制限に」） ----
+
+        const float kHingeRange = 45;
+        /// <summary>テストの物の回る軸（枠の向き。テストの物は位置の向きが 0 なので、物のローカルでも同じ。柄の軸 y に直交する）</summary>
+        static readonly Vector3 kHingeAxis = Vector3.forward;
+
+        /// <summary>両手を Hinge の先にする</summary>
+        void UseHinge ()
+        {
+            foreach (EditRigDefinition.AttachPoint point in definition_.attachPoints) {
+                if (point.name != kRight && point.name != kLeft) continue;
+                point.joint = EditRigDefinition.AttachJoint.Hinge;
+                point.hingeAxis = kHingeAxis;
+                point.hingeRange = kHingeRange;
+            }
+        }
+
+        /// <summary>手首を回らなくする（手首で向けられない分を、握りの中の回りで向けるか見る）</summary>
+        void LockWrists ()
+        {
+            foreach (HumanBodyBones hand in new[] { HumanBodyBones.RightHand, HumanBodyBones.LeftHand }) {
+                EditRigDefinition.JointLimit wrist = definition_.FindFkControl (hand).limit;
+                for (int axis = 0; axis < 3; axis++) wrist[axis].mode = EditRigDefinition.LimitMode.Locked;
+            }
+        }
+
+        /// <summary>
+        /// 物を右手の決まった位置へ寄せて付け（both なら左手も決まった位置で付ける）、キーを打つ。手は握った向きのまま（握りの中の回りは 0）から始める。
+        /// 寄せずに体の前の決まった場所から手を伸ばすと、柄の軸まわりに回れない握りでは手の向きを物に合わせきれず、握りの中の回りが初めから範囲の端に当たる
+        /// </summary>
+        static void SnapToHands (PoseSession session, bool both)
+        {
+            WriteAttach (session, 0, both ? kRight + "," + kLeft : kRight, kRight, both ? SettingsGrips () : null);
+            session.Evaluate (0);
+            session.SolveAfterEdit ();
+        }
+
+        /// <summary>握りの中の回る中心（柄の軸の上で握りに一番近い点。物のローカル）</summary>
+        static Vector3 HingePivot (HeldObjectRig.Entry entry, HumanBodyBones hand)
+        {
+            Vector3 axis = entry.definition.gripAxis.normalized;
+            return axis * Vector3.Dot (SettingsGrip (entry, hand), axis);
+        }
+
+        /// <summary>手から見た物の向きと、回る中心の場所（手の枠）</summary>
+        static void HandToObject (PoseSession session, HumanBodyBones hand, out Quaternion relative, out Vector3 pivot)
+        {
+            HeldObjectRig.Entry entry = Entry (session);
+            Transform bone = Bone (session, hand);
+            relative = Quaternion.Inverse (bone.rotation) * entry.editing.rotation;
+            pivot = Quaternion.Inverse (bone.rotation) * (entry.editing.TransformPoint (HingePivot (entry, hand)) - bone.position);
+        }
+
+        /// <summary>
+        /// 手から見た物の向きが、はじめ（start）から回る軸まわりにどれだけ回ったか（yaw。度）と、軸の外へどれだけ回ったか（度）。
+        /// 回る中心の場所が、手から見てどれだけずれたか（メートル）
+        /// </summary>
+        static void MeasureHinge (PoseSession session, HumanBodyBones hand, Quaternion start, Vector3 startPivot, out float yaw, out float off, out float pivotGap)
+        {
+            HandToObject (session, hand, out Quaternion relative, out Vector3 pivot);
+            Quaternion delta = Quaternion.Inverse (start) * relative;
+            if (delta.w < 0) delta = new Quaternion (-delta.x, -delta.y, -delta.z, -delta.w);
+            yaw = 2 * Mathf.Atan2 (Vector3.Dot (new Vector3 (delta.x, delta.y, delta.z), kHingeAxis), delta.w) * Mathf.Rad2Deg;
+            off = Quaternion.Angle (delta, Quaternion.AngleAxis (yaw, kHingeAxis));
+            pivotGap = Vector3.Distance (pivot, startPivot);
+        }
+
+        [Test]
+        public void Hinge_DoesNotRollAboutTheGripAxis_TheWristTurnsWithTheObject ()
+        {
+            // 柄の軸まわり（roll）には握りの中で回らない。物を柄の軸まわりに回すと、手首が一緒に回る（Twist の先では手首は回らない: HeldHand_TwistsFreelyAroundTheGripAxis）
+            UseHinge ();
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            SnapToHands (session, false);
+            HandToObject (session, HumanBodyBones.RightHand, out Quaternion start, out Vector3 startPivot);
+            Transform hand = Bone (session, HumanBodyBones.RightHand);
+            Quaternion before = hand.rotation;
+            Vector3 axis = entry.editing.TransformDirection (entry.definition.gripAxis).normalized;
+
+            entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+            entry.DragTo (position, Quaternion.AngleAxis (40, axis) * rotation);
+            session.SolveAfterEdit ();
+            MeasureHinge (session, HumanBodyBones.RightHand, start, startPivot, out float yaw, out float off, out float pivotGap);
+            Assert.LessOrEqual (off, 0.5f, "手から見て、物は回る軸の外へ回らない（柄の軸まわりに回らない）");
+            Assert.LessOrEqual (Mathf.Abs (yaw), kHingeRange + 0.5f, "回る軸まわりは範囲の中");
+            Assert.LessOrEqual (pivotGap, kGripTolerance, "回る中心は手の同じ所");
+            Assert.Greater (Quaternion.Angle (before, hand.rotation), 20f, "手首が物と一緒に回る");
+        }
+
+        [Test]
+        public void Hinge_LockedWrist_ObjectTurnsInTheGrip_WithinTheRange ()
+        {
+            // 手首で向けられないとき、物は握りの中で回る軸まわりに回る。範囲（±45°）の先へは回らない（物の方が譲る）
+            UseHinge ();
+            LockWrists ();
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            SnapToHands (session, false);
+            HandToObject (session, HumanBodyBones.RightHand, out Quaternion start, out Vector3 startPivot);
+            foreach (float angle in new[] { 30f, 80f }) {
+                entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                Vector3 axis = entry.editing.TransformDirection (kHingeAxis);
+                Quaternion dragged = Quaternion.AngleAxis (angle, axis) * entry.editing.rotation;
+                entry.DragTo (position, dragged);
+                session.SolveAfterEdit ();
+                MeasureHinge (session, HumanBodyBones.RightHand, start, startPivot, out float yaw, out float off, out float pivotGap);
+                Assert.LessOrEqual (off, 0.5f, angle + "°: 回る軸の外へ回らない");
+                Assert.LessOrEqual (Mathf.Abs (yaw), kHingeRange + 0.5f, angle + "°: 範囲の中");
+                Assert.Greater (Mathf.Abs (yaw), 15f, angle + "°: 握りの中で回った");
+                Assert.LessOrEqual (pivotGap, kGripTolerance, angle + "°: 回る中心は手の同じ所");
+            }
+        }
+
+        [Test]
+        public void Hinge_FreeWrist_WristTurnsFirst ()
+        {
+            // 握りの中の回りは要るときだけ（11-09 ユーザー決定）。手首で向けられる向きなら、握りの中ではほとんど回らない
+            UseHinge ();
+            PoseSession session = Open (CreateObject (HeldObjectFrame.Root));
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            SnapToHands (session, false);
+            HandToObject (session, HumanBodyBones.RightHand, out Quaternion start, out Vector3 startPivot);
+            entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+            Vector3 axis = entry.editing.TransformDirection (kHingeAxis);
+            entry.DragTo (position, Quaternion.AngleAxis (30, axis) * entry.editing.rotation);
+            session.SolveAfterEdit ();
+            MeasureHinge (session, HumanBodyBones.RightHand, start, startPivot, out float yaw, out float off, out float pivotGap);
+            Assert.LessOrEqual (Mathf.Abs (yaw), 5f, "握りの中ではほとんど回らない");
+            Assert.LessOrEqual (off, 0.5f, "回る軸の外へ回らない");
+            Assert.LessOrEqual (pivotGap, kGripTolerance, "回る中心は手の同じ所");
+        }
+
+        [Test]
+        public void Hinge_TwoHands_BothHandsStayInTheRange_AndKeepTheGrips ()
+        {
+            // もう片方の手（輪の関節）も同じ決まり: 柄の軸まわりに回らず、回る軸まわりは範囲の中、回る中心は手の同じ所
+            UseHinge ();
+            LockWrists ();
+            definition_.fullBody.hipsPin = 1;
+            PoseSession session = Open (CreateObject ());
+            session.Evaluate (0);
+            HeldObjectRig.Entry entry = Entry (session);
+            SnapToHands (session, true);
+            HumanBodyBones[] hands = { HumanBodyBones.RightHand, HumanBodyBones.LeftHand };
+            Quaternion[] starts = new Quaternion[2];
+            Vector3[] pivots = new Vector3[2];
+            for (int h = 0; h < 2; h++) HandToObject (session, hands[h], out starts[h], out pivots[h]);
+            foreach (Vector3 local in new[] { Vector3.right, Vector3.forward, Vector3.up }) {
+                entry.GetWorldPose (out Vector3 position, out Quaternion rotation);
+                entry.DragTo (position, rotation * Quaternion.AngleAxis (40, local));
+                session.SolveAfterEdit ();
+                for (int h = 0; h < 2; h++) {
+                    MeasureHinge (session, hands[h], starts[h], pivots[h], out float yaw, out float off, out float pivotGap);
+                    Assert.LessOrEqual (off, 0.5f, local + ": " + hands[h] + " は回る軸の外へ回らない");
+                    Assert.LessOrEqual (Mathf.Abs (yaw), kHingeRange + 0.5f, local + ": " + hands[h] + " は範囲の中");
+                    Assert.LessOrEqual (pivotGap, kGripTolerance, local + ": " + hands[h] + " は握りに付く");
+                }
+            }
+        }
+
+        [Test]
+        public void Hinge_DraggingTipAimPoint_TurnsTheObjectWithoutRolling_AndKeepsTheGrip ()
+        {
+            // 物の先（向けるだけの点）を引くと、手首と握りの中の回りで向ける（握りの中は手首で向けきれない分だけ）。どちらも柄の軸まわりには回さない
+            UseHinge ();
+            PoseSession session = Open (CreateObjectWithPoints ());
+            session.Evaluate (0);
+            SnapToHands (session, false);
+            HandToObject (session, HumanBodyBones.RightHand, out Quaternion start, out Vector3 startPivot);
+            Quaternion rotation = Entry (session).editing.rotation;
+            BodyPointTarget tip = ObjectPoint (session, kTip);
+            tip.MoveTo (tip.framePosition + new Vector3 (0.15f, 0, 0));
+            session.SolveAfterEdit ();
+            Assert.Greater (Vector3.Angle (Entry (session).editing.rotation * Vector3.up, rotation * Vector3.up), 3f, "柄の軸が引いた方へ向く");
+            MeasureHinge (session, HumanBodyBones.RightHand, start, startPivot, out float yaw, out float off, out float pivotGap);
+            Assert.LessOrEqual (off, 0.5f, "回る軸の外へ回らない");
+            Assert.LessOrEqual (Mathf.Abs (yaw), kHingeRange + 0.5f, "範囲の中");
+            Assert.LessOrEqual (pivotGap, kGripTolerance, "回る中心は手の同じ所");
+        }
+
         /// <summary>柄の軸の線（物の原点を通る）の、手首にいちばん近い所を手首から見た場所</summary>
         static Vector3 HandleOnHand (HeldObjectRig.Entry entry, Transform hand)
         {
@@ -1139,15 +1355,19 @@ namespace Lilium
         public void ObjectState_IsKeyed_AndFreeObjectFollowsTheBody ()
         {
             // S102: 持ち物の姿勢は全身 IK の点で、体の点と同じ状態を持つ（11-07 ユーザー指示「持ち物 Stick も制御点に」「体の点の決まりどおりに」）。
-            // キーの無いクリップでは Pin。Free にすると物の姿勢に留まらず、体と手に付いて動く
+            // キーの無いクリップでは Free（11-10 ユーザー指示。11-07 からは位置だけの Pin だった）。Free の物は物の姿勢に留まらず、体と手に付いて動く
             PoseSession session = Open (false, CreateObject (HeldObjectFrame.Root));
             session.Evaluate (0);
-            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "キーの無いクリップでは Pin");
-            ObjectTarget (session).SetState (BodyPointState.Free);
+            Assert.AreEqual (BodyPointState.Free, ObjectTarget (session).state, "キーの無いクリップでは Free");
+            ObjectTarget (session).SetState (BodyPointState.Pin);
             Assert.IsNull (session.CommitPose ());
             Assert.IsTrue (AnimationUtility.GetCurveBindings (session.clip).Any (b => b.path == RigPaths.ObjectPose (kName)), "状態のキーを打つ");
             session.Evaluate (0);
-            Assert.AreEqual (BodyPointState.Free, ObjectTarget (session).state, "状態がキーから戻る");
+            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "Pin がキーから戻る");
+            ObjectTarget (session).SetState (BodyPointState.Free);
+            Assert.IsNull (session.CommitPose ());
+            session.Evaluate (0);
+            Assert.AreEqual (BodyPointState.Free, ObjectTarget (session).state, "Free もキーから戻る");
             Vector3 before = Entry (session).editing.position;
             Point (session, HumanBodyBones.Hips).MoveBy (new Vector3 (0.2f, 0, 0));
             session.SolveAfterEdit ();
@@ -1161,9 +1381,9 @@ namespace Lilium
         }
 
         [Test]
-        public void ObjectWithoutStateKeys_PinsPositionOnly_SoMovingItTurnsThePinnedWrist ()
+        public void MovingObjectWithoutStateKeys_PinsPositionOnly_SoItTurnsThePinnedWrist ()
         {
-            // S102: キーの無い物は、体の点と同じく位置だけの Pin（11-07 ユーザー決定）。手首を Pin にして物を動かすと、手首が回る
+            // キーの無い物は Free。動かすと、体の点と同じく位置だけの Pin になる（向きは回したときに固定する）。手首を Pin にして物を動かすと、手首が回る
             // （11-07 ユーザー報告「手首を pin にとめて持ち物 stick を動かすと、手首の角度が固定された状態で動く。通常の IK 制御では回転するはず」）
             PoseSession session = Open (false, CreateObject (HeldObjectFrame.Root));
             session.Evaluate (0);
@@ -1171,9 +1391,12 @@ namespace Lilium
             SetAttached (session, kLeft, false);
             Point (session, HumanBodyBones.RightHand).SetState (BodyPointState.Pin);
             session.SolveAfterEdit ();
+            Assert.AreEqual (BodyPointState.Free, entry.poseState, "キーの無い物は Free");
             Transform wrist = session.stage.editingRig.GetEditingBone (HumanBodyBones.RightHand);
             Quaternion before = wrist.rotation;
             MoveObject (session, new Vector3 (0, 0.1f, 0));
+            Assert.AreEqual (BodyPointState.Pin, entry.poseState, "動かした物は Pin");
+            Assert.AreEqual (0, entry.poseValues.rotationWeight, "向きは固定しない");
             Assert.Greater (Quaternion.Angle (before, wrist.rotation), 5f, "手首が回る");
             Assert.LessOrEqual (HandleGap (session, HumanBodyBones.RightHand), kGripTolerance, "右手は柄に付く");
         }
@@ -1190,6 +1413,8 @@ namespace Lilium
                 session.Evaluate (0);
                 HeldObjectRig.Entry entry = Entry (session);
                 SetAttached (session, kLeft, false);
+                // キーの無い物は Free なので、Pin にする（位置だけ固定）
+                ObjectTarget (session).SetState (BodyPointState.Pin);
                 ObjectPoint (session, kTip).SetState (BodyPointState.Pin);
                 ObjectPoint (session, kPommel).SetState (BodyPointState.Pin);
                 session.SolveAfterEdit ();
@@ -1280,11 +1505,13 @@ namespace Lilium
             session.Evaluate (0);
             HeldObjectRig.Entry entry = Entry (session);
             SetAttached (session, kLeft, false);
-            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "物は Pin");
+            // キーの無い物は Free なので、Pin にする（位置だけ固定）
+            ObjectTarget (session).SetState (BodyPointState.Pin);
             Point (session, HumanBodyBones.RightHand).SetState (BodyPointState.Pin);
             session.SolveAfterEdit ();
             Assert.IsNull (session.CommitPose ());
             session.Evaluate (0);
+            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "物は Pin");
             BodyPointTarget hand = Point (session, HumanBodyBones.RightHand);
             Vector3 from = hand.framePosition;
             Vector3 origin = entry.editing.position;
@@ -1312,11 +1539,13 @@ namespace Lilium
             session.Evaluate (0);
             HeldObjectRig.Entry entry = Entry (session);
             SetAttached (session, kLeft, false);
-            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "物は Pin");
+            // キーの無い物は Free なので、Pin にする（位置だけ固定）
+            ObjectTarget (session).SetState (BodyPointState.Pin);
             Point (session, HumanBodyBones.RightHand).SetState (BodyPointState.Pin);
             session.SolveAfterEdit ();
             Assert.IsNull (session.CommitPose ());
             session.Evaluate (0);
+            Assert.AreEqual (BodyPointState.Pin, ObjectTarget (session).state, "物は Pin");
             Transform wrist = session.stage.editingRig.GetEditingBone (HumanBodyBones.RightHand);
             Vector3 start = wrist.position;
             BodyPointTarget hand = Point (session, HumanBodyBones.RightHand);

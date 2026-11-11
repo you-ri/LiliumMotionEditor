@@ -63,7 +63,6 @@ namespace Lilium
                 labels_[i] = CreateLabel ();
             }
             readout_ = CreateLabel ();
-            readout_.style.width = kSize;
 
             RegisterCallback<PointerDownEvent> (OnPointerDown);
             RegisterCallback<PointerMoveEvent> (OnPointerMove);
@@ -114,7 +113,10 @@ namespace Lilium
             }
             PlaceLabel (labels_[kZoneCenter], center, CenterLabel ());
 
+            // 幅いっぱいにして真ん中に寄せる（盤は幅の真ん中に描く）
             readout_.style.left = 0;
+            readout_.style.right = 0;
+            readout_.style.width = StyleKeyword.Auto;
             readout_.style.top = contentRect.height - 14;
         }
 
@@ -137,10 +139,12 @@ namespace Lilium
             label.style.top = position.y - 7;
         }
 
+        /// <summary>
+        /// 触っていない間は何も出さない（選んでいる物の名前はパネルの一番上に出す）
+        /// </summary>
         void ShowIdleReadout ()
         {
-            string target = window_ != null ? window_.spinTargetLabel : null;
-            readout_.text = target ?? "";
+            readout_.text = "";
         }
 
         void OnGenerateVisualContent (MeshGenerationContext context)

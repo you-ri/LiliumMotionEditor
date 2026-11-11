@@ -28,6 +28,20 @@ namespace Lilium
         /// <summary>向けるだけの点が、目標の向きからずれてよい角度</summary>
         const float kAimAngle = 2;
         const int kSteps = 20;
+        /// <summary>
+        /// マウスを細かく動かす回数（R10。0.3m を 2mm ずつ）。伸びきる所で膝が跳ぶのは、1 回の動きが小さいときに目立つ
+        /// （11-10 ユーザー報告「腰を持ち上げると、一定以上上に動かすと、足が変に動く」。20 回に分けると 1 回 15mm で、許す量に収まって見えなかった）
+        /// </summary>
+        const int kFineSteps = 150;
+
+        /// <summary>
+        /// 伸ばしきった長さ length の鎖で、Pin の点が付いてき始める長さ（伸びきる FullBodyRig.kSoftStretch 手前）から、測りの誤差 5mm を引いた長さ。
+        /// それより短い間は Pin の点は留まる（11-10 ユーザー決定「伸びきる手前から付いてくる」。伸びきるまで留めると、伸びきる所で膝・肘が跳んだ）
+        /// </summary>
+        static float FollowStart (float length)
+        {
+            return length * (1 - FullBodyRig.kSoftStretch) - 5e-3f;
+        }
         /// <summary>離して解き直したとき（I1）に、骨が動いてよい量・回ってよい角度</summary>
         const float kReleasePosition = 1e-3f;
         const float kReleaseAngle = 0.5f;
@@ -233,10 +247,10 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 点 name をつかみ、target まで kSteps 回に分けて動かす（窓でつかむのと同じ: BodyPointTarget.PinPosition）。
+        /// 点 name をつかみ、target まで steps 回に分けて動かす（窓でつかむのと同じ: BodyPointTarget.PinPosition）。
         /// 各回の後に step を呼ぶ。どの骨も、1 回でマウスの動きの 4 倍 + 5mm より大きくは跳ばない（I2）ことを確かめる
         /// </summary>
-        static void Drag (Setup s, string name, Vector3 target, System.Action<int> step = null)
+        static void Drag (Setup s, string name, Vector3 target, System.Action<int> step = null, int steps = kSteps)
         {
             BodyPointId id = Id (name);
             Solve (s);
@@ -245,13 +259,13 @@ namespace Lilium
             s.body.MarkGrabbed (id);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Vector3[] last = bones.Select (b => b.position).ToArray ();
-            float allowed = 4 * Vector3.Distance (start, target) / kSteps + 5e-3f;
+            float allowed = 4 * Vector3.Distance (start, target) / steps + 5e-3f;
             float worst = 0;
             string worstAt = null;
             float worstGap = 0;
             string worstGapAt = null;
-            for (int k = 1; k <= kSteps; k++) {
-                s.body.SetPointPositionWorld (id, Vector3.Lerp (start, target, (float)k / kSteps));
+            for (int k = 1; k <= steps; k++) {
+                s.body.SetPointPositionWorld (id, Vector3.Lerp (start, target, (float)k / steps));
                 s.body.SetPositionWeight (id, 1);
                 Solve (s);
                 for (int i = 0; i < bones.Length; i++) {
@@ -425,7 +439,7 @@ namespace Lilium
                 stretched (k);
                 float moved = Vector3.Distance (At (s, "A"), a);
                 float span = Vector3.Distance (At (s, "A"), At (s, "C"));
-                Check (s, moved <= kStay || span >= 2 * kBone - 5e-3f, "A は伸びきるまで動かない: " + k + " 回目に " + Mm (moved) + " 動いた（A─C " + Mm (span) + "）");
+                Check (s, moved <= kStay || span >= FollowStart (2 * kBone), "A は伸びきる少し手前まで動かない: " + k + " 回目に " + Mm (moved) + " 動いた（A─C " + Mm (span) + "）");
             });
             Reached (s, "C", target);
             PulledLeast (s, "A", a, target, 2 * kBone);
@@ -622,7 +636,7 @@ namespace Lilium
                 stretched (k);
                 float moved = Vector3.Distance (At (s, "D2"), d2);
                 float span = Vector3.Distance (At (s, "B2"), At (s, "D2"));
-                Check (s, moved <= kStay || span >= 2 * kBone - 5e-3f, "D2 は枝が伸びきるまで動かない: " + k + " 回目に " + Mm (moved) + " 動いた（B2─D2 " + Mm (span) + "）");
+                Check (s, moved <= kStay || span >= FollowStart (2 * kBone), "D2 は枝が伸びきる少し手前まで動かない: " + k + " 回目に " + Mm (moved) + " 動いた（B2─D2 " + Mm (span) + "）");
             });
             Reached (s, "D1", target);
             Report (s);
@@ -1008,7 +1022,7 @@ namespace Lilium
             float length = limits == Limits.Tight ? Mathf.Min (2 * kBone, reaches[reaches.Count - 1]) : 2 * kBone;
             bool stretched = false;
             for (int k = 0; k < moves.Count; k++) {
-                Check (s, moves[k] <= kStay || reaches[k] >= length - 5e-3f, "D1 は腕が伸びきるまで動かない: " + (k + 1) + " 回目に " + Mm (moves[k]) + " 動いた（B1─D1 " + Mm (reaches[k]) + "）");
+                Check (s, moves[k] <= kStay || reaches[k] >= FollowStart (length), "D1 は腕が伸びきる少し手前まで動かない: " + (k + 1) + " 回目に " + Mm (moves[k]) + " 動いた（B1─D1 " + Mm (reaches[k]) + "）");
                 if (stretched) Check (s, reaches[k] >= length - 5e-3f, "I3 伸びきったまま: " + (k + 1) + " 回目に B1─D1 が " + Mm (reaches[k]) + " に縮んだ");
                 else stretched = reaches[k] >= length - 5e-3f;
             }
@@ -1029,6 +1043,73 @@ namespace Lilium
             Vector3 expected = d2 + (target - d2).normalized * span;
             float off = Vector3.Distance (At (s, "D1"), expected);
             Check (s, off <= kPlace, "D1 は D2 から離れのままの球の上で目標に一番近い所: " + Mm (off) + " ずれ");
+            Report (s);
+        }
+
+
+        // ---- R10 両脚 R─{B1─C1─D1─T1, B2─C2─D2─T2}（腰を持ち上げる。11-10 追加） ----
+
+        /// <summary>
+        /// しゃがんだ両脚。腰 R から股 B1・B2 を左右に出し、腿 B・すね C を膝 C（蝶番）で 90° 曲げ、足首 D から足 D を前へ出す（T は爪先）。
+        /// デモのキャラのしゃがみ（膝で約 100°）と同じくらいの曲がり。片脚だと腰が傾いて股が下がり、脚が伸びきらない
+        /// </summary>
+        static BoneSpec[] Legs ()
+        {
+            return new[] {
+                Top ("R", new Vector3 (0, 0.7f, 0)),
+                Child ("B1", "R", new Vector3 (-1, 0, 0)),
+                Child ("C1", "B1", new Vector3 (0, -0.5f, 0.866f)),
+                Child ("D1", "C1", new Vector3 (0, -0.866f, -0.5f)),
+                Child ("T1", "D1", new Vector3 (0, 0, 1)),
+                Child ("B2", "R", new Vector3 (1, 0, 0)),
+                Child ("C2", "B2", new Vector3 (0, -0.5f, 0.866f)),
+                Child ("D2", "C2", new Vector3 (0, -0.866f, -0.5f)),
+                Child ("T2", "D2", new Vector3 (0, 0, 1)),
+            };
+        }
+
+        /// <summary>膝 C1・C2 を蝶番にする（R2 と同じ。人型の膝と同じく前へ曲がる）</summary>
+        static void Knees (EditRigDefinition definition)
+        {
+            foreach (string name in new[] { "C1", "C2" }) {
+                EditRigDefinition.ExtraControl knee = definition.extraControls.First (c => c.name == name);
+                knee.hinge = true;
+                knee.bendDirection = new Vector3 (0, 0, 1);
+            }
+        }
+
+        [Test]
+        public void Case10_1_Legs_LiftRoot_PinnedAnklesFollowOnlyOnceStretched_WithoutSnapping ([Values] bool pinnedRoot, [Values] Limits limits)
+        {
+            // 11-10 ユーザー報告「腰を持ち上げると、一定以上上に動かすと、足が変に動く」の再現。足首 D1・D2 を Pin にして、腰 R を脚が伸びきる所の先へ細かく持ち上げる。
+            // D は脚が伸びきるまで留まり、伸びきったら付いてくる（1-3・9-5。11-10 決定「今のまま」）。足 D はすね C に対する向きのまま（1-7。11-10 決定「今のまま」）。
+            // 伸びきる所で膝 C が跳ばない（I2）
+            Setup s = Create (limits, pinnedRoot, Legs (), Knees);
+            Vector3 d1 = At (s, "D1"), d2 = At (s, "D2");
+            Quaternion foot1 = Bone (s, "D1").localRotation, foot2 = Bone (s, "D2").localRotation;
+            Pin (s, "D1");
+            Pin (s, "D2");
+            Vector3 target = At (s, "R") + new Vector3 (0, 0.3f, 0);
+            List<float> moves = new List<float> (), reaches = new List<float> ();
+            Drag (s, "R", target, k => {
+                moves.Add (Vector3.Distance (At (s, "D1"), d1));
+                reaches.Add (Vector3.Distance (At (s, "B1"), At (s, "D1")));
+            }, kFineSteps);
+            // 狭い制限では、脚は骨 2 本の長さまで伸ばせない（I7: 制限が勝つ）。伸びきった長さは、引ききった後の脚の長さ
+            float length = limits == Limits.Tight ? Mathf.Min (2 * kBone, reaches[reaches.Count - 1]) : 2 * kBone;
+            bool stretched = false;
+            for (int k = 0; k < moves.Count; k++) {
+                Check (s, moves[k] <= kStay || reaches[k] >= FollowStart (length), "D1 は脚が伸びきる少し手前まで動かない: " + (k + 1) + " 回目に " + Mm (moves[k]) + " 動いた（B1─D1 " + Mm (reaches[k]) + "）");
+                if (stretched) Check (s, reaches[k] >= length - 5e-3f, "I3 伸びきったまま: " + (k + 1) + " 回目に B1─D1 が " + Mm (reaches[k]) + " に縮んだ");
+                else stretched = reaches[k] >= length - 5e-3f;
+            }
+            // 伸びきった脚の長さで届く所のうち、元の足首に一番近い所へ付いてくる（決めたこと 4。11-10 決定「狭い制限で膝が止めに当たった後も、必要な分だけ」。
+            // 前は、強さ 1 どうしの足首とつかんだ腰が取り合い、股の遊びのばねが決める所まで足首が股の真下より後ろへ 24cm 滑った）
+            PulledLeast (s, "D1", d1, At (s, "B1"), length);
+            PulledLeast (s, "D2", d2, At (s, "B2"), length);
+            KeptLocal (s, "D1", foot1);
+            KeptLocal (s, "D2", foot2);
+            Reached (s, "R", target);
             Report (s);
         }
     }

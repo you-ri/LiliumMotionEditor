@@ -366,12 +366,12 @@
     "RIG_VALUES_OVERLAY_HELD_OBJECT": "Object {0}",
     "HELD_OBJECT_INVALID_ATTACHMENT": "持ち物「{0}」の付ける先の名前「{1}」が空か重複しています",
     "HELD_OBJECT_NO_ATTACH_BONE": "持ち物「{0}」は付ける先「{1}」を使えません（このキャラにその骨がありません）",
-    "HELD_OBJECT_SNAP_OUT_OF_REACH": "{0} を {1} へ寄せると、付けている骨が届きません。付け替えるフレームで跳ぶので、届かない先は手前のキーで外してください",
+    "HELD_OBJECT_SNAP_OUT_OF_REACH": "{0} を {1} へスナップすると、付けている骨が届きません。付け替えるフレームで跳ぶので、届かない先は手前のキーで外してください",
     "HELD_OBJECT_LATER_KEY": "{0} は後ろのキーの付け方へ戻ります（切り替えは次のキーまで）",
-    "RIG_VALUES_OVERLAY_SNAP": "寄せる",
+    "RIG_VALUES_OVERLAY_SNAP": "スナップ",
     "RIG_VALUES_OVERLAY_SNAP_TOOLTIP": "物を、この付ける先の決まった位置（リグエディタで決める）へ動かします。付けている骨は付いてきます。付け替えるときは、この後にこの先へ付けます",
     "POSE_DOCUMENT_UNKNOWN_ATTACH": "持ち物 {0} に付ける先 {1} はありません（ある先: {2}）",
-    "POSE_DOCUMENT_SNAP_NO_SETTINGS": "持ち物 {0} には、付ける先 {1} の決まった位置がないので寄せられません（リグエディタで決めてください）",
+    "POSE_DOCUMENT_SNAP_NO_SETTINGS": "持ち物 {0} には、付ける先 {1} の決まった位置がないのでスナップできません（リグエディタで決めてください）",
     "RIG_EDITOR_ATTACHMENT": "{0} の {1} の位置",
     "RIG_EDITOR_ATTACHMENT_NO_SETTINGS": "この物には、ここの決まった位置がありません。付けるボタンを押したときの場所で付きます。足すかハンドルを動かすと、決まった位置になります",
     "RIG_EDITOR_ADD_ATTACHMENT": "決まった位置を足す",
@@ -750,6 +750,7 @@
     "RIG_EDITOR_LIMITS_FROM_HUMANOID": "Humanoid の可動域から角度制限を作る",
     "RIG_EDITOR_LIMITS_FROM_HUMANOID_TOOLTIP": "全身 IK で解く骨の角度制限を、キャラの Humanoid の Avatar の muscle の範囲から作る。遊びは今の値を残す",
     "RIG_EDITOR_LIMITS_FROM_HUMANOID_DONE": "{0} 本の骨に角度制限を入れた",
+    "RESET_LAYOUT": "レイアウトをリセット",
     "RIG_EDITOR_MIRROR_LIMITS": "左右まとめて編集",
     "RIG_EDITOR_MIRROR_LIMITS_TOOLTIP": "左右のある骨の角度制限を直すと、反対側の骨へ鏡写しにする"
 }

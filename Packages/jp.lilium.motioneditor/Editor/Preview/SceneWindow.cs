@@ -43,6 +43,16 @@ namespace Lilium
             window.Show ();
         }
 
+        /// <summary>窓のタブの ⋮ メニュー。Scene ビューの項目の後ろに、パネルの置き場所を戻す項目を足す</summary>
+        public override void AddItemsToMenu (GenericMenu menu)
+        {
+            base.AddItemsToMenu (menu);
+            menu.AddItem (new GUIContent (Tr ("RESET_LAYOUT")), false, () => {
+                if (OverlayWindows.ResetLayout (this)) overlayDefaultsChecked_ = false;
+                Repaint ();
+            });
+        }
+
         public override void OnEnable ()
         {
             // パネル（Overlay）は作られるときに扱う窓を決める。base.OnEnable の中で作られるので、その前に今ある窓へ結ぶ。

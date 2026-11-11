@@ -865,7 +865,7 @@ namespace Lilium
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
                 bool keyed;
-                // キーより前は、その点の基準の値（体の点は Free。持ち物の姿勢の点は Pin。S102）
+                // キーより前は、その点の基準の値（リグ定義の点の既定の状態。持ち物の姿勢の点は Free）
                 for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) pointRest_[v] = i * Lilium.BodyPoint.kValueCount + v < bodyPointRest_.Length ? bodyPointRest_[i * Lilium.BodyPoint.kValueCount + v] : 0;
                 EditingClip.GetPointState (clip, bodyPointPaths_[i], time, pointState_, out keyed, pointRest_);
                 bool active = false;

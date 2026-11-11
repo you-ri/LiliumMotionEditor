@@ -271,10 +271,16 @@ namespace Lilium
                 get { return values.attached >= 0.5f; }
             }
 
-            /// <summary>柄の軸まわりに回る先か（手）。違えば回らない（腰・背中）</summary>
+            /// <summary>回る先か（手。柄の軸まわり・Hinge の軸まわり）。違えば回らない（腰・背中）</summary>
             public bool twists
             {
-                get { return point.joint == EditRigDefinition.AttachJoint.Twist; }
+                get { return point.joint != EditRigDefinition.AttachJoint.Fixed; }
+            }
+
+            /// <summary>柄の軸まわりには回らず、Hinge の軸まわりに範囲の中だけ回る先か（EditRigDefinition.AttachJoint.Hinge）</summary>
+            public bool hinges
+            {
+                get { return point.joint == EditRigDefinition.AttachJoint.Hinge; }
             }
 
             /// <summary>物の設定に決まった位置があるか（窓の「寄せる」）</summary>
@@ -309,10 +315,24 @@ namespace Lilium
                 values.gripRotation = rotation;
             }
 
-            /// <summary>柄の軸（物のローカル）。回らない先は 0</summary>
+            /// <summary>回る軸（物のローカル）。柄の軸か、Hinge の先の軸（枠の向きの軸を、今の位置の向きで物のローカルにした向き）。回らない先は 0</summary>
             internal Vector3 axis
             {
-                get { return twists ? entry.definition.gripAxis : Vector3.zero; }
+                get {
+                    if (!twists) return Vector3.zero;
+                    return hinges ? heldGripRotation * point.hingeAxis : entry.definition.gripAxis;
+                }
+            }
+
+            /// <summary>回る中心（物のローカル）: 柄の軸の上で、今の位置の場所に一番近い点（握りの中）。柄の軸が無ければ物の原点</summary>
+            internal Vector3 pivot
+            {
+                get {
+                    Vector3 grip = entry.definition.gripAxis;
+                    if (grip.sqrMagnitude < 1e-8f) return Vector3.zero;
+                    grip.Normalize ();
+                    return grip * Vector3.Dot (heldGripPosition, grip);
+                }
             }
         }
 
@@ -450,6 +470,9 @@ namespace Lilium
             {
                 rig.GetSettingsPose (target, out Vector3 position, out Quaternion rotation);
                 PlaceWithoutPulling (position, rotation);
+                // 寄せる先の位置も物の設定の位置に戻す。キーで付けた位置（S99）が残ると、寄せた後に解くとき、その位置が物の設定の位置の所へ来るよう
+                // 付けている骨が引かれた（11-09 ユーザー報告「右手の寄せるを押すと届かないと出て姿勢が崩れる」。腰の所で付けた位置のまま右手に寄せると、右手が 0.6m 跳んだ）
+                target.SetKeyedGrip (false, Vector3.zero, Vector3.zero);
                 snapping = true;
                 snapTarget = target;
             }
@@ -586,10 +609,9 @@ namespace Lilium
             if (editing == null) return;
             Transform control = rig_.CreateControl (RigPaths.Object (definition.name), createGameObject);
             Transform poseControl = rig_.CreateControl (RigPaths.ObjectPose (definition.name), createGameObject);
-            // キーの無いクリップでは位置だけの Pin（届く間は物の場所に留まり、引かれれば付いて動く。向きは体の点と同じく、回したときに固定する。
-            // 11-07 ユーザー決定。向きまで固定すると、物を動かしても手首の角度が変わらなかった）
+            // キーの無いクリップでは Free（体の点の既定と同じ。付けている骨に付いて動く。11-10 ユーザー指示「物そのものを Free に」。
+            // 11-07 から位置だけの Pin だった）。物を動かせば、体の点と同じく動かした分だけ固定する（DragTo）
             BodyPoint poseValues = poseControl.gameObject.AddComponent<BodyPoint> ();
-            poseValues.positionWeight = 1;
             Entry entry = new Entry {
                 poseControl = poseControl,
                 poseValues = poseValues,
@@ -1042,11 +1064,9 @@ namespace Lilium
         static Vector3 GripOffset (Attachment attachment, Quaternion rotation)
         {
             Vector3 at = attachment.heldGripPosition;
-            Vector3 axis = attachment.axis;
-            if (axis.sqrMagnitude < 1e-8f) return rotation * at;
-            axis.Normalize ();
-            Vector3 onAxis = axis * Vector3.Dot (at, axis);
-            return rotation * onAxis + attachment.twist * (rotation * (at - onAxis));
+            if (attachment.axis.sqrMagnitude < 1e-8f) return rotation * at;
+            Vector3 pivot = attachment.pivot;
+            return rotation * pivot + attachment.twist * (rotation * (at - pivot));
         }
 
         /// <summary>
@@ -1066,13 +1086,20 @@ namespace Lilium
                 Attachment parent = ParentAttachment (body, entry);
                 if (parent == null) continue;
                 bool fixedJoint = Welded (entry, parent);
+                bool hinge = !fixedJoint && parent.hinges;
+                // 骨から見た物の向き（物の向き = 骨の向き × 骨の基準⁻¹ × 枠の基準の向き × 位置の向き⁻¹）
+                Quaternion onBone = Quaternion.Normalize (Quaternion.Inverse (parent.boneRest) * parent.frameRotation * Quaternion.Inverse (GripRotation (entry, parent)));
                 attachments_.Add (new FullBodyRig.HeldAttachment {
                     body = entry.editing,
                     parent = parent.bone,
-                    axis = fixedJoint ? Vector3.zero : parent.axis,
+                    axis = fixedJoint || hinge ? Vector3.zero : parent.axis,
                     fixedPose = fixedJoint,
-                    // 骨から見た物の向き（物の向き = 骨の向き × 骨の基準⁻¹ × 枠の基準の向き × 位置の向き⁻¹）
-                    weld = fixedJoint ? Quaternion.Normalize (Quaternion.Inverse (parent.boneRest) * parent.frameRotation * Quaternion.Inverse (GripRotation (entry, parent))) : Quaternion.identity,
+                    weld = fixedJoint ? onBone : Quaternion.identity,
+                    // Hinge の先は、握りの中の回る中心を物の骨の付け根にして、回る軸まわりにだけ回す
+                    hingeAxis = hinge ? parent.axis : Vector3.zero,
+                    origin = hinge ? parent.pivot : Vector3.zero,
+                    hingeRange = hinge ? parent.point.hingeRange : 0,
+                    hingeRest = hinge ? onBone : Quaternion.identity,
                 });
             }
             body.SetHeldAttachments (attachments_);
@@ -1112,8 +1139,11 @@ namespace Lilium
                         restRotation = attachment.boneRest,
                         body = entry.editing,
                         grip = attachment.heldGripPosition,
-                        // 輪の関節は柄の軸まわりに回る。回らない先を輪でつなぐときも柄の軸を使う（輪のばねが位置の向きへ戻す）
-                        axis = entry.definition.gripAxis,
+                        // 輪の関節は柄の軸まわりに回る。回らない先を輪でつなぐときも柄の軸を使う（輪のばねが位置の向きへ戻す）。
+                        // Hinge の先は、その軸まわりに範囲の中だけ回る。回る中心はどちらも柄の軸の上で握りに一番近い点
+                        axis = attachment.hinges ? attachment.axis : entry.definition.gripAxis,
+                        pivot = attachment.pivot,
+                        range = attachment.hinges ? attachment.point.hingeRange : 0,
                         toObject = Quaternion.Normalize (attachment.frameRotation * Quaternion.Inverse (attachment.heldGripRotation)),
                     });
                 }
@@ -1178,14 +1208,27 @@ namespace Lilium
                 // つかんでいる間の物の向き（置いた姿勢）は前に解いた後の向きで、解き直しはキーの骨から始まる。前に解いた骨に対する回りを
                 // キーの骨に一番近い向きで当てはめると、骨がキーからねじれた分だけ解くたびに回りが足され、丸い棒が手の中で柄の軸まわりに回り続けた
                 // （11-07 ユーザー報告「表示しているボーンが回転しまくる。見た目は回転していないのに」。60 回動かす間に ±170°）
-                if (entry.dragging && attachment.hasRoll && entry.poseValues.rotationWeight <= 0) rotation = Quaternion.Normalize (exact * attachment.roll);
+                // Hinge の先は、動かしている間は向きを留めていても前に解いた回りから始める（握りの中の回りは要るときだけ。手首で向けられる分は手首が回る）。
+                // 物の目標の向きに一番近くすると、手首で向けられる分まで握りの中で回った（11-09 実測で、手首の自由な手で物を 30° 回すと握りの中で 31°）
+                if (entry.dragging && attachment.hasRoll && (attachment.hinges || entry.poseValues.rotationWeight <= 0)) rotation = Quaternion.Normalize (exact * attachment.roll);
                 else rotation = Quaternion.Normalize (Quaternion.FromToRotation (entry.rotation * axis, exact * axis) * entry.rotation);
-                onAxis = axis * Vector3.Dot (at, axis);
+                if (attachment.hinges) rotation = ClampHinge (exact, rotation, axis, attachment.point.hingeRange);
+                onAxis = attachment.pivot;
             }
             // 位置の場所: 柄の軸の上の分は物と一緒に、柄から離れた分は枠と一緒に回る
             Vector3 position = frame - rotation * onAxis - exact * (at - onAxis);
             Transform root = rig_.root.transform;
             entry.editing.SetPositionAndRotation (root.TransformPoint (position), root.rotation * rotation);
+        }
+
+        /// <summary>枠に合わせた向き exact から見た rotation の、軸 axis（物のローカル）まわりの回りを ±range 度に収めた向き</summary>
+        static Quaternion ClampHinge (Quaternion exact, Quaternion rotation, Vector3 axis, float range)
+        {
+            Quaternion turn = Quaternion.Inverse (exact) * rotation;
+            if (turn.w < 0) turn = new Quaternion (-turn.x, -turn.y, -turn.z, -turn.w);
+            float angle = 2 * Mathf.Atan2 (Vector3.Dot (new Vector3 (turn.x, turn.y, turn.z), axis), turn.w) * Mathf.Rad2Deg;
+            float clamped = Mathf.Clamp (angle, -range, range);
+            return Mathf.Approximately (angle, clamped) ? rotation : Quaternion.Normalize (exact * Quaternion.AngleAxis (clamped, axis));
         }
 
         /// <summary>

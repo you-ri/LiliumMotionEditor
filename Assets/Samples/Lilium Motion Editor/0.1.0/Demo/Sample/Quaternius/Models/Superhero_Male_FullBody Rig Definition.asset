@@ -1361,7 +1361,7 @@ MonoBehaviour:
     contact: 1
     radius: 0
     passive: 0
-    defaultState: 0
+    defaultState: 1
   - enabled: 1
     name: RightFoot
     bone: 6
@@ -1383,7 +1383,7 @@ MonoBehaviour:
     contact: 1
     radius: 0
     passive: 0
-    defaultState: 0
+    defaultState: 1
   - enabled: 1
     name: Neck
     bone: 9
@@ -2006,14 +2006,18 @@ MonoBehaviour:
     control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
-    joint: 0
+    joint: 2
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 0
   - name: LeftHand
     bone: 17
     control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
-    joint: 0
+    joint: 2
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 0
   - name: Hips
     bone: 0
@@ -2021,5 +2025,7 @@ MonoBehaviour:
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 1
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 1
   loopJoints: []

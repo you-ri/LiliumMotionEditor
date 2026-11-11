@@ -750,6 +750,7 @@
     "RIG_EDITOR_LIMITS_FROM_HUMANOID": "Joint Limits From Humanoid",
     "RIG_EDITOR_LIMITS_FROM_HUMANOID_TOOLTIP": "Set the full-body IK joint limits of every solved bone from the muscle ranges of the character's Humanoid Avatar. Slack is kept.",
     "RIG_EDITOR_LIMITS_FROM_HUMANOID_DONE": "Set joint limits on {0} bones",
+    "RESET_LAYOUT": "Reset Layout",
     "RIG_EDITOR_MIRROR_LIMITS": "Edit Left and Right Together",
     "RIG_EDITOR_MIRROR_LIMITS_TOOLTIP": "When the joint limit of a left or right bone changes, mirror it to the bone on the other side"
 }

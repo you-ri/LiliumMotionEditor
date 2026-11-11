@@ -137,6 +137,10 @@ namespace Lilium
             public BodyPointId id;
             /// <summary>骨の上の点の、骨の付け根からの位置（基準姿勢の骨の枠・メートル）。関節の点は 0。向きを混ぜる点は PointOffset で今の値を出す</summary>
             public Vector3 offset;
+            /// <summary>骨の原点からの位置（offset = boneOffset - bodyOrigin。骨の付け根をずらさない骨では offset と同じ）</summary>
+            public Vector3 boneOffset;
+            /// <summary>骨の付け根の、骨の原点からのずれ（FullBodyRig.origins_。Hinge の先に付けた物の回る中心）</summary>
+            public Vector3 bodyOrigin;
             /// <summary>ずれの向きを混ぜる相手の骨（S34。混ぜない点は null）</summary>
             public Transform blendBone;
             /// <summary>混ぜる割合（0〜1）</summary>
@@ -221,6 +225,7 @@ namespace Lilium
                     points_.Add (new Point {
                         id = new BodyPointId (point.name),
                         offset = Quaternion.Inverse (restRotation) * offset,
+                        boneOffset = Quaternion.Inverse (restRotation) * offset,
                         blendBone = blendBone,
                         blend = blendBone != null ? Mathf.Clamp01 (point.definition.blend) : 0,
                         blendOffset = blendBone != null ? Quaternion.Inverse (restRotation) * blendOffset : Vector3.zero,
@@ -288,6 +293,11 @@ namespace Lilium
             // リグ定義の輪の関節（S105）はその前に入れる
             data_ = FullBodyIkData.Create (bodies_.Count, points_.Count, points_.Count, Mathf.Max (1, loopJoints_.Count + heldAttachments_.Count * kHeldLoopsPerObject), Allocator.Persistent);
             attached_ = new bool[bodies_.Count];
+            origins_ = new Vector3[bodies_.Count];
+            foreach (HeldAttachment attachment in heldAttachments_) {
+                int body = bodies_.IndexOf (attachment.body);
+                if (body >= skeleton && !attachment.fixedPose && attachment.hingeAxis.sqrMagnitude > kEpsilon) origins_[body] = attachment.origin;
+            }
             solveRotations_ = new Quaternion[bodies_.Count];
             solvePositions_ = new Vector3[bodies_.Count];
             startPositions_ = new Vector3[bodies_.Count];
@@ -348,6 +358,9 @@ namespace Lilium
             }
             foreach (Point point in points_) {
                 point.body = bodies_.IndexOf (point.bone);
+                // 骨の付け根を骨の原点からずらした骨（Hinge の先に付けた物）の点は、ずらした付け根から測る
+                point.bodyOrigin = point.body >= 0 ? origins_[point.body] : Vector3.zero;
+                point.offset = point.boneOffset - point.bodyOrigin;
                 point.blendBody = point.blendBone != null ? bodies_.IndexOf (point.blendBone) : -1;
             }
             // 動かせない点（S89）は、乗る骨の上でも親から見ても動かない。付け根から離れていれば、骨は付け根と点を結ぶ軸まわりにだけ回る（基盤どおり、

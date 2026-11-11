@@ -138,6 +138,36 @@ namespace Lilium
             return true;
         }
 
+        static readonly System.Type kPresetManager = typeof (Overlay).Assembly.GetType ("UnityEditor.Overlays.OverlayPresetManager");
+        static readonly System.Reflection.MethodInfo kGetDefaultPreset = kPresetManager != null
+            ? kPresetManager.GetMethod ("GetDefaultPreset", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic, null, new[] { typeof (System.Type) }, null)
+            : null;
+        static readonly System.Reflection.MethodInfo kApplyPreset = typeof (OverlayCanvas).GetMethod ("ApplyPreset", kInternal | System.Reflection.BindingFlags.Public);
+        static readonly System.Reflection.MethodInfo kRebuildContent = typeof (Overlay).GetMethod ("RebuildContent", kInternal | System.Reflection.BindingFlags.Public, null, System.Type.EmptyTypes, null);
+
+        /// <summary>
+        /// 窓のパネルの置き場所・表示を、初めて開いたときの状態へ戻す。Unity の Overlay メニューのプリセット「Default」と同じものを当てる
+        /// （置き場所の記録が空になる）。[Overlay] で決まらない置き場所は、呼んだ側が PlaceDefaults をもう一度通して当て直す。
+        /// プリセットを当ててもパネルの中身は作り直されないので、この窓のパネルは作り直す（中身を作るときに読む大きさを、呼ぶ前に戻しておけば効く）。
+        /// プリセット・作り直しは Unity の内部（OverlayPresetManager.GetDefaultPreset・OverlayCanvas.ApplyPreset・Overlay.RebuildContent）。
+        /// 見つからなければ何もしない
+        /// </summary>
+        /// <returns>戻せた</returns>
+        public static bool ResetLayout (EditorWindow window)
+        {
+            if (window == null || window.overlayCanvas == null || kGetDefaultPreset == null || kApplyPreset == null) return false;
+            object preset = kGetDefaultPreset.Invoke (null, new object[] { window.GetType () });
+            if (preset == null) return false;
+            kApplyPreset.Invoke (window.overlayCanvas, new[] { preset });
+            if (kRebuildContent != null) {
+                string[] ids = PanelIds (window.GetType ());
+                foreach (Overlay overlay in window.overlayCanvas.overlays.ToArray ()) {
+                    if (System.Array.IndexOf (ids, overlay.id) >= 0) kRebuildContent.Invoke (overlay, null);
+                }
+            }
+            return true;
+        }
+
         /// <summary>画面内に残す幅（見出しの左端からこの幅は見えるようにする）</summary>
         const float kVisibleWidth = 80f;
         /// <summary>画面内に残す高さ（見出しの帯）</summary>
