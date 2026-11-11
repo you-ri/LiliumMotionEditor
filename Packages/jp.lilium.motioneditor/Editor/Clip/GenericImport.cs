@@ -33,8 +33,9 @@ namespace Lilium
         /// <param name="source">合成している Generic のクリップ（範囲と注意に使う）</param>
         /// <param name="evaluate">その時刻の段の出力を編集用の骨に作る（窓は段の並びを Generic Pose まで通す）</param>
         /// <param name="targets">キーを打つ対象（窓と同じもの）</param>
+        /// <param name="afterPose">姿勢を作った後に呼ぶ（窓は全身 IK の点を骨の位置へ置き直す。PoseImport.Options.afterEvaluate）</param>
         public static PoseImport.Result Import (AnimationClip source, AnimationClip destination, EditingRig rig, EditingRigSolver solver,
-            System.Action<float> evaluate, IList<PoseTarget> targets)
+            System.Action<float> evaluate, IList<PoseTarget> targets, System.Action afterPose = null)
         {
             string problem = GetProblem (source);
             if (problem != null) throw new System.InvalidOperationException (problem);
@@ -51,6 +52,7 @@ namespace Lilium
                 rig = rig,
                 solver = solver,
                 evaluate = evaluate,
+                afterEvaluate = afterPose,
                 targets = targets,
                 checkBones = bones,
                 length = Mathf.Max (source.empty ? 0 : source.length, destination == null || destination.empty ? 0 : destination.length),

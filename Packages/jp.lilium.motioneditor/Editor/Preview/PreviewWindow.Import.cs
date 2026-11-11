@@ -112,6 +112,8 @@ namespace Lilium
                 // 表示モデルの骨を編集用の体へ写して、操作値として捉える
                 stage_.editingRig.SyncFromDisplay ();
                 stage_.editingRigSolver.Capture ();
+                // 状態だけ引き継いだ点（既定で Pin の足首など）は、写した姿勢の骨の位置へ置き直す（全身 IK の段で置いたのは写す前の姿勢）
+                stage_.SnapCarriedPoints ();
                 AddKeyAllCurves ();
                 SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_APPLIED", currentFrame), false);
                 return true;
@@ -260,8 +262,9 @@ namespace Lilium
             AnimationClip destination = null;
             try {
                 destination = AnimBank.Create (AnimBank.GetFolder (model), source.name);
-                PoseImport.Result result = HumanoidImport.Import (source, destination, stage_.editingRig, stage_.editingRigSolver,
-                    time => poseStack_.EvaluateThroughHumanoid (time), targets_);
+                // 左右反転して読むキャラは、窓に出しているのと同じ反転したクリップから取り込む（ルートの移動・最初の向きもそちらで測る）
+                PoseImport.Result result = HumanoidImport.Import (stage_.ReadHumanoidClip (source), destination, stage_.editingRig, stage_.editingRigSolver,
+                    time => poseStack_.EvaluateThroughHumanoid (time), targets_, stage_.SnapCarriedPoints);
                 AssetDatabase.SaveAssetIfDirty (destination);
                 string text = Tr ("PREVIEW_WINDOW_IMPORT_IMPORTED_BASE", source.name, destination.name, result.frameCount, result.milliseconds.ToString ("0"),
                     (result.maxError * 1000).ToString ("0.00"));
@@ -338,7 +341,7 @@ namespace Lilium
                 Undo.RecordObject (this, "Import Generic Clip");
                 // 書き出し先の元の値も段の流れに入る（合成の相手）。値は最後にまとめて書くので、取り込み中は元の値が読める
                 PoseImport.Result result = GenericImport.Import (source, editingClip_, stage_.editingRig, stage_.editingRigSolver,
-                    time => poseStack_.EvaluateUntil (generic, time), targets_);
+                    time => poseStack_.EvaluateUntil (generic, time), targets_, stage_.SnapCarriedPoints);
                 genericClip_ = null;
                 string text = Tr ("PREVIEW_WINDOW_IMPORT_IMPORTED_GENERIC", source.name, result.frameCount, result.milliseconds.ToString ("0"),
                     (result.maxError * 1000).ToString ("0.00"));

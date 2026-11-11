@@ -101,7 +101,8 @@ namespace Lilium
                         return new LayerClipStatus (LayerClipState.Stale, Tr ("EDITING_RIG_LAYER_IMPORT_PREVIEWING"));
                     }
                     if (host.useHumanoidBase) {
-                        return new LayerClipStatus (LayerClipState.Ready, Tr ("EDITING_RIG_LAYER_HUMANOID_BASE"));
+                        bool mirrored = stage_ != null && stage_.mirrorHumanoidClips;
+                        return new LayerClipStatus (LayerClipState.Ready, mirrored ? Tr ("EDITING_RIG_LAYER_HUMANOID_BASE_MIRRORED") : Tr ("EDITING_RIG_LAYER_HUMANOID_BASE"));
                     }
                     if (host.clip == null) return new LayerClipStatus (LayerClipState.None, Tr ("EDITING_RIG_LAYER_NO_CLIP"));
                     if (host.clipProblem != null) return new LayerClipStatus (LayerClipState.Blocked, Tr ("EDITING_RIG_LAYER_CANNOT_EDIT", host.clipProblem));

@@ -640,6 +640,9 @@ namespace Lilium
             OverrideImportResult result = computed.result;
             EditingRig rig = stage.editingRig;
             Transform root = rig.root.transform;
+            // 左右反転して読むキャラは、窓と同じく反転したクリップから取り込む。
+            // 反転するのはアセットのクリップ（ゲームが流しているもの）だけ。BVH などから作った一時のクリップは、撮った動きのまま
+            if (EditorUtility.IsPersistent (source)) source = stage.ReadHumanoidClip (source);
             float rate = CurveEdit.FrameRateOf (clip_);
             // 作業用のクリップ（使い終えたら消す。保存しない印を付けて、Undo にも控えない）
             AnimationClip imported = new AnimationClip { frameRate = rate, hideFlags = HideFlags.HideAndDontSave };

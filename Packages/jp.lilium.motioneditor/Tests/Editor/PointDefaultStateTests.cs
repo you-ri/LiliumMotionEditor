@@ -129,6 +129,82 @@ namespace Lilium
             Assert.Less (Vector3.Distance (ankle.framePosition, ankle.editingBone.position), 1e-3f, "足首の点は骨の上");
         }
 
+        /// <summary>脚を開いて閉じる Humanoid のクリップ（全身 IK の点のキーは無い）。rootMotion なら前へ 1 進む</summary>
+        AnimationClip CreateLegSpreadClip (bool rootMotion = false)
+        {
+            AnimationClip clip = new AnimationClip { frameRate = 60 };
+            created_.Add (clip);
+            foreach (string muscle in new[] { "Left Upper Leg In-Out", "Right Upper Leg In-Out" }) {
+                SetCurve (clip, muscle, new AnimationCurve (new Keyframe (0, 0), new Keyframe (0.25f, 1), new Keyframe (0.5f, 0)));
+            }
+            if (rootMotion) {
+                SetCurve (clip, "RootT.y", AnimationCurve.Constant (0, 0.5f, 1));
+                SetCurve (clip, "RootT.z", AnimationCurve.Linear (0, 0, 0.5f, 1));
+                SetCurve (clip, "RootQ.w", AnimationCurve.Constant (0, 0.5f, 1));
+            }
+            Assert.IsTrue (clip.humanMotion);
+            return clip;
+        }
+
+        static void SetCurve (AnimationClip clip, string property, AnimationCurve curve)
+        {
+            UnityEditor.AnimationUtility.SetEditorCurve (clip, UnityEditor.EditorCurveBinding.FloatCurve ("", typeof (Animator), property), curve);
+        }
+
+        static void AssertAnklesOnTheBones (PoseSession session, string label)
+        {
+            foreach (string name in new[] { "LeftFoot", "RightFoot" }) {
+                BodyPointTarget ankle = Point (session, name);
+                Assert.AreEqual (BodyPointState.Pin, ankle.state, label + " " + name + " の状態");
+                Assert.Less (Vector3.Distance (ankle.framePosition, ankle.editingBone.position), 1e-3f, label + " " + name + " の点は骨の上");
+            }
+        }
+
+        /// <summary>
+        /// Humanoid のクリップを土台に開いても、既定で Pin の足首の点はそのフレームの骨の上にある（基準姿勢の場所に残らない。11-10 不具合）
+        /// </summary>
+        [Test]
+        public void HumanoidBase_PinnedAnklesFollowTheBones ()
+        {
+            PoseSession session = Open ();
+            session.clip = CreateLegSpreadClip ();
+            session.Evaluate (0);
+            Vector3 rest = Point (session, "LeftFoot").framePosition;
+            session.Evaluate (15);
+            Assert.Greater (Vector3.Distance (rest, Point (session, "LeftFoot").editingBone.position), 0.05f, "脚が開いている");
+            AssertAnklesOnTheBones (session, "15F");
+        }
+
+        /// <summary>
+        /// 取込で書いた足首の点のキーは、そのフレームの骨の位置（基準姿勢の場所を全フレームに書かない。11-10 不具合）。
+        /// ルートの移動を腰へ足し戻すクリップでも、足し戻した後の骨の位置（点だけがルートの移動の分残らない。11-10 不具合の 2 つ目）
+        /// </summary>
+        [TestCase (false)]
+        [TestCase (true)]
+        public void ImportedHumanoidClip_KeysTheAnklesOnTheBones (bool rootMotion)
+        {
+            PoseSession session = Open ();
+            AnimationClip source = CreateLegSpreadClip (rootMotion);
+            session.clip = source;
+            AnimationClip destination = new AnimationClip { frameRate = 60 };
+            created_.Add (destination);
+            HumanoidImport.Import (source, destination, session.stage.editingRig, session.stage.editingRigSolver,
+                time => session.stack.EvaluateThroughHumanoid (time), session.targets.ToList (), session.stage.SnapCarriedPoints);
+
+            session.clip = destination;
+            Transform hips = session.stage.editingRig.GetEditingBone (HumanBodyBones.Hips);
+            session.Evaluate (0);
+            Vector3 rest = Point (session, "LeftFoot").framePosition;
+            Vector3 hipsStart = hips.position;
+            session.Evaluate (15);
+            Assert.Greater (Vector3.Distance (rest, Point (session, "LeftFoot").framePosition), 0.05f, "足首の点が動く");
+            if (rootMotion) Assert.Greater (hips.position.z - hipsStart.z, 0.1f, "腰が前へ進む");
+            foreach (int frame in new[] { 0, 15, 30 }) {
+                session.Evaluate (frame);
+                AssertAnklesOnTheBones (session, "取り込んだ " + frame + "F");
+            }
+        }
+
         [Test]
         public void PassivePoint_IgnoresTheDefaultState ()
         {

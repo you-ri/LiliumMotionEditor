@@ -114,6 +114,7 @@
     "EDITING_RIG_LAYER_CLIP_LABEL": "元",
     "EDITING_RIG_LAYER_CLIP_TOOLTIP": "編集しているクリップ（*.rig.anim）。値を基準の値へ重みで合成してから解く（1 で上書き）。\n欄は見せるだけ（押すと Project で場所が分かる）。開くのは AnimBank・New、Humanoid のクリップ（FBX の中のクリップなど）は取込で編集用クリップにして開く",
     "EDITING_RIG_LAYER_HUMANOID_BASE": "Humanoid のクリップ（読み取り専用）。キーは +Override で足した Override へ。取込で編集用クリップにできる",
+    "EDITING_RIG_LAYER_HUMANOID_BASE_MIRRORED": "Humanoid のクリップ（読み取り専用・左右反転して表示）。このキャラは焼くときに左右反転するので、ゲームと同じ見え方にそろえて読んでいる。キーは +Override で足した Override へ。取込で編集用クリップにできる",
     "EDITING_RIG_LAYER_IMPORT": "取込",
     "EDITING_RIG_LAYER_IMPORT_PREVIEWING": "取込の候補を試し見中（キーは打たない）。取込の窓の「取り込む」で編集用クリップにする、「やめる」で元に戻す",
     "EDITING_RIG_LAYER_IMPORT_TOOLTIP": "Humanoid のクリップ（FBX の中のクリップなど）を選んで、編集用クリップ（*.rig.anim）に書き出して開く。そのクリップに重ねた Override があれば込みで、全フレームにキーを打つ。置き場所は AnimBank の先頭のフォルダ（同じ名前があれば番号を付ける）",

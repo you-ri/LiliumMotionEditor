@@ -65,6 +65,18 @@ namespace Lilium
         }
 
         /// <summary>
+        /// clip を左右反転したコピー（保存しない。名前と設定は元のまま）。使い終えたら DestroyImmediate する
+        /// </summary>
+        public static AnimationClip CreateMirroredCopy (AnimationClip clip)
+        {
+            AnimationClip copy = Object.Instantiate (clip);
+            copy.name = clip.name;
+            copy.hideFlags = HideFlags.HideAndDontSave;
+            MirrorClip (copy);
+            return copy;
+        }
+
+        /// <summary>
         /// Humanoid のクリップの体のカーブ（RootT / RootQ / muscle）と手足の IK ゴールを左右反転する。ほかのカーブ（骨・Rig など）はそのまま
         /// </summary>
         public static void MirrorClip (AnimationClip clip)

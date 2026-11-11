@@ -30,17 +30,18 @@ namespace Lilium
         /// <param name="source">読み込む Humanoid のクリップ</param>
         /// <param name="evaluate">その時刻の姿勢を表示モデルに作る（窓は段の並びを Humanoid Pose まで通す）</param>
         /// <param name="targets">キーを打つ対象（窓と同じもの）</param>
+        /// <param name="afterPose">ルートの移動を腰へ足し戻した後に呼ぶ（窓は全身 IK の点を骨の位置へ置き直す。PoseImport.Options.afterEvaluate）</param>
         public static PoseImport.Result Import (AnimationClip source, AnimationClip destination, EditingRig rig, EditingRigSolver solver,
-            System.Action<float> evaluate, IList<PoseTarget> targets)
+            System.Action<float> evaluate, IList<PoseTarget> targets, System.Action afterPose = null)
         {
             PoseImport.Result result = default;
-            Stepper.Run (ImportSteps (source, destination, rig, solver, evaluate, targets, r => result = r));
+            Stepper.Run (ImportSteps (source, destination, rig, solver, evaluate, targets, r => result = r, afterPose));
             return result;
         }
 
         /// <summary>Import をフレームごとに区切ったもの（Stepper で少しずつ回す）。終わったら done に結果を渡す</summary>
         public static IEnumerator ImportSteps (AnimationClip source, AnimationClip destination, EditingRig rig, EditingRigSolver solver,
-            System.Action<float> evaluate, IList<PoseTarget> targets, System.Action<PoseImport.Result> done)
+            System.Action<float> evaluate, IList<PoseTarget> targets, System.Action<PoseImport.Result> done, System.Action afterPose = null)
         {
             string problem = GetProblem (source);
             if (problem != null) throw new System.InvalidOperationException (problem);
@@ -81,6 +82,7 @@ namespace Lilium
                     int f = Mathf.Clamp (Mathf.RoundToInt (time * rate), 0, sourceFrames - 1);
                     RootMotion.Apply (rig, rootPositions[f], rootRotations[f]);
                 },
+                afterEvaluate = afterPose,
                 targets = targets,
                 checkBones = bones,
                 length = length,
@@ -117,8 +119,19 @@ namespace Lilium
 
             evaluate (0);
             HumanPose pose = new HumanPose ();
-            using (HumanPoseHandler handler = new HumanPoseHandler (animator.avatar, animator.transform)) {
-                handler.GetHumanPose (ref pose);
+            // HumanPoseHandler の体の向きと場所には Animator の GameObject 自身の置き方が入る。クリップの RootT・RootQ はその中の値なので、
+            // 読む間だけ GameObject を原点・無回転に置く（骨のローカルの値は変わらない）。
+            // モデルごと回して置いた prefab（Neko2 は Animator の GameObject が Y 270°）で、体の向きの差に置き方の 90° が混ざり、取り込むと体が 90° 回った（11-10 不具合）
+            Transform root = animator.transform;
+            root.GetLocalPositionAndRotation (out Vector3 rootPosition, out Quaternion rootRotation);
+            try {
+                root.SetLocalPositionAndRotation (Vector3.zero, Quaternion.identity);
+                using (HumanPoseHandler handler = new HumanPoseHandler (animator.avatar, root)) {
+                    handler.GetHumanPose (ref pose);
+                }
+            }
+            finally {
+                root.SetLocalPositionAndRotation (rootPosition, rootRotation);
             }
             // Unity が GameObject へ移すのは鉛直軸まわりの向きだけ（前後・左右の傾きは姿勢に残る）
             Vector3 forward = rootQ * Quaternion.Inverse (pose.bodyRotation) * Vector3.forward;

@@ -37,6 +37,17 @@ namespace Lilium
         void PostProcess (HumanoidBakeContext context, AnimationClip clip);
     }
 
+    /// <summary>
+    /// Humanoid のクリップを窓で読むときの受け口（任意）。焼きの受け口（IHumanoidBakeHook）と同じオブジェクトに実装し、HumanoidBakeHooks に登録する。
+    /// 焼いたクリップを PostProcess で左右反転するキャラは、既存の Humanoid のクリップ（ゲームが今流しているもの）も左右反転して読む。
+    /// そうすると窓の見え方が焼いた後のゲームの見え方とそろい、取り込んで焼くと元のクリップに戻る
+    /// </summary>
+    public interface IHumanoidReadHook
+    {
+        /// <summary>model（キャラの prefab）では、Humanoid のクリップを左右反転して読むか</summary>
+        bool MirrorsHumanoidClips (GameObject model);
+    }
+
     public static class HumanoidBakeHooks
     {
         static readonly HookList<IHumanoidBakeHook> hooks_ = new HookList<IHumanoidBakeHook> ();
@@ -57,6 +68,23 @@ namespace Lilium
         public static void Unregister (IHumanoidBakeHook hook)
         {
             hooks_.Unregister (hook);
+        }
+
+        /// <summary>model では Humanoid のクリップを左右反転して読むか（登録した受け口のうち IHumanoidReadHook のどれかが反転すると答えたら）</summary>
+        public static bool MirrorsHumanoidClips (GameObject model)
+        {
+            if (model == null) return false;
+            foreach (IHumanoidBakeHook hook in hooks_.items) {
+                IHumanoidReadHook read = hook as IHumanoidReadHook;
+                if (read == null) continue;
+                try {
+                    if (read.MirrorsHumanoidClips (model)) return true;
+                }
+                catch (System.Exception e) {
+                    Debug.LogException (e);
+                }
+            }
+            return false;
         }
 
         internal static bool ShouldBake (IList<IHumanoidBakeHook> hooks, HumanoidBakeContext context, EditorCurveBinding binding)

@@ -32,6 +32,11 @@ namespace Lilium
             public EditingRigSolver solver;
             /// <summary>その時刻の姿勢を編集用の体に作る</summary>
             public System.Action<float> evaluate;
+            /// <summary>
+            /// 姿勢を作り終えた後（ルートの移動を腰へ足し戻した後）に呼ぶ。窓は、状態だけ引き継いだ全身 IK の点（既定で Pin の足首など）を
+            /// その姿勢の骨の位置へ置き直す。段の並びの中で置くと、後から足し戻すルートの移動の分だけ点が残る（11-10 不具合）
+            /// </summary>
+            public System.Action afterEvaluate;
             /// <summary>キーを打つ対象（窓と同じもの）</summary>
             public IList<PoseTarget> targets;
             /// <summary>ずれを測る骨（編集用の体の骨）</summary>
@@ -76,6 +81,7 @@ namespace Lilium
                     // Animator の GameObject のカーブ（ルートモーション）は取り込まないので、当たっても戻す
                     root.SetLocalPositionAndRotation (rootPosition, rootRotation);
                     root.localScale = rootScale;
+                    if (options.afterEvaluate != null) options.afterEvaluate ();
                     for (int b = 0; b < bones.Count; b++) expected[b] = root.InverseTransformPoint (bones[b].position);
 
                     solver.Capture ();

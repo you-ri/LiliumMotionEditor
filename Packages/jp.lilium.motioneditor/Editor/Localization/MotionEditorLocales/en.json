@@ -114,6 +114,7 @@
     "EDITING_RIG_LAYER_CLIP_LABEL": "Source",
     "EDITING_RIG_LAYER_CLIP_TOOLTIP": "The clip being edited (*.rig.anim). Its values are blended onto the base values by weight before solving (1 overrides).\nThis field is display only (click it to locate the clip in the Project). Open clips with AnimBank or New; a Humanoid clip (such as a clip inside an FBX) is opened by converting it to an editing clip with Import",
     "EDITING_RIG_LAYER_HUMANOID_BASE": "Humanoid clip (read-only). Keys go to an Override added with +Override. Use Import to make it an editing clip",
+    "EDITING_RIG_LAYER_HUMANOID_BASE_MIRRORED": "Humanoid clip (read-only, shown mirrored). This character is mirrored when baked, so the clip is read mirrored to match how it looks in game. Keys go to an Override added with +Override. Use Import to make it an editing clip",
     "EDITING_RIG_LAYER_IMPORT": "Import",
     "EDITING_RIG_LAYER_IMPORT_PREVIEWING": "Previewing an import candidate (no keys are set). Click Import in the import window to make it an editing clip, or Cancel to go back",
     "EDITING_RIG_LAYER_IMPORT_TOOLTIP": "Pick a Humanoid clip (such as a clip inside an FBX), write it out as an editing clip (*.rig.anim) and open it. Every frame is keyed, including any Overrides layered on that clip. It is saved in the first AnimBank folder (a number is appended if the name is taken)",

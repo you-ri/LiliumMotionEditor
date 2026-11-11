@@ -61,6 +61,10 @@ namespace Lilium
         ClipSampler genericSampler_;
         // Humanoid Pose の段のクリップ（既存の Humanoid のクリップ）を表示モデルへ当てる道具。初めて使うときに作る
         ClipSampler humanoidSampler_;
+        // 左右反転して読む Humanoid のクリップの、反転したコピー（ReadHumanoidClip。元のクリップ → 反転したときのカーブの版とコピー）
+        readonly Dictionary<AnimationClip, KeyValuePair<int, AnimationClip>> mirroredClips_ = new Dictionary<AnimationClip, KeyValuePair<int, AnimationClip>> ();
+        // このキャラで Humanoid のクリップを左右反転して読むか（受け口に一度だけ聞く）
+        bool? mirrorHumanoidClips_;
         // 合成するときに、クリップを当てる前の姿勢を覚えておく場所
         Vector3[] blendPositions_ = new Vector3[0];
         Quaternion[] blendRotations_ = new Quaternion[0];
@@ -242,6 +246,7 @@ namespace Lilium
                 humanoidSampler_.Dispose ();
                 humanoidSampler_ = null;
             }
+            ClearMirroredClips ();
             contexts_.Clear ();
             contextInfos_.Clear ();
             foreach (GameObject root in roots_) {
@@ -586,6 +591,43 @@ namespace Lilium
             if (clipSampler_ != null) clipSampler_.Invalidate ();
             if (genericSampler_ != null) genericSampler_.Invalidate ();
             if (humanoidSampler_ != null) humanoidSampler_.Invalidate ();
+        }
+
+        /// <summary>
+        /// このキャラで Humanoid のクリップを左右反転して読むか（HumanoidBakeHooks.MirrorsHumanoidClips）。
+        /// 焼いたクリップを左右反転するキャラ（ゲームが左右反転して流す左向きのモデルなど）は、既存のクリップも反転して見せる。
+        /// 窓の見え方が焼いた後のゲームの見え方とそろい、取り込んで焼くと元のクリップに戻る
+        /// </summary>
+        public bool mirrorHumanoidClips
+        {
+            get {
+                if (!mirrorHumanoidClips_.HasValue) mirrorHumanoidClips_ = HumanoidBakeHooks.MirrorsHumanoidClips (sourcePrefab);
+                return mirrorHumanoidClips_.Value;
+            }
+        }
+
+        /// <summary>
+        /// Humanoid のクリップを窓で読むときのクリップ。左右反転して読むキャラなら反転したコピー（保存しない）、そうでなければ clip そのもの。
+        /// 窓で当てる所（土台・見比べ）と取り込む所は、どれもこれを通す
+        /// </summary>
+        public AnimationClip ReadHumanoidClip (AnimationClip clip)
+        {
+            if (clip == null || !clip.humanMotion || !mirrorHumanoidClips) return clip;
+            int version = EditingClip.GetCurveVersion (clip);
+            KeyValuePair<int, AnimationClip> cached;
+            if (mirroredClips_.TryGetValue (clip, out cached) && cached.Value != null && cached.Key == version) return cached.Value;
+            if (cached.Value != null) Object.DestroyImmediate (cached.Value);
+            AnimationClip copy = HumanoidMirror.CreateMirroredCopy (clip);
+            mirroredClips_[clip] = new KeyValuePair<int, AnimationClip> (version, copy);
+            return copy;
+        }
+
+        void ClearMirroredClips ()
+        {
+            foreach (KeyValuePair<int, AnimationClip> pair in mirroredClips_.Values) {
+                if (pair.Value != null) Object.DestroyImmediate (pair.Value);
+            }
+            mirroredClips_.Clear ();
         }
 
         /// <summary>
@@ -1220,14 +1262,30 @@ namespace Lilium
             if (humanoidSampler_ == null) humanoidSampler_ = new ClipSampler (animator);
             Transform root = animator.transform;
             root.GetLocalPositionAndRotation (out Vector3 position, out Quaternion rotation);
-            humanoidSampler_.Sample (clip, time);
+            humanoidSampler_.Sample (ReadHumanoidClip (clip), time);
             root.SetLocalPositionAndRotation (position, rotation);
             humanoidPoseValid_ = false;
             // Humanoid のクリップに全身 IK の点のキーは無い（点は Override から入る）
             RestoreBodyPoints ();
+            CarryDefaultPoints ();
             editingRig.SyncFromDisplay ();
             editingRigSolver.Capture ();
             return true;
+        }
+
+        /// <summary>
+        /// 既定の状態で固定している点（足首の Pin など）を、キーの無いフレームの点と同じく、そのフレームの骨の位置へ置き直す点にする
+        /// （全身 IK の段の SnapCarriedPoints）。しないと点が基準姿勢の場所に残り、取込がその場所を毎フレームのキーとして書いていた
+        /// （11-10 不具合「取り込んだら足首の点が動かない」）
+        /// </summary>
+        void CarryDefaultPoints ()
+        {
+            for (int i = 0; i < bodyPoints_.Length; i++) {
+                if (bodyPoints_[i] == null) continue;
+                bool active = false;
+                for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) active |= bodyPoints_[i].GetValue (v) > 0;
+                if (active) carriedPoints_.Add (bodyPoints_[i].transform);
+            }
         }
 
         /// <summary>
@@ -1281,7 +1339,7 @@ namespace Lilium
                 upstream.muscles = (float[])humanoidPose_.muscles.Clone ();
                 Remember (poseTransforms_);
             }
-            humanoidSampler_.Sample (clip, time);
+            humanoidSampler_.Sample (ReadHumanoidClip (clip), time);
             // 表示に出るのはクリップを混ぜた後の姿勢。Rig へはそれを表示モデルから読ませる
             humanoidPoseValid_ = false;
             root.SetLocalPositionAndRotation (position, rotation);
