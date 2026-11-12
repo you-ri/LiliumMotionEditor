@@ -100,7 +100,7 @@ namespace Lilium
                 UnityEditor.AssetDatabase.ImportAsset (folder + "/Old.asset");
                 EditRigDefinition old = UnityEditor.AssetDatabase.LoadAssetAtPath<EditRigDefinition> (folder + "/Old.asset");
                 Assert.IsNotNull (old);
-                CollectionAssert.AreEqual (definition_.bodyPoints.Select (p => p.weight).ToArray (), old.bodyPoints.Select (p => p.weight).ToArray ());
+                CollectionAssert.AreEqual (EditRigDefinition.packageDefault.bodyPoints.Select (p => p.weight).ToArray (), old.bodyPoints.Select (p => p.weight).ToArray ());
                 Assert.Contains (0, old.bodyPoints.Select (p => p.weight).ToArray (), "0 の点も読める");
             }
             finally {

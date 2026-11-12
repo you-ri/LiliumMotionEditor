@@ -44,6 +44,59 @@ namespace Lilium
             Assert.IsFalse (labels.Any (l => l.Contains ("Transform") || l.Contains ("Animator")), string.Join ("\n", labels));
         }
 
+        /// <summary>
+        /// 段の行の値（[LayerParameter] のフィールド）は、Properties で打ったカーブと同じバインディングに結び付く。
+        /// 結び付かないと、Properties でキーを打った後に行のスライダーを動かしてもカーブの値で上書きされて動かない（2026-11-12 Face の angry）。
+        /// テストのアセンブリの MonoBehaviour は付けられないので、Runtime の部品の数値のフィールドで確かめる
+        /// </summary>
+        [Test]
+        public void MemberBinding_MatchesThePropertyCandidates ()
+        {
+            HeldObjectControl control = child_.AddComponent<HeldObjectControl> ();
+
+            EditorCurveBinding display;
+            Assert.IsTrue (PropertyPlayer.TryGetMemberBinding (root_, control, "attached", out display));
+            Assert.AreEqual (EditorCurveBinding.FloatCurve ("Effect", typeof (HeldObjectControl), "attached"), display);
+            Assert.IsTrue (PropertyPlayer.ListCandidates (root_).Any (c => c.binding == display), "Properties の一覧と同じバインディング");
+
+            // カーブを入れると値はカーブが決める（行で値だけ入れても、次に姿勢を作ると戻る）
+            AnimationUtility.SetEditorCurve (clip_, PropertyPlayer.ToClip (display), AnimationCurve.Constant (0, 1, 0.25f));
+            control.attached = 1;
+            new PropertyPlayer ().Apply (root_, clip_, 0);
+            Assert.AreEqual (0.25f, control.attached, 1e-5f);
+
+            // カーブにできない名前・表示モデルの外の部品は結び付かない
+            Assert.IsFalse (PropertyPlayer.TryGetMemberBinding (root_, control, "NoSuchField", out display));
+            GameObject outside = new GameObject ("Outside");
+            try {
+                Assert.IsFalse (PropertyPlayer.TryGetMemberBinding (root_, outside.AddComponent<HeldObjectControl> (), "attached", out display));
+            }
+            finally {
+                Object.DestroyImmediate (outside);
+            }
+        }
+
+        /// <summary>
+        /// タイムラインの行: 任意のプロパティは 1 つ 1 行、Transform はパスごとに 1 行。体のカーブは入れない（2026-11-12 表情のキーがタイムラインに出なかった）
+        /// </summary>
+        [Test]
+        public void KeyedProperties_AreGroupedIntoTimelineRows ()
+        {
+            clip_.frameRate = 30;
+            AnimationUtility.SetEditorCurve (clip_, PropertyPlayer.ToClip (EditorCurveBinding.FloatCurve ("", typeof (HeldObjectControl), "attached")), AnimationCurve.Constant (0, 1, 1));
+            AnimationUtility.SetEditorCurve (clip_, PropertyPlayer.ToClip (EditorCurveBinding.FloatCurve ("Effect", typeof (Light), "m_Intensity")), AnimationCurve.Linear (0, 1, 0.5f, 2));
+            foreach (string axis in new[] { "x", "y", "z", "w" }) {
+                AnimationUtility.SetEditorCurve (clip_, PropertyPlayer.ToClip (EditorCurveBinding.FloatCurve ("Weapon", typeof (Transform), "m_LocalRotation." + axis)), AnimationCurve.Constant (0, 1, 0));
+            }
+            AnimationUtility.SetEditorCurve (clip_, EditorCurveBinding.FloatCurve ("Controls/FK/Hips", typeof (Transform), "m_LocalRotation.x"), AnimationCurve.Constant (0, 1, 0));
+
+            var groups = PropertyPlayer.GroupKeyedProperties (clip_);
+            CollectionAssert.AreEquivalent (new[] { "HeldObjectControl.attached", "Effect Light.m_Intensity", "Weapon Transform" }, groups.Select (g => g.label).ToArray ());
+            var light = groups.First (g => g.label == "Effect Light.m_Intensity");
+            CollectionAssert.AreEqual (new[] { 0, 15 }, ClipKeyUtility.GetKeyFrames (clip_, light.filter), "その行のカーブのキーだけ（30fps）");
+            Assert.AreEqual (4, AnimationUtility.GetCurveBindings (clip_).Count (b => groups.First (g => g.label == "Weapon Transform").filter (b)));
+        }
+
         [Test]
         public void PathsAreMovedUnderControls ()
         {

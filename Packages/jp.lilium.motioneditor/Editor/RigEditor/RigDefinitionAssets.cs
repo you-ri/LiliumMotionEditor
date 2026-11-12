@@ -56,7 +56,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// source の中身を持った定義のアセットを作り、target に割り当てる（source が null なら既定の中身）。
+        /// source の中身を持った定義のアセットを作り、target に割り当てる（source が null ならパッケージの既定の中身）。
         /// 置き場所はキャラの設定と同じフォルダ（無ければ prefab のフォルダ、それも無ければ Assets）、名前は「キャラ名 Rig Definition」
         /// </summary>
         public static EditRigDefinition CreateCopy (EditRigDefinition source, GameObject prefab, AssignTarget target)
@@ -70,7 +70,7 @@ namespace Lilium
 
             EditRigDefinition copy = ScriptableObject.CreateInstance<EditRigDefinition> ();
             if (source != null) copy.CopyFrom (source);
-            else copy.SetDefault ();
+            else copy.SetPackageDefault ();
             string path = AssetDatabase.GenerateUniqueAssetPath (folder + "/" + name + kAssetSuffix);
             AssetDatabase.CreateAsset (copy, path);
             // アセットを作ったことは Undo に載せない（Create のメニューと同じ）。載せると Undo で物だけ消えてファイルが残る

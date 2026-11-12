@@ -106,6 +106,25 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 段の行で値を動かしたとき、書き込み先のクリップにその値のカーブがあれば、今のフレームにキーを打つ（Properties の値の欄と同じ）。
+        /// 打たずに値だけ入れると、姿勢を作り直したときにカーブの値で上書きされて動かない。カーブが無ければ false（値だけ入れる）
+        /// </summary>
+        public bool KeyLayerParameter (PoseParameter parameter, float value)
+        {
+            EditorCurveBinding display;
+            if (parameter == null || !PropertyPlayer.TryGetMemberBinding (propertyRoot, parameter.owner, parameter.member, out display)) return false;
+            if (!keyedProperties.Contains (display)) return false;
+            string problem = GetPropertyEditProblem (display);
+            if (problem != null) {
+                ShowNotification (new GUIContent (problem), 1.5);
+                SamplePose ();
+                return true;
+            }
+            SetPropertyKey (display, value);
+            return true;
+        }
+
+        /// <summary>
         /// 書き込み先が Override の段なら、見せたい値を段に入れる値へ直す（Additive の小数は、段の手前の値からの差分）
         /// </summary>
         float StorePropertyValue (EditorCurveBinding display, float value)

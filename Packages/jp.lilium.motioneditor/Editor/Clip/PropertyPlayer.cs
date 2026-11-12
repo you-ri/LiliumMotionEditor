@@ -82,6 +82,56 @@ namespace Lilium
             return AnimationUtility.GetFloatValue (root, display, out value);
         }
 
+        /// <summary>タイムラインに出す、任意のプロパティのカーブのまとまり（S6）</summary>
+        public struct KeyedGroup
+        {
+            /// <summary>行の名前（Properties の一覧と同じ書き方。Transform はパスと型まで）</summary>
+            public string label;
+            /// <summary>編集用クリップの、このまとまりのカーブ</summary>
+            public System.Predicate<EditorCurveBinding> filter;
+        }
+
+        /// <summary>
+        /// 編集用クリップにある任意のプロパティのカーブを、タイムラインの行に分ける。
+        /// 1 つのプロパティを 1 行にし、Transform（持ち越した武器の骨など）は位置・回転・大きさをまとめてパスごとに 1 行にする
+        /// </summary>
+        public static List<KeyedGroup> GroupKeyedProperties (AnimationClip clip)
+        {
+            List<KeyedGroup> result = new List<KeyedGroup> ();
+            if (clip == null) return result;
+            HashSet<string> seen = new HashSet<string> ();
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
+                EditorCurveBinding display;
+                if (!TryToDisplay (binding, out display)) continue;
+                string prefix = display.path.Length > 0 ? display.path + " " : "";
+                string path = binding.path;
+                System.Type type = binding.type;
+                KeyedGroup group;
+                if (type == typeof (Transform)) {
+                    group = new KeyedGroup { label = prefix + type.Name, filter = b => b.path == path && b.type == type };
+                }
+                else {
+                    string property = binding.propertyName;
+                    group = new KeyedGroup { label = prefix + type.Name + "." + property, filter = b => b.path == path && b.type == type && b.propertyName == property };
+                }
+                if (seen.Add (group.label)) result.Add (group);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// コンポーネントのフィールド（段の行の値など）を、表示モデルから見たバインディングへ。
+        /// カーブにできない物（C# のプロパティ・表示モデルの外）は false
+        /// </summary>
+        public static bool TryGetMemberBinding (GameObject root, Component owner, string member, out EditorCurveBinding display)
+        {
+            display = default (EditorCurveBinding);
+            if (root == null || owner == null || string.IsNullOrEmpty (member)) return false;
+            if (owner.transform != root.transform && !owner.transform.IsChildOf (root.transform)) return false;
+            display = EditorCurveBinding.FloatCurve (AnimationUtility.CalculateTransformPath (owner.transform, root.transform), owner.GetType (), member);
+            return AnimationUtility.GetEditorCurveValueType (root, display) != null;
+        }
+
         /// <summary>
         /// クリップの任意のプロパティのカーブを、time の値で表示モデルへ入れる。前に入れてカーブが無くなった値は元へ戻す
         /// </summary>

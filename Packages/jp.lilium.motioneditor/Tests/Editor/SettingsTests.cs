@@ -130,20 +130,41 @@ namespace Lilium
         }
 
         /// <summary>
-        /// パッケージの既定のアセットは SetDefault と同じ中身（SetDefault を直したらアセットも作り直す）
+        /// パッケージの既定のアセットは、SetDefault の中身を調整した物。骨の並びと点は SetDefault のものを全部持つ（SetDefault で点を足したらアセットにも足す）
         /// </summary>
         [Test]
-        public void PackageDefaultRigDefinitionMatchesSetDefault ()
+        public void PackageDefaultRigDefinitionCoversSetDefault ()
         {
             EditRigDefinition packageDefault = EditRigDefinition.packageDefault;
             Assert.IsNotNull (packageDefault, EditRigDefinition.kPackageDefaultPath + " が読めない");
             EditRigDefinition expected = EditRigDefinition.CreateDefault ();
-            // 型の名前（m_EditorClassIdentifier）は比べない。6.6 は新しく作った物に入れるが、6.0 で保存したアセットは空のまま
-            System.Func<Object, string> json = o => Regex.Replace (EditorJsonUtility.ToJson (o), "\"m_EditorClassIdentifier\":\"[^\"]*\",", "");
             try {
-                Assert.AreEqual (json (expected), json (packageDefault));
+                CollectionAssert.AreEqual (expected.fkControls.ConvertAll (c => c.bone), packageDefault.fkControls.ConvertAll (c => c.bone), "FK の骨");
+                List<string> names = packageDefault.bodyPoints.ConvertAll (p => p.name);
+                foreach (EditRigDefinition.BodyPoint point in expected.bodyPoints) {
+                    CollectionAssert.Contains (names, point.name, "全身 IK の点");
+                }
+                CollectionAssert.AreEqual (expected.attachPoints.ConvertAll (p => p.name), packageDefault.attachPoints.ConvertAll (p => p.name), "付ける先");
+                Assert.IsEmpty (packageDefault.Validate (), "定義の誤り");
             } finally {
                 Object.DestroyImmediate (expected);
+            }
+        }
+
+        /// <summary>
+        /// 新しく作る定義（メニュー・Reset・複製元の無い複製）は、パッケージの既定のアセットと同じ中身で始める
+        /// </summary>
+        [Test]
+        public void SetPackageDefaultCopiesThePackageAsset ()
+        {
+            EditRigDefinition packageDefault = EditRigDefinition.packageDefault;
+            Assert.IsNotNull (packageDefault, EditRigDefinition.kPackageDefaultPath + " が読めない");
+            EditRigDefinition definition = ScriptableObject.CreateInstance<EditRigDefinition> ();
+            try {
+                definition.SetPackageDefault ();
+                Assert.AreEqual (JsonUtility.ToJson (packageDefault), JsonUtility.ToJson (definition));
+            } finally {
+                Object.DestroyImmediate (definition);
             }
         }
 

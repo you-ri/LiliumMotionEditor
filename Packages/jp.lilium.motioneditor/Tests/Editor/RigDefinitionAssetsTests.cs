@@ -114,9 +114,10 @@ namespace Lilium
 
             Assert.That (settings, Is.Not.Null, "キャラの設定ができる");
             Assert.That (RigDefinitionAssets.Resolve (settings), Is.SameAs (copy));
-            // 元が無ければ既定の中身で始める
-            EditRigDefinition expected = EditRigDefinition.CreateDefault ();
+            // 元が無ければパッケージの既定の中身で始める
+            EditRigDefinition expected = ScriptableObject.CreateInstance<EditRigDefinition> ();
             try {
+                expected.SetPackageDefault ();
                 Assert.That (JsonUtility.ToJson (copy), Is.EqualTo (JsonUtility.ToJson (expected)));
             }
             finally {

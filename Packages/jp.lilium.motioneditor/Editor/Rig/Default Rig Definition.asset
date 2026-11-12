@@ -49,17 +49,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -121
+        max: 20
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -31
+        max: 31
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -62
+        max: 62
       slack: 15
     ownWeightOnly: 0
   - bone: 2
@@ -71,17 +71,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -121
+        max: 20
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -31
+        max: 31
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -62
+        max: 62
       slack: 15
     ownWeightOnly: 0
   - bone: 3
@@ -93,17 +93,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 1}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -1
+        max: 160
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -41
+        max: 41
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -7
+        max: 7
       slack: 15
     ownWeightOnly: 0
   - bone: 4
@@ -115,17 +115,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 1}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -1
+        max: 160
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -41
+        max: 41
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -7
+        max: 7
       slack: 15
     ownWeightOnly: 0
   - bone: 5
@@ -137,17 +137,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -50
+        max: 50
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -30
+        max: 30
       slack: 15
     ownWeightOnly: 0
   - bone: 6
@@ -159,17 +159,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -50
+        max: 50
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -30
+        max: 30
       slack: 15
     ownWeightOnly: 0
   - bone: 7
@@ -181,17 +181,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       slack: 15
     ownWeightOnly: 0
   - bone: 8
@@ -203,17 +203,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       slack: 15
     ownWeightOnly: 0
   - bone: 9
@@ -225,17 +225,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -39
+        max: 39
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -39
+        max: 39
       slack: 15
     ownWeightOnly: 0
   - bone: 10
@@ -247,17 +247,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       slack: 15
     ownWeightOnly: 0
   - bone: 11
@@ -269,17 +269,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -6
+        max: 12
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -4
+        max: 26
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -31
+        max: 9
       slack: 15
     ownWeightOnly: 0
   - bone: 12
@@ -291,17 +291,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -6
+        max: 12
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -26
+        max: 4
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -9
+        max: 31
       slack: 15
     ownWeightOnly: 0
   - bone: 13
@@ -313,17 +313,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -71
+        max: 38
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -78
+        max: 107
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -59
+        max: 102
       slack: 15
     ownWeightOnly: 0
   - bone: 14
@@ -335,17 +335,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -71
+        max: 38
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -107
+        max: 78
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -102
+        max: 59
       slack: 15
     ownWeightOnly: 0
   - bone: 15
@@ -357,17 +357,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: -1}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -47
+        max: 42
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -4
+        max: 157
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -15
+        max: 2
       slack: 15
     ownWeightOnly: 0
   - bone: 16
@@ -379,17 +379,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: -1}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -47
+        max: 42
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -157
+        max: 4
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -2
+        max: 15
       slack: 15
     ownWeightOnly: 0
   - bone: 17
@@ -401,17 +401,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
+        mode: 1
+        min: -50
         max: 45
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -80
+        max: 80
       slack: 15
     ownWeightOnly: 0
   - bone: 18
@@ -423,17 +423,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
+        mode: 1
+        min: -50
         max: 45
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -40
+        max: 40
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -80
+        max: 80
       slack: 15
     ownWeightOnly: 0
   - bone: 19
@@ -445,17 +445,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -50
+        max: 50
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       slack: 15
     ownWeightOnly: 0
   - bone: 20
@@ -467,17 +467,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -50
+        max: 50
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: 0
+        max: -0
       slack: 15
     ownWeightOnly: 0
   - bone: 21
@@ -1215,17 +1215,17 @@ MonoBehaviour:
     bendDirection: {x: 0, y: 0, z: 0}
     limit:
       x:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -20
+        max: 20
       y:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -20
+        max: 20
       z:
-        mode: 0
-        min: -45
-        max: 45
+        mode: 1
+        min: -20
+        max: 20
       slack: 15
     ownWeightOnly: 0
   extraControls: []
@@ -1266,7 +1266,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1288,7 +1288,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1310,7 +1310,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1332,7 +1332,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1420,7 +1420,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 1
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1442,7 +1442,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1464,7 +1464,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1486,7 +1486,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1508,7 +1508,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1596,7 +1596,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: Hips
     blendBone: 0
     blend: 0
@@ -1655,7 +1655,7 @@ MonoBehaviour:
     blendControl: 
     origin: 55
     toward: 21
-    along: 1
+    along: 0
     across: 0
     axes: {x: 0, y: 1, z: 0}
     ground: 0
@@ -1706,7 +1706,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1728,7 +1728,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1750,7 +1750,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: LeftSoleBall
     blendBone: 0
     blend: 0
@@ -1772,7 +1772,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: LeftSoleBall
     blendBone: 0
     blend: 0
@@ -1794,7 +1794,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1816,7 +1816,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1838,7 +1838,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1860,7 +1860,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1882,7 +1882,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: RightSoleBall
     blendBone: 0
     blend: 0
@@ -1904,7 +1904,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: RightSoleBall
     blendBone: 0
     blend: 0
@@ -1926,7 +1926,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1948,7 +1948,7 @@ MonoBehaviour:
     fallback: {x: 0, y: 0, z: 0}
     offset: {x: 0, y: 0, z: 0}
     rotation: 0
-    weight: 1
+    weight: 0
     link: 
     blendBone: 0
     blend: 0
@@ -1956,20 +1956,68 @@ MonoBehaviour:
     radius: 0
     passive: 0
     defaultState: 0
+  - enabled: 1
+    name: LeftShoulder
+    bone: 11
+    control: 
+    blendControl: 
+    origin: 11
+    toward: 13
+    along: 0
+    across: 0
+    axes: {x: 0, y: 0, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 1
+    defaultState: 0
+  - enabled: 1
+    name: RightShoulder
+    bone: 12
+    control: 
+    blendControl: 
+    origin: 12
+    toward: 14
+    along: 0
+    across: 0
+    axes: {x: 0, y: 0, z: 1}
+    ground: 0
+    fallback: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: 0, z: 0}
+    rotation: 0
+    weight: 0
+    link: 
+    blendBone: 0
+    blend: 0
+    contact: 0
+    radius: 0
+    passive: 1
+    defaultState: 0
   attachPoints:
   - name: RightHand
     bone: 18
     control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
-    joint: 0
+    joint: 2
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 0
   - name: LeftHand
     bone: 17
     control: 
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
-    joint: 0
+    joint: 2
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 0
   - name: Hips
     bone: 0
@@ -1977,5 +2025,7 @@ MonoBehaviour:
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
     joint: 1
+    hingeAxis: {x: 0, y: 1, z: 0}
+    hingeRange: 45
     attachedAtRest: 1
   loopJoints: []

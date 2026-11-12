@@ -400,7 +400,10 @@ namespace Lilium
         /// <summary>輪の関節（S105）</summary>
         public List<LoopJoint> loopJoints = new List<LoopJoint> ();
 
-        /// <summary>パッケージに入れた既定の定義のアセット。中身は SetDefault と同じ</summary>
+        /// <summary>
+        /// パッケージに入れた既定の定義のアセット。SetDefault の中身に、角度制限・点の重さ・肩の点・持ち物の Hinge などを
+        /// デモのキャラで調整して足した物。メニューで作ったとき・Reset・複製元が無いときは、この中身で始める（SetPackageDefault）
+        /// </summary>
         public const string kPackageDefaultPath = "Packages/jp.lilium.motioneditor/Editor/Rig/Default Rig Definition.asset";
 
         /// <summary>
@@ -445,6 +448,20 @@ namespace Lilium
             bodyPoints = CreateDefaultBodyPoints (fkControls);
             attachPoints = CreateDefaultAttachPoints ();
             loopJoints = new List<LoopJoint> ();
+        }
+
+        /// <summary>
+        /// 中身をパッケージの既定のアセット（kPackageDefaultPath）と同じにする（前の中身は捨てる）。アセットが読めない・自分自身なら SetDefault。
+        /// SetDefault（コードで作る既定）はテストの前提として残し、ユーザーが新しく作る定義はこちらで始める
+        /// </summary>
+        public void SetPackageDefault ()
+        {
+            EditRigDefinition source = packageDefault;
+            if (source == null || source == this) {
+                SetDefault ();
+                return;
+            }
+            CopyFrom (source);
         }
 
         /// <summary>
@@ -771,11 +788,11 @@ namespace Lilium
         }
 
         /// <summary>
-        /// メニューから作ったとき・インスペクタの Reset で、空ではなく既定の中身で始める
+        /// メニューから作ったとき・インスペクタの Reset で、空ではなくパッケージの既定の中身で始める
         /// </summary>
         void Reset ()
         {
-            SetDefault ();
+            SetPackageDefault ();
         }
 
         /// <summary>

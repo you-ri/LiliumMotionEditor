@@ -83,6 +83,10 @@ namespace Lilium
         public System.Action<object> setValue;
         /// <summary>見え方の設定（キーに打たない値）。行から触れる</summary>
         public bool display;
+        /// <summary>値を持つコンポーネント（ゲーム側の段）。任意のプロパティのカーブと結び付けるのに使う。無ければ null</summary>
+        public UnityEngine.Component owner;
+        /// <summary>フィールド・プロパティの名前（任意のプロパティのカーブの propertyName と同じ）</summary>
+        public string member;
 
         public bool hasRange
         {

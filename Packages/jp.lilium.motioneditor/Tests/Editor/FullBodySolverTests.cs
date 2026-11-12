@@ -1761,6 +1761,36 @@ namespace Lilium
         }
 
         [Test]
+        public void Solver_DeeplyFoldedHinge_StaysWhenSolvedAgain ()
+        {
+            // 太ももを上げて膝を 163° まで折りたたみ、ひねった脚（Neko2 の vs_pose の右脚の股・膝・足首の場所）。定義の蝶番の軸は x で、実際の曲がりの面から外れている。
+            // 腰と足首を今の場所に留めて解き直しても、膝は動かない。曲がりを正弦で測っていたときは、折りたたんだ膝（163° で 0.30）をほぼ伸びた膝とみなして
+            // 定義の軸を使い、膝が 14cm 回された（11-12 ユーザー報告「腰の点を少し動かしただけで全体が大きく動く」）
+            FullBodyIkData data = FullBodyIkData.Create (4, 2, Allocator.Temp);
+            try {
+                data.positions[0] = new float3 (-0.0064f, 1.767f, 0.1606f);
+                data.positions[1] = new float3 (0.1735f, 1.6771f, 0.1349f);
+                data.positions[2] = new float3 (0.5416f, 1.9476f, 0.6066f);
+                data.positions[3] = new float3 (0.0048f, 1.5320f, 0.2386f);
+                for (int i = 0; i < 4; i++) {
+                    data.bones[i] = new FullBodyIkBone { parent = i - 1, stiffness = i == 0 ? 0.95f : 0.1f, hinge = i == 2 ? 1 : 0, hingeAxis = new float3 (1, 0, 0) };
+                    data.rotations[i] = quaternion.identity;
+                }
+                float3 knee = data.positions[2];
+                data.iterations = 48;
+                data.rootPin = 0.6f;
+                data.effectors[0] = new FullBodyIkEffector { bone = 0, position = data.positions[0], rotation = quaternion.identity, positionWeight = 1 };
+                data.effectors[1] = new FullBodyIkEffector { bone = 3, position = data.positions[3], rotation = quaternion.identity, positionWeight = 1 };
+                data.effectorCount = 2;
+                FullBodyIk.Solve (ref data);
+                Assert.Less (math.distance (data.positions[2], knee), 1e-3f, "膝は動かない");
+            }
+            finally {
+                data.Dispose ();
+            }
+        }
+
+        [Test]
         public void Solver_OwnWeight_SpreadsTheBendAlongAChain ()
         {
             // 先の骨を重さに足すと根元が回りにくく、曲がりが先端の側に集まって角度制限で止まり、先端が届かない

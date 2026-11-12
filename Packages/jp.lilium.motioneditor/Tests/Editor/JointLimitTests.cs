@@ -277,6 +277,47 @@ namespace Lilium
             AssertSamePose (moved[0], LoadPose (check, moved[1]), "点を少し動かしたとき");
         }
 
+        [Test]
+        public void LockedLegsOutsideRange_DoNotJump_WhileDraggingTheNeck ()
+        {
+            // 脚を範囲 + 遊びの外まで上げて曲げ、腰・股・足首を Lock にして、首をつかんで少しずつ引く。膝は股と足首を結ぶ軸まわりにどこにでも居られるが、
+            // 引くたびに跳ばない。元の姿勢の値がそのまま止めになっていたときは、止めに当たった関節の戻しが片側にしか効かず、膝が別の止めまで流れ、
+            // 引く量の境目を行き来すると跳んでは戻った（11-12 ユーザー報告「下半身を Lock して首を動かすと、下半身がガクガクする」）
+            foreach (HumanBodyBones leg in new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg }) {
+                Limit (leg, -20, 20, 10);
+            }
+            Setup s = Create ();
+            s.rig.FindControl (RigPaths.Fk (HumanBodyBones.RightUpperLeg)).localRotation = Quaternion.Euler (-110, 60, 10);
+            s.rig.FindControl (RigPaths.Fk (HumanBodyBones.RightLowerLeg)).localRotation = Quaternion.Euler (110, 0, 0);
+            s.rig.ResetBonesToRest ();
+            s.solver.Solve ();
+            Assert.Greater (MaxAbs (Angles (s.rig, Bone (s, HumanBodyBones.RightUpperLeg))), 30, "太ももが範囲 + 遊びの外");
+            foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
+                Pin (s, bone, Vector3.zero);
+                s.body.SetLocked (bone, true);
+            }
+            Pin (s, HumanBodyBones.Neck, Vector3.zero);
+            s.body.CaptureInput ();
+            s.body.Solve ();
+            Transform knee = Bone (s, HumanBodyBones.RightLowerLeg);
+            Vector3 neck = Bone (s, HumanBodyBones.Neck).position;
+            Vector3 start = knee.position;
+            Vector3 previous = start;
+            float worstStep = 0;
+            s.body.MarkGrabbed (HumanBodyBones.Neck);
+            for (int k = 0; k <= 40; k++) {
+                s.body.SetPointPositionWorld (HumanBodyBones.Neck, neck + s.forward * (0.003f * k));
+                s.body.RestoreInput ();
+                s.body.Solve ();
+                worstStep = Mathf.Max (worstStep, Vector3.Distance (knee.position, previous));
+                previous = knee.position;
+            }
+            s.body.EndGrab ();
+            // 余りの無いときは、首を 3mm 引いた 1 回で膝が 14mm 跳んだ
+            Assert.Less (worstStep, 5e-3f, "首を 3mm 引くごとに膝が跳ばない");
+        }
+
+
         /// <summary>名前ごとの姿勢を、リグの骨へ入れる（比べるために、同じ形のリグへ写す）</summary>
         static EditingRig LoadPose (Setup s, Dictionary<string, (Vector3, Quaternion)> pose)
         {

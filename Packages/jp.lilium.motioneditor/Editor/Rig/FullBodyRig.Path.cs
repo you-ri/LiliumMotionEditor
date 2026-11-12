@@ -345,15 +345,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 親から見た向き relative が、骨 bone の必ず守る範囲（範囲 + 遊びと、元の姿勢 key の値の広い方。FullBodyIk.ClampHard と同じ）に入るか
+        /// 親から見た向き relative が、骨 bone の必ず守る範囲（FullBodyIk.HardLimitRange）に入るか
         /// </summary>
         static bool InsideHardLimit (FullBodyIkBone bone, Quaternion key, Quaternion relative)
         {
             float3 keyAngles = FullBodyIk.LimitAngles (bone.limitFrame, bone.limitRest, key);
             float3 angles = FullBodyIk.LimitAngles (bone.limitFrame, bone.limitRest, relative);
-            float3 slack = math.max (bone.limitSlack, 0);
-            float3 low = math.min (bone.limitMin - slack, math.min (bone.limitMin, keyAngles));
-            float3 high = math.max (bone.limitMax + slack, math.max (bone.limitMax, keyAngles));
+            FullBodyIk.HardLimitRange (bone, keyAngles, out float3 low, out float3 high);
             return math.all (angles >= low - 1e-4f) && math.all (angles <= high + 1e-4f);
         }
 

@@ -116,6 +116,8 @@ namespace Lilium
                 min = attribute.min,
                 max = attribute.max,
                 display = attribute.display,
+                owner = component_,
+                member = name,
                 getValue = get,
                 setValue = set,
             });

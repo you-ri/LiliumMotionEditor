@@ -56,7 +56,7 @@ namespace Lilium
             EditRigDefinition definition = target as EditRigDefinition;
             if (definition == null) return;
             Undo.RecordObject (definition, "Reset Rig Definition");
-            definition.SetDefault ();
+            definition.SetPackageDefault ();
             EditorUtility.SetDirty (definition);
             serializedObject.Update ();
             EditRigDefinition.NotifyChanged (definition);

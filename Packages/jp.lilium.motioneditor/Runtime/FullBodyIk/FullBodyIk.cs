@@ -454,9 +454,9 @@ namespace Lilium
         const float kMaxStepAngle = 0.5f;
         /// <summary>蝶番が曲がる角度の上限（ラジアン）。0 はまっすぐ</summary>
         const float kHingeMax = 2.97f;
-        /// <summary>曲がる面を定義の軸から決めるか、元の姿勢の曲がりから決めるかの境目（曲がりの角度の正弦。約 15°〜35°）</summary>
-        const float kBendFrom = 0.26f;
-        const float kBendTo = 0.57f;
+        /// <summary>曲がる面を定義の軸から決めるか、元の姿勢の曲がりから決めるかの境目（曲がりの角度。ラジアンで約 15°〜35°）</summary>
+        const float kBendFrom = 0.263f;
+        const float kBendTo = 0.606f;
         /// <summary>出力を丸める単位。計算機ごとの下位の桁の違いを、焼いた値に出さない</summary>
         const float kRound = 1e5f;
         /// <summary>仕上げ（必ず満たす拘束だけを詰める反復）の最少の回数</summary>
@@ -973,9 +973,12 @@ namespace Lilium
             }
             // 元の姿勢がはっきり曲がっていれば、その曲がりの面を使う。曲がりが小さい間は定義の軸
             // （立ち姿の膝のわずかな開きを曲がる面にすると、腰を下げたときに膝が横へ出る）。間は滑らかに移る
+            // はっきり曲がっているかは、正弦でなく曲がりの角度で測る。正弦は 90° を越えると小さくなり、深く折りたたんだ膝（163° で 0.30）を
+            // ほぼ伸びた膝とみなして定義の軸を使った。太ももをひねった姿勢では定義の軸が実際の曲がりの面から外れ、解くたびに膝がその軸の面へ回されて、
+            // 全身が動いた（11-12 ユーザー報告「腰の点を少し動かしただけで全体が大きく動く」。Neko2 の vs_pose で、腰を動かさずに Pin し直すだけで手が 15cm 動いた）
             float3 bend = math.cross (upper, lower);
             float sine = math.length (bend);
-            float blend = math.smoothstep (kBendFrom, kBendTo, sine);
+            float blend = math.smoothstep (kBendFrom, kBendTo, math.atan2 (sine, math.dot (upper, lower)));
             if (blend < 1) d.status[FullBodyIkData.kStatusDefaultBend] = d.status[FullBodyIkData.kStatusDefaultBend] + 1;
             float3 axis = blend > 0 ? math.normalizesafe (math.lerp (fallback, bend / sine, blend), fallback) : fallback;
 
@@ -1348,14 +1351,43 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 制限の値 angles を、必ず守る範囲に収める。範囲 + 遊びと、元の姿勢の値（limitLow / limitHigh に入っている）の広い方。
-        /// 元の姿勢の値の先には遊びを足さない。全身 IK の結果はキーに残って次に解くときの元の姿勢になるので、足すと解き直すたびに遊びの分ずつ広がる
+        /// 制限の値 angles を、必ず守る範囲に収める（HardLimitRange）
         /// </summary>
         static float3 ClampHard (ref FullBodyIkData d, int i, float3 angles)
         {
-            FullBodyIkBone bone = d.bones[i];
+            HardLimitRange (d.bones[i], d.limitKey[i], out float3 low, out float3 high);
+            return math.clamp (angles, low, high);
+        }
+
+        /// <summary>
+        /// 必ず守る範囲で、範囲 + 遊びの外にある元の姿勢の値の先に残す余り（ラジアン。約 3°）。元の姿勢が範囲 + 遊びの外にあると、元の姿勢そのものが止めになり、
+        /// 点が少し引かれただけで止めに当たった関節の戻しが片側にしか効かず、解くたびに膝・肘の向き（付け根と先を結ぶ軸まわり）が別の止めまで流れて跳んだ。
+        /// 境目を行き来すると跳んでは戻った（11-12 ユーザー報告「下半身を Lock して首を動かすと、下半身がガクガクする」。Neko2 の vs_pose で、
+        /// 可動域の外の右のすねの膝が首を 3mm 引くたびに 3.8cm 行き来した）。余りの中は、遊びの中と同じく範囲へ戻すばねが効く（SolveLimit）
+        /// </summary>
+        public const float kLimitKeyMargin = 0.0524f;
+        /// <summary>
+        /// 元の姿勢が範囲 + 遊びの外にはみ出しているとみなし始める量（ラジアン。約 1°）。ここからはみ出した分だけ余りを足す（kLimitKeyMargin まで）。
+        /// 全身 IK の結果は止めの上で丸めの差だけ外に出ることがあり、それを外とみなすと、解き直すたびに余りの分ずつ広がった（JointLimitTests.ResolvingFromTheResult_DoesNotWiden）
+        /// </summary>
+        const float kLimitKeyOutside = 0.0175f;
+
+        /// <summary>
+        /// 骨 bone の、必ず守る範囲（制限の値。ラジアン）。範囲 + 遊びと、元の姿勢の値 key の広い方。
+        /// 元の姿勢の値の先には遊びを足さない。全身 IK の結果はキーに残って次に解くときの元の姿勢になるので、足すと解き直すたびに遊びの分ずつ広がる。
+        /// 元の姿勢が範囲 + 遊びの外にはみ出している軸（手で置いた姿勢）だけ、その先に余りを残す（はみ出しが kLimitKeyOutside を越えた分。kLimitKeyMargin まで）。
+        /// 全身 IK の結果は範囲 + 遊びに収まるので、結果から解き直しても広がらない。回さない軸（範囲の幅が 0。Locked）には足さない
+        /// </summary>
+        public static void HardLimitRange (FullBodyIkBone bone, float3 key, out float3 low, out float3 high)
+        {
             float3 slack = math.max (bone.limitSlack, 0);
-            return math.clamp (angles, math.min (bone.limitMin - slack, d.limitLow[i]), math.max (bone.limitMax + slack, d.limitHigh[i]));
+            float3 hardLow = bone.limitMin - slack;
+            float3 hardHigh = bone.limitMax + slack;
+            float3 ranged = math.select (float3.zero, new float3 (1), bone.limitMax > bone.limitMin);
+            float3 lowMargin = ranged * math.clamp (hardLow - key - kLimitKeyOutside, 0, kLimitKeyMargin);
+            float3 highMargin = ranged * math.clamp (key - hardHigh - kLimitKeyOutside, 0, kLimitKeyMargin);
+            low = math.min (hardLow, key - lowMargin);
+            high = math.max (hardHigh, key + highMargin);
         }
 
         /// <summary>骨 i の向き rotation（ワールド）を、今の親から見て範囲 + 遊びに収まる向きにする（制限が無い・根の骨はそのまま）</summary>

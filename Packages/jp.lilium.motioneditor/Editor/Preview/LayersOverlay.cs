@@ -44,6 +44,8 @@ namespace Lilium
         ScrollView content_;
         // 重みを動かしている間は行を作り直さない（入力が切れる）。矢印と経路の注意だけを差し替える
         readonly System.Collections.Generic.List<System.Action> refreshers_ = new System.Collections.Generic.List<System.Action> ();
+        /// <summary>段の行の値の欄を、今の値（クリップのカーブが入れた値など）へ合わせる。姿勢を作るたびに呼ぶ</summary>
+        readonly System.Collections.Generic.List<System.Action> parameterRefreshers_ = new System.Collections.Generic.List<System.Action> ();
         readonly System.Collections.Generic.List<System.Action> clipRefreshers_ = new System.Collections.Generic.List<System.Action> ();
         // クリップの欄は行を作り直しても使い回す。クリップを選ぶと段が作り直されるが、開いたままの選択窓（Select AnimationClip）は
         // 最初の欄に結び付いている。欄を作り直すと 2 回目以降の選択はパネルから外れた欄に届き、変更が配られずに捨てられる
@@ -78,10 +80,12 @@ namespace Lilium
             window_.stackChanged -= OnStackChanged;
             window_.displayResidualChanged -= Refresh;
             window_.stateChanged -= Refresh;
+            window_.poseSampled -= RefreshParameters;
             if (!on) return;
             window_.stackChanged += OnStackChanged;
             window_.displayResidualChanged += Refresh;
             window_.stateChanged += Refresh;
+            window_.poseSampled += RefreshParameters;
         }
 
         Button editStructure_;
@@ -180,6 +184,7 @@ namespace Lilium
             if (content_ == null || window_ == null) return;
             content_.Clear ();
             refreshers_.Clear ();
+            parameterRefreshers_.Clear ();
             clipRefreshers_.Clear ();
             usedClipFields_.Clear ();
             try {
@@ -584,15 +589,36 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 触った値を段へ入れて、姿勢を作り直す（入れただけでは画面に出ない）
+        /// 触った値を段へ入れて、姿勢を作り直す（入れただけでは画面に出ない）。
+        /// クリップにその値のカーブがあるときは、今のフレームにキーを打つ（値だけ入れると、作り直した姿勢でカーブの値に戻って動かない）
         /// </summary>
         void Bind<T> (PoseParameter parameter, BaseField<T> field)
         {
+            parameterRefreshers_.Add (() => {
+                object current = parameter.getValue != null ? parameter.getValue () : null;
+                if (current is T && !Equals (field.value, current)) field.SetValueWithoutNotify ((T)current);
+            });
             if (parameter.setValue == null) return;
             field.RegisterValueChangedCallback (e => {
+                float number;
+                if (window_ != null && TryToFloat (e.newValue, out number) && window_.KeyLayerParameter (parameter, number)) return;
                 parameter.setValue (e.newValue);
                 if (window_ != null) window_.RefreshPose ();
             });
+        }
+
+        static bool TryToFloat (object value, out float number)
+        {
+            if (value is float) { number = (float)value; return true; }
+            if (value is int) { number = (int)value; return true; }
+            if (value is bool) { number = (bool)value ? 1 : 0; return true; }
+            number = 0;
+            return false;
+        }
+
+        void RefreshParameters ()
+        {
+            foreach (System.Action refresh in parameterRefreshers_) refresh ();
         }
 
         /// <summary>

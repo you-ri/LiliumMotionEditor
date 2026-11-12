@@ -1569,6 +1569,16 @@ namespace Lilium
             int[] allKeys = GetKeyFrames ().Where (f => f >= 0).ToArray ();
             System.Predicate<EditorCurveBinding> exclude = InterpolationExclude ();
             tracks.Add (new TimelineTrack { label = keyed.name, keys = allKeys, filter = null, interpolations = KeyInterpolations.GetRanges (keyed, allKeys, null, exclude), between = BetweenStates (keyed, allKeys) });
+            // 任意のプロパティ（表情のパラメータ・ブレンドシェイプなど）は体の選択と関係が無いので、キーがあれば選択に関係なく出す。体の行は数が多いので、その手前（クリップ全体の行の下）に置く
+            foreach (PropertyPlayer.KeyedGroup group in PropertyPlayer.GroupKeyedProperties (keyed)) {
+                int[] keys = ClipKeyUtility.GetKeyFrames (keyed, group.filter).Where (f => f >= 0).ToArray ();
+                if (keys.Length == 0) continue;
+                tracks.Add (new TimelineTrack {
+                    label = group.label, keys = keys, filter = group.filter,
+                    interpolations = KeyInterpolations.GetRanges (keyed, keys, group.filter, exclude),
+                    between = BetweenStates (keyed, keys),
+                });
+            }
 
             foreach (PoseTarget target in GetTrackTargets ()) {
                 HashSet<string> paths = new HashSet<string> ();
