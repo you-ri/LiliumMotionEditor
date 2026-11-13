@@ -330,17 +330,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// ライトはカメラについて回る（どこから見ても手前の左上から当たる）
-        /// </summary>
-        public void UpdateLights (Quaternion viewRotation)
-        {
-            if (renderUtility == null) return;
-            Light[] lights = renderUtility.lights;
-            lights[0].transform.rotation = viewRotation * Quaternion.Euler (35, 35, 0);
-            lights[1].transform.rotation = viewRotation * Quaternion.Euler (10, 200, 0);
-        }
-
-        /// <summary>
         /// クリップを当てる前に基準の姿勢へ戻す（カーブの無い骨が前の姿勢のまま残らないように）
         /// </summary>
         public void RestorePose ()

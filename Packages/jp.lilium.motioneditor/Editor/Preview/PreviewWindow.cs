@@ -101,6 +101,13 @@ namespace Lilium
         /// <summary>全身 IK の点（固定の印も）を出すか。切ると選んでいる物だけになる</summary>
         [SerializeField] bool showIk_ = true;
         [SerializeField] bool showFloor_ = true;
+        /// <summary>照明の出どころ（窓の決まった照明か、開いているシーンの照明か）</summary>
+        [SerializeField] PreviewLighting lighting_ = PreviewLighting.Default;
+        /// <summary>
+        /// ライトを縦軸まわりに 180° 回す。窓の照明は既定で奥から当て（こちらを向いた面が暗くなり、ハンドルが見やすい）、
+        /// 回すと手前から当たって明るくなる。シーンの照明では、シーンの光の向きを回す
+        /// </summary>
+        [SerializeField] bool flipLight_;
         [SerializeField] ShowTracksFlag showTracks_ = ShowTracksFlag.Selected;
         /// <summary>タイムライン オーバーレイのトラック一覧の高さ。下端のハンドルで変える</summary>
         [SerializeField] float timelineTracksHeight_ = kDefaultTimelineTracksHeight;
@@ -531,6 +538,24 @@ namespace Lilium
             set {
                 showFloor_ = value;
                 if (stage_ != null) stage_.showFloor = value;
+                RepaintView ();
+            }
+        }
+
+        public PreviewLighting lighting
+        {
+            get { return lighting_; }
+            set {
+                lighting_ = value;
+                RepaintView ();
+            }
+        }
+
+        public bool flipLighting
+        {
+            get { return flipLight_; }
+            set {
+                flipLight_ = value;
                 RepaintView ();
             }
         }
@@ -1506,7 +1531,9 @@ namespace Lilium
             Quaternion viewRotation = ApplyView (stage_.camera);
             // BeginPreview は描き先の大きさを合わせるだけで aspect は直さない。合わせないと窓の形を変えたときに絵がつぶれる
             stage_.camera.aspect = rect.width / rect.height;
-            stage_.UpdateLights (viewRotation);
+            // 窓の照明は奥から当てる向きが既定（UpdateLights の向きを回した側）。Flip Light で手前から当てる
+            bool flip = lighting_ == PreviewLighting.Default ? !flipLight_ : flipLight_;
+            stage_.UpdateLights (viewRotation, lighting_, flip);
             stage_.renderUtility.BeginPreview (rect, GUIStyle.none);
             // Stacker の残像（前後のフレーム）。Render の前に積む
             UpdateGhosts ();

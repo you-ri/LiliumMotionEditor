@@ -204,6 +204,17 @@ namespace Lilium
             floor.RegisterValueChangedCallback (e => window.showFloor = e.newValue);
             root.Add (floor);
 
+            EnumField lighting = new EnumField ("Lighting", window.lighting) { tooltip = Tr ("PREVIEW_OVERLAYS_LIGHTING_TOOLTIP") };
+            lighting.RegisterValueChangedCallback (e => window.lighting = (PreviewLighting)e.newValue);
+            root.Add (lighting);
+
+            Toggle flipLighting = new Toggle ("Flip Light") {
+                tooltip = Tr ("PREVIEW_OVERLAYS_FLIP_LIGHT_TOOLTIP"),
+                value = window.flipLighting,
+            };
+            flipLighting.RegisterValueChangedCallback (e => window.flipLighting = e.newValue);
+            root.Add (flipLighting);
+
             // 大きさ・倍率は非線形のスライダー（UE のカメラの移動速度と同じく、つまみの位置で値が倍々に変わる）
             LogSlider handleSize = new LogSlider ("Handle", 0.005f, 0.2f, window.handleSize) { tooltip = Tr ("PREVIEW_OVERLAYS_HANDLE_TOOLTIP") };
             handleSize.valueChanged += v => window.handleSize = v;

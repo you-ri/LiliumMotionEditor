@@ -41,10 +41,10 @@ namespace Lilium
             renderUtility.ambientColor = kAmbientColor;
 
             Light[] lights = renderUtility.lights;
-            lights[0].intensity = 1.1f;
+            lights[0].intensity = kKeyLightIntensity;
             lights[0].color = Color.white;
-            lights[1].intensity = 0.5f;
-            lights[1].color = new Color (0.75f, 0.8f, 1f);
+            lights[1].intensity = kFillLightIntensity;
+            lights[1].color = kFillLightColor;
         }
 
         GameObject CreateFloor ()
