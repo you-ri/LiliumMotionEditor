@@ -41,8 +41,12 @@ namespace Lilium
             public Playable Build (PlayableGraph graph, Playable input)
             {
                 if (builder_ == null) return input;
-                // プレビューの複製では止めてあるので、ここで動かす（OnEnable は再生中しか Build しないので副作用は無い）
+                // プレビューの複製では止めてあるので、ここで動かす（OnEnable は再生中しか Build しないので普段は副作用は無い）
                 builder_.enabled = true;
+                // 再生中（Play Mode を抜ける途中を含む）に世界を作ると、OnEnable が実行時のグラフ（<名前>_Rigs）を作る。
+                // 編集モードに戻っても OnDisable は消さず、表示モデルへ出し続けて窓の姿勢を上書きする（2026-11-12 開き直すと姿勢が出ない）。
+                // プレビューに入ると Clear が効かなくなるので、その前に消す
+                if (builder_.graph.IsValid ()) builder_.Clear ();
                 builder_.StartPreview ();
                 return builder_.BuildPreviewGraph (graph, input);
             }
