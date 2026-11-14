@@ -54,7 +54,8 @@ namespace Lilium
         /// </summary>
         public string key
         {
-            get { return (definition != null ? definition.GetInstanceID () : 0) + "|" + heldObjectsKey; }
+            // GetInstanceID は 6000.6 でエラー扱い。GetEntityId は 6000.3 から EntityId（int ではない）なので文字列にそろえる
+            get { return (definition != null ? definition.GetEntityId ().ToString () : "0") + "|" + heldObjectsKey; }
         }
 
         /// <summary>持つ物の中身を表す文字列。CharacterSettings.GetHeldObjectsKey と同じ形（持ち物の無いキャラとベースのクリップの焼いた版を古い扱いにしない）</summary>
