@@ -453,6 +453,8 @@ namespace Lilium
             public void SetClip (AnimationClip value) { }
             public void CreateClip () { }
             public void RemoveStrayCurves () { }
+            public int unknownObjectCurveCount { get { return 0; } }
+            public void RemoveUnknownObjectCurves () { }
             public List<AnimationClip> bakeOverrides { get { return new List<AnimationClip> (); } }
             public string GetSwapProblem () { return "テスト"; }
             public bool SwapClipReferences (bool back) { return false; }

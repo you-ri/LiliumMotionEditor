@@ -125,6 +125,12 @@ namespace Lilium
                 visible = () => host.strayCurveCount > 0,
             });
             result.buttons.Add (new LayerClipButton {
+                label = Tr ("EDITING_RIG_LAYER_REMOVE_OBJECT_CURVES"),
+                tooltip = Tr ("EDITING_RIG_LAYER_REMOVE_OBJECT_CURVES_TOOLTIP"),
+                run = host.RemoveUnknownObjectCurves,
+                visible = () => host.unknownObjectCurveCount > 0,
+            });
+            result.buttons.Add (new LayerClipButton {
                 label = Tr ("EDITING_RIG_LAYER_MERGE"),
                 tooltip = Tr ("EDITING_RIG_LAYER_MERGE_TOOLTIP"),
                 run = () => host.MergeOverrides (),

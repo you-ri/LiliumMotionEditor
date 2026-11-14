@@ -403,7 +403,50 @@ namespace Lilium
         void ResolveClipSetup ()
         {
             clipSetup_ = RigVariants.Resolve (settingsPrefab, RigVariants.GetClipVariant (editingClip_), rigDefinition);
-            clipProblem_ = EditingClip.GetProblem (editingClip_) ?? RigVariants.GetClipProblem (editingClip_, clipSetup_);
+            string clipProblem = EditingClip.GetProblem (editingClip_);
+            clipProblem_ = clipProblem ?? RigVariants.GetClipProblem (editingClip_, clipSetup_);
+            // 編集できないのが今のリグに無い物のキーのせいなら、消せるカーブを控える（物のカーブを消すボタン。S92b）
+            unknownObjectCurves_ = clipProblem == null && clipProblem_ != null
+                ? RigVariants.FindUnknownObjectCurves (editingClip_, clipSetup_)
+                : new List<EditorCurveBinding> ();
+        }
+
+        /// <summary>今のリグが持たない物のカーブ（それで編集できないときだけ。ResolveClipSetup で作る）</summary>
+        List<EditorCurveBinding> unknownObjectCurves_ = new List<EditorCurveBinding> ();
+
+        /// <summary>今のリグが持たない物のカーブの数（それで編集できないときだけ数える。S92b）</summary>
+        public int unknownObjectCurveCount
+        {
+            get { return unknownObjectCurves_.Count; }
+        }
+
+        /// <summary>
+        /// 今のリグが持たない物のカーブを、確かめてから消す（S92b の物のカーブを消すボタン。Undo で戻せる）
+        /// </summary>
+        public void RemoveUnknownObjectCurves ()
+        {
+            RemoveUnknownObjectCurves (true);
+        }
+
+        /// <param name="confirm">消す前に確かめる（テストは false）</param>
+        /// <returns>消したか</returns>
+        internal bool RemoveUnknownObjectCurves (bool confirm)
+        {
+            if (importPreviewing_ || unknownObjectCurves_.Count == 0) return false;
+            if (confirm) {
+                string names = string.Join (", ", RigVariants.ObjectNames (unknownObjectCurves_));
+                string message = Tr ("PREVIEW_WINDOW_REMOVE_OBJECT_CURVES_CONFIRM", editingClip_.name, names, unknownObjectCurves_.Count);
+                if (!EditorUtility.DisplayDialog ("Motion Editor", message, Tr ("PREVIEW_WINDOW_DELETE"), Tr ("PREVIEW_WINDOW_CANCEL"))) return false;
+            }
+
+            // 書き込み先が Override でも、消すのは編集用クリップのカーブ（問題はこのクリップにある）
+            Undo.IncrementCurrentGroup ();
+            RecordClipUndo ("Remove Object Curves", editingClip_);
+            RigVariants.RemoveUnknownObjectCurves (editingClip_, clipSetup_);
+            RefreshClipState ();
+            AfterClipEdit ();
+            RaiseStateChanged ();
+            return true;
         }
 
         /// <summary>

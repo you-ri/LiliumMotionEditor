@@ -218,6 +218,76 @@ namespace Lilium
             Assert.AreEqual (curves, AnimationUtility.GetCurveBindings (plain).Length, "カーブは自動で消さない");
         }
 
+        [Test]
+        public void RemoveUnknownObjectCurves_RemovesOnlyObjectsTheRigDoesNotHold ()
+        {
+            settings_.heldObjects.Add (CreateSword ("Sheath"));
+            CreateVariant (kSword, CreateSword ());
+            AnimationClip plain = CreateClip ("Plain");
+            AddKey (plain, RigPaths.Object (kSword));
+            AddKey (plain, RigPaths.ObjectAttach (kSword, EditRigDefinition.kRightHandAttach));
+            AddKey (plain, RigPaths.ObjectPose (kSword));
+            AnimationUtility.SetEditorCurve (plain, EditorCurveBinding.FloatCurve (RigPaths.Object ("Axe"), typeof (Transform), "m_LocalPosition.x"), new AnimationCurve ());
+            AddKey (plain, RigPaths.Object ("Sheath"));
+            AddKey (plain, RigPaths.Extra ("Tail"));
+            RigSetup plainSetup = RigVariants.Resolve (hero_, "");
+
+            List<EditorCurveBinding> unknown = RigVariants.FindUnknownObjectCurves (plain, plainSetup);
+            Assert.AreEqual (4, unknown.Count, "剣の 3 本とキーの無い斧の 1 本");
+            CollectionAssert.AreEquivalent (new[] { kSword, "Axe" }, RigVariants.ObjectNames (unknown));
+            Assert.IsEmpty (RigVariants.FindUnknownObjectCurves (plain, RigVariants.Resolve (hero_, kSword)), "印と違うリグでは消さない（バリアントを選び直す）");
+
+            Assert.AreEqual (4, RigVariants.RemoveUnknownObjectCurves (plain, plainSetup));
+            Assert.IsNull (RigVariants.GetClipProblem (plain, plainSetup));
+            string[] left = AnimationUtility.GetCurveBindings (plain).Select (b => b.path).ToArray ();
+            CollectionAssert.AreEquivalent (new[] { RigPaths.Object ("Sheath"), RigPaths.Extra ("Tail") }, left, "持つ物と体のカーブは残る");
+        }
+
+        [Test]
+        public void Window_RemoveUnknownObjectCurves_MakesClipEditable_AndUndoes ()
+        {
+            AnimationClip plain = CreateClip ("Plain");
+            AddKey (plain, RigPaths.Object (kSword));
+            AddKey (plain, RigPaths.ObjectPose (kSword));
+
+            window_ = ScriptableObject.CreateInstance<PreviewWindow> ();
+            window_.SetModel (hero_);
+            window_.SetClip (plain);
+            Assert.IsTrue (window_.isClipReadOnly);
+            Assert.AreEqual (2, window_.unknownObjectCurveCount, "ボタンが出る");
+
+            Assert.IsTrue (window_.RemoveUnknownObjectCurves (false));
+            Assert.IsFalse (window_.isClipReadOnly, "消すと書ける");
+            Assert.AreEqual (0, window_.unknownObjectCurveCount, "ボタンが消える");
+            Assert.AreEqual (0, AnimationUtility.GetCurveBindings (plain).Length);
+
+            Undo.PerformUndo ();
+            Assert.AreEqual (2, AnimationUtility.GetCurveBindings (plain).Length, "Undo でカーブが戻る");
+            Assert.IsTrue (window_.isClipReadOnly, "Undo で問題も戻る");
+            Assert.AreEqual (2, window_.unknownObjectCurveCount);
+        }
+
+        [Test]
+        public void Window_HidesRemoveObjectCurves_ForOtherVariantClips ()
+        {
+            CreateVariant (kSword, CreateSword ());
+            AnimationClip chop = CreateClip ("Chop", "Axe");
+            AddKey (chop, RigPaths.Object ("Axe"));
+
+            window_ = ScriptableObject.CreateInstance<PreviewWindow> ();
+            window_.SetModel (hero_);
+            window_.SetClip (chop);
+            Assert.IsTrue (window_.isClipReadOnly);
+            Assert.AreEqual (0, window_.unknownObjectCurveCount, "無いバリアントの印は、物のカーブを消しても直らない");
+            Assert.IsFalse (window_.RemoveUnknownObjectCurves (false));
+            Assert.AreEqual (1, AnimationUtility.GetCurveBindings (chop).Length);
+        }
+
+        static void AddKey (AnimationClip clip, string path)
+        {
+            AnimationUtility.SetEditorCurve (clip, EditorCurveBinding.FloatCurve (path, typeof (Transform), "m_LocalPosition.x"), AnimationCurve.Constant (0, 1, 0));
+        }
+
         // ---- 書く・焼くを断る ----
 
         [Test]

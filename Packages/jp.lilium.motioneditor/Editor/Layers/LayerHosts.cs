@@ -52,6 +52,10 @@ namespace Lilium
         void SetClip (AnimationClip clip);
         void CreateClip ();
         void RemoveStrayCurves ();
+        /// <summary>今のリグが持たない物のカーブの数（それで編集できないときだけ数える。S92b）</summary>
+        int unknownObjectCurveCount { get; }
+        /// <summary>今のリグが持たない物のカーブを消す（Undo で戻せる）</summary>
+        void RemoveUnknownObjectCurves ();
 
         /// <summary>読み取り専用の Humanoid の元を編集用クリップへ取り込めない理由（取り込めるなら null）</summary>
         string GetImportBaseProblem ();

@@ -112,7 +112,8 @@ namespace Lilium
 
         static void Collect ()
         {
-            byPrefab_ = new Dictionary<string, List<RigVariant>> ();
+            // 作り終えてから置く。初めて読み込むバリアントは OnValidate で Invalidate を呼ぶので、作りかけを置くと途中で null に戻される
+            Dictionary<string, List<RigVariant>> byPrefab = new Dictionary<string, List<RigVariant>> ();
             List<string> paths = new List<string> ();
             foreach (string guid in AssetDatabase.FindAssets ("t:" + typeof (RigVariant).Name)) paths.Add (AssetDatabase.GUIDToAssetPath (guid));
             paths.Sort (System.StringComparer.Ordinal);
@@ -122,7 +123,7 @@ namespace Lilium
                 // 名前の無いバリアントはベースと見分けられないので使わない
                 if (prefab == null || string.IsNullOrEmpty (variant.variantName)) continue;
                 List<RigVariant> list;
-                if (!byPrefab_.TryGetValue (prefab, out list)) byPrefab_.Add (prefab, list = new List<RigVariant> ());
+                if (!byPrefab.TryGetValue (prefab, out list)) byPrefab.Add (prefab, list = new List<RigVariant> ());
                 RigVariant first = list.Find (v => v.variantName == variant.variantName);
                 if (first != null) {
                     if (warned_.Add (path)) {
@@ -132,6 +133,7 @@ namespace Lilium
                 }
                 list.Add (variant);
             }
+            byPrefab_ = byPrefab;
         }
 
         /// <summary>
@@ -231,20 +233,85 @@ namespace Lilium
         static string FindUnknownObject (AnimationClip clip, IReadOnlyList<HeldObjectDefinition> heldObjects)
         {
             string prefix = RigPaths.kObject + "/";
-            HashSet<string> names = new HashSet<string> ();
-            foreach (HeldObjectDefinition held in heldObjects) {
-                if (held != null && !string.IsNullOrEmpty (held.name)) names.Add (held.name);
-            }
+            HashSet<string> names = HeldNames (heldObjects);
             foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
-                if (binding.path == null || !binding.path.StartsWith (prefix, System.StringComparison.Ordinal)) continue;
-                string rest = binding.path.Substring (prefix.Length);
-                int slash = rest.IndexOf ('/');
-                string name = slash >= 0 ? rest.Substring (0, slash) : rest;
-                if (name.Length == 0 || names.Contains (name)) continue;
+                string name = ObjectName (binding.path, prefix);
+                if (string.IsNullOrEmpty (name) || names.Contains (name)) continue;
                 AnimationCurve curve = AnimationUtility.GetEditorCurve (clip, binding);
                 if (curve != null && curve.length > 0) return name;
             }
             return null;
+        }
+
+        /// <summary>
+        /// clip にある、setup のリグが持たない物のカーブ（Controls/Object/物の名前・Controls/ObjectPose/物の名前。キーの無いカーブも。S92b）。
+        /// 印のバリアントが setup と合わないクリップは空（物のカーブを消しても直らない。バリアントを選び直す）
+        /// </summary>
+        public static List<EditorCurveBinding> FindUnknownObjectCurves (AnimationClip clip, RigSetup setup)
+        {
+            List<EditorCurveBinding> result = new List<EditorCurveBinding> ();
+            if (clip == null || setup == null || clip.humanMotion) return result;
+            if (setup.missing || GetClipVariant (clip) != setup.variantName) return result;
+            HashSet<string> names = HeldNames (setup.heldObjects);
+            string objectPrefix = RigPaths.kObject + "/";
+            string posePrefix = RigPaths.ObjectPose ("");
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings (clip)) {
+                if (IsUnknown (binding.path, names, objectPrefix, posePrefix)) result.Add (binding);
+            }
+            foreach (EditorCurveBinding binding in AnimationUtility.GetObjectReferenceCurveBindings (clip)) {
+                if (IsUnknown (binding.path, names, objectPrefix, posePrefix)) result.Add (binding);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// setup のリグが持たない物のカーブを消す（S92b の物のカーブを消すボタン。Undo の記録は呼ぶ側）。消した数を返す
+        /// </summary>
+        public static int RemoveUnknownObjectCurves (AnimationClip clip, RigSetup setup)
+        {
+            List<EditorCurveBinding> bindings = FindUnknownObjectCurves (clip, setup);
+            foreach (EditorCurveBinding binding in bindings) {
+                if (binding.isPPtrCurve) AnimationUtility.SetObjectReferenceCurve (clip, binding, null);
+                else AnimationUtility.SetEditorCurve (clip, binding, null);
+            }
+            return bindings.Count;
+        }
+
+        /// <summary>カーブの物の名前（並びは見つけた順・重複なし）。確かめの文に出す</summary>
+        public static List<string> ObjectNames (IEnumerable<EditorCurveBinding> bindings)
+        {
+            List<string> result = new List<string> ();
+            string objectPrefix = RigPaths.kObject + "/";
+            string posePrefix = RigPaths.ObjectPose ("");
+            foreach (EditorCurveBinding binding in bindings) {
+                string name = ObjectName (binding.path, objectPrefix) ?? ObjectName (binding.path, posePrefix);
+                if (!string.IsNullOrEmpty (name) && !result.Contains (name)) result.Add (name);
+            }
+            return result;
+        }
+
+        static HashSet<string> HeldNames (IReadOnlyList<HeldObjectDefinition> heldObjects)
+        {
+            HashSet<string> names = new HashSet<string> ();
+            foreach (HeldObjectDefinition held in heldObjects) {
+                if (held != null && !string.IsNullOrEmpty (held.name)) names.Add (held.name);
+            }
+            return names;
+        }
+
+        static bool IsUnknown (string path, HashSet<string> names, string objectPrefix, string posePrefix)
+        {
+            string name = ObjectName (path, objectPrefix) ?? ObjectName (path, posePrefix);
+            return !string.IsNullOrEmpty (name) && !names.Contains (name);
+        }
+
+        /// <summary>prefix（Controls/Object/ など）の下のパスなら、その次の名前（物の名前）。違えば null</summary>
+        static string ObjectName (string path, string prefix)
+        {
+            if (path == null || !path.StartsWith (prefix, System.StringComparison.Ordinal)) return null;
+            string rest = path.Substring (prefix.Length);
+            int slash = rest.IndexOf ('/');
+            return slash >= 0 ? rest.Substring (0, slash) : rest;
         }
     }
 

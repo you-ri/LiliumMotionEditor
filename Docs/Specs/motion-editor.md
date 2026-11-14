@@ -5202,6 +5202,9 @@ Burst とマネージドの不一致（11-05 調べ。ユーザー指示「調�
   ベースのクリップの焼いた版（AI Walk・Emotion 3 本・Roundhouse Kick）は剣を外したので古いと出る。剣のクリップの焼いた版は移す前から古かった（判定の値は移す前後で同じ）。
   テスト 9 件を足し（`RigVariantTests`）、6.0 でモーションエディタのテスト 896 件すべて通過。
   デモの焼いた版 7 本を、クリップの印のバリアントで焼き直した（`PoseSession.Bake`）。全部が最新と出て、剣のチャンネルは Sword Swing・Sword Sheathe の焼いた版にだけある。残り: 窓での目視・6.6（extrival）での確認
+  S92b のうち物のカーブを消すボタンを先に実装・テスト通過（11-14）。`RigVariants.FindUnknownObjectCurves`・`RemoveUnknownObjectCurves`、窓の `RemoveUnknownObjectCurves`（確かめてから消す。Undo で戻る）、Layers の Editing Rig の行のボタン。
+  ボタンは今のリグに無い物のキーで編集できないときだけ出し、消すのは今のリグに無い物の `Controls/Object/<名前>` と `Controls/ObjectPose/<名前>` の下のカーブ（キーの無いカーブも）。印のバリアントが無い・合わないクリップには出さない（消しても直らない）。
+  あわせて、ドメインリロード後に初めてバリアントを引くと `RigVariants.Collect` が null 参照で落ちるのを直した（初めて読み込んだバリアントの `OnValidate` が作りかけの一覧を捨てていた）。テスト 3 件を足し、6.0 で 899 件すべて通過。残り: ボタンの目視
 - [ ] S93 Generic の骨に対応: 実装済み・テスト通過（11-03）。6.0 で 612 件すべて通過。窓の目視は未確認。`GenericRigTests`、`EditRigDefinition.SetFromBones`・`ExtraControl.fullBodySolve`・`BodyPoint.control`、`PoseSession.ImportGeneric`・`motion_import_generic`、リグエディタの「骨から作る」
 - [ ] S94 Generic のキャラの体の大きさ: 実装済み・テスト通過（11-03）。`EditRigDefinition.bodyScale`
 - [ ] S95 全身 IK の角度制限: 実装済み・テスト通過（11-03）。`EditRigDefinition.JointLimit`（軸ごとの Free / Range / Locked・遊び。既定 15°）、ソルバーの `FullBodyIkBone.limit*`・`SolveLimit`（範囲の外は遊びの間だけ硬くなるばね、範囲 + 遊びは必ず守る）・仕上げの `ClampLimits`・基準の `limitReference`、`FullBodyRig.TryGetLimitFrame`（ひねりの軸を T ポーズの骨の向きから選ぶ）、`HumanoidJointLimits`（muscle 0 と ±1 で測る）、リグエディタの「Humanoid の可動域から角度制限を作る」と「左右まとめて編集」、`AxisLimitDrawer`。テスト 14 件を足し、6.0 でモーションエディタのテスト 630 件すべて通過。デモのキャラで作った範囲は左右が鏡写しになる（膝 -1〜160°・肘 -4〜157° など）。デモのリグ定義（両キャラ共通）に、男のキャラの可動域から作った制限を入れた（21 本・遊び 15°）。デモのクリップは再生の姿勢が変わる（16 本中 15 本、最大 46°。遊びの中で範囲へ戻す力の分）ので、焼いた版のある 7 本を焼き直し、焼いた版と画面の差は 0.6〜7.2mm。残り: リグエディタの窓での操作の確認、変わったクリップの見た目の確認、6.6（extrival）での確認、7 キャラで既定値を詰める（S25c の残り）、制限を入れた定義で焼いたときの `MuscleRange` の確認
