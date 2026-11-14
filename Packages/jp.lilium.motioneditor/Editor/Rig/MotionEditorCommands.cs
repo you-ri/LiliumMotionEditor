@@ -804,7 +804,7 @@ namespace Lilium
             }
             string folder = string.IsNullOrEmpty (request.folder) ? Path.Combine ("Temp", "MotionEditorCaptures") : request.folder;
             List<string> paths;
-            using (PoseSession rendered = new PoseSession (session_.stage.sourcePrefab, session_.definition, true)) {
+            using (PoseSession rendered = new PoseSession (session_.stage.sourcePrefab, session_.setup, true)) {
                 rendered.clip = session_.clip;
                 foreach (OverrideClip entry in session_.overrides) rendered.AddOverride (entry.clip, entry.mode, entry.mask);
                 rendered.overrideWriteIndex = session_.overrideWriteIndex;
@@ -1113,7 +1113,8 @@ namespace Lilium
             }
 
             Close ();
-            session_ = new PoseSession (prefab, definition);
+            // 持つ物はクリップの印のバリアント（S92。窓と同じ。印が無ければベース）
+            session_ = new PoseSession (prefab, RigVariants.Resolve (prefab, RigVariants.GetClipVariant (clip), definition));
             if (session_.error != null) {
                 error = session_.error;
                 Close ();

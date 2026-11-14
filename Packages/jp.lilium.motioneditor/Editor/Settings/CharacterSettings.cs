@@ -5,8 +5,9 @@ namespace Lilium
 {
 
     /// <summary>
-    /// キャラごとの設定（S19）。キャラの prefab を指すアセットで、git で共有される。
-    /// 「上書きする」を入れた項目だけがプロジェクト設定（ProjectSettings）より優先される。Layers の状態はいつもこのアセットに持つ
+    /// キャラへの結び付け（S19・S108）。キャラの prefab を指すアセットで、git で共有される。
+    /// 使い方（フォルダ・Auto Bake など）はプロジェクト設定（ProjectSettings）だけが持ち、ここはキャラに属するもの
+    /// （使う定義・Layers の状態・持ち替え・持ち物）だけを持つ。リグの形は定義（EditRigDefinition）に、装備は Rig Variant（S92）に分ける
     /// </summary>
     [CreateAssetMenu (menuName = "Lilium Motion Editor/Character Settings", fileName = "Motion Editor Settings")]
     public sealed class CharacterSettings : ScriptableObject
@@ -14,19 +15,33 @@ namespace Lilium
         /// <summary>この設定のキャラ（窓に入れる prefab）</summary>
         public GameObject prefab;
 
+        // S108 でやめた上書き。読まない。値が入っていたかを移す前に見られるよう 1 リリース残し（SettingsLookup が警告する）、次のリリースで消す
+        [System.Obsolete ("S108: folders come from the project settings only"), HideInInspector]
         public bool overrideAnimBankFolders;
-        /// <summary>AnimBank のフォルダの並び（置き換え文字列はプロジェクト設定と同じ）。先頭が New・Dup で作る場所</summary>
+        [System.Obsolete ("S108: folders come from the project settings only"), HideInInspector]
         public List<string> animBankFolders = new List<string> ();
-
+        [System.Obsolete ("S108: folders come from the project settings only"), HideInInspector]
         public bool overridePoseBankFolders;
-        /// <summary>PoseBank のフォルダの並び。先頭が Save で作る場所</summary>
+        [System.Obsolete ("S108: folders come from the project settings only"), HideInInspector]
         public List<string> poseBankFolders = new List<string> ();
 
         public bool overrideRigDefinition;
         public EditRigDefinition rigDefinition;
 
+        [System.Obsolete ("S108: Auto Bake comes from the project settings only"), HideInInspector]
         public bool overrideAutoBake;
+        [System.Obsolete ("S108: Auto Bake comes from the project settings only"), HideInInspector]
         public bool autoBake = true;
+
+        /// <summary>S108 でやめた上書き（フォルダ・Auto Bake）が入っているか（入っていれば値は使われない）</summary>
+        public bool hasObsoleteOverrides
+        {
+            get {
+#pragma warning disable 0618
+                return overrideAnimBankFolders || overridePoseBankFolders || overrideAutoBake;
+#pragma warning restore 0618
+            }
+        }
 
         /// <summary>Layers の ✏・✋・👁・重み・合成</summary>
         public LayerState layers = new LayerState ();
@@ -54,9 +69,7 @@ namespace Lilium
         /// <summary>持ち物の設定の中身を表す文字列（窓が、直されたかを見分ける。同じ中身なら作り直さない）</summary>
         public string GetHeldObjectsKey ()
         {
-            System.Text.StringBuilder text = new System.Text.StringBuilder ();
-            foreach (HeldObjectDefinition definition in heldObjects) text.Append (JsonUtility.ToJson (definition)).Append ('|');
-            return text.ToString ();
+            return RigSetup.MakeHeldObjectsKey (heldObjects);
         }
     }
 

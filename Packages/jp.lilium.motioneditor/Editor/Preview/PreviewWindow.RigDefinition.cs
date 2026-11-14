@@ -39,14 +39,26 @@ namespace Lilium
             RepaintView ();
         }
 
-        /// <summary>今の世界を作ったときの持ち物の設定（直されたかを見分ける）</summary>
-        string stageHeldObjectsKey_;
-
         /// <summary>持ち物の設定が直されたとき（リグエディタ・インスペクタ・Undo）。中身が変わっていれば作り直す（キャラの設定はほかの項目でも知らせが来る）</summary>
         void OnHeldObjectsChanged (CharacterSettings settings)
         {
-            if (settings == null || settings != characterSettings || rigDefinitionRebuildQueued_) return;
-            if (settings.GetHeldObjectsKey () == (stageHeldObjectsKey_ ?? "")) return;
+            if (settings == null || settings != characterSettings) return;
+            RebuildIfHeldObjectsChanged ();
+        }
+
+        /// <summary>バリアントが直されたとき（S92）。このキャラのバリアントで、今のクリップの持つ物が変わっていれば作り直す</summary>
+        void OnRigVariantChanged (RigVariant variant)
+        {
+            if (variant == null || stage_ == null) return;
+            RebuildIfHeldObjectsChanged ();
+        }
+
+        /// <summary>今のクリップの持つ物（ベースの物 + 印のバリアントの物）が、今の世界と違えば作り直す（まとめて 1 回）</summary>
+        void RebuildIfHeldObjectsChanged ()
+        {
+            if (stage_ == null || rigDefinitionRebuildQueued_) return;
+            RigSetup current = RigVariants.Resolve (settingsPrefab, RigVariants.GetClipVariant (editingClip_), rigDefinition);
+            if (stage_.setup != null && current.key == stage_.setup.key) return;
             rigDefinitionRebuildQueued_ = true;
             EditorApplication.delayCall += RebuildForRigDefinition;
         }
@@ -57,12 +69,15 @@ namespace Lilium
             EditRigDefinition.changed += OnRigDefinitionChanged;
             CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
             CharacterSettings.heldObjectsChanged += OnHeldObjectsChanged;
+            RigVariant.changed -= OnRigVariantChanged;
+            RigVariant.changed += OnRigVariantChanged;
         }
 
         void UnsubscribeRigDefinition ()
         {
             EditRigDefinition.changed -= OnRigDefinitionChanged;
             CharacterSettings.heldObjectsChanged -= OnHeldObjectsChanged;
+            RigVariant.changed -= OnRigVariantChanged;
             EditorApplication.delayCall -= RebuildForRigDefinition;
             rigDefinitionRebuildQueued_ = false;
         }

@@ -34,7 +34,8 @@ https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motion
 2. Animator の付いたキャラクターの prefab を選びます。
 3. ポーズを付けてキーを打ち、クリップへ保存します。
 
-+ プロジェクト全体の設定は `Project Settings > Lilium Motion Editor` にあります。
++ プロジェクト全体の設定（AnimBank / PoseBank のフォルダ・Auto Bake など）は `Project Settings > Lilium Motion Editor` にあります。全キャラ共通です。
++ キャラごとの設定（使うリグ定義・Layers・持ち物）は `Create > Lilium Motion Editor > Character Settings` で作ります（窓の上端のツールバーの「作る」でも作れます）。
 + 編集用リグの定義は `Create > Lilium Motion Editor > Rig Definition` で作れます。
 + 画面の言語（English / 日本語）は `Preferences > Lilium Motion Editor` の Language で選べます。既定は OS の言語に合わせます。
 

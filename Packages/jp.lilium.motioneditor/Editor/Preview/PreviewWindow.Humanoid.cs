@@ -13,34 +13,20 @@ namespace Lilium
     /// </summary>
     public partial class PreviewWindow
     {
-        /// <summary>
-        /// クリップを保存したら Humanoid 版を焼き直す
-        /// </summary>
-        [SerializeField] bool autoBake_ = true;
         string bakeStatus_;
         bool bakeFailed_;
 
-        /// <summary>保存したら焼き直すか。キャラの設定があればその値（上書きしていなければプロジェクト設定）、無ければ窓の中の値</summary>
+        /// <summary>
+        /// 保存したら焼き直すか。プロジェクト設定の値で、切り替えるとプロジェクト設定へ書く（S108。Auto Key と同じ。キャラごとには持たない）
+        /// </summary>
         public bool autoBake
         {
-            get {
-                CharacterSettings settings = characterSettings;
-                if (settings == null) return autoBake_;
-                return settings.overrideAutoBake ? settings.autoBake : ProjectSettings.instance.autoBake;
-            }
+            get { return ProjectSettings.instance.autoBake; }
             set {
-                if (autoBake == value) return;
-                CharacterSettings settings = characterSettings;
-                if (settings != null) {
-                    Undo.RecordObject (settings, "Motion Editor Auto Bake");
-                    settings.autoBake = value;
-                    settings.overrideAutoBake = true;
-                    SaveCharacterSettings ();
-                }
-                else {
-                    Undo.RecordObject (this, "Motion Editor Auto Bake");
-                    autoBake_ = value;
-                }
+                ProjectSettings project = ProjectSettings.instance;
+                if (project.autoBake == value) return;
+                project.autoBake = value;
+                project.Save ();
                 RaiseStateChanged ();
             }
         }

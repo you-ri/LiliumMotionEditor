@@ -133,13 +133,13 @@ namespace Lilium
 
         /// <summary>
         /// 焼いた版が今の設定で焼いたものかを見分ける値。持ち物の設定（握り・親の枠は焼いた姿勢を変える。S91）のハッシュ。
+        /// 持つ物は元のクリップの印のバリアントの物（S92。ベースのクリップはキャラの設定の物で、バリアントを入れる前と同じ値）。
         /// 持ち物の無いキャラは空（項目を足す前に焼いた版を、古い扱いにしない）。頭の "/" は、リグの定義のハッシュを前に付けていた頃の名残で、
         /// 焼いた版を古い扱いにしないよう残す
         /// </summary>
-        static string HeldObjectsKey (GameObject model)
+        static string HeldObjectsKey (GameObject model, AnimationClip source)
         {
-            CharacterSettings settings = SettingsLookup.Find (model);
-            string held = settings != null ? settings.GetHeldObjectsKey () : "";
+            string held = model != null ? RigVariants.Resolve (model, RigVariants.GetClipVariant (source), null).heldObjectsKey : "";
             return held.Length > 0 ? "/" + Hash128.Compute (held) : "";
         }
 
@@ -156,7 +156,7 @@ namespace Lilium
                 sourceHash = EditorUtility.IsDirty (source) ? kUnsaved : ComputeFileHash (sourcePath),
                 overrides = OverrideGuids (overrides),
                 overridesHash = OverridesHash (overrides),
-                definition = HeldObjectsKey (model),
+                definition = HeldObjectsKey (model, source),
             };
             string json = JsonUtility.ToJson (link);
             if (importer.userData == json) return;
@@ -246,7 +246,7 @@ namespace Lilium
                 GameObject baked = AssetDatabase.LoadAssetAtPath<GameObject> (AssetDatabase.GUIDToAssetPath (link.model));
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_OTHER_CHARACTER", baked != null ? baked.name : Tr ("HUMANOID_OUTPUT_UNKNOWN")));
             }
-            if ((link.definition ?? "") != HeldObjectsKey (model)) {
+            if ((link.definition ?? "") != HeldObjectsKey (model, source)) {
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_DEFINITION_CHANGED"));
             }
             if (EditorUtility.IsDirty (source)) {

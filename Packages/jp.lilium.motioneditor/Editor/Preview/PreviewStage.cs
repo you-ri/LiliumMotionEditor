@@ -150,6 +150,9 @@ namespace Lilium
             }
         }
 
+        /// <summary>この世界を作ったリグの組み（定義・持つ物・バリアントの名前。S92）</summary>
+        public RigSetup setup { get; private set; }
+
         /// <summary>
         /// 体の正面（ワールド）。キャラが無ければ +Z
         /// </summary>
@@ -161,9 +164,15 @@ namespace Lilium
             }
         }
 
-        /// <param name="definition">編集用リグの定義。null なら既定の定義を一時の物として作る（パッケージの既定のアセットが読めないときなど）</param>
+        /// <param name="definition">編集用リグの定義。null なら既定の定義を一時の物として作る（パッケージの既定のアセットが読めないときなど）。持つ物はベース（キャラの設定）</param>
         public PreviewStage (GameObject prefab, EditRigDefinition definition = null)
-            : this (prefab, definition, true)
+            : this (prefab, RigVariants.Resolve (prefab, "", definition), true)
+        {
+        }
+
+        /// <param name="setup">定義と持つ物（RigVariants.Resolve。S92）</param>
+        public PreviewStage (GameObject prefab, RigSetup setup)
+            : this (prefab, setup, true)
         {
         }
 
@@ -173,11 +182,19 @@ namespace Lilium
         /// </summary>
         public static PreviewStage CreateHeadless (GameObject prefab, EditRigDefinition definition = null)
         {
-            return new PreviewStage (prefab, definition, false);
+            return new PreviewStage (prefab, RigVariants.Resolve (prefab, "", definition), false);
         }
 
-        PreviewStage (GameObject prefab, EditRigDefinition definition, bool render)
+        /// <summary>描かない世界を、定義と持つ物を決めて作る（S92）</summary>
+        public static PreviewStage CreateHeadless (GameObject prefab, RigSetup setup)
         {
+            return new PreviewStage (prefab, setup, false);
+        }
+
+        PreviewStage (GameObject prefab, RigSetup setup, bool render)
+        {
+            this.setup = setup ?? new RigSetup (null);
+            EditRigDefinition definition = this.setup.definition;
             ownsDefinition_ = definition == null;
             sourcePrefab = prefab;
             definition_ = definition != null ? definition : EditRigDefinition.CreateDefault ();

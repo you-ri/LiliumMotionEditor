@@ -20,7 +20,7 @@ namespace Lilium
 
     /// <summary>
     /// AnimBank（S10）。キャラごとのフォルダにある編集用クリップ（*.rig.anim）の一覧と、作成・複製・名前変更・削除。
-    /// フォルダはキャラの設定・プロジェクト設定で決める（S19。SettingsLookup）。どちらにも無ければ拡張点 → 「キャラの prefab のフォルダ/Motions」。
+    /// フォルダはプロジェクト設定で決める（S19・S108。SettingsLookup）。無ければ拡張点 → 「キャラの prefab のフォルダ/Motions」。
     /// サブフォルダはそのまま一覧の組になる
     /// </summary>
     public static class AnimBank
@@ -51,25 +51,21 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 作る場所を選び直す（null で既定へ戻す）。キャラの設定があればそこへ書き、無ければこの PC にだけ覚える（EditorPrefs）
+        /// 作る場所を選び直す（null で既定へ戻す）。この PC にだけ覚える（EditorPrefs）。
+        /// キャラの設定へは書かない（S108。チームで共有する決まりはプロジェクト設定のフォルダの並びで書く）
         /// </summary>
         public static void SetFolder (GameObject prefab, string folder)
         {
-            CharacterSettings settings = SettingsLookup.Find (prefab);
-            if (settings != null) {
-                SetFirstFolder (settings, ref settings.overrideAnimBankFolders, settings.animBankFolders, ProjectSettings.instance.animBankFolders, folder);
-                return;
-            }
             SetFolder (prefab, kPrefsKey, folder);
         }
 
-        /// <summary>設定が無いときの既定（この PC で選んだもの → 拡張点 → prefab のフォルダ/Motions）</summary>
+        /// <summary>プロジェクト設定に並びが無いときの既定（この PC で選んだもの → 拡張点 → prefab のフォルダ/Motions）</summary>
         internal static string GetDefaultFolder (GameObject prefab)
         {
             return GetFolder (prefab, kPrefsKey, defaultFolder, kDefaultFolderName);
         }
 
-        /// <summary>この PC で選んだフォルダ（EditorPrefs。無ければ null）。キャラの設定を作るときに取り込む</summary>
+        /// <summary>この PC で選んだフォルダ（EditorPrefs。無ければ null）。フォルダの並びの先頭の代わりになる</summary>
         internal static string GetSavedFolder (GameObject prefab)
         {
             return GetSavedFolder (prefab, kPrefsKey);
@@ -81,28 +77,6 @@ namespace Lilium
             if (string.IsNullOrEmpty (prefabPath)) return null;
             string saved = EditorPrefs.GetString (prefsKey + AssetDatabase.AssetPathToGUID (prefabPath), "");
             return string.IsNullOrEmpty (saved) ? null : saved;
-        }
-
-        /// <summary>キャラの設定のフォルダの並びの先頭を差し替える（null で上書きをやめる）</summary>
-        /// <param name="inherited">上書きを始めるときに引き継ぐ並び（プロジェクト設定の並び）</param>
-        internal static void SetFirstFolder (CharacterSettings settings, ref bool overrides, List<string> folders, List<string> inherited, string folder)
-        {
-            Undo.RecordObject (settings, "Motion Editor Folder");
-            if (string.IsNullOrEmpty (folder)) {
-                overrides = false;
-            }
-            else {
-                if (!overrides) {
-                    // 上書きを始めるときは、プロジェクト設定の並びを引き継いで先頭だけ差し替える（共通のフォルダを並べたまま）
-                    folders.Clear ();
-                    if (inherited != null) folders.AddRange (inherited);
-                }
-                overrides = true;
-                if (folders.Count == 0) folders.Add (folder.TrimEnd ('/'));
-                else folders[0] = folder.TrimEnd ('/');
-            }
-            EditorUtility.SetDirty (settings);
-            AssetDatabase.SaveAssetIfDirty (settings);
         }
 
         /// <summary>

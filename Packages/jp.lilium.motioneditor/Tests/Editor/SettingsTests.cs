@@ -58,34 +58,57 @@ namespace Lilium
         }
 
         /// <summary>
-        /// フォルダはキャラの設定（上書きしたときだけ）→ プロジェクト設定の順。先頭は無くても入り、2 つ目からは実在するものだけ
+        /// フォルダはプロジェクト設定だけから引く（S108）。キャラの設定に古い上書きが入っていても読まない。先頭は無くても入り、2 つ目からは実在するものだけ
         /// </summary>
         [Test]
-        public void FoldersFollowCharacterThenProject ()
+        public void FoldersComeFromProjectOnly ()
         {
             AssetDatabase.CreateFolder (kFolder, "Common");
             ProjectSettings project = ProjectSettings.instance;
             project.poseBankFolders.AddRange (new[] { "{prefabFolder}/Poses", kFolder + "/Common", kFolder + "/Missing", kFolder + "/Common" });
 
-            List<string> fromProject = SettingsLookup.ResolveFolders (prefab_, false, project, null);
+            List<string> fromProject = SettingsLookup.ResolveFolders (prefab_, false, project);
             CollectionAssert.AreEqual (new[] { kFolder + "/Poses", kFolder + "/Common" }, fromProject, "先頭は無くても入る・無いフォルダと重複は飛ばす");
+            CollectionAssert.AreEqual (new[] { kFolder + "/Motions" }, SettingsLookup.ResolveFolders (prefab_, true, project), "AnimBank は何も指定が無いのでパッケージの既定");
 
             CharacterSettings character = ScriptableObject.CreateInstance<CharacterSettings> ();
-            try {
-                character.prefab = prefab_;
-                character.poseBankFolders.Add ("{prefabFolder}/Mine");
-                CollectionAssert.AreEqual (fromProject, SettingsLookup.ResolveFolders (prefab_, false, project, character), "上書きしていなければプロジェクト設定");
-                character.overridePoseBankFolders = true;
-                CollectionAssert.AreEqual (new[] { kFolder + "/Mine" }, SettingsLookup.ResolveFolders (prefab_, false, project, character), "上書きすればキャラの設定");
-                CollectionAssert.AreEqual (new[] { kFolder + "/Motions" }, SettingsLookup.ResolveFolders (prefab_, true, project, character), "AnimBank は何も指定が無いのでパッケージの既定");
-            }
-            finally {
-                Object.DestroyImmediate (character);
-            }
+            character.prefab = prefab_;
+#pragma warning disable 0618
+            character.overridePoseBankFolders = true;
+            character.poseBankFolders.Add ("{prefabFolder}/Mine");
+#pragma warning restore 0618
+            // 警告はパスで 1 回にしているので、前の実行と重ならない名前にする
+            string path = kFolder + "/Character" + System.Guid.NewGuid ().ToString ("N") + ".asset";
+            AssetDatabase.CreateAsset (character, path);
+            SettingsLookup.Invalidate ();
+            LogAssert.Expect (LogType.Warning, new Regex (Regex.Escape (path)));
+            Assert.AreSame (character, SettingsLookup.Find (prefab_));
+            CollectionAssert.AreEqual (fromProject, SettingsLookup.GetPoseBankFolders (prefab_), "キャラの設定の上書きは読まない");
         }
 
         /// <summary>
-        /// キャラの設定を作ると prefab から引き当てられ、今の値と、この PC で選んでいたフォルダを取り込む。プロジェクト設定と同じ値は上書きにしない
+        /// 作る場所の選び直しはこの PC にだけ覚え、並びの先頭の代わりになる。キャラの設定へは書かない（S108）
+        /// </summary>
+        [Test]
+        public void ChosenFolderStaysOnThisPc ()
+        {
+            AssetDatabase.CreateFolder (kFolder, "Common");
+            ProjectSettings project = ProjectSettings.instance;
+            project.animBankFolders.AddRange (new[] { "{prefabFolder}/Motions", kFolder + "/Common" });
+            CharacterSettings settings = SettingsLookup.Create (prefab_, null, null);
+            string before = EditorJsonUtility.ToJson (settings);
+
+            AnimBank.SetFolder (prefab_, kFolder + "/Mine");
+            CollectionAssert.AreEqual (new[] { kFolder + "/Mine", kFolder + "/Common" }, SettingsLookup.GetAnimBankFolders (prefab_), "選んだ場所が先頭。無い本来の先頭は並べない");
+            Assert.AreEqual (before, EditorJsonUtility.ToJson (settings), "キャラの設定は変わらない");
+            Assert.IsFalse (settings.hasObsoleteOverrides);
+
+            AnimBank.SetFolder (prefab_, null);
+            CollectionAssert.AreEqual (new[] { kFolder + "/Motions", kFolder + "/Common" }, SettingsLookup.GetAnimBankFolders (prefab_), "取り消すとプロジェクト設定の並び");
+        }
+
+        /// <summary>
+        /// キャラの設定を作ると prefab から引き当てられ、今の値（Layers）を取り込む。上書きの項目は空のまま（S108）
         /// </summary>
         [Test]
         public void CreateImportsCurrentValues ()
@@ -93,25 +116,75 @@ namespace Lilium
             ProjectSettings project = ProjectSettings.instance;
             project.characterSettingsFolder = "{prefabFolder}/Settings";
             project.nameSuffixes.Add ("_Variant");
+            project.autoBake = false;
             AnimBank.SetFolder (prefab_, kFolder + "/OldMotions");
             LayerState layers = new LayerState { write = "Override:0" };
             layers.values.Add (new LayerValues { id = "HumanoidAnimation", enabled = false });
 
             Assert.IsNull (SettingsLookup.Find (prefab_));
-            CharacterSettings settings = SettingsLookup.Create (prefab_, layers, null, true);
+            CharacterSettings settings = SettingsLookup.Create (prefab_, layers, null);
 
             Assert.AreEqual (kFolder + "/Settings/Hero Motion Editor.asset", AssetDatabase.GetAssetPath (settings));
             Assert.AreSame (settings, SettingsLookup.Find (prefab_), "prefab から引き当てられる");
             Assert.AreEqual ("Override:0", settings.layers.write);
             Assert.IsFalse (settings.layers.Find ("HumanoidAnimation").enabled);
             Assert.AreNotSame (layers, settings.layers, "写しを持つ");
-            Assert.IsFalse (settings.overrideAutoBake, "プロジェクト設定と同じ値は上書きにしない");
-            Assert.IsTrue (settings.overrideAnimBankFolders);
-            CollectionAssert.AreEqual (new[] { kFolder + "/OldMotions" }, settings.animBankFolders, "この PC で選んでいたフォルダを取り込む");
-            Assert.AreEqual (kFolder + "/OldMotions", AnimBank.GetFolder (prefab_));
+            Assert.IsFalse (settings.hasObsoleteOverrides, "フォルダと Auto Bake の上書きを取り込まない");
+            Assert.AreEqual (kFolder + "/OldMotions", AnimBank.GetFolder (prefab_), "この PC で選んだ場所はそのまま効く");
+        }
 
-            AnimBank.SetFolder (prefab_, kFolder + "/NewMotions");
-            Assert.AreEqual (kFolder + "/NewMotions", settings.animBankFolders[0], "設定があれば選び直しは設定へ書く");
+        /// <summary>
+        /// 古い上書きの入ったキャラの設定は、引くとアセットごとに 1 回だけ警告する。入っていなければ警告しない（S108）
+        /// </summary>
+        [Test]
+        public void ObsoleteOverridesWarnOncePerAsset ()
+        {
+            CharacterSettings clean = ScriptableObject.CreateInstance<CharacterSettings> ();
+            clean.prefab = prefab_;
+            AssetDatabase.CreateAsset (clean, kFolder + "/Clean.asset");
+            SettingsLookup.Invalidate ();
+            Assert.AreSame (clean, SettingsLookup.Find (prefab_));
+            LogAssert.NoUnexpectedReceived ();
+            AssetDatabase.DeleteAsset (kFolder + "/Clean.asset");
+
+            // 警告はパスで 1 回にしているので、前の実行と重ならない名前にする
+            string path = kFolder + "/Old" + System.Guid.NewGuid ().ToString ("N") + ".asset";
+            CharacterSettings old = ScriptableObject.CreateInstance<CharacterSettings> ();
+            old.prefab = prefab_;
+#pragma warning disable 0618
+            old.overrideAutoBake = true;
+            old.autoBake = false;
+#pragma warning restore 0618
+            AssetDatabase.CreateAsset (old, path);
+            SettingsLookup.Invalidate ();
+            LogAssert.Expect (LogType.Warning, new Regex (Regex.Escape (path)));
+            Assert.AreSame (old, SettingsLookup.Find (prefab_));
+            SettingsLookup.Invalidate ();
+            Assert.AreSame (old, SettingsLookup.Find (prefab_), "2 回目は警告しない");
+            LogAssert.NoUnexpectedReceived ();
+        }
+
+        /// <summary>
+        /// 窓の Auto（Output の段）はプロジェクト設定を読み書きし、キャラの設定に古い上書きがあっても使わない（S108）
+        /// </summary>
+        [Test]
+        public void AutoBakeIsTheProjectValue ()
+        {
+            // 窓の切り替えはプロジェクト設定をファイルへ保存するので、SetUp で変えた値を戻してから始め、終わりに元の値で保存し直す
+            EditorJsonUtility.FromJsonOverwrite (projectBackup_, ProjectSettings.instance);
+            ProjectSettings project = ProjectSettings.instance;
+            bool original = project.autoBake;
+            PreviewWindow window = ScriptableObject.CreateInstance<PreviewWindow> ();
+            try {
+                Assert.AreEqual (original, window.autoBake);
+                window.autoBake = !original;
+                Assert.AreEqual (!original, project.autoBake, "切り替えはプロジェクト設定へ書く");
+                Assert.AreEqual (!original, window.autoBake);
+            }
+            finally {
+                window.autoBake = original;
+                Object.DestroyImmediate (window);
+            }
         }
 
         [Test]

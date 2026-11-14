@@ -127,11 +127,17 @@ namespace Lilium
         /// </summary>
         protected PoseSession OpenSession (Animator display, EditRigDefinition definition, bool render = false)
         {
+            return OpenSession (display, new RigSetup (definition), render);
+        }
+
+        /// <summary>定義と持つ物を決めて開く（S92。テストの人型は prefab のアセットではないので、キャラの設定・バリアントを引けない）</summary>
+        protected PoseSession OpenSession (Animator display, RigSetup setup, bool render = false)
+        {
             GameObject prefab = new GameObject ("Prefab");
             created_.Add (prefab);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             display.transform.SetParent (prefab.transform, false);
-            PoseSession session = Keep (new PoseSession (prefab, definition, render));
+            PoseSession session = Keep (new PoseSession (prefab, setup, render));
             session.clip = NewClip ();
             return session;
         }

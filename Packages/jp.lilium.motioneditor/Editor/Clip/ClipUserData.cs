@@ -23,6 +23,11 @@ namespace Lilium
         public BetweenClips.Settings between;
         /// <summary>元のクリップの、外部の補間の結果のファイルの GUID（S82。結果のファイルが無くなったことを検査で知らせる）</summary>
         public string betweenClip;
+        /// <summary>
+        /// このクリップを作ったリグのバリアントの名前（S92。空・null はベース）。書くのは RigVariants.SetClipVariant だけ
+        /// （Humanoid の土台・焼いた版には書かない）
+        /// </summary>
+        public string rigVariant;
         /// <summary>パッケージの外の項目（ClipExtraData）。中は見ずに残す</summary>
         public List<Extra> extras;
 

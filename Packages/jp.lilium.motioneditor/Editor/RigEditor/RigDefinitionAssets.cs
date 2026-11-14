@@ -79,7 +79,7 @@ namespace Lilium
             if (target == AssignTarget.Character && prefab != null && EditorUtility.IsPersistent (prefab)) {
                 if (settings == null) {
                     // キャラの設定が無ければ作る（作るときに、プロジェクト設定と違う定義は上書きとして入る）
-                    SettingsLookup.Create (prefab, null, copy, project.autoBake);
+                    SettingsLookup.Create (prefab, null, copy);
                 }
                 else {
                     Undo.RecordObject (settings, "Assign Rig Definition");

@@ -44,7 +44,6 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            PreviewStage.heldObjectsForTest = null;
             DestroyCreated ();
         }
 
@@ -84,8 +83,7 @@ namespace Lilium
         /// </param>
         PoseSession Open (bool keyObjectRotation, params HeldObjectDefinition[] objects)
         {
-            PreviewStage.heldObjectsForTest = objects;
-            PoseSession session = OpenSession (TestSkeleton.CreateHumanoid (created_, true, 1), definition_);
+            PoseSession session = OpenSession (TestSkeleton.CreateHumanoid (created_, true, 1), new RigSetup (definition_, objects));
             if (keyObjectRotation) {
                 foreach (HeldObjectDefinition held in objects) KeyObjectState (session.clip, held.name, 1, 1, 0);
             }

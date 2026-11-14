@@ -215,10 +215,7 @@ namespace Lilium
         void ChooseFolder ()
         {
             if (window_.model == null) return;
-            if (window_.characterSettings == null
-                && EditorUtility.DisplayDialog ("Motion Editor", Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_CREATE"), Tr ("POSE_BANK_OVERLAY_SETTINGS_DIALOG_DONT_CREATE"))) {
-                window_.CreateCharacterSettings ();
-            }
+            // 選び直しはこの PC にだけ覚える（S108）。チームで共有する置き場所はプロジェクト設定のフォルダの並びで決める
             string start = folder ?? "Assets";
             string chosen = EditorUtility.OpenFolderPanel (folderPanelTitle, AssetDatabase.IsValidFolder (start) ? start : "Assets", "");
             if (string.IsNullOrEmpty (chosen)) {

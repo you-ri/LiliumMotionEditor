@@ -151,7 +151,7 @@ namespace Lilium
             }
 
             // 持ち物（S91）は骨と一緒に複製させるので、編集用の体を作る前に表示モデルへ置く
-            IReadOnlyList<HeldObjectDefinition> held = FindHeldObjects (prefab);
+            IReadOnlyList<HeldObjectDefinition> held = setup.heldObjects;
             List<string> heldErrors = new List<string> ();
             List<Transform> heldPlaced = HeldObjectRig.Place (animator, held, InstantiateHeldObject, heldErrors);
 
@@ -174,17 +174,6 @@ namespace Lilium
             foreach (string problem in editingRig.errors) {
                 Debug.LogWarning ("MotionEditor: " + prefab.name + ": " + problem);
             }
-        }
-
-        /// <summary>テストで渡す持ち物の定義（テストの人型は prefab のアセットではないので、キャラの設定を引けない）</summary>
-        internal static IReadOnlyList<HeldObjectDefinition> heldObjectsForTest;
-
-        /// <summary>このキャラの持ち物の定義（キャラの設定が無ければ空）</summary>
-        static IReadOnlyList<HeldObjectDefinition> FindHeldObjects (GameObject prefab)
-        {
-            if (heldObjectsForTest != null) return heldObjectsForTest;
-            CharacterSettings settings = SettingsLookup.Find (prefab);
-            return settings != null && settings.heldObjects != null ? settings.heldObjects : (IReadOnlyList<HeldObjectDefinition>)System.Array.Empty<HeldObjectDefinition> ();
         }
 
         /// <summary>持ち物の prefab を複製して、見た目以外を外す（キャラと同じく、無効にした親の下で複製して Awake を走らせない）</summary>

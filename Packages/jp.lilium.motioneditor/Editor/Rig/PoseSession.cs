@@ -36,9 +36,18 @@ namespace Lilium
         /// 描く世界で作る（画像を撮るとき。PoseCapture）。描くには画面のある Unity が要る（-nographics では PreviewRenderUtility を作れない）
         /// </param>
         public PoseSession (GameObject prefab, EditRigDefinition definition, bool render)
+            : this (prefab, RigVariants.Resolve (prefab, "", definition), render)
         {
-            this.definition = definition;
-            stage = render ? new PreviewStage (prefab, definition) : PreviewStage.CreateHeadless (prefab, definition);
+        }
+
+        /// <param name="setup">
+        /// 定義と持つ物（RigVariants.Resolve。S92）。開くクリップの印のバリアントと違えば、キーを打つ・焼くを断る（作り漏らした一時セッションが違うリグで書くのを防ぐ）
+        /// </param>
+        public PoseSession (GameObject prefab, RigSetup setup, bool render = false)
+        {
+            this.setup = setup ?? new RigSetup (null);
+            definition = this.setup.definition;
+            stage = render ? new PreviewStage (prefab, this.setup) : PreviewStage.CreateHeadless (prefab, this.setup);
             host_ = new Host (this);
             targets_ = stage.editingRig != null ? RigTargets.Create (stage) : new List<PoseTarget> ();
             Rebuild ();
@@ -58,6 +67,17 @@ namespace Lilium
 
         /// <summary>開いたときに渡した編集用リグの定義（null ならパッケージの既定）</summary>
         public EditRigDefinition definition { get; private set; }
+
+        /// <summary>開いたときのリグの組み（定義・持つ物・バリアントの名前。S92）</summary>
+        public RigSetup setup { get; private set; }
+
+        /// <summary>
+        /// 今のクリップを、このセッションのリグで書けない理由（書けるなら null）。印のバリアントが違う・無い、今のリグに無い物のカーブがある（S92）
+        /// </summary>
+        string variantProblem
+        {
+            get { return useHumanoidBase ? null : RigVariants.GetClipProblem (clip_, setup); }
+        }
 
         /// <summary>段の並び。窓と同じ物で、姿勢はこれを上から通して作る</summary>
         public PoseStack stack { get; private set; }
@@ -200,7 +220,7 @@ namespace Lilium
         public string GetWriteProblem ()
         {
             string problem = characterProblem
-                ?? PoseCommit.GetWriteProblem (stack, targetClip, writeOverride == null ? EditingClip.GetProblem (clip_) : null);
+                ?? PoseCommit.GetWriteProblem (stack, targetClip, writeOverride == null ? (EditingClip.GetProblem (clip_) ?? variantProblem) : null);
             if (problem != null) return problem;
             string reason;
             if (!stack.CanWrite (stack.writeLayer, out reason)) return reason ?? Tr ("POSE_STACK_CANNOT_WRITE");
@@ -436,7 +456,7 @@ namespace Lilium
             if (character != null) return character;
             if (clip_ == null) return Tr ("POSE_SESSION_NO_CLIP");
             if (!useHumanoidBase) {
-                string problem = EditingClip.GetProblem (clip_);
+                string problem = EditingClip.GetProblem (clip_) ?? variantProblem;
                 if (problem != null) return problem;
             }
             List<AnimationClip> layers = overrides_.Where (o => o.clip != null).Select (o => o.clip).ToList ();

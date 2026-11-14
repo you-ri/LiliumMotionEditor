@@ -30,14 +30,9 @@ namespace Lilium
             return SettingsLookup.GetPoseBankFolders (prefab);
         }
 
-        /// <summary>作る場所を選び直す（null で既定へ戻す）。キャラの設定があればそこへ書き、無ければこの PC にだけ覚える</summary>
+        /// <summary>作る場所を選び直す（null で既定へ戻す）。この PC にだけ覚える（S108。キャラの設定へは書かない）</summary>
         public static void SetFolder (GameObject prefab, string folder)
         {
-            CharacterSettings settings = SettingsLookup.Find (prefab);
-            if (settings != null) {
-                AnimBank.SetFirstFolder (settings, ref settings.overridePoseBankFolders, settings.poseBankFolders, ProjectSettings.instance.poseBankFolders, folder);
-                return;
-            }
             AnimBank.SetFolder (prefab, kPrefsKey, folder);
         }
 

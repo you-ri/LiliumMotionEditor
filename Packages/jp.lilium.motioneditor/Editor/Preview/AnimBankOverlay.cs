@@ -113,6 +113,7 @@ namespace Lilium
                 return;
             }
             AnimationClip clip = AnimBank.Create (path);
+            window_.InheritRigVariant (clip);
             window_.SetClip (clip);
             ShowMessage (null, true);
             Refresh ();

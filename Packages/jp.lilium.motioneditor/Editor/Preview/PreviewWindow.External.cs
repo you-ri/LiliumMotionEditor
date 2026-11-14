@@ -20,7 +20,8 @@ namespace Lilium
         internal PoseSession CreateScratchSession (AnimationClip clip)
         {
             if (stage_ == null || stage_.sourcePrefab == null) return null;
-            return new PoseSession (stage_.sourcePrefab, rigDefinition) { clip = clip };
+            // 持つ物は clip の印のバリアント（S92。窓が同じクリップを開いているなら窓と同じ一覧）
+            return new PoseSession (stage_.sourcePrefab, RigVariants.Resolve (stage_.sourcePrefab, RigVariants.GetClipVariant (clip), rigDefinition)) { clip = clip };
         }
 
         /// <summary>

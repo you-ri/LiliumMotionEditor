@@ -296,14 +296,14 @@ namespace Lilium
         }
 
         /// <summary>
-        /// このキャラの設定を作る。今の値（Layers・編集用リグの定義・Auto）を取り込む
+        /// このキャラの設定を作る。今の値（Layers・編集用リグの定義）を取り込む
         /// </summary>
         public CharacterSettings CreateCharacterSettings ()
         {
             GameObject prefab = settingsPrefab;
             if (prefab == null || characterSettings != null) return characterSettings;
             if (poseStack_ != null) poseStack_.SaveState (layerState_);
-            CharacterSettings settings = SettingsLookup.Create (prefab, layerState_, ProjectSettings.instance.rigDefinition, autoBake_);
+            CharacterSettings settings = SettingsLookup.Create (prefab, layerState_, ProjectSettings.instance.rigDefinition);
             RaiseStateChanged ();
             RaiseStackChanged ();
             return settings;
@@ -353,7 +353,6 @@ namespace Lilium
             if (characterSettings != null) return;
             ProjectSettings project = ProjectSettings.instance;
             layerState_ = SettingsLookup.Clone (project.layers);
-            autoBake_ = project.autoBake;
         }
 
         /// <summary>
@@ -385,12 +384,34 @@ namespace Lilium
             }
         }
 
+        /// <summary>今のクリップを開くリグの組み（クリップの印のバリアント。S92）。世界はこれで作る</summary>
+        RigSetup clipSetup_;
+
+        /// <summary>今のクリップを開くリグの組み（定義・持つ物・バリアントの名前。S92）</summary>
+        public RigSetup rigSetup
+        {
+            get {
+                if (clipSetup_ == null) ResolveClipSetup ();
+                return clipSetup_;
+            }
+        }
+
+        /// <summary>
+        /// 今のキャラとクリップの印から、リグの組みを引き直し、クリップを編集できない理由を作り直す。
+        /// 印のバリアントが無い・今のリグに無い物のカーブがあると、見られるが書けない（決めたこと 11）
+        /// </summary>
+        void ResolveClipSetup ()
+        {
+            clipSetup_ = RigVariants.Resolve (settingsPrefab, RigVariants.GetClipVariant (editingClip_), rigDefinition);
+            clipProblem_ = EditingClip.GetProblem (editingClip_) ?? RigVariants.GetClipProblem (editingClip_, clipSetup_);
+        }
+
         /// <summary>
         /// 今のクリップを編集できるかと、残ったカーブの数を数え直す
         /// </summary>
         void RefreshClipState ()
         {
-            clipProblem_ = EditingClip.GetProblem (editingClip_);
+            ResolveClipSetup ();
             strayCurveCount_ = -1;
             // 土台のフレームの細かさに合わせる（Humanoid を土台にしていればそのクリップ。S14）
             AnimationClip source = baseClip;
@@ -1106,13 +1127,15 @@ namespace Lilium
 
         public void SetClip (AnimationClip clip)
         {
+            // 手で動かした分は、前のクリップへ確定してから切り替える
             CommitHandleKeys ();
             editingClip_ = clip;
             RefreshClipState ();
             keyFrames_ = null;
             clock_.Stop ();
-            // 段はクリップも見て作るので作り直す
-            BuildStack ();
+            // 持つ物が違うバリアントのクリップなら世界を作り直す（S92）。同じなら段だけ（段はクリップも見て作るので作り直す）
+            if (stage_ != null && (stage_.setup == null || stage_.setup.key != clipSetup_.key)) RebuildStage ();
+            else BuildStack ();
             // Humanoid のクリップ（読み取り専用の土台）を開いたら、書き込み先を重ねている Override にする。
             // 取込の試し見では書かないので変えない（書き込み先はキャラの設定に残るため、戻したときにずれる）
             if (!importPreviewing_) WriteToTopOverrideOnHumanoidBase ();
@@ -1235,9 +1258,10 @@ namespace Lilium
         public void RebuildStage ()
         {
             DisposeStage ();
-            stageRigDefinition_ = rigDefinition;
-            stage_ = new PreviewStage (prefab_, stageRigDefinition_);
-            stageHeldObjectsKey_ = characterSettings != null ? characterSettings.GetHeldObjectsKey () : "";
+            // 定義・持つ物・印は直されているかもしれないので引き直す
+            ResolveClipSetup ();
+            stageRigDefinition_ = clipSetup_.definition;
+            stage_ = new PreviewStage (prefab_, clipSetup_);
             stage_.showFloor = showFloor_;
             stage_.grabbedBones = GrabbedDisplayBones;
 
@@ -1323,7 +1347,19 @@ namespace Lilium
 
             AnimationClip clip = new AnimationClip { frameRate = 60 };
             AssetDatabase.CreateAsset (clip, path);
+            InheritRigVariant (clip);
             SetClip (clip);
+        }
+
+        /// <summary>
+        /// 新しく作ったクリップに、今のクリップのバリアントの印を付ける（S92 の決めたこと 9。剣のクリップを開いたまま New すると剣のクリップになる）。
+        /// 無いバリアントの印は継がない（直せないクリップを増やさない）
+        /// </summary>
+        public void InheritRigVariant (AnimationClip created)
+        {
+            RigSetup setup = rigSetup;
+            if (created == null || setup == null || setup.missing || setup.variantName.Length == 0) return;
+            RigVariants.SetClipVariant (created, setup.variantName);
         }
 
         /// <summary>

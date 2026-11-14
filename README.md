@@ -34,7 +34,8 @@ https://github.com/you-ri/LiliumMotionEditor.git?path=/Packages/jp.lilium.motion
 2. Pick a character prefab that has an Animator.
 3. Pose it, set keys, and save to a clip.
 
-+ Project-wide settings are in `Project Settings > Lilium Motion Editor`.
++ Project-wide settings (AnimBank / PoseBank folders, Auto Bake, and more) are in `Project Settings > Lilium Motion Editor`. They are shared by all characters.
++ Per-character settings (the rig definition to use, Layers, held objects) are created with `Create > Lilium Motion Editor > Character Settings` (or with Create on the window's top toolbar).
 + Editing rig definitions can be created with `Create > Lilium Motion Editor > Rig Definition`.
 + The UI language (English / 日本語) can be chosen with Language in `Preferences > Lilium Motion Editor`. It follows the OS language by default.
 

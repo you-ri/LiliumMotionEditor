@@ -276,7 +276,7 @@ namespace Lilium
         {
             if (model == null || prefab_ == null) return;
             CharacterSettings target = settings;
-            if (target == null) target = SettingsLookup.Create (prefab_, null, definition, true);
+            if (target == null) target = SettingsLookup.Create (prefab_, null, definition);
             if (target == null) {
                 ShowNotification (new GUIContent (Tr ("RIG_EDITOR_ADD_OBJECT_NEEDS_PREFAB")), 2);
                 return;

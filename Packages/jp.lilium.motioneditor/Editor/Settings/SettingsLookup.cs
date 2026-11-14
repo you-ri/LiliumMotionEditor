@@ -8,7 +8,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 設定の引き当て（S19）。キャラの設定（上書きした項目だけ）→ プロジェクト設定 → パッケージの既定値 の順
+    /// 設定の引き当て（S19・S108）。キャラへの結び付け（使う定義・Layers）はキャラの設定、使い方（フォルダ・Auto Bake）はプロジェクト設定 → パッケージの既定値
     /// </summary>
     public static class SettingsLookup
     {
@@ -76,6 +76,9 @@ namespace Lilium
                 CharacterSettings settings = AssetDatabase.LoadAssetAtPath<CharacterSettings> (path);
                 string prefab = settings != null ? PrefabGuid (settings.prefab) : null;
                 if (prefab == null) continue;
+                if (settings.hasObsoleteOverrides && warned_.Add ("obsolete:" + path)) {
+                    Debug.LogWarning (Tr ("SETTINGS_LOOKUP_OBSOLETE_OVERRIDES", path), settings);
+                }
                 CharacterSettings first;
                 if (byPrefab_.TryGetValue (prefab, out first)) {
                     if (warned_.Add (path)) {
@@ -87,7 +90,7 @@ namespace Lilium
             }
         }
 
-        static string PrefabGuid (GameObject prefab)
+        internal static string PrefabGuid (GameObject prefab)
         {
             string path = prefab != null ? AssetDatabase.GetAssetPath (prefab) : null;
             return string.IsNullOrEmpty (path) ? null : AssetDatabase.AssetPathToGUID (path);
@@ -124,36 +127,37 @@ namespace Lilium
         /// <summary>AnimBank のフォルダの並び（先頭が作る場所。2 つ目からは実在するものだけ）</summary>
         public static List<string> GetAnimBankFolders (GameObject prefab)
         {
-            return ResolveFolders (prefab, true, ProjectSettings.instance, Find (prefab));
+            return ResolveFolders (prefab, true, ProjectSettings.instance);
         }
 
         /// <summary>PoseBank のフォルダの並び（先頭が作る場所。2 つ目からは実在するものだけ）</summary>
         public static List<string> GetPoseBankFolders (GameObject prefab)
         {
-            return ResolveFolders (prefab, false, ProjectSettings.instance, Find (prefab));
+            return ResolveFolders (prefab, false, ProjectSettings.instance);
         }
 
-        internal static List<string> ResolveFolders (GameObject prefab, bool animBank, ProjectSettings project, CharacterSettings character)
+        /// <summary>
+        /// フォルダの並び。プロジェクト設定の並び（空ならパッケージの既定）で、この PC で作る場所を選び直していれば先頭だけそれに替える。
+        /// 選び直しはキャラの設定へ書かない（S108。チームで共有する決まりはプロジェクト設定の {name} で書く）
+        /// </summary>
+        internal static List<string> ResolveFolders (GameObject prefab, bool animBank, ProjectSettings project)
         {
             List<string> result = new List<string> ();
             if (prefab == null) return result;
-            List<string> patterns = null;
-            if (character != null && (animBank ? character.overrideAnimBankFolders : character.overridePoseBankFolders)) {
-                patterns = animBank ? character.animBankFolders : character.poseBankFolders;
-            }
-            else if (project != null) {
-                patterns = animBank ? project.animBankFolders : project.poseBankFolders;
-            }
+            List<string> patterns = project != null ? (animBank ? project.animBankFolders : project.poseBankFolders) : null;
             if (patterns == null || patterns.Count == 0) {
-                // 指定が無ければ、パッケージの既定（拡張点 → prefab のフォルダの下）
+                // 指定が無ければ、パッケージの既定（この PC で選んだもの → 拡張点 → prefab のフォルダの下）
                 string legacy = animBank ? AnimBank.GetDefaultFolder (prefab) : PoseBank.GetDefaultFolder (prefab);
                 if (!string.IsNullOrEmpty (legacy)) result.Add (legacy);
                 return result;
             }
+            // この PC で選び直した場所は、並びの先頭（作る場所）の代わりになる
+            string saved = animBank ? AnimBank.GetSavedFolder (prefab) : PoseBank.GetSavedFolder (prefab);
+            if (saved != null) result.Add (saved);
             foreach (string pattern in patterns) {
                 string folder = Expand (pattern, prefab, project);
                 if (string.IsNullOrEmpty (folder) || result.Contains (folder)) continue;
-                // 先頭は作る場所なので、まだ無くても入れる（作るときにフォルダを作る）
+                // 先頭は作る場所なので、まだ無くても入れる（作るときにフォルダを作る）。選び直した場所が先頭なら、本来の先頭も実在するときだけ並べる
                 if (result.Count > 0 && !AssetDatabase.IsValidFolder (folder)) continue;
                 result.Add (folder);
             }
@@ -162,9 +166,9 @@ namespace Lilium
 
         /// <summary>
         /// キャラの設定を作る。置き場所はプロジェクト設定（characterSettingsFolder）。
-        /// 今の値（Layers・編集用リグの定義・Auto）と、EditorPrefs に残っている旧いフォルダの選択を取り込む。プロジェクト設定と同じ値は上書きにしない
+        /// 今の値（Layers・編集用リグの定義）を取り込む。プロジェクト設定と同じ定義は上書きにしない
         /// </summary>
-        public static CharacterSettings Create (GameObject prefab, LayerState layers, EditRigDefinition rigDefinition, bool autoBake)
+        public static CharacterSettings Create (GameObject prefab, LayerState layers, EditRigDefinition rigDefinition)
         {
             if (prefab == null || !EditorUtility.IsPersistent (prefab)) return null;
             CharacterSettings existing = Find (prefab);
@@ -178,26 +182,21 @@ namespace Lilium
             CharacterSettings settings = ScriptableObject.CreateInstance<CharacterSettings> ();
             settings.prefab = prefab;
             settings.layers = layers != null ? Clone (layers) : Clone (project.layers);
-            string animBank = AnimBank.GetSavedFolder (prefab);
-            if (!string.IsNullOrEmpty (animBank)) {
-                settings.overrideAnimBankFolders = true;
-                settings.animBankFolders.Add (animBank);
-            }
-            string poseBank = PoseBank.GetSavedFolder (prefab);
-            if (!string.IsNullOrEmpty (poseBank)) {
-                settings.overridePoseBankFolders = true;
-                settings.poseBankFolders.Add (poseBank);
-            }
             settings.rigDefinition = rigDefinition;
             settings.overrideRigDefinition = rigDefinition != project.rigDefinition;
-            settings.autoBake = autoBake;
-            settings.overrideAutoBake = autoBake != project.autoBake;
 
             string path = AssetDatabase.GenerateUniqueAssetPath (folder + "/" + CharacterName (prefab, project) + kAssetSuffix);
             AssetDatabase.CreateAsset (settings, path);
             AssetDatabase.SaveAssetIfDirty (settings);
             Invalidate ();
             return settings;
+        }
+
+        /// <summary>S108 より前の形。Auto Bake はプロジェクト設定だけが持つので、autoBake は使わない</summary>
+        [System.Obsolete ("S108: Auto Bake comes from the project settings only. Use Create (prefab, layers, rigDefinition)")]
+        public static CharacterSettings Create (GameObject prefab, LayerState layers, EditRigDefinition rigDefinition, bool autoBake)
+        {
+            return Create (prefab, layers, rigDefinition);
         }
 
         internal static LayerState Clone (LayerState state)
