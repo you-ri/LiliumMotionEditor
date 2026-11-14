@@ -224,48 +224,36 @@ namespace Lilium
 
             bool rig;
             bool throughStack = BakesThroughStack (output, out rig);
-            // 段を通して焼くときは、見比べ用の参照と演出の段の合成は焼かない（焼き終えたら戻す）
+            // 段を通して焼くときは、見比べ用の参照の合成は焼かない（焼き終えたら戻す）
             List<KeyValuePair<PoseLayer, float>> clipWeights = new List<KeyValuePair<PoseLayer, float>> ();
-            List<PoseLayer> hidden = new List<PoseLayer> ();
             if (throughStack) {
                 foreach (PoseLayer layer in poseStack_.layers) {
                     if (layer.kind == LayerKind.HumanoidAnimation) {
                         clipWeights.Add (new KeyValuePair<PoseLayer, float> (layer, layer.clipWeight));
                         layer.clipWeight = 0;
                     }
-                    if (layer.kind == LayerKind.TimelineClip && layer.enabled) {
-                        hidden.Add (layer);
-                        layer.enabled = false;
-                    }
                 }
             }
 
-            AnimationClip bakeProperties = null;
             try {
                 List<AnimationClip> overrides = bakeOverrides;
                 System.Action<float> apply = throughStack
                     ? time => poseStack_.EvaluateUntil (output, time)
                     : overrides.Count > 0 || useHumanoidBase ? ApplyBakePose : (System.Action<float>)null;
-                using (HumanoidBaker baker = stage_.CreateHumanoidBaker (apply)) {
-                    baker.readFromDisplay = throughStack;
-                    // 段を通さずに焼くときも、キーの間で前後のキーが Locked の点は全身 IK で解く（画面の再生と同じ姿勢を焼く。S25d）
-                    if (!throughStack) {
-                        PoseLayer fullBody = poseStack_.Find (LayerKind.FullBodyIk);
-                        float fullBodyWeight = fullBody != null && fullBody.active ? fullBody.weight : 0;
-                        baker.afterSolve = () => stage_.SolveLockedSpan (fullBodyWeight);
-                    }
-                    baker.bakeRigProxies = !rig;
-                    bakeProperties = OverrideProperties.CreateBakeSource (baseClip, bakePropertyLayers, stage_);
-                    baker.propertySource = bakeProperties;
-                    string path;
-                    HumanoidBaker.Result result = HumanoidOutput.BakeToAsset (baker, baseClip, stage_.sourcePrefab, overrides, output.outputName, out path);
-                    string text = Tr ("PREVIEW_WINDOW_OUTPUT_BAKED", Path.GetFileName (path), result.frameCount, result.milliseconds.ToString ("0"));
-                    if (result.notes != null && result.notes.Count > 0) {
-                        text += Tr ("PREVIEW_WINDOW_IMPORT_NOTES_COUNT", result.notes.Count);
-                        Debug.Log (Tr ("PREVIEW_WINDOW_OUTPUT_LOG_BAKED_NOTES", path, string.Join ("\n- ", result.notes)), AssetDatabase.LoadMainAssetAtPath (path));
-                    }
-                    SetBakeStatus (text, false);
+                // 段を通さずに焼くときも、キーの間で前後のキーが Locked の点は全身 IK で解く（画面の再生と同じ姿勢を焼く。S25d）
+                string path;
+                HumanoidBaker.Result result = stage_.BakeToAsset (baseClip, overrides, bakePropertyLayers, output.outputName, apply,
+                    throughStack ? (float?)null : poseStack_.fullBodyWeight,
+                    baker => {
+                        baker.readFromDisplay = throughStack;
+                        baker.bakeRigProxies = !rig;
+                    }, out path);
+                string text = Tr ("PREVIEW_WINDOW_OUTPUT_BAKED", Path.GetFileName (path), result.frameCount, result.milliseconds.ToString ("0"));
+                if (result.notes != null && result.notes.Count > 0) {
+                    text += Tr ("PREVIEW_WINDOW_IMPORT_NOTES_COUNT", result.notes.Count);
+                    Debug.Log (Tr ("PREVIEW_WINDOW_OUTPUT_LOG_BAKED_NOTES", path, string.Join ("\n- ", result.notes)), AssetDatabase.LoadMainAssetAtPath (path));
                 }
+                SetBakeStatus (text, false);
                 return true;
             }
             catch (System.Exception e) {
@@ -274,9 +262,7 @@ namespace Lilium
                 return false;
             }
             finally {
-                if (bakeProperties != null) Object.DestroyImmediate (bakeProperties);
                 foreach (KeyValuePair<PoseLayer, float> pair in clipWeights) pair.Key.clipWeight = pair.Value;
-                foreach (PoseLayer layer in hidden) layer.enabled = true;
                 if (stage_ != null) stage_.InvalidateClipCurves ();
                 SamplePose ();
             }

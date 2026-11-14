@@ -14,13 +14,14 @@ namespace Lilium
     public sealed class GenericPoseLayer : PoseLayer
     {
         readonly PreviewStage stage_;
-        readonly IGenericHost host_;
+        readonly ILayerSource source_;
 
-        public GenericPoseLayer (PreviewStage stage = null, IGenericHost host = null)
+        /// <param name="source">クリップの持ち主。窓（IGenericHost）なら Layers のパネルの行も作る</param>
+        public GenericPoseLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
-            host_ = host;
-            if (host != null) clip = CreateClip (host);
+            source_ = source;
+            if (source is IGenericHost host) clip = CreateClip (host);
         }
 
         /// <summary>
@@ -29,7 +30,7 @@ namespace Lilium
         AnimationClip blending
         {
             get {
-                AnimationClip generic = host_ != null ? host_.genericClip : null;
+                AnimationClip generic = source_ != null ? source_.genericClip : null;
                 if (generic == null || clipWeight <= 0) return null;
                 return GenericImport.GetProblem (generic) == null ? generic : null;
             }

@@ -18,9 +18,7 @@ namespace Lilium
         /// <summary>持ち替えのカーブか（区間の補間で外す）。キャラの設定はカーブごとに引かず、1 回だけ引く</summary>
         System.Predicate<EditorCurveBinding> InterpolationExclude ()
         {
-            IReadOnlyList<ParentSwitchDefinition> definitions = parentSwitches;
-            if (definitions.Count == 0) return null;
-            return binding => ParentSwitch.IsSwitchCurve (definitions, binding);
+            return ParentSwitch.SwitchCurveFilter (parentSwitches);
         }
 
         /// <summary>frame のキーから次のキーまでの補間（混在なら null）。区間が無ければ null</summary>
@@ -99,9 +97,7 @@ namespace Lilium
         /// <summary>元のクリップの、frame のキーから次のキーまでの外部の動きの状態（S82）</summary>
         public BetweenClips.State GetBetweenState (int frame)
         {
-            AnimationClip clip = editingClip_;
-            if (clip == null || !KeyInterpolations.TryGetSegment (clip, frame, out int start, out int end)) return BetweenClips.State.None;
-            return BetweenClips.GetState (clip, start, end);
+            return BetweenClips.GetStateAt (editingClip_, frame);
         }
 
         /// <summary>
@@ -188,8 +184,7 @@ namespace Lilium
             CommitHandleKeys ();
             Undo.IncrementCurrentGroup ();
             string error;
-            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                session.clip = editingClip_;
+            using (PoseSession session = CreateScratchSession (editingClip_)) {
                 error = session.BakeBetween (frame);
             }
             AfterClipEdit ();

@@ -10,20 +10,10 @@ namespace Lilium
 {
 
     /// <summary>
-    /// パネル（Overlay）が扱うモーションエディタの窓を決める。パネルはプレビュー窓にも Motion Scene（S15d）にも載り、
-    /// Motion Scene に載ったときは、姿勢を作っているプレビュー窓を扱う（2 窓構成）
+    /// モーションエディタの窓に載るパネル（Overlay）の並び・畳み方
     /// </summary>
     static class OverlayWindows
     {
-        public static PreviewWindow Resolve (EditorWindow container)
-        {
-            PreviewWindow preview = container as PreviewWindow;
-            if (preview != null) return preview;
-            SceneWindow scene = container as SceneWindow;
-            if (scene != null && scene.source != null) return scene.source;
-            return Resources.FindObjectsOfTypeAll<PreviewWindow> ().FirstOrDefault ();
-        }
-
         static readonly Dictionary<System.Type, string[]> panelIds_ = new Dictionary<System.Type, string[]> ();
 
         /// <summary>

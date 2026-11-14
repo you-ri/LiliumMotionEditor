@@ -9,24 +9,10 @@ namespace Lilium
     /// <summary>
     /// 外部の骨格の定義と BVH の読み書き（S72）
     /// </summary>
-    public class BvhTests
+    public class BvhTests : RigTestFixture
     {
         const float kPositionTolerance = 0.01f;
         const float kAngleTolerance = 1f;
-
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
 
         /// <summary>
         /// Kimodo の出す形の BVH（包みの Root・腰も位置を持つ・回転は ZYX・単位は cm・End Site 無し・右手系で体は +Z を向く）。

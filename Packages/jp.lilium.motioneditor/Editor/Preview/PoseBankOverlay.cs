@@ -158,13 +158,4 @@ namespace Lilium
         }
     }
 
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "PoseBank.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-posebank", "PoseBank", defaultDisplay = true,
-        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
-    sealed class PoseBankOverlayScene : PoseBankOverlay
-    {
-    }
-
 }

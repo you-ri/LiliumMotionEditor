@@ -14,6 +14,16 @@ namespace Lilium
     public partial class PreviewWindow
     {
         /// <summary>
+        /// clip を開いた、使い捨ての PoseSession（S107d）。窓の世界とは別にキャラを置くので、窓の Override・選択・書き込み先・表示に左右されず、
+        /// 元のクリップだけで計算できる（外部の骨格への書き出し・取り込み・キーの間の焼き・検査）。使い終えたら Dispose。キャラが無ければ null
+        /// </summary>
+        internal PoseSession CreateScratchSession (AnimationClip clip)
+        {
+            if (stage_ == null || stage_.sourcePrefab == null) return null;
+            return new PoseSession (stage_.sourcePrefab, rigDefinition) { clip = clip };
+        }
+
+        /// <summary>
         /// 元のクリップのキーの姿勢を、外部の骨格へ写して BVH にする（S73 を窓から）。
         /// ✏ の位置によらず元のクリップのキーを出す（✏ が前に取り込んだ Override にあると、その密なキーと生成結果を「キー」として渡してしまう）。
         /// 描かない世界で作るので、窓の表示は変わらない
@@ -26,9 +36,8 @@ namespace Lilium
             AnimationClip source = baseClip;
             if (stage_ == null || stage_.sourcePrefab == null || source == null) return Tr ("POSE_SESSION_NO_CLIP");
             CommitHandleKeys ();
-            using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                // Override は重ねない（✏ は元。元へ書く間は上の段が効かないので、元のキーの姿勢そのものになる）
-                session.clip = source;
+            // Override は重ねない（✏ は元。元へ書く間は上の段が効かないので、元のキーの姿勢そのものになる）
+            using (PoseSession session = CreateScratchSession (source)) {
                 string error = session.ExportToSkeleton (skeleton, null, out bvh, out List<int> frames);
                 if (error != null) return error;
                 int[] keys = ClipCycle.GetFrames (source);
@@ -60,8 +69,7 @@ namespace Lilium
             PoseSession.OverrideImportResult imported = null;
             string error = InOwnUndoGroup ("Motion Editor Import Override", () => {
                 ClipUndo.Record (destination, "Motion Editor Import Override");
-                using (PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition)) {
-                    session.clip = source;
+                using (PoseSession session = CreateScratchSession (source)) {
                     string importError = session.ImportOverride (bvh, skeleton, destination, mode, options, out imported);
                     if (importError != null) return importError;
                 }
@@ -170,8 +178,7 @@ namespace Lilium
             if (problem != null) return null;
             // 計算は始めたときのクリップで回すので、つかんでいるハンドルのキーを先に打つ
             CommitHandleKeys ();
-            PoseSession session = new PoseSession (stage_.sourcePrefab, rigDefinition);
-            session.clip = source;
+            PoseSession session = CreateScratchSession (source);
             PoseSession.BetweenImport import = session.BeginImportBetween (bvh, skeleton, segments, out problem);
             if (import == null) {
                 session.Dispose ();

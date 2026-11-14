@@ -10,13 +10,13 @@ namespace Lilium
     /// <summary>
     /// 外部の補間（S81）: キーの間の値を外部の動きの結果から取る。窓・PoseSession・焼き・検査が同じ動きになる
     /// </summary>
-    public class BetweenClipsTests
+    public class BetweenClipsTests : RigTestFixture
     {
+        const float kPositionTolerance = 0.001f;
+        const float kAngleTolerance = 0.1f;
         const string kFolder = "Assets/__MktBetweenClipsTests";
         const float kRate = 60;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         HumanPose rest_;
@@ -41,12 +41,7 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null && !EditorUtility.IsPersistent (o)) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
             BetweenClips.Invalidate ();
         }
@@ -421,15 +416,7 @@ namespace Lilium
         static List<Pose> WorldPose (PoseSession session, int frame)
         {
             session.Evaluate (frame);
-            return session.stage.editingRig.editingBones.Select (b => new Pose (b.position, b.rotation)).ToList ();
-        }
-
-        static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message)
-        {
-            for (int i = 0; i < expected.Count; i++) {
-                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), 0.001f, message + ": " + i + " 番目の骨の位置");
-                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), 0.1f, message + ": " + i + " 番目の骨の向き");
-            }
+            return WorldPose (session);
         }
 
         static List<string> BetweenIssues (PoseSession session)
@@ -531,12 +518,12 @@ namespace Lilium
             Assert.IsNull (session.BakeBetween (0));
             Assert.AreEqual (BetweenClips.State.None, session.GetBetweenState (0), "キーにした区間は外部の動きから外れる");
             Assert.Greater (ClipCycle.GetFrames (session.clip).Length, 20, "区間の中の毎フレームにキー");
-            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "キーにした後 " + frames[i] + "F");
+            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "キーにした後 " + frames[i] + "F", kPositionTolerance, kAngleTolerance);
 
             AssetDatabase.DeleteAsset (kFolder + "/Walk.between.anim");
             BetweenClips.Invalidate ();
             session.stage.InvalidateClipCurves ();
-            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "結果のファイルを消した後 " + frames[i] + "F");
+            for (int i = 0; i < frames.Length; i++) AssertSamePose (before[i], WorldPose (session, frames[i]), "結果のファイルを消した後 " + frames[i] + "F", kPositionTolerance, kAngleTolerance);
             CollectionAssert.AreEqual (new[] { "missing@0-60" }, BetweenIssues (session), "結果のファイルが無いことを検査で知らせる");
         }
 

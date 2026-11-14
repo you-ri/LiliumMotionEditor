@@ -132,19 +132,6 @@ namespace Lilium
             Assert.AreEqual (0.33f, copy.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness, 1e-6f);
         }
 
-        [Test]
-        public void FullBodyHash_ChangesWithSettings ()
-        {
-            string hash = definition_.GetFullBodyHash ();
-            Assert.IsNotEmpty (hash);
-            Assert.AreEqual (hash, definition_.GetFullBodyHash (), "同じ設定なら同じ");
-            definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness = 0.31f;
-            string stiffer = definition_.GetFullBodyHash ();
-            Assert.AreNotEqual (hash, stiffer, "硬さを変えると変わる");
-            definition_.fullBody.hipsPin = 0.11f;
-            Assert.AreNotEqual (stiffer, definition_.GetFullBodyHash (), "腰を留める強さを変えると変わる");
-        }
-
         // ---- 変更の知らせ ----
 
         [Test]

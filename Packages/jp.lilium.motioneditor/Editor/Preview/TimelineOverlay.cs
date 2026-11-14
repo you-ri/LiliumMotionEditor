@@ -93,7 +93,7 @@ namespace Lilium
             if (window_ == null) return;
 
             timebar_ = new TimebarElement (window_);
-            transport_ = new TransportBar (window_, timebar_, containerWindow);
+            transport_ = new TransportBar (window_, timebar_);
             VisualElement topHandle = timebar_.CreateResizeHandle (true);
             VisualElement bottomHandle = timebar_.CreateResizeHandle (false);
             root.Add (topHandle);
@@ -133,16 +133,6 @@ namespace Lilium
                 }
             }
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Timeline.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-timeline", "Timeline", defaultDisplay = true,
-        defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom,
-        defaultLayout = Layout.HorizontalToolbar)]
-    sealed class TimelineOverlayScene : TimelineOverlay
-    {
     }
 
 }

@@ -24,31 +24,9 @@ namespace Lilium
             definition_ = CreateDefinition ();
         }
 
-        sealed class Setup
+        FullBodySetup Create (bool twistFrames = false)
         {
-            public Animator display;
-            public EditingRig rig;
-            public EditingRigSolver solver;
-            public FullBodyRig body;
-            public Vector3 forward;
-        }
-
-        Setup Create (bool twistFrames = false)
-        {
-            Setup s = new Setup ();
-            s.display = CreateCharacter (twistFrames: twistFrames);
-            s.display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            s.rig = CreateEditingRig (definition_, s.display);
-            s.solver = new EditingRigSolver (s.rig);
-            s.solver.Capture ();
-            s.body = Keep (new FullBodyRig (s.rig, definition_));
-            s.forward = s.rig.root.transform.TransformDirection (s.rig.bodyForward).normalized;
-            return s;
-        }
-
-        static Transform Bone (Setup s, HumanBodyBones bone)
-        {
-            return s.rig.GetEditingBone (bone);
+            return CreateFullBody (CreateCharacter (twistFrames: twistFrames), definition_);
         }
 
         /// <summary>全軸を同じ範囲にする</summary>
@@ -63,26 +41,8 @@ namespace Lilium
             limit.slack = slack;
         }
 
-        static void Pin (Setup s, HumanBodyBones bone, Vector3 offset, float weight = 1, bool rotation = false)
-        {
-            s.body.CapturePoint (bone);
-            s.body.SetPointPositionWorld (bone, Bone (s, bone).position + offset);
-            s.body.SetPositionWeight (bone, weight);
-            if (rotation) s.body.SetRotationWeight (bone, 1);
-        }
-
-        /// <summary>基準姿勢へ戻して、編集用リグ → 全身 IK の順に解く</summary>
-        static void Solve (Setup s)
-        {
-            s.body.Unsolve ();
-            s.rig.ResetBonesToRest ();
-            s.solver.Solve ();
-            s.body.CaptureInput ();
-            s.body.Solve ();
-        }
-
         /// <summary>両足を固定し、左手を上と前へ大きく引く（腕を範囲の外まで振らないと届かない）</summary>
-        static void PullLeftHand (Setup s, float weight = 1)
+        static void PullLeftHand (FullBodySetup s, float weight = 1)
         {
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, 1, true);
@@ -147,7 +107,7 @@ namespace Lilium
             // 骨の軸の取り方が違うキャラでも、同じ FK の値なら同じ角度制限の値になる（体の向きの軸で測る）
             Vector3[] angles = new Vector3[2];
             for (int k = 0; k < 2; k++) {
-                Setup s = Create (twistFrames: k == 1);
+                FullBodySetup s = Create (twistFrames: k == 1);
                 s.rig.FindControl (RigPaths.Fk (HumanBodyBones.LeftUpperArm)).localRotation = Quaternion.Euler (10, 20, 30);
                 s.rig.ResetBonesToRest ();
                 s.solver.Solve ();
@@ -163,12 +123,12 @@ namespace Lilium
         public void Pull_DoesNotExceedRangePlusSlack ()
         {
             // 制限なしなら範囲 + 遊び（30°）を越えて振る引き方
-            Setup free = Create ();
+            FullBodySetup free = Create ();
             PullLeftHand (free);
             Assert.Greater (MaxAbs (Angles (free.rig, Bone (free, HumanBodyBones.LeftUpperArm))), 35, "制限なしでは 30° を越える（引き方の確かめ）");
 
             Limit (HumanBodyBones.LeftUpperArm, -20, 20, 10);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             PullLeftHand (s);
             Vector3 angles = Angles (s.rig, Bone (s, HumanBodyBones.LeftUpperArm));
             Assert.LessOrEqual (MaxAbs (angles), 30 + kAngleTolerance, "範囲 + 遊びを越えない: " + angles);
@@ -180,7 +140,7 @@ namespace Lilium
         {
             // 全身 IK の結果はキーに残り、次に解くときの元の姿勢になる。結果から解き直しても、範囲 + 遊びの分ずつ広がらない
             Limit (HumanBodyBones.LeftUpperArm, -20, 20, 10);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             PullLeftHand (s);
             for (int k = 0; k < 3; k++) {
                 s.body.CaptureInput ();
@@ -203,7 +163,7 @@ namespace Lilium
             hand.x.min = -10;
             hand.x.max = 10;
             hand.slack = 5;
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.LeftHand, Vector3.zero, 1, true);
@@ -225,7 +185,7 @@ namespace Lilium
             for (int k = 0; k < 2; k++) {
                 definition_ = CreateDefinition ();
                 Limit (HumanBodyBones.LeftUpperArm, -20, 20, slacks[k]);
-                Setup s = Create ();
+                FullBodySetup s = Create ();
                 PullLeftHand (s, 0.9f);
                 overshoot[k] = MaxAbs (Angles (s.rig, Bone (s, HumanBodyBones.LeftUpperArm))) - 20;
             }
@@ -240,7 +200,7 @@ namespace Lilium
         {
             // 腕のひねりは体の右の軸（x）
             definition_.FindFkControl (HumanBodyBones.LeftUpperArm).limit.x.mode = EditRigDefinition.LimitMode.Locked;
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             PullLeftHand (s);
             Vector3 angles = Angles (s.rig, Bone (s, HumanBodyBones.LeftUpperArm));
             Assert.LessOrEqual (Mathf.Abs (angles.x), kAngleTolerance, "固定の軸は回らない: " + angles);
@@ -256,7 +216,7 @@ namespace Lilium
             for (int k = 0; k < 2; k++) {
                 definition_ = CreateDefinition ();
                 if (k == 1) Limit (HumanBodyBones.LeftUpperArm, -20, 20, 10);
-                Setup s = Create ();
+                FullBodySetup s = Create ();
                 s.rig.FindControl (RigPaths.Fk (HumanBodyBones.LeftUpperArm)).localRotation = Quaternion.Euler (0, 0, 70);
                 s.rig.ResetBonesToRest ();
                 s.solver.Solve ();
@@ -272,7 +232,7 @@ namespace Lilium
                 moved[k] = Pose (s.rig);
                 if (k == 1) Assert.Greater (MaxAbs (Angles (s.rig, Bone (s, HumanBodyBones.LeftUpperArm))), 45, "範囲の内側へ引き戻さない");
             }
-            Setup check = Create ();
+            FullBodySetup check = Create ();
             AssertSamePose (stay[0], LoadPose (check, stay[1]), "点を留めたとき");
             AssertSamePose (moved[0], LoadPose (check, moved[1]), "点を少し動かしたとき");
         }
@@ -286,7 +246,7 @@ namespace Lilium
             foreach (HumanBodyBones leg in new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg }) {
                 Limit (leg, -20, 20, 10);
             }
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             s.rig.FindControl (RigPaths.Fk (HumanBodyBones.RightUpperLeg)).localRotation = Quaternion.Euler (-110, 60, 10);
             s.rig.FindControl (RigPaths.Fk (HumanBodyBones.RightLowerLeg)).localRotation = Quaternion.Euler (110, 0, 0);
             s.rig.ResetBonesToRest ();
@@ -319,7 +279,7 @@ namespace Lilium
 
 
         /// <summary>名前ごとの姿勢を、リグの骨へ入れる（比べるために、同じ形のリグへ写す）</summary>
-        static EditingRig LoadPose (Setup s, Dictionary<string, (Vector3, Quaternion)> pose)
+        static EditingRig LoadPose (FullBodySetup s, Dictionary<string, (Vector3, Quaternion)> pose)
         {
             Transform root = s.rig.root.transform;
             foreach (Transform bone in s.rig.editingBones) {
@@ -332,7 +292,7 @@ namespace Lilium
         public void FreeLimits_DoNotChangeTheSolve ()
         {
             // 範囲を十分広くしても、制限なしと同じ姿勢（制限の計算が、効かない所で姿勢を動かさない）
-            Setup free = Create ();
+            FullBodySetup free = Create ();
             PullLeftHand (free);
             Dictionary<string, (Vector3, Quaternion)> expected = Pose (free.rig);
             foreach (EditRigDefinition.FkControl control in definition_.fkControls) {
@@ -342,7 +302,7 @@ namespace Lilium
                     control.limit[axis].max = 179;
                 }
             }
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             PullLeftHand (s);
             AssertSamePose (expected, s.rig, "制限なしと同じ");
         }
@@ -352,7 +312,7 @@ namespace Lilium
         {
             Limit (HumanBodyBones.LeftUpperArm, -20, 20, 10);
             Limit (HumanBodyBones.Spine, -10, 10, 15);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.LeftHand, Vector3.up * 0.6f + s.forward * 0.3f);
@@ -464,7 +424,7 @@ namespace Lilium
             Limit (HumanBodyBones.LeftUpperArm, -20, 20, 10);
             definition_.FindFkControl (HumanBodyBones.LeftUpperArm).limit.y.max = 5;
             definition_.FindFkControl (HumanBodyBones.RightUpperArm).limit = definition_.FindFkControl (HumanBodyBones.LeftUpperArm).limit.Mirrored ();
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, 1, true);
             Pin (s, HumanBodyBones.LeftHand, Vector3.up * 0.4f + s.forward * 0.4f);
@@ -473,16 +433,6 @@ namespace Lilium
             Vector3 left = Angles (s.rig, Bone (s, HumanBodyBones.LeftUpperArm));
             Vector3 right = Angles (s.rig, Bone (s, HumanBodyBones.RightUpperArm));
             Assert.LessOrEqual (Vector3.Distance (left, new Vector3 (right.x, -right.y, -right.z)), 0.5f, "左右対称: " + left + " / " + right);
-        }
-
-        [Test]
-        public void Hash_ChangesOnlyWithLimits ()
-        {
-            string before = definition_.GetFullBodyHash ();
-            definition_.FindFkControl (HumanBodyBones.LeftUpperArm).limit.slack = 30;
-            Assert.AreEqual (before, definition_.GetFullBodyHash (), "制限していない骨の遊びはハッシュに入らない");
-            definition_.FindFkControl (HumanBodyBones.LeftUpperArm).limit.y.mode = EditRigDefinition.LimitMode.Range;
-            Assert.AreNotEqual (before, definition_.GetFullBodyHash ());
         }
 
         [Test]

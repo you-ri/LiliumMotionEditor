@@ -27,8 +27,6 @@ namespace Lilium
         User,
         /// <summary>表示モデルの骨。出力なので値を持たない</summary>
         DisplayBone,
-        /// <summary>一緒に見ている演出（Timeline）の中で、このクリップがどう置かれているか（時計の写像・ブレンド。S15b）</summary>
-        TimelineClip,
         /// <summary>焼いて書き出す段（S20）。この段より上を通った姿勢を焼く</summary>
         Output,
         /// <summary>全身 IK（S25）。固定の強さが入っている点へ届くように、元の姿勢を曲げる。リグの定義が全身 IK のときだけ並ぶ</summary>

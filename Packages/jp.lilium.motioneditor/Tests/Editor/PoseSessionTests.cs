@@ -12,14 +12,12 @@ namespace Lilium
     /// <summary>
     /// 窓を開かずに姿勢を作ってキーを打つ（S35）。描かない世界でも描く世界（窓）と同じ姿勢になり、打ったキーから同じ姿勢に戻る
     /// </summary>
-    public class PoseSessionTests
+    public class PoseSessionTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-4f;
         const float kAngleTolerance = 0.01f;
         const string kFolder = "Assets/__MktPoseSessionTest";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -32,19 +30,8 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
-        }
-
-        T Keep<T> (T disposable) where T : System.IDisposable
-        {
-            disposables_.Add (disposable);
-            return disposable;
         }
 
         GameObject CreatePrefab ()
@@ -62,28 +49,12 @@ namespace Lilium
             return Keep (new PoseSession (prefab, definition_, render));
         }
 
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
-        }
-
         static List<Pose> Snapshot (PoseSession session)
         {
             List<Pose> result = new List<Pose> ();
             foreach (Transform t in session.stage.editingRig.editingBones) result.Add (new Pose (t.localPosition, t.localRotation));
             foreach (Transform t in session.stage.animator.GetComponentsInChildren<Transform> ()) result.Add (new Pose (t.localPosition, t.localRotation));
             return result;
-        }
-
-        static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message)
-        {
-            Assert.AreEqual (expected.Count, actual.Count, message + ": 骨の数");
-            for (int i = 0; i < expected.Count; i++) {
-                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), kPositionTolerance, message + ": " + i + " 番目の骨の位置");
-                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), kAngleTolerance, message + ": " + i + " 番目の骨の回転");
-            }
         }
 
         static void SetRotation (AnimationClip clip, string path, float start, Quaternion a, float end, Quaternion b)
@@ -223,7 +194,7 @@ namespace Lilium
             foreach (int frame in new[] { 0, 5, 10, 20 }) {
                 headless.Evaluate (frame);
                 rendered.Evaluate (frame);
-                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F");
+                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F", kPositionTolerance, kAngleTolerance);
             }
             headless.Evaluate (10);
             Assert.IsNotEmpty (headless.stage.lockedSpanPoints, "キーの間で足を留めている（確かめたい経路を通っている）");
@@ -254,7 +225,7 @@ namespace Lilium
             foreach (int frame in new[] { 0, 15, 30 }) {
                 headless.Evaluate (frame);
                 rendered.Evaluate (frame);
-                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F");
+                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F", kPositionTolerance, kAngleTolerance);
             }
 
             // Override が効いている（確かめたい経路を通っている）
@@ -291,7 +262,7 @@ namespace Lilium
             foreach (int frame in new[] { 0, 15, 30 }) {
                 headless.Evaluate (frame);
                 rendered.Evaluate (frame);
-                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F");
+                AssertSamePose (Snapshot (rendered), Snapshot (headless), frame + "F", kPositionTolerance, kAngleTolerance);
             }
         }
 
@@ -314,7 +285,7 @@ namespace Lilium
             Assert.IsTrue (EditingClip.HasPointKey (clip, RigPaths.Body (HumanBodyBones.LeftHand), 12 / 60f), "動かした点のキーを打つ");
             session.Evaluate (0);
             session.Evaluate (12);
-            AssertSamePose (posed, Snapshot (session), "打ったキーから作り直した姿勢");
+            AssertSamePose (posed, Snapshot (session), "打ったキーから作り直した姿勢", kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -353,7 +324,7 @@ namespace Lilium
             Assert.IsNotEmpty (AnimationUtility.GetCurveBindings (layer), "Override へ書く");
             session.Evaluate (0);
             session.Evaluate (15);
-            AssertSamePose (posed, Snapshot (session), "元＋Override から作り直した姿勢");
+            AssertSamePose (posed, Snapshot (session), "元＋Override から作り直した姿勢", kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -407,7 +378,7 @@ namespace Lilium
             Assert.IsNull (session.CommitPose ());
             session.Evaluate (0);
             session.Evaluate (5);
-            AssertSamePose (posed, Snapshot (session), "打ったキーから作り直した姿勢");
+            AssertSamePose (posed, Snapshot (session), "打ったキーから作り直した姿勢", kPositionTolerance, kAngleTolerance);
         }
 
         [Test]

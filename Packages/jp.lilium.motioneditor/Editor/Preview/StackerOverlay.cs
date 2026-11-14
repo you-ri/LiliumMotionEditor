@@ -103,7 +103,7 @@ namespace Lilium
             VisualElement buttons = new VisualElement ();
             buttons.style.flexDirection = FlexDirection.Row;
             Button keyAll = new Button (() => window_.KeyAll ()) { text = "Key All" };
-            ShortcutTooltip.Set (keyAll, containerWindow, Tr ("STACKER_OVERLAY_KEY_ALL_TOOLTIP"), "Key All");
+            ShortcutTooltip.Set (keyAll, Tr ("STACKER_OVERLAY_KEY_ALL_TOOLTIP"), "Key All");
             keyAll.style.flexGrow = 1;
             buttons.Add (keyAll);
             Button insert = new Button (() => window_.StackerInsert ()) { text = "Insert", tooltip = Tr ("STACKER_OVERLAY_INSERT_TOOLTIP") };
@@ -214,15 +214,6 @@ namespace Lilium
                 groupName_.SelectAll ();
             });
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Stacker.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-stacker", "Stacker", defaultDisplay = false,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    sealed class StackerOverlayScene : StackerOverlay
-    {
     }
 
 }

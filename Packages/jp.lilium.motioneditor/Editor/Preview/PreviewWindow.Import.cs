@@ -318,19 +318,13 @@ namespace Lilium
         /// </summary>
         public bool ImportGenericClip ()
         {
-            return ImportGenericClip (true);
-        }
-
-        /// <param name="confirm">false なら確認のダイアログを出さない（スクリプトから使うとき。ダイアログはエディタを止める）</param>
-        public bool ImportGenericClip (bool confirm)
-        {
             string problem = GetImportProblem ();
             if (problem != null) {
                 SetBakeStatus (Tr ("PREVIEW_WINDOW_IMPORT_CANNOT_IMPORT", problem), true);
                 return false;
             }
             bool hasKeys = AnimationUtility.GetCurveBindings (editingClip_).Any (EditingClip.IsRigBinding);
-            if (confirm && hasKeys && !EditorUtility.DisplayDialog ("Motion Editor",
+            if (hasKeys && !EditorUtility.DisplayDialog ("Motion Editor",
                 Tr ("PREVIEW_WINDOW_IMPORT_REPLACE_KEYS_CONFIRM", editingClip_.name, genericClip_.name), Tr ("PREVIEW_WINDOW_IMPORT_REPLACE"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }

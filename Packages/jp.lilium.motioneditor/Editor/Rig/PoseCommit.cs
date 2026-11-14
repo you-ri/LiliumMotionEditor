@@ -13,6 +13,40 @@ namespace Lilium
     public static class PoseCommit
     {
         /// <summary>
+        /// 書き込み先（✏）の段のクリップへ今キーを打てない理由のうち、窓と PoseSession に共通のもの（打てるなら null。S107a）。
+        /// 合成の重みが 1 未満のとき・段の 👁 を落としているときは、画面の値がクリップから出ていないので書かない。
+        /// 段が見つからないときも書かない（判定を飛ばして書けてしまわないように）。
+        /// ✋ からの経路とサイクルキーは見ない（窓は Rig Values のパネルのように ✋ を通さずに値を動かす書き込みがあり、サイクルキーは窓が操作ごとに見る）
+        /// </summary>
+        /// <param name="target">キーを打つクリップ（書き込み先が Override ならそのクリップ）</param>
+        /// <param name="baseClipProblem">元のクリップが編集用クリップとして書けない理由。元へ書くときだけ見る（Override へ書くときの土台は Humanoid でもよい）</param>
+        public static string GetWriteProblem (PoseStack stack, AnimationClip target, string baseClipProblem)
+        {
+            if (stack == null || target == null) return Tr ("POSE_SESSION_NO_CLIP");
+            PoseLayer write = stack.writeLayer;
+            if (!(write is OverrideLayer) && baseClipProblem != null) return baseClipProblem;
+            if (write == null) return Tr ("POSE_STACK_CANNOT_WRITE");
+            if (!write.canWrite) return string.IsNullOrEmpty (write.unavailableReason) ? Tr ("POSE_STACK_CANNOT_WRITE") : write.unavailableReason;
+            if (!write.enabled) return Tr ("POSE_STACK_DISABLED");
+            if (write.clipWeight < 1) return Tr ("POSE_SESSION_BLENDING");
+            return null;
+        }
+
+        /// <summary>
+        /// 書き込み先（✏）の段のクリップの、今のフレームへの書き出し口（S107b）。書き込み先が Override なら元からの差分として書く口を付け（S14）、
+        /// サイクルキーのフレームなら先頭のキーへ打つ（S32）。パスの基準は編集用の体のルート。書けるかは先に GetWriteProblem で見る
+        /// </summary>
+        /// <param name="target">キーを打つクリップ（書き込み先が Override ならそのクリップ）</param>
+        /// <param name="keyFrames">target のキーのあるフレーム</param>
+        public static CurveWriter BeginCurves (PreviewStage stage, PoseStack stack, AnimationClip target, int frame, bool cycle, int[] keyFrames, string undoName)
+        {
+            OverrideLayer layer = stack != null ? stack.writeLayer as OverrideLayer : null;
+            CurveWriter writer = CurveWriter.Begin (target, stage.editingRoot, KeyFrameToWrite (frame, cycle, keyFrames, layer != null), undoName);
+            if (layer != null) AttachOverrideStore (writer, stage, layer.mode, layer.mask);
+            return writer;
+        }
+
+        /// <summary>
         /// 書き込み先が Override のとき、打つ値（狙いの値）をクリップに入れる値へ直す口を書き出し口に付ける（S14）。
         /// 元の値は、姿勢を作ったときに書き込み先の層の手前で控えたもの（PreviewStage.CaptureOverrideSource）。
         /// 段にマスクがあれば、マスクの外のカーブは打たない（S17。打っても重ねるときに使われず、クリップに使われない値が残るだけ）

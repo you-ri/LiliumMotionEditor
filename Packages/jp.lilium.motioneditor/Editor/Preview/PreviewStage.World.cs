@@ -10,7 +10,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// 世界の部品を作る。カメラとライト・床とグリッド・材質、キャラの複製と、プレビューで動かさないコンポーネントを剥がす（StripPolicy）
+    /// 世界の部品を作る。カメラとライト・床とグリッド・材質、キャラの複製と、プレビューで動かさないコンポーネントを剥がす
     /// </summary>
     public sealed partial class PreviewStage
     {
@@ -128,16 +128,11 @@ namespace Lilium
         void CreateModel (GameObject prefab)
         {
             GameObject holder = CreateRoot ("Model");
-            // 開いているシーンのキャラを編集するときは、その親と同じ場所に置く（編集用の体は作るときに表示モデルの置き場所を写す）
-            if (placement_ != null) {
-                holder.transform.SetPositionAndRotation (placement_.position, placement_.rotation);
-                holder.transform.localScale = placement_.lossyScale;
-            }
             // 親を無効にしてから複製する。ゲーム用コンポーネントの Awake / OnEnable を走らせずに外せる
             holder.SetActive (false);
             model = Object.Instantiate (prefab, holder.transform, false);
             model.name = prefab.name;
-            StripComponents (model, StripPolicy.EditTarget);
+            StripComponents (model);
             foreach (SkinnedMeshRenderer skin in model.GetComponentsInChildren<SkinnedMeshRenderer> (true)) {
                 // 骨を動かしても枠が追従しないので、カメラの外と判定されて消えないようにする
                 skin.updateWhenOffscreen = true;
@@ -198,7 +193,7 @@ namespace Lilium
             GameObject holder = CreateGameObject ("Held Object");
             holder.SetActive (false);
             GameObject instance = Object.Instantiate (prefab, holder.transform, false);
-            StripComponents (instance, StripPolicy.EditTarget);
+            StripComponents (instance);
             instance.transform.SetParent (null, false);
             Object.DestroyImmediate (holder);
             return instance;
@@ -213,15 +208,15 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 残すもの以外のコンポーネントを外す（StripPolicy）。RequireComponent で頼られているものは、頼っている側を先に外す
+        /// 残すもの以外のコンポーネントを外す。RequireComponent で頼られているものは、頼っている側を先に外す
         /// </summary>
-        static void StripComponents (GameObject root, StripPolicy policy)
+        static void StripComponents (GameObject root)
         {
             foreach (Transform t in root.GetComponentsInChildren<Transform> (true)) {
                 GameObjectUtility.RemoveMonoBehavioursWithMissingScript (t.gameObject);
             }
 
-            List<Component> pending = root.GetComponentsInChildren<Component> (true).Where (c => !IsKeptComponent (c, policy)).ToList ();
+            List<Component> pending = root.GetComponentsInChildren<Component> (true).Where (c => !IsKeptComponent (c)).ToList ();
             bool removed = true;
             while (pending.Count > 0 && removed) {
                 removed = false;
@@ -245,8 +240,6 @@ namespace Lilium
             // 残した段はこちらから呼ぶときだけ動かす（edit-mode で勝手に走らせない）
             foreach (Component component in root.GetComponentsInChildren<Component> (true)) {
                 if (IsVisualComponent (component)) continue;
-                // 文脈の Director は時計を窓から回すので止めない（S15a）
-                if (policy == StripPolicy.Context && IsTimelineComponent (component)) continue;
                 Behaviour behaviour = component as Behaviour;
                 if (behaviour != null) behaviour.enabled = false;
             }
@@ -279,26 +272,11 @@ namespace Lilium
         /// 外さずに残すもの。見た目（メッシュ・Animator）に加えて、**段として出すもの**（Rigging の部品・[PoseLayer]）。
         /// 段のコンポーネントを外すと「キャラに付いていない」ことになり、その段がスタックから消えてしまう
         /// </summary>
-        static bool IsKeptComponent (Component component, StripPolicy policy)
+        static bool IsKeptComponent (Component component)
         {
             if (IsVisualComponent (component)) return true;
             if (IsKeptByHook (component)) return true;
-            switch (policy) {
-                case StripPolicy.Context:
-                    return IsTimelineComponent (component) || component is ParticleSystem || component is ParticleSystemRenderer;
-                default:
-                    return RigProbe.IsRigComponent (component) || LayerTypes.IsPoseLayer (component);
-            }
-        }
-
-        /// <summary>
-        /// Director と、Timeline の仕組みに属するもの（名前空間で見る。Timeline パッケージへは依存しない）
-        /// </summary>
-        static bool IsTimelineComponent (Component component)
-        {
-            if (component is UnityEngine.Playables.PlayableDirector) return true;
-            string ns = component.GetType ().Namespace;
-            return ns != null && (ns == "UnityEngine.Timeline" || ns.StartsWith ("UnityEngine.Timeline."));
+            return RigProbe.IsRigComponent (component) || LayerTypes.IsPoseLayer (component);
         }
 
         static bool IsVisualComponent (Component component)

@@ -156,13 +156,4 @@ namespace Lilium
         }
     }
 
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Properties.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-properties", "Properties", defaultDisplay = false,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    sealed class PropertiesOverlayScene : PropertiesOverlay
-    {
-    }
-
 }

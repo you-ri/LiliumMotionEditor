@@ -300,6 +300,13 @@ namespace Lilium
             return System.Array.IndexOf (entry.lost, range) >= 0 ? State.Lost : State.None;
         }
 
+        /// <summary>元のクリップの、frame のキーから次のキーまでの外部の補間の状態（区間が無ければ None。S82）。窓と PoseSession が同じ物を使う</summary>
+        public static State GetStateAt (AnimationClip baseClip, int frame)
+        {
+            if (baseClip == null || !KeyInterpolations.TryGetSegment (baseClip, frame, out int start, out int end)) return State.None;
+            return GetState (baseClip, start, end);
+        }
+
         /// <summary>
         /// フレームの間（start から end。タイムラインのトラックのキーの間）に掛かる外部の補間の状態。
         /// 使う区間が掛かれば Fresh（どれかが古ければ Stale）、使えなくなった区間だけが掛かれば Lost、どれも掛からなければ None

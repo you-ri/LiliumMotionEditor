@@ -11,10 +11,8 @@ namespace Lilium
     /// <summary>
     /// モーションの検査（S37）。わざと壊したモーションで、壊した項目だけが出る。正常なモーションでは何も出ない
     /// </summary>
-    public class MotionLintTests
+    public class MotionLintTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -24,31 +22,10 @@ namespace Lilium
             created_.Add (definition_);
         }
 
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
         PoseSession Open ()
         {
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
             // 足を踵・つま先の先・小指側で置くので、つま先の骨のあるキャラにする（足の点はつま先の骨のあるキャラにだけできる）
-            Animator display = TestSkeleton.CreateHumanoidWithToes (created_);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
-            PoseSession session = new PoseSession (prefab, definition_);
-            disposables_.Add (session);
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            session.clip = clip;
-            return session;
+            return OpenSession (TestSkeleton.CreateHumanoidWithToes (created_), definition_);
         }
 
         static PoseDocument Rest (PoseSession session)

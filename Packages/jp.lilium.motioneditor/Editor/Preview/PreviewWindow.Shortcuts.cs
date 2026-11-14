@@ -10,17 +10,14 @@ namespace Lilium
 {
 
     /// <summary>
-    /// ショートカット（この窓にフォーカスがあるときだけ効く。Edit > Shortcuts で変えられる）。中身は窓の操作を呼ぶだけ。
-    /// Motion Scene の窓のものは PreviewWindow.SceneShortcuts
+    /// ショートカット（この窓にフォーカスがあるときだけ効く。Edit > Shortcuts で変えられる）。中身は窓の操作を呼ぶだけ
     /// </summary>
     public partial class PreviewWindow
     {
-        /// <summary>
-        /// ショートカットを、受けた窓で行う。Motion Scene の窓が受けたら、その窓が映しているプレビュー窓で行う
-        /// </summary>
+        /// <summary>ショートカットを、受けた窓で行う</summary>
         static void Run (ShortcutArguments args, System.Action<PreviewWindow> action)
         {
-            PreviewWindow window = OverlayWindows.Resolve (args.context as EditorWindow);
+            PreviewWindow window = args.context as PreviewWindow;
             if (window != null) action (window);
         }
 
@@ -58,45 +55,22 @@ namespace Lilium
         /// Ctrl+C / Ctrl+V / Ctrl+A（Unity の Edit メニューの Copy / Paste / Select All のコマンド）で、姿勢のコピー・貼り付けと全選択（10-21 ユーザー指示）。
         /// [Shortcut] で同じキーを取ると、文字欄やタイムラインのキー欄（選んだキーのコピー・貼り付け。TimebarElement）より先に取ってしまうので、
         /// コマンドで受ける。フォーカスのある要素が先に受け、受けなかったものがここまで上がってくる。キーは Edit > Shortcuts の Main Menu/Edit で変わる。
-        /// オーバーレイ（パネル）は rootVisualElement の外にあるので、パネルのボタンにフォーカスがあるときも受けられるよう、窓ごとの根で受ける。
-        /// Motion Scene の窓も同じ口を使う（resolve が、今コマンドを受けるプレビュー窓を返す。受けないときは null）
+        /// オーバーレイ（パネル）は rootVisualElement の外にあるので、パネルのボタンにフォーカスがあるときも受けられるよう、窓の根（パネルの根のすぐ下）で受ける
         /// </summary>
-        internal static void RegisterEditCommands (EditorWindow host, System.Func<PreviewWindow> resolve)
+        void RegisterEditCommands ()
         {
-            VisualElement root = WindowRoot (host);
-            root.RegisterCallback<ValidateCommandEvent, System.Func<PreviewWindow>> (OnValidateEditCommand, resolve);
-            root.RegisterCallback<ExecuteCommandEvent, System.Func<PreviewWindow>> (OnExecuteEditCommand, resolve);
-        }
-
-        internal static void UnregisterEditCommands (EditorWindow host)
-        {
-            VisualElement root = WindowRoot (host);
-            root.UnregisterCallback<ValidateCommandEvent, System.Func<PreviewWindow>> (OnValidateEditCommand);
-            root.UnregisterCallback<ExecuteCommandEvent, System.Func<PreviewWindow>> (OnExecuteEditCommand);
-        }
-
-        /// <summary>窓ごとの根（rootVisualElement とオーバーレイを含む。パネルの根のすぐ下）</summary>
-        static VisualElement WindowRoot (EditorWindow host)
-        {
-            VisualElement root = host.rootVisualElement;
+            VisualElement root = rootVisualElement;
             while (root.parent != null && root.parent.parent != null) root = root.parent;
-            return root;
+            root.RegisterCallback<ValidateCommandEvent> (e => {
+                if (CanRunEditCommand (e.commandName)) e.StopPropagation ();
+            });
+            root.RegisterCallback<ExecuteCommandEvent> (e => {
+                if (RunEditCommand (e.commandName)) e.StopPropagation ();
+            });
         }
 
-        static void OnValidateEditCommand (ValidateCommandEvent e, System.Func<PreviewWindow> resolve)
-        {
-            PreviewWindow window = resolve ();
-            if (window != null && window.CanRunEditCommand (e.commandName)) e.StopPropagation ();
-        }
-
-        static void OnExecuteEditCommand (ExecuteCommandEvent e, System.Func<PreviewWindow> resolve)
-        {
-            PreviewWindow window = resolve ();
-            if (window != null && window.RunEditCommand (e.commandName)) e.StopPropagation ();
-        }
-
-        /// <summary>窓の IMGUI に来たコマンド（UI Toolkit の要素のどれにもフォーカスが無いとき。Motion Scene の窓からも呼ぶ）</summary>
-        internal void HandleEditCommandGUI ()
+        /// <summary>窓の IMGUI に来たコマンド（UI Toolkit の要素のどれにもフォーカスが無いとき）</summary>
+        void HandleEditCommandGUI ()
         {
             Event ev = Event.current;
             if (ev.type == EventType.ValidateCommand && CanRunEditCommand (ev.commandName)) ev.Use ();

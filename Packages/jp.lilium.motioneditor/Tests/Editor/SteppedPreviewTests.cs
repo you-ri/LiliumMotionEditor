@@ -10,11 +10,10 @@ namespace Lilium
     /// <summary>
     /// タイムラインの Interpolate を切ると、キーの間を補間せずに見せる（コマ送り）。キーは書き換えない
     /// </summary>
-    public class SteppedPreviewTests
+    public class SteppedPreviewTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktSteppedPreviewTests";
 
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         PreviewWindow window_;
@@ -36,10 +35,7 @@ namespace Lilium
         public void TearDown ()
         {
             if (window_ != null) Object.DestroyImmediate (window_);
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 

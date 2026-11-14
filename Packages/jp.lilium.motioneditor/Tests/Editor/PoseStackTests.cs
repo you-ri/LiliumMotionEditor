@@ -485,8 +485,6 @@ namespace Lilium
             public bool importPreviewing { get { return false; } }
             public string GetHumanoidApplyProblem () { return "テスト"; }
             public bool ApplyHumanoidPoseToRig () { return false; }
-            public ContextClip timelineClip { get { return null; } }
-            public int timelineClipCandidateCount { get { return 0; } }
             public bool useHumanoidBase { get { return false; } }
             public IReadOnlyList<OverrideClip> overrides { get { return new OverrideClip[0]; } }
             public int overrideWriteIndex { get { return -1; } }

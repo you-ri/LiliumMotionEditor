@@ -9,22 +9,14 @@ namespace Lilium
     /// <summary>
     /// キーから次のキーまで（区間）の補間を曲線・リニア・一定から選ぶ（S80）
     /// </summary>
-    public class KeyInterpolationTests
+    public class KeyInterpolationTests : RigTestFixture
     {
         const float kRate = 60;
-
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
 
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             TimelineClipboard.Clear ();
         }
 

@@ -11,12 +11,10 @@ namespace Lilium
     /// <summary>
     /// 姿勢を 4 方向から画像に書き出す（S39）
     /// </summary>
-    public class PoseCaptureTests
+    public class PoseCaptureTests : RigTestFixture
     {
         const string kFolder = "Temp/__MktPoseCaptureTest";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -30,12 +28,7 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             if (Directory.Exists (kFolder)) Directory.Delete (kFolder, true);
         }
 

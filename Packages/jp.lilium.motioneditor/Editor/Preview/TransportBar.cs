@@ -19,8 +19,6 @@ namespace Lilium
 
         readonly PreviewWindow window_;
         readonly TimebarElement timebar_;
-        /// <summary>パネルが載っている窓（ボタンの説明に出すショートカットは窓ごとに別）</summary>
-        readonly EditorWindow host_;
         readonly Button playButton_;
         readonly IntegerField frameField_;
         readonly Label fractionLabel_;
@@ -32,11 +30,10 @@ namespace Lilium
         bool? shownAutoKey_;
         bool? shownInterpolate_;
 
-        public TransportBar (PreviewWindow window, TimebarElement timebar, EditorWindow host)
+        public TransportBar (PreviewWindow window, TimebarElement timebar)
         {
             window_ = window;
             timebar_ = timebar;
-            host_ = host;
             style.flexDirection = FlexDirection.Row;
             style.alignItems = Align.Center;
             style.height = kHeight;
@@ -141,7 +138,7 @@ namespace Lilium
         /// <summary>説明の後ろに、shortcut（[Shortcut] の名前）に今割り当てているキーを付ける</summary>
         Button WithShortcut (Button button, string tooltip, string shortcut)
         {
-            ShortcutTooltip.Set (button, host_, tooltip, shortcut);
+            ShortcutTooltip.Set (button, tooltip, shortcut);
             return button;
         }
 

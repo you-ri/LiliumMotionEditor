@@ -1090,11 +1090,6 @@ namespace Lilium
         {
         }
 
-        float humanScale
-        {
-            get { return rig_.humanScale; }
-        }
-
         /// <summary>
         /// 数値欄に出す値。位置はルートから見た点の位置（メートル）、向きはルートから見た基準姿勢からの差。
         /// 固定していない間は、今の骨の位置と向き

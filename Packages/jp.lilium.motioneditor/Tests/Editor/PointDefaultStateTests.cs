@@ -10,37 +10,15 @@ namespace Lilium
     /// 全身 IK の点の既定の状態（リグ定義の defaultState）。キーの無いフレームと、姿勢を基準へ戻したとき（Reset）に、その状態になる。
     /// 既定の定義では足首の点が Pin（11-08 ユーザー指示）
     /// </summary>
-    public class PointDefaultStateTests
+    public class PointDefaultStateTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
 
         PoseSession Open (System.Action<EditRigDefinition> edit = null)
         {
             EditRigDefinition definition = EditRigDefinition.CreateDefault ();
             created_.Add (definition);
             if (edit != null) edit (definition);
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            Animator display = TestSkeleton.CreateHumanoidWithToes (created_);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
-            PoseSession session = new PoseSession (prefab, definition);
-            disposables_.Add (session);
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            session.clip = clip;
+            PoseSession session = OpenSession (TestSkeleton.CreateHumanoidWithToes (created_), definition);
             session.Evaluate (0);
             return session;
         }

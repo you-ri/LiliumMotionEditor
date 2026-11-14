@@ -144,14 +144,4 @@ namespace Lilium
         }
     }
 
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "AnimBank.png")]
-    // Scene ビューの Tool Settings・Grid and Snap も上端の左に並ぶ（順番 0・1）。Context・AnimBank・PoseBank をその前にまとめるため、どれも順番 0 にする
-    [Overlay (typeof (SceneWindow), "mkt-scene-animbank", "AnimBank", defaultDisplay = true,
-        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
-    sealed class AnimBankOverlayScene : AnimBankOverlay
-    {
-    }
-
 }

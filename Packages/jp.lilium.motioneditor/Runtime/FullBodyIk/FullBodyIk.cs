@@ -275,8 +275,6 @@ namespace Lilium
         internal NativeArray<int> aimed;
         /// <summary>1 なら、床に当たって押し戻した骨（向きの固定の戻し・合わせ直しで、床に当てた向きを保つ）</summary>
         internal NativeArray<int> contactTouched;
-        /// <summary>1 なら、床との当たりを解く（1 回目は当たりなしで解き、潜っていたときだけ当たりを入れて解き直す）</summary>
-        internal int contactsOn;
 
         public bool isCreated
         {
@@ -501,15 +499,12 @@ namespace Lilium
                 for (int i = 0; i < n; i++) d.limitReference[i] = math.normalizesafe (d.rotations[i], quaternion.identity);
             }
 
-            d.contactsOn = 0;
             SolveOnce (ref d, n, effectorCount, 0);
             // 床との当たり（S63）: 当たりなしで解いて潜った点があるときだけ、その姿勢から当たりを入れて詰め直す
             // （潜らない姿勢は、当たりの無いときと同じ答えになる。元の姿勢から解き直すと、当たりのために足を解く骨にした分だけ解き方が変わり、
             // 潜り始めた所で足が 10〜16° 跳ねた。解いた姿勢から詰めれば、潜りが小さければ少しだけ動く）
             if (contactCount == 0 || !Penetrates (ref d, n, contactCount)) return;
-            d.contactsOn = 1;
             SolveOnce (ref d, n, effectorCount, contactCount);
-            d.contactsOn = 0;
         }
 
         /// <summary>解いた姿勢（positions / rotations）で、床より下へ潜った当たりの点があるか</summary>

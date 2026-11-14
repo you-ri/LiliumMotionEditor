@@ -143,7 +143,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// パネル下端の細い帯。上下で一覧の高さ、左右でパネルの幅を変える（値は PreviewWindow.layersHeight / layersWidth に持つ）
+        /// パネル下端の細い帯。上下で一覧の高さを変える（値は PreviewWindow.layersHeight に持つ）
         /// </summary>
         VisualElement ResizeHandle ()
         {
@@ -754,15 +754,6 @@ namespace Lilium
             label.text = text;
             label.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Layers.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-layers", "Layers", defaultDisplay = true,
-        defaultDockZone = DockZone.LeftColumn, defaultDockPosition = DockPosition.Top)]
-    sealed class LayersOverlayScene : LayersOverlay
-    {
     }
 
 }

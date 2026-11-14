@@ -162,7 +162,6 @@ namespace Lilium
                 case EventType.ScrollWheel:
                     // 選んでいる骨の上のホイールはねじり（PoseHandles.BoneHandle が先に使う）。残ったものでズームする
                     if (mouseInView && GUIUtility.hotControl == 0) {
-                        LeaveContextCamera ();
                         camera_.Zoom (ev.delta.y);
                         ev.Use ();
                         RepaintView ();
@@ -233,8 +232,6 @@ namespace Lilium
 
         void BeginCameraDrag (int viewId, Event ev)
         {
-            // 演出のカメラで見ていたら、その位置からいつもの視点へ移って動かす
-            LeaveContextCamera ();
             GUIUtility.hotControl = viewId;
             cameraDragButton_ = ev.button;
             cameraDragAlt_ = ev.alt;
@@ -273,7 +270,6 @@ namespace Lilium
 
         void DrawViewportInfo (Rect rect)
         {
-            DrawContextViewInfo (rect);
             string text;
             if (stage_.error != null) {
                 text = stage_.error;
@@ -340,7 +336,6 @@ namespace Lilium
         /// </summary>
         public void LookFrom (ViewPreset preset)
         {
-            LeaveContextCamera ();
             switch (preset) {
                 case ViewPreset.Front:
                     camera_.LookAlong (-(stage_ != null ? stage_.bodyForward : Vector3.forward));
@@ -361,7 +356,6 @@ namespace Lilium
         public void FrameSelection ()
         {
             if (stage_ == null || stage_.animator == null) return;
-            LeaveContextCamera ();
 
             PoseTarget target = selectedTarget;
             if (target != null) {

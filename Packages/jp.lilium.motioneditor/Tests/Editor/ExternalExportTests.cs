@@ -10,12 +10,10 @@ namespace Lilium
     /// <summary>
     /// キーの姿勢を外部の骨格へ写して BVH に書き出す（S73）
     /// </summary>
-    public class ExternalExportTests
+    public class ExternalExportTests : RigTestFixture
     {
         const float kPositionTolerance = 0.02f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
 
@@ -29,24 +27,6 @@ namespace Lilium
             Animator display = TestSkeleton.CreateHumanoid (created_, true, 1);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             display.transform.SetParent (prefab_.transform, false);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         PoseSession Open (AnimationClip clip)

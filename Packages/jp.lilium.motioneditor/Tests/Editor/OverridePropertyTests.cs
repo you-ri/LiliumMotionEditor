@@ -10,14 +10,12 @@ namespace Lilium
     /// <summary>
     /// 任意のプロパティ（Controls/Props/...）を Override の段で重ねる（S17）
     /// </summary>
-    public class OverridePropertyTests
+    public class OverridePropertyTests : RigTestFixture
     {
         const float kTolerance = 1e-4f;
         const string kFace = "Face";
         const string kShape = "Mouth_A";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
 
@@ -38,24 +36,6 @@ namespace Lilium
             GameObject face = new GameObject (kFace);
             face.transform.SetParent (display.transform, false);
             face.AddComponent<SkinnedMeshRenderer> ().sharedMesh = mesh;
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         static EditorCurveBinding Shape

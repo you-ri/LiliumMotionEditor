@@ -19,7 +19,6 @@ namespace Lilium
         public const string kGroupFace = "Face";
         public const string kGroupProps = "Props";
         const string kBlendShape = "blendShape.";
-        static readonly string[] kFingerWords = { "Thumb", "Index", "Middle", "Ring", "Little" };
         static readonly Color kGhostPrevious = new Color (0.35f, 0.65f, 1f, 1);
         static readonly Color kGhostNext = new Color (1f, 0.6f, 0.3f, 1);
         /// <summary>隣のフレームの残像の濃さ。離れるほど薄くする</summary>
@@ -172,7 +171,7 @@ namespace Lilium
         static bool IsFinger (PoseTarget target)
         {
             string key = target.mirrorKey ?? target.label;
-            return kFingerWords.Any (word => key.Contains (word));
+            return kFingerNames.Any (word => key.Contains (word));
         }
 
         IEnumerable<PoseTarget> GroupTargets (string name)

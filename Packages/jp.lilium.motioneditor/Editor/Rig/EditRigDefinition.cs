@@ -537,78 +537,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 定義のうち、全身 IK の姿勢を変える設定のハッシュ（焼いた版が今の定義で焼いたものかを見分ける）
-        /// </summary>
-        public string GetFullBodyHash ()
-        {
-            System.Text.StringBuilder text = new System.Text.StringBuilder ();
-            System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.InvariantCulture;
-            FullBodySettings settings = fullBody ?? new FullBodySettings ();
-            text.Append (settings.iterations).Append ('/').Append (settings.pull.ToString ("R", culture)).Append ('/').Append (settings.hipsPin.ToString ("R", culture));
-            // 体の大きさ（S94）は入れたときだけ足す（無い定義は、項目を足す前と同じハッシュのまま）
-            if (bodyScale > 0) text.Append ("/s").Append (bodyScale.ToString ("R", culture));
-            foreach (FkControl control in fkControls) {
-                if (control == null) continue;
-                text.Append ('|').Append ((int)control.bone).Append (control.fullBodySolve ? 's' : '-').Append (control.stiffness.ToString ("R", culture));
-                if (control.hinge) {
-                    text.Append ('h').Append (control.bendDirection.x.ToString ("R", culture)).Append (',')
-                        .Append (control.bendDirection.y.ToString ("R", culture)).Append (',').Append (control.bendDirection.z.ToString ("R", culture));
-                }
-                AppendLimit (text, control.limit, culture);
-                // 重さを自分の骨の分だけにする骨（S96）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
-                if (control.ownWeightOnly) text.Append ('o');
-            }
-            // 解く追加コントロール（S93）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
-            foreach (ExtraControl control in extraControls) {
-                if (control == null || !control.fullBodySolve) continue;
-                text.Append ("|e").Append (control.name).Append (',').Append (control.pattern).Append (',').Append (control.stiffness.ToString ("R", culture));
-                if (control.hinge) AppendVector (text, control.bendDirection, culture);
-                AppendLimit (text, control.limit, culture);
-                if (control.ownWeightOnly) text.Append ('o');
-            }
-            if (bodyPoints != null) {
-                foreach (BodyPoint point in bodyPoints) {
-                    if (point == null || !point.enabled) continue;
-                    text.Append ("|p").Append (point.name).Append (',').Append ((int)point.bone).Append (',').Append ((int)point.origin).Append (',')
-                        .Append ((int)point.toward).Append (',').Append (point.along.ToString ("R", culture)).Append (',').Append (point.across.ToString ("R", culture));
-                    AppendVector (text, point.axes, culture);
-                    AppendVector (text, point.fallback, culture);
-                    AppendVector (text, point.offset, culture);
-                    text.Append (point.ground ? 'g' : '-').Append (point.rotation ? 'r' : '-');
-                    // 重さ 0 の点（S28）だけ足す（1 の点だけの定義は、項目を足す前と同じハッシュのまま。焼き直しが要る扱いにしない）
-                    if (point.weight <= 0) text.Append ('a');
-                    // 向きを混ぜる点（S34）だけ足す（混ぜない定義は、項目を足す前と同じハッシュのまま）
-                    if (point.blends) text.Append ('b').Append ((int)point.blendBone).Append (',').Append (point.blend.ToString ("R", culture));
-                    // 半径のある点だけ足す（地面へ落とす点の場所が変わる。半径の無い定義は、項目を足す前と同じハッシュのまま）
-                    if (point.radius > 0) text.Append ('c').Append (point.radius.ToString ("R", culture));
-                    // 動かせない点（passive。S89）だけ足す（骨を軸まわりにだけ回すので、キーから解いた姿勢も変わる。無い定義は、項目を足す前と同じハッシュのまま）
-                    if (point.passive) text.Append ('v');
-                    // 名前で乗る点（S93）だけ足す（無い定義は、項目を足す前と同じハッシュのまま）
-                    if (point.onControl) text.Append ('n').Append (point.control);
-                    if (point.blends && !string.IsNullOrEmpty (point.blendControl)) text.Append ('m').Append (point.blendControl);
-                }
-            }
-            return Hash128.Compute (text.ToString ()).ToString ();
-        }
-
-        /// <summary>角度制限（S95）は、制限している骨だけ足す（全部 Free の定義は、項目を足す前と同じハッシュのまま）</summary>
-        static void AppendLimit (System.Text.StringBuilder text, JointLimit limit, System.Globalization.CultureInfo culture)
-        {
-            if (limit == null || !limit.any) return;
-            text.Append ('l').Append (limit.slack.ToString ("R", culture));
-            for (int axis = 0; axis < 3; axis++) {
-                AxisLimit value = limit[axis];
-                text.Append (',').Append ((int)value.mode);
-                if (value.mode == LimitMode.Range) text.Append (':').Append (value.min.ToString ("R", culture)).Append (':').Append (value.max.ToString ("R", culture));
-            }
-        }
-
-        static void AppendVector (System.Text.StringBuilder text, Vector3 value, System.Globalization.CultureInfo culture)
-        {
-            text.Append (',').Append (value.x.ToString ("R", culture)).Append (',').Append (value.y.ToString ("R", culture)).Append (',').Append (value.z.ToString ("R", culture));
-        }
-
-        /// <summary>
         /// 全身 IK の骨ごとの既定値。硬さは体の中心ほど強くする（全部同じだと、手を引いたときにてこの長い腰・背骨ほど大きく回る）
         /// </summary>
         public static void SetFullBodyDefaults (FkControl control)
@@ -795,9 +723,6 @@ namespace Lilium
             SetPackageDefault ();
         }
 
-        /// <summary>
-        /// 定義の誤り（名前の重複・パスに使えない名前・範囲外の値など）。空なら使える
-        /// </summary>
         /// <summary>骨を名前の追加コントロールか人型の骨で指していて、その先が定義にあるか（輪の関節）</summary>
         bool KnownBone (HumanBodyBones bone, string control)
         {
@@ -812,6 +737,9 @@ namespace Lilium
             return from + " - " + to;
         }
 
+        /// <summary>
+        /// 定義の誤り（名前の重複・パスに使えない名前・範囲外の値など）。空なら使える
+        /// </summary>
         public List<string> Validate ()
         {
             List<string> errors = new List<string> ();

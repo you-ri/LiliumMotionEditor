@@ -12,18 +12,19 @@ namespace Lilium
     public sealed class EditingRigLayer : PoseLayer
     {
         readonly PreviewStage stage_;
-        readonly IEditClipHost host_;
+        readonly ILayerSource source_;
 
-        public EditingRigLayer (PreviewStage stage = null, IEditClipHost host = null)
+        /// <param name="source">クリップの持ち主。窓（IEditClipHost）なら Layers のパネルの行も作る</param>
+        public EditingRigLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
-            host_ = host;
-            if (host != null) clip = CreateClip (host);
+            source_ = source;
+            if (source is IEditClipHost host) clip = CreateClip (host);
         }
 
         AnimationClip source
         {
-            get { return host_ != null ? host_.clip : null; }
+            get { return source_ != null ? source_.clip : null; }
         }
 
         public override LayerKind kind { get { return LayerKind.EditingRig; } }
@@ -57,7 +58,7 @@ namespace Lilium
             // 重みが 1 未満なら、コントロールの基準の値へ合成する
             // 土台は編集用クリップか、Humanoid のクリップをフレームごとに操作値へ直したもの（S14）
             stage_.ClearOverrideSource ();
-            if (host_ != null && host_.useHumanoidBase) stage_.SampleHumanoidAsControls (host_.clip, time);
+            if (source_ != null && source_.useHumanoidBase) stage_.SampleHumanoidAsControls (source_.clip, time);
             else if (source != null) stage_.BlendDataClip (source, time, clipWeight);
             SolveAndShow ();
             // 任意のプロパティ（表示の ON/OFF・ブレンドシェイプなど）は表示モデルの部品へ直接入れる

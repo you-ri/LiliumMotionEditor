@@ -132,19 +132,19 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 焼いた版が今の設定で焼いたものかを見分ける値。リグの定義に、持ち物の設定（握り・親の枠は焼いた姿勢を変える。S91）を足す。
-        /// 持ち物の無いキャラは定義だけ（項目を足す前に焼いた版を、古い扱いにしない）
+        /// 焼いた版が今の設定で焼いたものかを見分ける値。持ち物の設定（握り・親の枠は焼いた姿勢を変える。S91）のハッシュ。
+        /// 持ち物の無いキャラは空（項目を足す前に焼いた版を、古い扱いにしない）。頭の "/" は、リグの定義のハッシュを前に付けていた頃の名残で、
+        /// 焼いた版を古い扱いにしないよう残す
         /// </summary>
-        static string WithHeldObjects (string definitionHash, GameObject model)
+        static string HeldObjectsKey (GameObject model)
         {
             CharacterSettings settings = SettingsLookup.Find (model);
             string held = settings != null ? settings.GetHeldObjectsKey () : "";
-            return (definitionHash ?? "") + (held.Length > 0 ? "/" + Hash128.Compute (held) : "");
+            return held.Length > 0 ? "/" + Hash128.Compute (held) : "";
         }
 
         /// <param name="overrides">一緒に焼いた Override のクリップ（S14。無ければ null）</param>
-        /// <param name="definitionHash">リグの定義のうち、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
-        public static void WriteLink (string outputPath, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides = null, string definitionHash = null)
+        public static void WriteLink (string outputPath, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides = null)
         {
             AssetImporter importer = AssetImporter.GetAtPath (outputPath);
             if (importer == null) return;
@@ -156,7 +156,7 @@ namespace Lilium
                 sourceHash = EditorUtility.IsDirty (source) ? kUnsaved : ComputeFileHash (sourcePath),
                 overrides = OverrideGuids (overrides),
                 overridesHash = OverridesHash (overrides),
-                definition = WithHeldObjects (definitionHash, model),
+                definition = HeldObjectsKey (model),
             };
             string json = JsonUtility.ToJson (link);
             if (importer.userData == json) return;
@@ -217,8 +217,7 @@ namespace Lilium
         /// <param name="bakeProblem">いま焼けない理由（窓の状態も含む）。焼けるなら null</param>
         /// <param name="overrides">一緒に焼く Override のクリップ（S14）</param>
         /// <param name="outputName">焼いて書き出す段（Output）の名前（S21）</param>
-        /// <param name="definitionHash">今のリグの定義の、姿勢を変える設定のハッシュ（EditRigDefinition.GetFullBodyHash。無ければ null）</param>
-        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides = null, string outputName = null, string definitionHash = null)
+        public static LayerClipStatus GetStatus (AnimationClip source, GameObject model, string bakeProblem, System.Collections.Generic.IList<AnimationClip> overrides = null, string outputName = null)
         {
             if (source == null) return new LayerClipStatus (LayerClipState.None, Tr ("HUMANOID_OUTPUT_NO_SOURCE_CLIP"));
             bool edited = overrides != null && overrides.Count > 0;
@@ -247,7 +246,7 @@ namespace Lilium
                 GameObject baked = AssetDatabase.LoadAssetAtPath<GameObject> (AssetDatabase.GUIDToAssetPath (link.model));
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_OTHER_CHARACTER", baked != null ? baked.name : Tr ("HUMANOID_OUTPUT_UNKNOWN")));
             }
-            if ((link.definition ?? "") != WithHeldObjects (definitionHash, model)) {
+            if ((link.definition ?? "") != HeldObjectsKey (model)) {
                 return new LayerClipStatus (LayerClipState.Stale, Tr ("HUMANOID_OUTPUT_DEFINITION_CHANGED"));
             }
             if (EditorUtility.IsDirty (source)) {
@@ -308,7 +307,7 @@ namespace Lilium
 
         /// <param name="overrides">一緒に焼く Override のクリップ（S14）。1 つでもあれば `<元>.edited.anim` へ出す</param>
         /// <param name="outputName">焼いて書き出す段（Output）の名前（S21）。空なら 名前.anim</param>
-        public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides, string outputName, out string outputPath, string definitionHash = null)
+        public static HumanoidBaker.Result BakeToAsset (HumanoidBaker baker, AnimationClip source, GameObject model, System.Collections.Generic.IList<AnimationClip> overrides, string outputName, out string outputPath)
         {
             bool edited = overrides != null && overrides.Count > 0;
             outputPath = GetOutputPath (source, edited, outputName);
@@ -329,7 +328,7 @@ namespace Lilium
             }
             // 対応は焼いたクリップを保存してから書く（WriteLink は取り込み直すので、先に書くと保存前の中身が読み直されて消える）
             AssetDatabase.SaveAssetIfDirty (output);
-            WriteLink (outputPath, source, model, overrides, definitionHash);
+            WriteLink (outputPath, source, model, overrides);
             if (baked != null) {
                 // 受け側の失敗で焼いた結果を失敗扱いにしない
                 try {

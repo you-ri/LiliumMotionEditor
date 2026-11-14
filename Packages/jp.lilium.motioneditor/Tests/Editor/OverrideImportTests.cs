@@ -11,13 +11,11 @@ namespace Lilium
     /// <summary>
     /// 外で作った Humanoid のクリップを、元に重ねる Override として取り込む（S40）
     /// </summary>
-    public class OverrideImportTests
+    public class OverrideImportTests : RigTestFixture
     {
         const float kPositionTolerance = 0.01f;
         const float kAngleTolerance = 1f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
 
@@ -31,24 +29,6 @@ namespace Lilium
             Animator display = TestSkeleton.CreateHumanoid (created_, true, 1);
             display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             display.transform.SetParent (prefab_.transform, false);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         /// <summary>元のクリップ（窓で打ったものと同じく全身のキーを持つ。0F に基準姿勢を打つ）</summary>
@@ -81,19 +61,6 @@ namespace Lilium
             return clip;
         }
 
-        static List<Pose> WorldPose (PoseSession session)
-        {
-            return session.stage.editingRig.editingBones.Select (t => new Pose (t.position, t.rotation)).ToList ();
-        }
-
-        static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message)
-        {
-            for (int i = 0; i < expected.Count; i++) {
-                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), kPositionTolerance, message + ": " + i + " 番目の骨の位置");
-                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), kAngleTolerance, message + ": " + i + " 番目の骨の向き");
-            }
-        }
-
         static string Dump (AnimationClip clip)
         {
             return string.Join ("\n", AnimationUtility.GetCurveBindings (clip).OrderBy (b => b.path + b.propertyName)
@@ -109,7 +76,7 @@ namespace Lilium
             string before = Dump (session.clip);
 
             PoseSession.OverrideImportResult result;
-            Assert.IsNull (session.ImportOverride (generated, layer, OverrideMode.Additive, false, out result));
+            Assert.IsNull (session.ImportOverride (generated, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result));
             Assert.AreEqual (before, Dump (session.clip), "元のクリップは変わらない");
             Assert.AreEqual (61, result.frameCount);
             Assert.LessOrEqual (result.keyCount * 3, result.keyCountBeforeReduce, "間引いてキーを 1/3 以下にする: " + result.keyCount + " / " + result.keyCountBeforeReduce);
@@ -135,7 +102,7 @@ namespace Lilium
             foreach (int frame in new[] { 0, 15, 30, 45, 60 }) {
                 reference.Evaluate (frame);
                 session.Evaluate (frame);
-                AssertSamePose (WorldPose (reference), WorldPose (session), frame + "F の元＋Override");
+                AssertSamePose (WorldPose (reference), WorldPose (session), frame + "F の元＋Override", kPositionTolerance, kAngleTolerance);
             }
 
             // Override の重み 0 で元の姿勢
@@ -145,7 +112,7 @@ namespace Lilium
             session.overrideWriteIndex = 0;
             session.stack.Find<OverrideLayer> ().weight = 0;
             session.Evaluate (30);
-            AssertSamePose (baseOnly, WorldPose (session), "重み 0");
+            AssertSamePose (baseOnly, WorldPose (session), "重み 0", kPositionTolerance, kAngleTolerance);
         }
 
         /// <summary>外の動きをそのまま編集用クリップへ取り込む（HumanoidImport。ルートの移動は腰へ移る）</summary>
@@ -204,11 +171,11 @@ namespace Lilium
             List<Pose> before = WorldPose (session);
             AnimationClip layer = NewClip ();
             PoseSession.OverrideImportResult result;
-            Assert.IsNull (session.ImportOverride (baked, layer, OverrideMode.Additive, false, out result));
+            Assert.IsNull (session.ImportOverride (baked, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result));
             session.AddOverride (layer, OverrideMode.Additive);
             session.overrideWriteIndex = 0;
             session.Evaluate (30);
-            AssertSamePose (before, WorldPose (session), "自分を焼いたクリップを重ねても姿勢は変わらない");
+            AssertSamePose (before, WorldPose (session), "自分を焼いたクリップを重ねても姿勢は変わらない", kPositionTolerance, kAngleTolerance);
         }
 
         [Test]
@@ -224,7 +191,7 @@ namespace Lilium
                 PoseSession session = OpenWithBase ();
                 AnimationClip layer = NewClip ();
                 PoseSession.OverrideImportResult result;
-                Assert.IsNull (session.ImportOverride (generated, layer, OverrideMode.Additive, i == 1, out result));
+                Assert.IsNull (session.ImportOverride (generated, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions { lockFeet = i == 1 }, out result));
                 session.AddOverride (layer, OverrideMode.Additive);
                 session.overrideWriteIndex = 0;
                 MotionLintReport report = MotionLint.Run (session, 0, 60);
@@ -240,13 +207,13 @@ namespace Lilium
         {
             PoseSession session = OpenWithBase ();
             PoseSession.OverrideImportResult result;
-            Assert.IsNotNull (session.ImportOverride (Generated (), session.clip, OverrideMode.Additive, false, out result), "元のクリップへは書かない");
-            Assert.IsNotNull (session.ImportOverride (NewClip (), NewClip (), OverrideMode.Additive, false, out result), "Humanoid でないクリップ");
-            Assert.IsNotNull (session.ImportOverride (Generated (), null, OverrideMode.Additive, false, out result), "書き先が無い");
+            Assert.IsNotNull (session.ImportOverride (Generated (), session.clip, OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result), "元のクリップへは書かない");
+            Assert.IsNotNull (session.ImportOverride (NewClip (), NewClip (), OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result), "Humanoid でないクリップ");
+            Assert.IsNotNull (session.ImportOverride (Generated (), null, OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result), "書き先が無い");
 
             PoseSession empty = new PoseSession (prefab_, definition_);
             disposables_.Add (empty);
-            Assert.IsNotNull (empty.ImportOverride (Generated (), NewClip (), OverrideMode.Additive, false, out result), "元のクリップが無い");
+            Assert.IsNotNull (empty.ImportOverride (Generated (), NewClip (), OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out result), "元のクリップが無い");
         }
     }
 

@@ -103,8 +103,7 @@ namespace Lilium
                 report_ = new MotionLintReport { error = Tr ("LINT_OVERLAY_NO_CLIP") };
             }
             else {
-                using (PoseSession session = new PoseSession (stage.sourcePrefab, window_.rigDefinition)) {
-                    session.clip = clip;
+                using (PoseSession session = window_.CreateScratchSession (clip)) {
                     foreach (OverrideClip entry in window_.overrides) session.AddOverride (entry.clip, entry.mode, entry.mask);
                     session.overrideWriteIndex = window_.overrideWriteIndex;
                     int end = Mathf.Max (0, Mathf.RoundToInt (clip.length * clip.frameRate));
@@ -171,14 +170,6 @@ namespace Lilium
             }
             return frames + "  " + issue.kind + "  " + issue.target + "  " + value;
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Overlay (typeof (SceneWindow), "mkt-scene-lint", "Lint", defaultDisplay = false,
-        defaultDockZone = DockZone.RightColumn, defaultDockPosition = DockPosition.Bottom)]
-    sealed class LintOverlayScene : LintOverlay
-    {
     }
 
 }

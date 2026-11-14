@@ -4,8 +4,32 @@ using UnityEngine;
 namespace Lilium
 {
 
-    // 段のクリップと操作の持ち主（窓）。段は作り直すので、クリップそのものと焼く・取り込む処理は窓が持ち、段はここを通して見せる。
-    // **1 つの段が受け取るのは 1 本だけ**になるよう、段ごとに分けている。窓は全部をまとめた ILayerHost を実装する
+    // 段のクリップと操作の持ち主。段は作り直すので、クリップそのものと焼く・取り込む処理は持ち主が持ち、段はここを通して見せる。
+    // 姿勢を作るのに読むもの（ILayerSource）は窓も PoseSession も渡す。Layers のパネルの行に出す操作は窓だけが持ち（ILayerHost）、
+    // 段は渡されたものがその操作を持つときだけ行（LayerClip）を作る。操作は段ごとに分けている（1 つの段が受け取るのは 1 本だけ）
+
+    /// <summary>
+    /// 段が姿勢を作るのに読むもの（クリップ・Override の並び・どの段を置くか）
+    /// </summary>
+    public interface ILayerSource
+    {
+        /// <summary>編集するクリップ</summary>
+        AnimationClip clip { get; }
+        /// <summary>Editing Rig の段に Humanoid のクリップを開いているか（読み取り専用の土台。フレームごとに操作値へ変換して使う。S14・S20）</summary>
+        bool useHumanoidBase { get; }
+        /// <summary>元のクリップに重ねる Override のクリップ（下から順。S14。1 枚が 1 段）</summary>
+        IReadOnlyList<OverrideClip> overrides { get; }
+        /// <summary>書き込み先の Override は何枚目か（-1 は元のクリップ）</summary>
+        int overrideWriteIndex { get; }
+        /// <summary>Generic Pose の段に合成するクリップ（骨のカーブ）</summary>
+        AnimationClip genericClip { get; }
+        /// <summary>Humanoid Pose の段に合成して見比べるクリップ（参照。既存の Humanoid のクリップ）</summary>
+        AnimationClip humanoidClip { get; }
+        /// <summary>Humanoid Pose の段を置くか（S21。既定は置かない）</summary>
+        bool humanoidPoseLayer { get; }
+        /// <summary>焼いて書き出す段（Output）の並び（S21）</summary>
+        IReadOnlyList<OutputEntry> outputEntries { get; }
+    }
 
     /// <summary>
     /// 段のクリップを流れに合成する重み（Editing Rig / Generic Pose / Humanoid Pose 共通）
@@ -17,21 +41,10 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 元のクリップに重ねる Override の並び（Editing Rig の段と Override の段が読む）
-    /// </summary>
-    public interface IOverrideListHost
-    {
-        /// <summary>元のクリップに重ねる Override のクリップ（下から順。S14。1 枚が 1 段）</summary>
-        IReadOnlyList<OverrideClip> overrides { get; }
-    }
-
-    /// <summary>
     /// Editing Rig の段: 編集するクリップと、それに重ねた Override の統合
     /// </summary>
-    public interface IEditClipHost : IClipWeightHost, IOverrideListHost
+    public interface IEditClipHost : IClipWeightHost, ILayerSource
     {
-        /// <summary>編集するクリップ</summary>
-        AnimationClip clip { get; }
         /// <summary>編集できない理由（編集できるなら null）</summary>
         string clipProblem { get; }
         /// <summary>編集用リグ以外を指すカーブの数</summary>
@@ -40,8 +53,6 @@ namespace Lilium
         void CreateClip ();
         void RemoveStrayCurves ();
 
-        /// <summary>Editing Rig の段に Humanoid のクリップを開いているか（読み取り専用の土台。フレームごとに操作値へ変換して使う。S14・S20）</summary>
-        bool useHumanoidBase { get; }
         /// <summary>読み取り専用の Humanoid の元を編集用クリップへ取り込めない理由（取り込めるなら null）</summary>
         string GetImportBaseProblem ();
         /// <summary>読み取り専用の Humanoid の元を、新しい編集用クリップへ書き出して開き直す（取込。S20）</summary>
@@ -62,10 +73,8 @@ namespace Lilium
     /// <summary>
     /// Override の段: 1 枚ずつの差し替え・並べ替え・外す
     /// </summary>
-    public interface IOverrideHost : IOverrideListHost
+    public interface IOverrideHost : ILayerSource
     {
-        /// <summary>書き込み先の Override は何枚目か（-1 は元のクリップ）</summary>
-        int overrideWriteIndex { get; }
         /// <summary>Layers の構造を編集中か（段の追加・削除・移動の操作を出す。S21）</summary>
         bool layerStructureEditing { get; }
         /// <summary>層のクリップを置き換える。null で層を外す</summary>
@@ -83,10 +92,8 @@ namespace Lilium
     /// <summary>
     /// Generic Pose の段: 骨を直接動かすクリップ（取り込み元）
     /// </summary>
-    public interface IGenericHost : IClipWeightHost
+    public interface IGenericHost : IClipWeightHost, ILayerSource
     {
-        /// <summary>Generic Pose の段に合成するクリップ（骨のカーブ）</summary>
-        AnimationClip genericClip { get; }
         void SetGenericClip (AnimationClip clip);
         /// <summary>Generic のクリップを取り込めない理由（取り込めるなら null）</summary>
         string GetImportProblem ();
@@ -97,10 +104,8 @@ namespace Lilium
     /// <summary>
     /// Humanoid Pose の段: 見比べる参照と、その姿勢の反映
     /// </summary>
-    public interface IHumanoidHost : IClipWeightHost
+    public interface IHumanoidHost : IClipWeightHost, ILayerSource
     {
-        /// <summary>Humanoid Pose の段に合成して見比べるクリップ（参照。既存の Humanoid のクリップ）</summary>
-        AnimationClip humanoidClip { get; }
         void SetHumanoidClip (AnimationClip clip);
         /// <summary>今のフレームの姿勢を編集用リグへ反映できない理由（できるなら null）</summary>
         string GetHumanoidApplyProblem ();
@@ -141,18 +146,10 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 段の並びを組み立てる相手（窓）。段ごとの持ち主を全部まとめ、どの段を置くかを決める情報を足したもの
+    /// 窓: 段が読むものに、Layers のパネルの行に出す操作を全部足したもの
     /// </summary>
     public interface ILayerHost : IEditClipHost, IOverrideHost, IGenericHost, IHumanoidHost, IOutputHost
     {
-        /// <summary>Humanoid Pose の段を置くか（S21。既定は置かない）</summary>
-        bool humanoidPoseLayer { get; }
-        /// <summary>焼いて書き出す段（Output）の並び（S21）</summary>
-        IReadOnlyList<OutputEntry> outputEntries { get; }
-        /// <summary>一緒に見ている演出の、どのクリップとして見ているか（S15b。無ければ null）</summary>
-        ContextClip timelineClip { get; }
-        /// <summary>一緒に見ている演出にあるアニメーションのクリップの数（0 なら Timeline Clip の段を作らない）</summary>
-        int timelineClipCandidateCount { get; }
     }
 
 }

@@ -59,7 +59,7 @@ namespace Lilium
             if (editingClip_ == null) return Tr ("PREVIEW_WINDOW_CURVES_OPEN_CLIP");
             if (clipProblem_ != null) return clipProblem_;
             if (CanEditClip ()) return null;
-            return timelineEditBlockReason ?? Tr ("PREVIEW_WINDOW_CURVES_WRITE_LAYER_INACTIVE");
+            return Tr ("PREVIEW_WINDOW_CURVES_WRITE_LAYER_INACTIVE");
         }
 
         /// <summary>

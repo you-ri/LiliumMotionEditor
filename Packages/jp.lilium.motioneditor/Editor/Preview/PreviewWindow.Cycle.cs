@@ -125,15 +125,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// キーを打つフレーム。サイクルキーのフレームなら先頭のキー（サイクルキーは先頭を写した物で、直接打っても先頭へ戻される）。
-        /// Override へ書くときは土台の値との差分なので、写し先を変えない
-        /// </summary>
-        int KeyFrameToWrite ()
-        {
-            return PoseCommit.KeyFrameToWrite (currentFrame, cycle, GetKeyFrames (), overrideWriteLayer != null);
-        }
-
-        /// <summary>
         /// サイクルキーより後ろのフレームか。ここでキーを打つと、そこが最後のキーになって先頭の姿勢で上書きされるので、動かさない
         /// </summary>
         bool IsPastCycleKey ()

@@ -12,7 +12,7 @@ namespace Lilium
     /// 持ち物（S91・S104）。物の姿勢をキーに持ち、付けている骨はどのフレームでも付けた位置に付く。
     /// 付ける先はリグ定義の一覧（既定は右手・左手・腰）で、どの先も同じ決まりで解く
     /// </summary>
-    public class HeldObjectTests
+    public class HeldObjectTests : RigTestFixture
     {
         /// <summary>握りの残差の上限（メートル）</summary>
         const float kGripTolerance = 0.001f;
@@ -23,8 +23,6 @@ namespace Lilium
         const string kLeft = EditRigDefinition.kLeftHandAttach;
         const string kHips = EditRigDefinition.kHipsAttach;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -47,12 +45,7 @@ namespace Lilium
         public void TearDown ()
         {
             PreviewStage.heldObjectsForTest = null;
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
         }
 
         /// <summary>物のモデル（空の Transform だけ。テストはメッシュに頼らない）</summary>
@@ -91,15 +84,8 @@ namespace Lilium
         /// </param>
         PoseSession Open (bool keyObjectRotation, params HeldObjectDefinition[] objects)
         {
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            Animator display = TestSkeleton.CreateHumanoid (created_, true, 1);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
             PreviewStage.heldObjectsForTest = objects;
-            PoseSession session = new PoseSession (prefab, definition_, false);
-            disposables_.Add (session);
-            session.clip = NewClip ();
+            PoseSession session = OpenSession (TestSkeleton.CreateHumanoid (created_, true, 1), definition_);
             if (keyObjectRotation) {
                 foreach (HeldObjectDefinition held in objects) KeyObjectState (session.clip, held.name, 1, 1, 0);
             }
@@ -115,13 +101,6 @@ namespace Lilium
                 AnimationUtility.SetKeyRightTangentMode (curve, 0, AnimationUtility.TangentMode.Constant);
                 AnimationUtility.SetEditorCurve (clip, EditorCurveBinding.FloatCurve (RigPaths.ObjectPose (name), typeof (BodyPoint), property), curve);
             }
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         static HeldObjectRig.Entry Entry (PoseSession session)

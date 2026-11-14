@@ -98,6 +98,12 @@
 
 - Animator の付いたモデルを回して置いた prefab で、Humanoid のクリップを取り込むと体の向きが回る不具合を修正。
 
+### Removed
+
+- Motion Editor In Scene (Experimental) の窓を削除。
+- 演出の prefab（Timeline）を一緒に置いて見る機能と、Timeline 窓への追従を削除。拡張点の `IContextHook` もなくなりました。
+- `PoseSession.ImportOverride` の、オプションを bool で並べて渡す形を削除。`OverrideImportOptions` を渡します。
+
 ## [0.2.0] - 2026-10-26
 <!-- changelog-sha: 6ab3ad6bed0a922c5a4e87da6cacc91aea762613 -->
 

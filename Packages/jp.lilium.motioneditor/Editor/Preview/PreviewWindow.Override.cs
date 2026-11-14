@@ -18,11 +18,6 @@ namespace Lilium
         [SerializeField] List<OverrideClip> overrides_ = new List<OverrideClip> ();
         /// <summary>overrides_ を読んだときの元のクリップ（替わったら読み直す）</summary>
         [SerializeField] AnimationClip overridesBase_;
-        /// <summary>
-        /// 旧形式の「H土台」のチェック（S14。Humanoid Pose の段のクリップを土台にしていた）。
-        /// 今は Editing Rig の段に Humanoid のクリップを開けば土台になるので、読み込んだ窓の状態を 1 回だけ移す（MigrateHumanoidBase）
-        /// </summary>
-        [SerializeField] bool useHumanoidBase_;
 
         /// <summary>
         /// Editing Rig の段に Humanoid のクリップ（FBX の中のクリップなど）を開いている。そのクリップは読み取り専用の土台で、
@@ -31,18 +26,6 @@ namespace Lilium
         public bool useHumanoidBase
         {
             get { return editingClip_ != null && editingClip_.humanMotion; }
-        }
-
-        /// <summary>
-        /// 旧形式の窓の状態（H土台 のチェック＋Humanoid Pose の段のクリップ）を、Editing Rig の段のクリップへ移す
-        /// </summary>
-        void MigrateHumanoidBase ()
-        {
-            if (!useHumanoidBase_) return;
-            useHumanoidBase_ = false;
-            if (humanoidClip_ == null) return;
-            editingClip_ = humanoidClip_;
-            humanoidClip_ = null;
         }
 
         /// <summary>
@@ -317,17 +300,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 書き込み先が Override のとき、打つ値（狙いの値）をクリップに入れる値へ直す口を書き出し口に付ける。
-        /// 元の値は、姿勢を作ったときに書き込み先の層の手前で控えたもの（PreviewStage.ApplyOverrides）
-        /// </summary>
-        void AttachOverrideStore (CurveWriter writer)
-        {
-            OverrideLayer layer = overrideWriteLayer;
-            if (layer == null || stage_ == null) return;
-            PoseCommit.AttachOverrideStore (writer, stage_, layer.mode, layer.mask);
-        }
-
-        /// <summary>
         /// 焼くときに重ねる Override のクリップ（効いている段だけ。下から順。S14）。
         /// ✏ の位置は見ない（焼くのは「元＋効いている Override」の見た目どおりの姿勢）
         /// </summary>
@@ -389,12 +361,6 @@ namespace Lilium
         /// </summary>
         public bool MergeOverrides ()
         {
-            return MergeOverrides (true);
-        }
-
-        /// <param name="confirm">焼き込む前に対象を見せて確かめる（テストや自動化からは false で呼ぶ）</param>
-        internal bool MergeOverrides (bool confirm)
-        {
             string problem = GetMergeOverridesProblem ();
             if (problem != null) {
                 SetBakeStatus (Tr ("PREVIEW_WINDOW_OVERRIDE_CANNOT_MERGE", problem), true);
@@ -408,7 +374,7 @@ namespace Lilium
                 foreach (int frame in ClipKeyUtility.GetKeyFrames (clip)) last = Mathf.Max (last, frame);
             }
             string names = string.Join ("\n", merged.ConvertAll (c => AssetDatabase.GetAssetPath (c)));
-            if (confirm && !EditorUtility.DisplayDialog ("Motion Editor",
+            if (!EditorUtility.DisplayDialog ("Motion Editor",
                 Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE_CONFIRM", merged.Count, editingClip_.name, last, names), Tr ("PREVIEW_WINDOW_OVERRIDE_MERGE"), Tr ("PREVIEW_WINDOW_CANCEL"))) {
                 return false;
             }

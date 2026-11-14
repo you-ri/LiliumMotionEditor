@@ -173,14 +173,6 @@ namespace Lilium
             return index >= 0 && attached_[index];
         }
 
-        /// <summary>直前に解いた、輪の関節 l の残り（点の離れ m・軸の差 度）</summary>
-        internal Vector2 GetHeldLoopResidual (int l)
-        {
-            if (!data_.isCreated || l < 0 || l >= data_.loopCount) return Vector2.zero;
-            float2 residual = data_.loopResiduals[l];
-            return new Vector2 (residual.x, residual.y * Mathf.Rad2Deg);
-        }
-
         /// <summary>輪が閉じなかったので、両手で持った物のつかんだ点を輪より弱くして解き直している間か</summary>
         bool yieldToLoops_;
 

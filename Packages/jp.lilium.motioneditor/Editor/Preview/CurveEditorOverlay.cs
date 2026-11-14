@@ -150,13 +150,4 @@ namespace Lilium
         }
     }
 
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Curves.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-curves", "Curves", defaultDisplay = false,
-        defaultDockZone = DockZone.BottomToolbar, defaultDockPosition = DockPosition.Bottom)]
-    sealed class CurveEditorOverlayScene : CurveEditorOverlay
-    {
-    }
-
 }

@@ -11,12 +11,10 @@ namespace Lilium
     /// <summary>
     /// 段のマスク（S17）。部位と決まりで効く範囲を決め、Override の合成と、Override へのキーの書き込みを絞る
     /// </summary>
-    public class ChannelMaskTests
+    public class ChannelMaskTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktChannelMaskTest";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -29,12 +27,7 @@ namespace Lilium
         [TearDown]
         public void TearDown ()
         {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null && !EditorUtility.IsPersistent (o)) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);
         }
 
@@ -43,13 +36,6 @@ namespace Lilium
             ChannelMask mask = ScriptableObject.CreateInstance<ChannelMask> ();
             created_.Add (mask);
             return mask;
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         static EditorCurveBinding Rotation (string path)

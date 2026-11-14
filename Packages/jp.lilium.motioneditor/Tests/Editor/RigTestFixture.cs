@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,9 +13,10 @@ namespace Lilium
     /// </summary>
     public abstract class RigTestFixture
     {
-        /// <summary>TearDown で DestroyImmediate する物</summary>
+        /// <summary>TearDown で DestroyImmediate する物（アセットとして保存した物は消さない。置いたフォルダごと各テストが消す）</summary>
         protected readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
+        /// <summary>TearDown で Dispose する物（作った順の逆に捨てる）</summary>
+        protected readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
 
         /// <summary>
         /// 作った物を捨てる。続けて別の後片付けをしたいテストクラスは、自分の TearDown から先に呼んでよい（2 度呼んでも何もしない）
@@ -27,7 +29,7 @@ namespace Lilium
             for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
             disposables_.Clear ();
             foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
+                if (o != null && !EditorUtility.IsPersistent (o)) Object.DestroyImmediate (o);
             }
             created_.Clear ();
         }
@@ -39,6 +41,99 @@ namespace Lilium
         {
             disposables_.Add (disposable);
             return disposable;
+        }
+
+        /// <summary>空のクリップ。TearDown で捨てる</summary>
+        protected AnimationClip NewClip (float frameRate = 60)
+        {
+            AnimationClip clip = new AnimationClip { frameRate = frameRate };
+            created_.Add (clip);
+            return clip;
+        }
+
+        /// <summary>全身 IK を解くテストの組（キャラ・編集用リグ・FK を解く物・全身 IK）</summary>
+        protected sealed class FullBodySetup
+        {
+            public Animator display;
+            public EditingRig rig;
+            public EditingRigSolver solver;
+            public FullBodyRig body;
+            /// <summary>体の前（ワールド）</summary>
+            public Vector3 forward;
+            public Vector3 up = Vector3.up;
+        }
+
+        /// <summary>display から編集用リグと全身 IK を組む。TearDown で捨てる</summary>
+        protected FullBodySetup CreateFullBody (Animator display, EditRigDefinition definition)
+        {
+            FullBodySetup s = new FullBodySetup { display = display };
+            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            s.rig = CreateEditingRig (definition, display);
+            s.solver = new EditingRigSolver (s.rig);
+            s.solver.Capture ();
+            s.body = Keep (new FullBodyRig (s.rig, definition));
+            s.forward = s.rig.root.transform.TransformDirection (s.rig.bodyForward).normalized;
+            return s;
+        }
+
+        protected static Transform Bone (FullBodySetup s, HumanBodyBones bone)
+        {
+            return s.rig.GetEditingBone (bone);
+        }
+
+        /// <summary>点を、今の骨の位置から offset だけ動かした所に固定する</summary>
+        protected static void Pin (FullBodySetup s, HumanBodyBones bone, Vector3 offset, bool rotation = false)
+        {
+            Pin (s, bone, offset, 1, rotation);
+        }
+
+        /// <summary>点を、今の骨の位置から offset だけ動かした所に、位置の強さ weight で固定する</summary>
+        protected static void Pin (FullBodySetup s, HumanBodyBones bone, Vector3 offset, float weight, bool rotation = false)
+        {
+            s.body.CapturePoint (bone);
+            s.body.SetPointPositionWorld (bone, Bone (s, bone).position + offset);
+            s.body.SetPositionWeight (bone, weight);
+            if (rotation) s.body.SetRotationWeight (bone, 1);
+        }
+
+        /// <summary>窓と同じく、キーの姿勢（基準姿勢）へ戻して、編集用リグ → 全身 IK の順に解く</summary>
+        protected static void Solve (FullBodySetup s)
+        {
+            s.body.Unsolve ();
+            s.rig.ResetBonesToRest ();
+            s.solver.Solve ();
+            s.body.CaptureInput ();
+            s.body.Solve ();
+        }
+
+        /// <summary>編集用リグの骨のワールドの姿勢（同じキャラの 2 つの姿勢を AssertSamePose で比べる）</summary>
+        protected static List<Pose> WorldPose (PoseSession session)
+        {
+            return session.stage.editingRig.editingBones.Select (t => new Pose (t.position, t.rotation)).ToList ();
+        }
+
+        /// <summary>骨ごとに、位置の差が position（m）以下・向きの差が angle（度）以下</summary>
+        protected static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message, float position, float angle)
+        {
+            Assert.AreEqual (expected.Count, actual.Count, message + ": 骨の数");
+            for (int i = 0; i < expected.Count; i++) {
+                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), position, message + ": " + i + " 番目の骨の位置");
+                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), angle, message + ": " + i + " 番目の骨の向き");
+            }
+        }
+
+        /// <summary>
+        /// キャラ（TestSkeleton で作った物）を prefab に入れ、窓を開かずに編集する PoseSession を開いて空のクリップを当てる。TearDown で捨てる
+        /// </summary>
+        protected PoseSession OpenSession (Animator display, EditRigDefinition definition, bool render = false)
+        {
+            GameObject prefab = new GameObject ("Prefab");
+            created_.Add (prefab);
+            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            display.transform.SetParent (prefab.transform, false);
+            PoseSession session = Keep (new PoseSession (prefab, definition, render));
+            session.clip = NewClip ();
+            return session;
         }
 
         /// <summary>

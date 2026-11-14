@@ -49,19 +49,6 @@ public static class GeometryMath
 		
 		
 	/**
-	  *  線と点との距離を算出
-	  */
-	public static Vector3 GetClosestPointToLine (Vector3 point, Vector3 beginPoint, Vector3 endPoint)
-	{
-		Vector3 dv = point - beginPoint;
-		Vector3 rv = endPoint - beginPoint;
-		float dp = Vector3.Dot (dv, rv);
-		float bl = rv.magnitude;
-		float pl = dp / bl;
-		return rv * (pl / bl) + beginPoint;
-	}
-
-	/**
 	  *  線（beginPoint → endPoint を伸ばした直線）の上で、光線にいちばん近い点。
 	  *  光線の起点を線へ落とすだけだと、透視のカメラでは起点（近いクリップ面の上）がマウスに合わせてほとんど動かず、軸をつかんでも点が動かない。
 	  *  光線と線がほぼ平行（軸をまっすぐ見ている）なら決まらないので false
@@ -84,9 +71,6 @@ public static class GeometryMath
 		return true;
 	}
 
-	/**
-	  *  線と点との距離を算出
-	  */
 	/**
 	 *  refernece: http://www5.ocn.ne.jp/~tane/prog/resource/3d_doc/3d_memo_apply.html
 	 */

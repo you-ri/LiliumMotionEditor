@@ -104,11 +104,6 @@ namespace Lilium
             get { return errorCount_; }
         }
 
-        internal string selectedId
-        {
-            get { return selectedId_; }
-        }
-
         internal RigControlEntry selectedEntry
         {
             get { return Find (selectedId_); }
@@ -707,7 +702,6 @@ namespace Lilium
             return best;
         }
 
-        /// <summary>ワールドの位置を表示域の位置へ（左上が原点）。カメラの後ろなら false</summary>
         /// <summary>
         /// 骨の線（根元から index 番目の先まで）の両端。点の丸がある端は、丸に重ならないよう隙間を空ける（モーションエディタの点の線と同じ）。
         /// 指のような短い骨で線が消えないよう、隙間は骨の長さの一部までに抑える

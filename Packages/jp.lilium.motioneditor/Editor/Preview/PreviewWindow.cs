@@ -72,7 +72,6 @@ namespace Lilium
 
         /// <summary>タイムラインの下端（Layers パネルの一覧）の最小の高さ</summary>
         const float kMinLayersHeight = 120;
-        const float kMinLayersWidth = 200;
         /// <summary>タイムラインのトラック一覧の最小の高さ</summary>
         const float kMinTimelineTracksHeight = 60;
         /// <summary>パネルの大きさの既定（初めて開いたとき・レイアウトを戻したとき）</summary>
@@ -119,7 +118,6 @@ namespace Lilium
         [SerializeField] float timelineFirstFrame_ = -2;
         /// <summary>Layers オーバーレイの一覧の高さ。下端のハンドルで変える</summary>
         [SerializeField] float layersHeight_ = kDefaultLayersHeight;
-        [SerializeField] float layersWidth_ = kDefaultLayersWidth;
         [SerializeField] OrbitCamera camera_ = new OrbitCamera ();
         /// <summary>
         /// カメラを合わせたモデル。再読み込みで作り直したときは視点を保つ
@@ -221,7 +219,6 @@ namespace Lilium
         {
             timelineTracksHeight_ = kDefaultTimelineTracksHeight;
             layersHeight_ = kDefaultLayersHeight;
-            layersWidth_ = kDefaultLayersWidth;
             if (OverlayWindows.ResetLayout (this)) overlayDefaultsChecked_ = false;
             Repaint ();
         }
@@ -258,15 +255,10 @@ namespace Lilium
             get { return RigDefinitionAssets.Resolve (characterSettings); }
         }
 
-        /// <summary>
-        /// 設定を探すキャラの prefab（開いているシーンのキャラなら、その元の prefab）
-        /// </summary>
+        /// <summary>設定を探すキャラの prefab</summary>
         GameObject settingsPrefab
         {
-            get {
-                if (sceneTarget_ != null) return PrefabUtility.GetCorrespondingObjectFromOriginalSource (sceneTarget_);
-                return prefab_;
-            }
+            get { return prefab_; }
         }
 
         /// <summary>このキャラの設定（S19。無ければ null）</summary>
@@ -489,7 +481,7 @@ namespace Lilium
             get {
                 if (stage_ == null) return null;
                 stage_.EnsureHandlesTarget (Screen.width, Screen.height);
-                ApplyView (stage_.handlesCamera);
+                camera_.Apply (stage_.handlesCamera);
                 // 出力先（ダミー）ではなく表示域の形に合わせる。絵と同じ見え方にしないとハンドルが骨からずれる
                 Rect view = ViewportRect ();
                 if (view.height > 1) stage_.handlesCamera.aspect = view.width / view.height;
@@ -570,8 +562,7 @@ namespace Lilium
         /// <summary>Layers オーバーレイの幅（行の中身はこの幅に合わせて伸び縮みする）</summary>
         public float layersWidth
         {
-            get { return layersWidth_; }
-            set { layersWidth_ = Mathf.Max (kMinLayersWidth, value); }
+            get { return kDefaultLayersWidth; }
         }
 
         /// <summary>
@@ -797,11 +788,8 @@ namespace Lilium
         /// <param name="edit">ハンドル・Spinner・数値欄などの操作から打つとき。キーの自動追加が切なら、キーのあるカーブだけ書き換える</param>
         CurveWriter BeginCurves (string undoName, bool edit = false)
         {
-            Transform root = editingRoot;
-            // 書き込み先が Override なら、そのクリップへ元からの差分として書く（S14）。サイクルキーのフレームなら先頭のキーへ打つ（S32）
-            CurveWriter writer = CurveWriter.Begin (targetClip, root, KeyFrameToWrite (), undoName);
+            CurveWriter writer = PoseCommit.BeginCurves (stage_, poseStack_, targetClip, currentFrame, cycle, GetKeyFrames (), undoName);
             writer.onlyExistingKeys = edit && !autoKey;
-            AttachOverrideStore (writer);
             return writer;
         }
 
@@ -943,9 +931,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// クリップのカーブを書き換えた後。キーの一覧と残像を捨て、段が控えているカーブを読み直させて、姿勢を当て直す
-        /// </summary>
-        /// <summary>
         /// クリップを直に書き換える操作の共通の流れ: 前の操作と Undo を分けて clip を記録し、edit で書き換え、書き換えたら姿勢を当て直す。
         /// 記録するのは書き換えるクリップそのもの（書き込み先が Override でも編集用クリップを書き換える操作があり、
         /// 書き込み先を記録すると Undo で戻らなかった）
@@ -957,6 +942,9 @@ namespace Lilium
             if (edit ()) AfterClipEdit ();
         }
 
+        /// <summary>
+        /// クリップのカーブを書き換えた後。キーの一覧と残像を捨て、段が控えているカーブを読み直させて、姿勢を当て直す
+        /// </summary>
         public void AfterClipEdit ()
         {
             keyFrames_ = null;
@@ -980,19 +968,14 @@ namespace Lilium
             AnimationUtility.onCurveWasModified += OnCurveWasModified;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-            // 窓の Update は見えている窓にしか来ないので、時計は EditorApplication.update で回す
-            // （Scene ビュー型の窓で編集しているとき、この窓はタブの後ろに隠れていることがある。S15d）
+            // 窓の Update は見えている窓にしか来ないので、時計は EditorApplication.update で回す（タブの後ろに隠れていても再生を進める）
             EditorApplication.update -= Tick;
             EditorApplication.update += Tick;
-            // 姿勢が変わるたびに、編集しているシーンのキャラへ写す（S15d）
-            poseSampled -= ApplySceneMirror;
-            poseSampled += ApplySceneMirror;
             // 定義を直したら編集用リグを作り直す（S23）
             SubscribeRigDefinition ();
             ProjectSettings.changed -= OnProjectSettingsChanged;
             ProjectSettings.changed += OnProjectSettingsChanged;
 
-            MigrateHumanoidBase ();
             RefreshClipState ();
             RebuildStage ();
         }
@@ -1010,9 +993,6 @@ namespace Lilium
             AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.update -= Tick;
-            poseSampled -= ApplySceneMirror;
-            // 写した姿勢を戻す（再読み込み・窓を閉じる）
-            sceneMirror_.Release ();
             EditorHost.Release (this);
             DisposeStage ();
         }
@@ -1038,9 +1018,8 @@ namespace Lilium
                     DisposeStage ();
                     break;
                 case PlayModeStateChange.EnteredEditMode:
-                    // Play Mode を抜ける途中（まだ再生中の扱い）に描画で作り直された世界は、姿勢を当て損ねている。
-                    // シーンのキャラへはその姿勢が写るので（S15d）、編集モードに戻ってから作り直す
-                    if (stage_ != null || sceneTarget_ != null) RebuildStage ();
+                    // Play Mode を抜ける途中（まだ再生中の扱い）に描画で作り直された世界は、姿勢を当て損ねている。編集モードに戻ってから作り直す
+                    if (stage_ != null) RebuildStage ();
                     Repaint ();
                     break;
                 case PlayModeStateChange.EnteredPlayMode:
@@ -1060,7 +1039,7 @@ namespace Lilium
 #else
             viewport_ = ToolViewport.Create (rootVisualElement, "MktViewport", OnViewportGUI);
 #endif
-            RegisterEditCommands (this, () => this);
+            RegisterEditCommands ();
         }
 
 #if !UNITY_6000_6_OR_NEWER
@@ -1095,46 +1074,18 @@ namespace Lilium
         {
             Repaint ();
             if (viewport_ != null) viewport_.MarkDirtyRepaint ();
-            if (viewRepainted != null) viewRepainted ();
-        }
-
-        /// <summary>表示域を描き直したとき（Scene ビュー型の窓も描き直す。S15d）</summary>
-        public event System.Action viewRepainted;
-
-        /// <summary>
-        /// 別の窓（Scene ビュー型の窓。S15d）の中で骨のハンドルを描いて扱う。視点はその窓のカメラ（Camera.current）
-        /// </summary>
-        internal void DoExternalHandles ()
-        {
-            EnsureStage ();
-            if (stage_ == null) return;
-            DoHandles ();
         }
 
         /// <summary>
         /// 世界がまだ無ければ作る（作り直しの中で姿勢も当てる）。作ったら true。
-        /// 普段は窓の描画（OnGUI）で作るが、Motion Scene が持つ見えない窓や、タブの後ろに隠れた窓には描画が来ないため
+        /// 普段は窓の描画（OnGUI）で作るが、タブの後ろに隠れた窓には描画が来ないため
         /// </summary>
         bool EnsureStage ()
         {
             if (stage_ != null || EditorApplication.isPlayingOrWillChangePlaymode) return false;
-            if (prefab_ == null && sceneTarget_ == null) return false;
+            if (prefab_ == null) return false;
             RebuildStage ();
             return true;
-        }
-
-        /// <summary>
-        /// 別の窓で、どのハンドルにも当たらなかったクリック。メッシュを指していればその骨を選び、何も無ければ選択を外す。
-        /// Shift・Ctrl は表示域のクリックと同じ
-        /// </summary>
-        internal void SelectByRay (Ray ray, EventModifiers modifiers)
-        {
-            if (stage_ == null) return;
-            PoseTarget target = FindPickTarget (stage_.PickBone (ray));
-            // 表示域のクリック（PickTargetAt）と同じく、キーの自動追加が切で今のフレームにキーの無い物は選ばない
-            if (target != null && !CanEditTarget (target)) target = null;
-            SelectPicked (target, modifiers);
-            RepaintView ();
         }
 
         /// <summary>
@@ -1143,10 +1094,8 @@ namespace Lilium
         public void SetModel (GameObject prefab)
         {
             CommitHandleKeys ();
-            if (prefab == prefab_ && sceneTarget_ == null && string.IsNullOrEmpty (sceneTargetId_)) return;
+            if (prefab == prefab_) return;
             prefab_ = prefab;
-            // prefab を選び直したら、開いているシーンのキャラの編集はやめる
-            ForgetSceneTarget ();
             selectedNames_.Clear ();
             ResetWindowSettingsFromProject ();
             // Override の並びはキャラの設定にあるので、キャラが替わったら読み直す（S21）
@@ -1203,8 +1152,7 @@ namespace Lilium
         /// </summary>
         float CurrentTime ()
         {
-            // 演出だけ置いているときも時計を進められる（クリップが無くても演出は見たい）
-            return editingClip_ != null || genericClip_ != null || humanoidClip_ != null || contextPrefab_ != null ? (float)clock_.time : 0;
+            return editingClip_ != null || genericClip_ != null || humanoidClip_ != null ? (float)clock_.time : 0;
         }
 
         /// <summary>
@@ -1287,18 +1235,11 @@ namespace Lilium
         public void RebuildStage ()
         {
             DisposeStage ();
-            // 開いているシーンのキャラを編集するときは、そのキャラから複製して同じ場所に置く
-            if (sceneTarget_ != null) {
-                stageRigDefinition_ = rigDefinition;
-                stage_ = new PreviewStage (sceneTarget_, stageRigDefinition_, sceneTarget_.transform.parent);
-            } else {
-                stageRigDefinition_ = rigDefinition;
-                stage_ = new PreviewStage (prefab_, stageRigDefinition_);
-            }
+            stageRigDefinition_ = rigDefinition;
+            stage_ = new PreviewStage (prefab_, stageRigDefinition_);
             stageHeldObjectsKey_ = characterSettings != null ? characterSettings.GetHeldObjectsKey () : "";
             stage_.showFloor = showFloor_;
             stage_.grabbedBones = GrabbedDisplayBones;
-            AddContext ();
 
             targets_ = RigTargets.Create (stage_);
             foreach (PoseTarget target in targets_) {
@@ -1314,7 +1255,6 @@ namespace Lilium
                 framedPrefab_ = prefab_;
             }
             keyFrames_ = null;
-            BindSceneMirror ();
             SamplePose ();
             if (stateChanged != null) stateChanged ();
         }
@@ -1322,8 +1262,6 @@ namespace Lilium
         void DisposeStage ()
         {
             CommitHandleKeys ();
-            // シーンのキャラへ写した姿勢を戻す（作り直し・再読み込み・Play Mode の前）。作り直した後は BindSceneMirror で写し直す
-            sceneMirror_.Release ();
             foreach (PoseTarget target in targets_) {
                 target.Dispose ();
             }
@@ -1354,18 +1292,9 @@ namespace Lilium
 
         bool CanEditClip ()
         {
-            if (poseStack_ == null || targetClip == null) return false;
             // 取込の候補を試し見している間は、どこへも書かない（見ているのは他人のクリップ）
             if (importPreviewing_) return false;
-            // 編集用クリップへ書くときだけ、そのクリップが編集できる形かを見る（Override へ書くときの土台は Humanoid でもよい）
-            if (overrideWriteLayer == null && (editingClip_ == null || clipProblem_ != null)) return false;
-            // 合成の重みが 1 未満のとき・書き出す段の 👁 を落としているときは、画面の値がクリップから出ていないので書かない。
-            // 段が見つからないときも書かない（判定を飛ばして書けてしまわないように）
-            // （✋ からの経路は見ない。Rig Values のパネルのように、✋ を通さずに値を動かす書き込みもあるため）
-            PoseLayer write = poseStack_.writeLayer;
-            if (write == null || !write.canWrite || !write.enabled || write.clipWeight < 1) return false;
-            // 演出の中で前後のクリップと混ざる区間は、v1 では編集しない（S15b。理由は Timeline Clip の段に出る）
-            return timelineEditBlockReason == null;
+            return PoseCommit.GetWriteProblem (poseStack_, targetClip, clipProblem_) == null;
         }
 
         /// <summary>
@@ -1408,17 +1337,13 @@ namespace Lilium
         void SamplePose (float time)
         {
             CommitHandleKeys ();
-            // 窓が描かれていない（Motion Scene が持っている見えない窓・タブの後ろ）ときも、要るときに世界を作る（S15d）
+            // 窓が描かれていない（タブの後ろ）ときも、要るときに世界を作る
             if (EnsureStage ()) return;
             if (stage_ == null || stage_.animator == null) return;
-            // 演出のどのクリップとして見ているかと、時計の写像（演出の時刻）を先に決める（S15b）
-            ResolveTimelineClip ();
-            UpdateClockMapping ();
             // 段の並び（Layers のパネルに出ているもの）をそのまま上から通す。
             // クリップを当てるのも IK を解くのも段の側にある（AnimationClip.SampleAnimation は使わない。PreviewStage.SampleClip）
-            // コマ送りのときは、キャラの姿勢だけを前のキーで止める（演出は今の時刻のまま）
+            // コマ送りのときは、前のキーの姿勢で止める
             poseStack_.Evaluate (PoseTime (time));
-            EvaluateContexts (time);
             RepaintView ();
             if (poseSampled != null) poseSampled ();
         }
@@ -1467,16 +1392,6 @@ namespace Lilium
 
         void Tick ()
         {
-            // 編集しているシーンのキャラを見失った・見つけ直した（S15d）
-            KeepSceneTarget ();
-            // 見えない窓でも、編集しているシーンのキャラがあれば世界を作って写す（S15d）
-            if (sceneTarget_ != null) EnsureStage ();
-            // 開いているシーンの演出を読み直す（読むだけ。S15d）
-            RefreshSceneContext ();
-            // Timeline 窓の再生位置に付いていく（S15c。Motion Scene ではいつも）
-            FollowTimelineWindow ();
-            // シーンのキャラへ写した登録が外れていたら写し直す（S15d）
-            KeepSceneMirror ();
             // キャラの設定・プロジェクト設定でリグの定義を差し替えたら作り直す
             KeepRigDefinition ();
             if (!clock_.isPlaying) return;
@@ -1485,12 +1400,8 @@ namespace Lilium
                 return;
             }
 
-            // 止めている間（つかんでいる間）は進めず、姿勢も当て直さない。
-            // 演出のクリップと結び付けていれば、演出の速さ（クリップの速さ）で演出の頭から終わりまでを回る
-            UpdateClockMapping ();
-            double start, end;
-            PlayRange (out start, out end);
-            if (clock_.Tick (EditorApplication.timeSinceStartup, start, end)) SamplePose ();
+            // 止めている間（つかんでいる間）は進めず、姿勢も当て直さない。クリップの頭から最後のキーまでを回る
+            if (clock_.Tick (EditorApplication.timeSinceStartup, (GetLastKeyFrame () + 1) / (double)clock_.rate)) SamplePose ();
         }
 
         public void TogglePlay ()
@@ -1527,8 +1438,8 @@ namespace Lilium
             Rect rect = viewport_.ChangeCoordinatesTo (rootVisualElement, viewport_.contentRect);
             if (rect.width < 1 || rect.height < 1) return;
 
-            // 視点の出どころは ApplyView の 1 か所（いつもの視点か、演出のカメラ割り）
-            Quaternion viewRotation = ApplyView (stage_.camera);
+            camera_.Apply (stage_.camera);
+            Quaternion viewRotation = camera_.rotation;
             // BeginPreview は描き先の大きさを合わせるだけで aspect は直さない。合わせないと窓の形を変えたときに絵がつぶれる
             stage_.camera.aspect = rect.width / rect.height;
             // 窓の照明は奥から当てる向きが既定（UpdateLights の向きを回した側）。Flip Light で手前から当てる
@@ -1579,8 +1490,6 @@ namespace Lilium
             // 取り込む前の Generic のクリップも最後まで見られるように
             if (genericClip_ != null && !genericClip_.empty) last = Mathf.Max (last, Mathf.RoundToInt (genericClip_.length * (float)clock_.rate));
             if (humanoidClip_ != null && !humanoidClip_.empty) last = Mathf.Max (last, Mathf.RoundToInt (humanoidClip_.length * (float)clock_.rate));
-            // 一緒に見ている演出の終わりまで
-            last = Mathf.Max (last, ContextLastFrame ());
             return last;
         }
 

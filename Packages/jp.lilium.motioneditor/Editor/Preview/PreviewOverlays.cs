@@ -21,11 +21,6 @@ namespace Lilium
         ObjectField model_;
         ObjectField settings_;
         EditorToolbarButton createSettings_;
-        IntegerField contextOffset_;
-        EditorToolbarDropdown timelineClip_;
-        IntegerField masterFrame_;
-        EditorToolbarToggle contextCamera_;
-        EditorToolbarToggle followTimeline_;
 
         public override VisualElement CreatePanelContent ()
         {
@@ -64,30 +59,6 @@ namespace Lilium
             // リグの定義はリグエディタで直す。今のキャラと、そのキャラが使う定義で開く
             toolbar.Add (new EditorToolbarButton ("Rig", Icons.Load ("PoseTool"), OpenRigEditor) { tooltip = Tr ("PREVIEW_OVERLAYS_RIG_EDITOR_TOOLTIP") });
 
-            contextOffset_ = new IntegerField { tooltip = Tr ("PREVIEW_OVERLAYS_CONTEXT_OFFSET_TOOLTIP") };
-            contextOffset_.style.width = 44;
-            contextOffset_.RegisterValueChangedCallback (e => window_.SetContextOffset (e.newValue));
-            toolbar.Add (contextOffset_);
-
-            // 演出のどのクリップとして見るか（S15b）。結び付けると、演出の時刻はそのクリップの置き方（開始・頭出し・速さ）で決まる
-            timelineClip_ = new EditorToolbarDropdown ("Clip", ShowTimelineClipMenu) {
-                tooltip = Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_TOOLTIP"),
-            };
-            toolbar.Add (timelineClip_);
-
-            masterFrame_ = new IntegerField { tooltip = Tr ("PREVIEW_OVERLAYS_MASTER_FRAME_TOOLTIP") };
-            masterFrame_.style.width = 44;
-            masterFrame_.RegisterValueChangedCallback (e => window_.SetMasterFrame (e.newValue));
-            toolbar.Add (masterFrame_);
-
-            // 演出のカメラ割りで見る・Timeline 窓の再生位置に付いていく（S15c）
-            contextCamera_ = new EditorToolbarToggle { text = "Cam", tooltip = Tr ("PREVIEW_OVERLAYS_CAM_TOOLTIP") };
-            contextCamera_.RegisterValueChangedCallback (e => window_.SetUseContextCamera (e.newValue));
-            toolbar.Add (contextCamera_);
-            followTimeline_ = new EditorToolbarToggle { text = "Follow", tooltip = Tr ("PREVIEW_OVERLAYS_FOLLOW_TOOLTIP") };
-            followTimeline_.RegisterValueChangedCallback (e => window_.SetFollowTimelineWindow (e.newValue));
-            toolbar.Add (followTimeline_);
-
             Refresh ();
             Resubscribe ();
             return toolbar;
@@ -96,10 +67,8 @@ namespace Lilium
         protected override void Subscribe (bool on)
         {
             window_.stateChanged -= Refresh;
-            window_.poseSampled -= RefreshTime;
             if (!on) return;
             window_.stateChanged += Refresh;
-            window_.poseSampled += RefreshTime;
         }
 
         void OpenRigEditor ()
@@ -109,34 +78,6 @@ namespace Lilium
             rigEditor.SetModel (window_.model);
             // リグエディタの欄で別の定義を選んでいても、このキャラが使う定義に戻す
             rigEditor.SetDefinition (null);
-        }
-
-        void ShowTimelineClipMenu ()
-        {
-            if (window_ == null) return;
-            GenericMenu menu = new GenericMenu ();
-            ContextClip current = window_.timelineClip;
-            menu.AddItem (new GUIContent (Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_AUTO")), window_.timelineClipAuto, () => window_.SetTimelineClip (null));
-            menu.AddItem (new GUIContent (Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_UNLINKED")), !window_.timelineClipAuto && current == null, window_.SetTimelineClipNone);
-            menu.AddSeparator ("");
-            double rate = window_.contextFrameRate;
-            foreach (ContextClip candidate in window_.timelineClipCandidates) {
-                ContextClip item = candidate;
-                string text = Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_ITEM", item.label, Mathf.RoundToInt ((float)(item.start * rate)), Mathf.RoundToInt ((float)(item.end * rate)))
-                    + (System.Math.Abs (item.timeScale - 1) > 1e-6 ? "  ×" + item.timeScale.ToString ("0.###") : "");
-                // メニューの「/」は階層になるので置き換える
-                menu.AddItem (new GUIContent (text.Replace ("/", "∕")), !window_.timelineClipAuto && current == item, () => window_.SetTimelineClip (item.key));
-            }
-            menu.ShowAsContext ();
-        }
-
-        /// <summary>
-        /// フレームを動かしたとき（演出の時刻の欄）
-        /// </summary>
-        void RefreshTime ()
-        {
-            if (window_ == null || masterFrame_ == null) return;
-            if (window_.followsTimelineClip) masterFrame_.SetValueWithoutNotify (window_.masterFrame);
         }
 
         /// <summary>
@@ -152,24 +93,6 @@ namespace Lilium
                 settings_.style.display = window_.model != null ? DisplayStyle.Flex : DisplayStyle.None;
                 createSettings_.style.display = settings == null && window_.model != null ? DisplayStyle.Flex : DisplayStyle.None;
             }
-            // Motion Scene では演出は開いているシーンのもの（Timeline 窓が開いているもの）を使う
-            bool inScene = window_.sceneTarget != null;
-            if (contextOffset_ != null) contextOffset_.SetValueWithoutNotify (window_.contextOffset);
-            if (timelineClip_ == null) return;
-            bool hasCandidates = window_.timelineClipCandidates.Count > 0;
-            bool follows = window_.followsTimelineClip;
-            ContextClip current = window_.timelineClip;
-            timelineClip_.style.display = hasCandidates ? DisplayStyle.Flex : DisplayStyle.None;
-            timelineClip_.text = current != null && current.clip != null ? current.clip.name : Tr ("PREVIEW_OVERLAYS_TIMELINE_CLIP_NONE");
-            // 結び付けていればオフセットは写像が決めるので隠し、代わりに演出の時刻を出す
-            contextOffset_.style.display = follows || (window_.contextPrefab == null && !inScene) ? DisplayStyle.None : DisplayStyle.Flex;
-            masterFrame_.style.display = follows ? DisplayStyle.Flex : DisplayStyle.None;
-            bool hasContext = window_.contextPrefab != null && !inScene;
-            contextCamera_.style.display = hasContext && window_.hasContextShots ? DisplayStyle.Flex : DisplayStyle.None;
-            contextCamera_.SetValueWithoutNotify (window_.useContextCamera);
-            followTimeline_.style.display = hasContext ? DisplayStyle.Flex : DisplayStyle.None;
-            followTimeline_.SetValueWithoutNotify (window_.followTimelineWindow);
-            RefreshTime ();
         }
     }
 
@@ -228,31 +151,22 @@ namespace Lilium
 
             VisualElement views = new VisualElement ();
             views.style.flexDirection = FlexDirection.Row;
-            views.Add (ViewButton (window, "Front", Tr ("PREVIEW_OVERLAYS_FRONT_TOOLTIP"), "Front View", () => window.LookFrom (PreviewWindow.ViewPreset.Front)));
-            views.Add (ViewButton (window, "Side", Tr ("PREVIEW_OVERLAYS_SIDE_TOOLTIP"), "Side View", () => window.LookFrom (PreviewWindow.ViewPreset.Side)));
-            views.Add (ViewButton (window, "Top", Tr ("PREVIEW_OVERLAYS_TOP_TOOLTIP"), "Top View", () => window.LookFrom (PreviewWindow.ViewPreset.Top)));
-            views.Add (ViewButton (window, "Frame", Tr ("PREVIEW_OVERLAYS_FRAME_TOOLTIP"), "Frame Selected", window.FrameSelection));
+            views.Add (ViewButton ("Front", Tr ("PREVIEW_OVERLAYS_FRONT_TOOLTIP"), "Front View", () => window.LookFrom (PreviewWindow.ViewPreset.Front)));
+            views.Add (ViewButton ("Side", Tr ("PREVIEW_OVERLAYS_SIDE_TOOLTIP"), "Side View", () => window.LookFrom (PreviewWindow.ViewPreset.Side)));
+            views.Add (ViewButton ("Top", Tr ("PREVIEW_OVERLAYS_TOP_TOOLTIP"), "Top View", () => window.LookFrom (PreviewWindow.ViewPreset.Top)));
+            views.Add (ViewButton ("Frame", Tr ("PREVIEW_OVERLAYS_FRAME_TOOLTIP"), "Frame Selected", window.FrameSelection));
             root.Add (views);
 
             return root;
         }
 
         /// <param name="shortcut">同じ操作のショートカットの名前（説明の後ろに今のキーを付ける）</param>
-        static Button ViewButton (PreviewWindow window, string text, string tooltip, string shortcut, System.Action click)
+        static Button ViewButton (string text, string tooltip, string shortcut, System.Action click)
         {
             Button button = new Button (click) { text = text };
-            ShortcutTooltip.Set (button, window, tooltip, shortcut);
+            ShortcutTooltip.Set (button, tooltip, shortcut);
             return button;
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Motion.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-preview-toolbar", "Context", defaultDisplay = true,
-        defaultDockZone = DockZone.TopToolbar, defaultDockPosition = DockPosition.Top, defaultDockIndex = 0)]
-    sealed class PreviewToolbarOverlayScene : PreviewToolbarOverlay
-    {
     }
 
 }

@@ -10,12 +10,10 @@ namespace Lilium
     /// <summary>
     /// 窓のキーを外部の骨格へ書き出し、外部の BVH を窓の Override として取り込む口（S77）
     /// </summary>
-    public class ExternalWindowTests
+    public class ExternalWindowTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktExternalWindowTests";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         HumanPose rest_;
@@ -41,12 +39,7 @@ namespace Lilium
         public void TearDown ()
         {
             if (window_ != null) Object.DestroyImmediate (window_);
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 

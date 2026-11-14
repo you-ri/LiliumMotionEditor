@@ -14,13 +14,14 @@ namespace Lilium
     public sealed class HumanoidLayer : PoseLayer
     {
         readonly PreviewStage stage_;
-        readonly IHumanoidHost host_;
+        readonly ILayerSource source_;
 
-        public HumanoidLayer (PreviewStage stage = null, IHumanoidHost host = null)
+        /// <param name="source">クリップの持ち主。窓（IHumanoidHost）なら Layers のパネルの行も作る</param>
+        public HumanoidLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
-            host_ = host;
-            if (host != null) {
+            source_ = source;
+            if (source is IHumanoidHost host) {
                 clip = CreateClip (host);
                 // 構造を編集している間だけ出る（S21。Humanoid Pose は足したり外したりできる段。位置は固定）
                 headButtons.Add (new LayerClipButton {
@@ -37,7 +38,7 @@ namespace Lilium
         AnimationClip blending
         {
             get {
-                AnimationClip humanoid = host_ != null ? host_.humanoidClip : null;
+                AnimationClip humanoid = source_ != null ? source_.humanoidClip : null;
                 if (humanoid == null || clipWeight <= 0) return null;
                 return humanoid.humanMotion ? humanoid : null;
             }

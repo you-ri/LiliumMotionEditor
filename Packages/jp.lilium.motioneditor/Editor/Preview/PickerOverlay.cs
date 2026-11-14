@@ -181,13 +181,4 @@ namespace Lilium
         }
     }
 
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Picker.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-picker", "Picker", defaultDisplay = true,
-        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
-    sealed class PickerOverlayScene : PickerOverlay
-    {
-    }
-
 }

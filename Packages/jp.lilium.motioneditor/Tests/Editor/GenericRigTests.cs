@@ -124,31 +124,6 @@ namespace Lilium
             Assert.IsTrue (definition.Validate ().Any (e => e.Contains ("Nowhere")));
         }
 
-        [Test]
-        public void SolvedExtrasChangeTheHashOnlyWhenPresent ()
-        {
-            EditRigDefinition plain = CreateDefinition ();
-            string before = plain.GetFullBodyHash ();
-            plain.extraControls.Add (new EditRigDefinition.ExtraControl { name = "Tail", pattern = "Tail" });
-            Assert.AreEqual (before, plain.GetFullBodyHash (), "解かない追加コントロールは変えない");
-            plain.extraControls[0].fullBodySolve = true;
-            Assert.AreNotEqual (before, plain.GetFullBodyHash ());
-        }
-
-        [Test]
-        public void OwnWeightChangesTheHashOnlyWhenOn ()
-        {
-            // 重さを自分の骨の分だけにする骨（S96）。入れない定義のハッシュは、項目を足す前と同じ
-            EditRigDefinition plain = CreateDefinition ();
-            plain.extraControls.Add (new EditRigDefinition.ExtraControl { name = "Tail", pattern = "Tail", fullBodySolve = true });
-            string before = plain.GetFullBodyHash ();
-            plain.extraControls[0].ownWeightOnly = true;
-            string extra = plain.GetFullBodyHash ();
-            Assert.AreNotEqual (before, extra, "追加コントロール");
-            plain.FindFkControl (HumanBodyBones.Spine).ownWeightOnly = true;
-            Assert.AreNotEqual (extra, plain.GetFullBodyHash (), "FK");
-        }
-
         [TestCase (GenericAvatar.None)]
         [TestCase (GenericAvatar.Generic)]
         [TestCase (GenericAvatar.GenericWithRootNode)]
@@ -311,17 +286,6 @@ namespace Lilium
                     Assert.Less (Quaternion.Angle (deltaA, deltaB), kAngleTolerance, "フレーム " + frame + " " + name);
                 }
             }
-        }
-
-        [Test]
-        public void BodyScaleChangesTheHashOnlyWhenSet ()
-        {
-            EditRigDefinition plain = CreateDefinition ();
-            string before = plain.GetFullBodyHash ();
-            plain.bodyScale = 0;
-            Assert.AreEqual (before, plain.GetFullBodyHash ());
-            plain.bodyScale = 0.8f;
-            Assert.AreNotEqual (before, plain.GetFullBodyHash ());
         }
 
         /// <summary>

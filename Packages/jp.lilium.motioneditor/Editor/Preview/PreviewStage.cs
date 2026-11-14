@@ -27,14 +27,6 @@ namespace Lilium
         /// <summary>
         /// 置いた物の剥がし方
         /// </summary>
-        enum StripPolicy
-        {
-            /// <summary>編集するキャラ。見た目と段（Rigging・[PoseLayer]）だけ残す</summary>
-            EditTarget,
-            /// <summary>文脈（エフェクト・相手など）。見た目に加えて Director と Timeline 関連を残し、ゲームのロジックだけ外す</summary>
-            Context,
-        }
-
         static readonly Color kBackgroundColor = new Color (0.19f, 0.2f, 0.22f);
         static readonly Color kAmbientColor = new Color (0.42f, 0.42f, 0.46f);
         static readonly Color kFloorColor = new Color (0.27f, 0.28f, 0.3f);
@@ -48,11 +40,8 @@ namespace Lilium
 
         readonly List<GameObject> roots_ = new List<GameObject> ();
         readonly List<Object> assets_ = new List<Object> ();
-        readonly List<GameObject> contexts_ = new List<GameObject> ();
-        readonly List<ContextInfo> contextInfos_ = new List<ContextInfo> ();
         readonly EditRigDefinition definition_;
         readonly bool ownsDefinition_;
-        GameObject contextRoot_;
         readonly Scene scene_;
         readonly GameObject floor_;
         RenderTexture handlesTarget_;
@@ -173,12 +162,8 @@ namespace Lilium
         }
 
         /// <param name="definition">編集用リグの定義。null なら既定の定義を一時の物として作る（パッケージの既定のアセットが読めないときなど）</param>
-        /// <param name="placement">
-        /// キャラを置く親の場所（ワールドの位置・向き・大きさ）。開いているシーンのキャラを編集するとき（S15d）に、そのキャラの親を渡す。
-        /// 骨のハンドルが本物の骨の上に出るよう、複製を同じ場所に置く。null なら原点
-        /// </param>
-        public PreviewStage (GameObject prefab, EditRigDefinition definition = null, Transform placement = null)
-            : this (prefab, definition, placement, true)
+        public PreviewStage (GameObject prefab, EditRigDefinition definition = null)
+            : this (prefab, definition, true)
         {
         }
 
@@ -188,12 +173,11 @@ namespace Lilium
         /// </summary>
         public static PreviewStage CreateHeadless (GameObject prefab, EditRigDefinition definition = null)
         {
-            return new PreviewStage (prefab, definition, null, false);
+            return new PreviewStage (prefab, definition, false);
         }
 
-        PreviewStage (GameObject prefab, EditRigDefinition definition, Transform placement, bool render)
+        PreviewStage (GameObject prefab, EditRigDefinition definition, bool render)
         {
-            placement_ = placement;
             ownsDefinition_ = definition == null;
             sourcePrefab = prefab;
             definition_ = definition != null ? definition : EditRigDefinition.CreateDefault ();
@@ -210,8 +194,6 @@ namespace Lilium
             }
             if (prefab != null) CreateModel (prefab);
         }
-
-        readonly Transform placement_;
 
         public void Dispose ()
         {
@@ -247,8 +229,6 @@ namespace Lilium
                 humanoidSampler_ = null;
             }
             ClearMirroredClips ();
-            contexts_.Clear ();
-            contextInfos_.Clear ();
             foreach (GameObject root in roots_) {
                 if (root != null) Object.DestroyImmediate (root);
             }
@@ -264,45 +244,6 @@ namespace Lilium
             if (ownsDefinition_ && definition_ != null) Object.DestroyImmediate (definition_);
             if (renderUtility != null) renderUtility.Cleanup ();
             else if (scene_.IsValid ()) EditorSceneManager.ClosePreviewScene (scene_);
-        }
-
-        /// <summary>
-        /// 文脈の物（Timeline で一緒に動くエフェクト・相手など）を置く。編集対象とは剥がし方が違う（Director と Timeline 関連を残す）。
-        /// ステージを捨てると一緒に消える
-        /// </summary>
-        public GameObject AddContext (GameObject prefab)
-        {
-            if (prefab == null) return null;
-            if (contextRoot_ == null) contextRoot_ = CreateRoot ("Context");
-
-            GameObject holder = CreateGameObject (prefab.name);
-            holder.transform.SetParent (contextRoot_.transform, false);
-            holder.SetActive (false);
-            GameObject instance = Object.Instantiate (prefab, holder.transform, false);
-            instance.name = prefab.name;
-            StripComponents (instance, StripPolicy.Context);
-            holder.SetActive (true);
-            contexts_.Add (instance);
-            // 時計（Timeline）は手回しにして、バインドの決め方を拡張点に通す
-            ContextInfo info = ContextProbe.Prepare (instance, prefab);
-            if (info != null) contextInfos_.Add (info);
-            return instance;
-        }
-
-        /// <summary>
-        /// 置いた文脈の中身（時計の長さ・トラック・注意）
-        /// </summary>
-        public IReadOnlyList<ContextInfo> contextInfos
-        {
-            get { return contextInfos_; }
-        }
-
-        /// <summary>
-        /// 文脈をその時刻（秒）の姿にする。時計は窓が正なので、窓が姿勢を作るたびに呼ぶ
-        /// </summary>
-        public void EvaluateContexts (double time)
-        {
-            foreach (ContextInfo info in contextInfos_) ContextProbe.Evaluate (info.instance, time);
         }
 
         /// <summary>
@@ -1387,6 +1328,34 @@ namespace Lilium
         public HumanoidBaker CreateHumanoidBaker (System.Action<float> apply = null)
         {
             return new HumanoidBaker (editingRig, editingRigSolver, SampleClipForBake, apply);
+        }
+
+        /// <summary>
+        /// Humanoid のクリップを焼いて保存する（窓の Output の段と PoseSession.Bake の共通の手順。S107c）。
+        /// 任意のプロパティは元と Override を重ねた物を写し、使い終えた一時のクリップは捨てる
+        /// </summary>
+        /// <param name="apply">そのフレームの姿勢を作る関数（CreateHumanoidBaker と同じ）</param>
+        /// <param name="lockedSpanWeight">段を通さずに焼くときの全身 IK の段の重み。キーの間で前後のキーが Locked の点を解く（S25d）。段を通して焼くなら null</param>
+        /// <param name="configure">焼く前に焼く道具へ足す設定（窓の、表示モデルから読む・Rig の代理を焼かないなど）</param>
+        public HumanoidBaker.Result BakeToAsset (AnimationClip baseClip, IList<AnimationClip> overrides, List<OverrideProperties.Layer> propertyLayers, string outputName,
+            System.Action<float> apply, float? lockedSpanWeight, System.Action<HumanoidBaker> configure, out string outputPath)
+        {
+            AnimationClip properties = null;
+            try {
+                using (HumanoidBaker baker = CreateHumanoidBaker (apply)) {
+                    if (lockedSpanWeight.HasValue) {
+                        float weight = lockedSpanWeight.Value;
+                        baker.afterSolve = () => SolveLockedSpan (weight);
+                    }
+                    if (configure != null) configure (baker);
+                    properties = OverrideProperties.CreateBakeSource (baseClip, propertyLayers, this);
+                    baker.propertySource = properties;
+                    return HumanoidOutput.BakeToAsset (baker, baseClip, sourcePrefab, overrides, outputName, out outputPath);
+                }
+            }
+            finally {
+                if (properties != null) Object.DestroyImmediate (properties);
+            }
         }
 
         /// <summary>

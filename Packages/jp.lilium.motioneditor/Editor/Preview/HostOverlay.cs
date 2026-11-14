@@ -43,15 +43,9 @@ namespace Lilium
         }
     }
 
-    /// <summary>
-    /// プレビュー窓のパネル。Motion Scene（S15d）に載ったときは、姿勢を作っているプレビュー窓を扱う（OverlayWindows.Resolve）
-    /// </summary>
+    /// <summary>プレビュー窓のパネル</summary>
     abstract class MotionOverlay : HostOverlay<PreviewWindow>
     {
-        protected override PreviewWindow ResolveWindow ()
-        {
-            return OverlayWindows.Resolve (containerWindow);
-        }
     }
 
 }

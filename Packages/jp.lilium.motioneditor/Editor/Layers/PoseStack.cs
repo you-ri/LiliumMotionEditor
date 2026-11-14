@@ -40,8 +40,6 @@ namespace Lilium
         /// 並べ替え（Sort）の後で差し込むので、Output を入れた後に Sort し直さないこと
         /// </summary>
         public const int kOrderOutput = 95;
-        /// <summary>Timeline のクリップの段（時間の写像・オフセット・ブレンド）に予約</summary>
-        public const int kOrderTimelineClip = 100;
         public const int kOrderRigBuilder = 1000;
         public const int kOrderDisplayBone = int.MaxValue;
 
@@ -67,6 +65,17 @@ namespace Lilium
         public IReadOnlyList<string> notes
         {
             get { return notes_; }
+        }
+
+        /// <summary>
+        /// 全身 IK の段の重み（段が無い・入っていないなら 0）。段を通さずに焼くとき、キーの間の Locked の点をこの重みで解く（S25d）
+        /// </summary>
+        public float fullBodyWeight
+        {
+            get {
+                PoseLayer layer = Find (LayerKind.FullBodyIk);
+                return layer != null && layer.active ? layer.weight : 0;
+            }
         }
 
         /// <summary>
@@ -113,49 +122,48 @@ namespace Lilium
         /// <summary>
         /// 表示モデルと今のクリップから段を組み立てる。キャラやクリップを替えるたびに作り直す
         /// </summary>
-        /// <param name="host">クリップの持ち主。段はクリップをここから読む</param>
-        public static PoseStack Build (PreviewStage stage, ILayerHost host)
+        /// <param name="source">クリップの持ち主。段はクリップをここから読む。窓（ILayerHost）なら Layers のパネルの行も作る</param>
+        public static PoseStack Build (PreviewStage stage, ILayerSource source)
         {
             PoseStack stack = new PoseStack ();
             if (stage == null || stage.animator == null) return stack;
 
             stack.stage_ = stage;
             // クリップを持つので、解くコントロールが無いキャラでも出す
-            stack.Add (new EditingRigLayer (stage, host));
+            stack.Add (new EditingRigLayer (stage, source));
             // 元のクリップに重ねる差分（S14）。1 枚が 1 段
-            if (host != null) {
-                for (int i = 0; i < host.overrides.Count; i++) stack.Add (new OverrideLayer (stage, host, i));
+            if (source != null) {
+                for (int i = 0; i < source.overrides.Count; i++) stack.Add (new OverrideLayer (stage, source, i));
             }
             // 全身 IK（S25）。リグの定義が全身 IK のときだけ
             if (stage.fullBody != null) stack.Add (new FullBodyLayer (stage));
             // Generic Pose（GenericPoseLayer）は Humanoid のキャラの既定の並びに入れない。段の並びを選べるようにしたときに足す。
             // Humanoid でないキャラは、Generic のクリップを取り込むのに使う（S93）
-            if (!stage.animator.isHuman && host != null) stack.Add (new GenericPoseLayer (stage, host));
+            if (!stage.animator.isHuman && source != null) stack.Add (new GenericPoseLayer (stage, source));
             // Humanoid Pose は置くと決めたときだけ（S21。既定は置かない）
-            if (stage.animator.isHuman && (host == null || host.humanoidPoseLayer)) stack.Add (new HumanoidLayer (stage, host));
-            stack.AddTimelineClip (stage, host);
+            if (stage.animator.isHuman && (source == null || source.humanoidPoseLayer)) stack.Add (new HumanoidLayer (stage, source));
             stack.AddRigBuilder (stage);
             stack.AddUserLayers (stage);
             stack.Add (new DisplayBoneLayer (stage));
             stack.Sort ();
             // 焼いて書き出す段（S21）は並びの設定どおりに差し込む
-            if (host != null) stack.InsertOutputs (host);
+            if (source != null) stack.InsertOutputs (source);
             return stack;
         }
 
         /// <summary>
         /// 焼いて書き出す段を、それぞれ「直前の段」の後ろへ差し込む。直前の段が無ければ Humanoid Pose の後、それも無ければ最後
         /// </summary>
-        void InsertOutputs (ILayerHost host)
+        void InsertOutputs (ILayerSource source)
         {
-            IReadOnlyList<OutputEntry> entries = host.outputEntries;
+            IReadOnlyList<OutputEntry> entries = source.outputEntries;
             if (entries == null) return;
             // 別の Output の後ろに続く段もあるので、直前の段が並びに入ったものから順に差し込む。最後まで決まらなければ Humanoid Pose の後ろ
             List<OutputEntry> pending = entries.Where (e => e != null).ToList ();
             while (pending.Count > 0) {
                 OutputEntry entry = pending.FirstOrDefault (e => layers_.Any (l => l.id == e.after)) ?? pending[0];
                 pending.Remove (entry);
-                OutputLayer layer = new OutputLayer (host, entry);
+                OutputLayer layer = new OutputLayer (source as IOutputHost, entry);
                 if (Find (layer.id) != null) continue;
                 int index = layers_.FindIndex (l => l.id == entry.after);
                 // 直前の段が無ければ、Humanoid Pose（無ければ Editing Rig と Override）の後ろ
@@ -246,18 +254,6 @@ namespace Lilium
             List<PoseLayer> sorted = layers_.OrderBy (l => l.order).ToList ();
             layers_.Clear ();
             layers_.AddRange (sorted);
-        }
-
-        /// <summary>
-        /// 一緒に見ている演出にアニメーションのクリップがあれば、その中でこのクリップがどう置かれているかの段（S15b）
-        /// </summary>
-        void AddTimelineClip (PreviewStage stage, ILayerHost host)
-        {
-            if (host == null) return;
-            // 演出はプレビューの世界に置いたもの（prefab）か、Motion Scene なら開いているシーンのもの（S15d）。どちらかは窓が決める
-            int candidates = host.timelineClipCandidateCount;
-            if (candidates == 0) return;
-            Add (new TimelineClipLayer (() => host.timelineClip, candidates));
         }
 
         /// <summary>

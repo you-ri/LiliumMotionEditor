@@ -10,40 +10,17 @@ namespace Lilium
     /// Controller パネルの Reset（PreviewWindow.ResetValues）。全身 IK の点を選んで戻すと、点の骨の FK も基準へ戻り、
     /// Free の点（向きを固定していない足首の点・踵・つま先など）の骨も、親から見た基準姿勢になる
     /// </summary>
-    public class PointResetTests
+    public class PointResetTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
 
         const float kAngleTolerance = 0.5f;
         const float kPositionTolerance = 1e-3f;
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
 
         PoseSession Open ()
         {
             EditRigDefinition definition = EditRigDefinition.CreateDefault ();
             created_.Add (definition);
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            Animator display = TestSkeleton.CreateHumanoidWithToes (created_);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
-            PoseSession session = new PoseSession (prefab, definition);
-            disposables_.Add (session);
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            session.clip = clip;
-            return session;
+            return OpenSession (TestSkeleton.CreateHumanoidWithToes (created_), definition);
         }
 
         [Test]

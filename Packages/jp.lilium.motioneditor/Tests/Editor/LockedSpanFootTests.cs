@@ -13,12 +13,11 @@ namespace Lilium
     /// 点ごとのカーブの膨らみを残していたので足の形が縮み、足首の向きは別に補間していたので、足裏の点に 1〜3cm 届かず、
     /// 届かない分をつま先の曲げで合わせようとして、フレームごとに曲がり方が飛んだ）
     /// </summary>
-    public class LockedSpanFootTests
+    public class LockedSpanFootTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktLockedSpanFootTests";
         static readonly string[] kFoot = { "LeftFoot", "LeftHeel", "LeftSoleBall", "LeftLittleToeSide", "LeftToeTip" };
 
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         PoseSession session_;
@@ -42,10 +41,7 @@ namespace Lilium
         {
             session_?.Dispose ();
             session_ = null;
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 

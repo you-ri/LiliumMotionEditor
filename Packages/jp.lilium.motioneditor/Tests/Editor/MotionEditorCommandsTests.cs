@@ -11,12 +11,10 @@ namespace Lilium
     /// <summary>
     /// 窓を開かずにモーションを作る操作口（S38）。JSON の要求で開く・読む・書く・検査・焼く・保存ができ、誤りは例外でなく理由で返る
     /// </summary>
-    public class MotionEditorCommandsTests
+    public class MotionEditorCommandsTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktCommandsTest";
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         string prefabPath_;
         string projectBackup_;
 
@@ -104,12 +102,7 @@ namespace Lilium
         public void TearDown ()
         {
             MotionEditorCommands.Close ();
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null && !EditorUtility.IsPersistent (o)) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             if (projectBackup_ != null) EditorJsonUtility.FromJsonOverwrite (projectBackup_, ProjectSettings.instance);
             projectBackup_ = null;
             if (AssetDatabase.IsValidFolder (kFolder)) AssetDatabase.DeleteAsset (kFolder);

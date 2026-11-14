@@ -124,7 +124,7 @@ namespace Lilium
             pointStateButtons_[0] = AddPointStateButton (BodyPointState.Free, "Free", Tr ("CONTROLLER_OVERLAY_POINT_FREE_TOOLTIP"));
             pointStateButtons_[1] = AddPointStateButton (BodyPointState.Pin, "Pin", Tr ("CONTROLLER_OVERLAY_POINT_PIN_TOOLTIP"));
             pointStateButtons_[2] = AddPointStateButton (BodyPointState.Locked, "Lock", Tr ("CONTROLLER_OVERLAY_POINT_LOCK_TOOLTIP"));
-            ShortcutTooltip.Set (pointStateButtons_[2], containerWindow, pointStateButtons_[2].tooltip, "Toggle Point Lock");
+            ShortcutTooltip.Set (pointStateButtons_[2], pointStateButtons_[2].tooltip, "Toggle Point Lock");
             root.Add (pointStates_);
 
             warning_ = new Label ();
@@ -210,7 +210,7 @@ namespace Lilium
         Button AddModeButton (VisualElement parent, PreviewWindow.SpinnerMode mode, string text, string tooltip, string shortcut)
         {
             Button button = PanelUI.FlexButton (text, null, () => window_.spinnerMode = mode);
-            ShortcutTooltip.Set (button, containerWindow, tooltip, shortcut);
+            ShortcutTooltip.Set (button, tooltip, shortcut);
             parent.Add (button);
             return button;
         }
@@ -385,15 +385,6 @@ namespace Lilium
             float step = channel == TransformChannels.Rotation ? 0.01f : 0.0001f;
             return Mathf.Round (value / step) * step;
         }
-    }
-
-
-    /// <summary>Motion Scene（開いているシーンのキャラをその場で編集する窓。S15d）にも同じパネルを出す</summary>
-    [Icon (Icons.kFolder + "Controller.png")]
-    [Overlay (typeof (SceneWindow), "mkt-scene-transform", "Controller", defaultDisplay = true,
-        defaultDockZone = DockZone.Floating, defaultDockPosition = DockPosition.Top)]
-    sealed class ControllerOverlayScene : ControllerOverlay
-    {
     }
 
 }

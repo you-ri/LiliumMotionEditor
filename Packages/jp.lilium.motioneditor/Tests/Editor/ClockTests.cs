@@ -50,19 +50,6 @@ namespace Lilium
         }
 
         [Test]
-        public void MasterTimeMapsThroughOffsetAndSpeed ()
-        {
-            Clock clock = new Clock ();
-            clock.SetMapping (2, 0.5);
-            Assert.AreEqual (0.5, clock.LocalFromMaster (3), 1e-9);
-            Assert.AreEqual (3, clock.MasterFromLocal (0.5), 1e-9);
-
-            clock.SetMasterTime (4);
-            Assert.AreEqual (1, clock.time, 1e-9);
-            Assert.AreEqual (4, clock.masterTime, 1e-9);
-        }
-
-        [Test]
         public void PlaybackAdvancesAndLoops ()
         {
             Clock clock = new Clock ();
@@ -75,52 +62,15 @@ namespace Lilium
             Assert.AreEqual (10, clock.frame, 1e-3f, "長さ 1 秒で頭へ戻る");
         }
 
-        /// <summary>
-        /// 演出に合わせて再生するとき（S15b）: 演出の速さ（クリップの速さ）で進み、演出の頭から終わりまでを回る
-        /// </summary>
+        /// <summary>再生を止めたら、クリップの格子へ揃える（止めた後に打つキーと見た目を合わせる）</summary>
         [Test]
-        public void PlaybackFollowsTheMasterSpeedWithinARange ()
+        public void StopSnapsToTheClipGrid ()
         {
             Clock clock = new Clock ();
-            // 演出 X: 演出 0s でクリップ 0.2333s、0.1 倍
-            clock.SetMapping (-2.3333333, 0.1, 60);
-            clock.SetMasterTime (0);
-            double start = clock.LocalFromMaster (0), end = clock.LocalFromMaster (2);
-            clock.Play (100);
-            Assert.IsTrue (clock.Tick (101, start, end));
-            Assert.AreEqual (1, clock.masterTime, 1e-6, "実時間 1 秒で演出が 1 秒進む");
-            Assert.AreEqual (start + 0.1, clock.time, 1e-6, "クリップは 0.1 秒だけ進む");
-            Assert.IsTrue (clock.Tick (102.5, start, end));
-            Assert.AreEqual (0.5, clock.masterTime, 1e-6, "演出の終わりで頭へ戻る");
-        }
-
-        /// <summary>
-        /// 演出の格子を持つとき（スローの演出に合わせているとき）は、止めたら演出のフレームへ揃える。
-        /// クリップの格子へ揃えると、0.1 倍では演出の時刻が最大 5F 飛ぶ
-        /// </summary>
-        [Test]
-        public void StopSnapsToTheMasterGridWhenFollowingASlowClip ()
-        {
-            Clock clock = new Clock ();
-            clock.SetMapping (-2.3333333, 0.1, 60);
-            clock.SetMasterTime (0);
-            clock.Play (100);
-            clock.Tick (100.52, 0, 10);
-            clock.Stop ();
-            Assert.AreEqual (0.5166667, clock.masterTime, 1e-5, "演出の 31F へ揃う");
-            Assert.IsFalse (clock.onGrid, "クリップの格子には乗らない（キーは丸めた所に打つ）");
-
-            // 演出に合わせているときは、クリップが始まる前（ローカルがマイナス）も演出の時刻を保つ
-            clock.SetMapping (0.5, 1, 60);
-            clock.SetMasterTime (0.3);
-            Assert.AreEqual (0.3, clock.masterTime, 1e-9);
-            Assert.AreEqual (0, clock.keyFrame, "キーはクリップの頭に打つ");
-
-            clock.SetMapping (0, 1);
             clock.SetTime (12.4 / 60);
             clock.Play (0);
             clock.Stop ();
-            Assert.AreEqual (12, clock.frame, 1e-4f, "演出の格子が無ければ今までどおりクリップの格子へ");
+            Assert.AreEqual (12, clock.frame, 1e-4f);
         }
 
         [Test]

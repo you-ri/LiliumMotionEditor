@@ -16,15 +16,16 @@ namespace Lilium
     public sealed class OverrideLayer : PoseLayer
     {
         readonly PreviewStage stage_;
-        readonly IOverrideHost host_;
+        readonly ILayerSource source_;
         readonly int index_;
 
-        public OverrideLayer (PreviewStage stage, IOverrideHost host, int index)
+        /// <param name="source">Override の並びの持ち主。窓（IOverrideHost）なら Layers のパネルの行も作る</param>
+        public OverrideLayer (PreviewStage stage, ILayerSource source, int index)
         {
             stage_ = stage;
-            host_ = host;
+            source_ = source;
             index_ = index;
-            clip = CreateClip ();
+            if (source is IOverrideHost host) clip = CreateClip (host);
         }
 
         /// <summary>何枚目の Override か（下から 0）</summary>
@@ -35,7 +36,7 @@ namespace Lilium
 
         OverrideClip entry
         {
-            get { return host_ != null && index_ < host_.overrides.Count ? host_.overrides[index_] : null; }
+            get { return source_ != null && index_ < source_.overrides.Count ? source_.overrides[index_] : null; }
         }
 
         /// <summary>この段が重ねるクリップ</summary>
@@ -73,7 +74,7 @@ namespace Lilium
         bool belowWriteLayer
         {
             get {
-                int write = host_ != null ? host_.overrideWriteIndex : -1;
+                int write = source_ != null ? source_.overrideWriteIndex : -1;
                 return index_ > write;
             }
         }
@@ -88,14 +89,14 @@ namespace Lilium
             }
         }
 
-        LayerClip CreateClip ()
+        LayerClip CreateClip (IOverrideHost host)
         {
             OverrideMode next = mode == OverrideMode.Additive ? OverrideMode.Override : OverrideMode.Additive;
             LayerClip result = new LayerClip {
                 label = "Clip",
                 tooltip = Tr ("OVERRIDE_LAYER_CLIP_TOOLTIP"),
                 getClip = () => overrideClip,
-                assign = value => host_.SetOverrideClip (index_, value),
+                assign = value => host.SetOverrideClip (index_, value),
                 getStatus = () => {
                     if (overrideClip == null) return new LayerClipStatus (LayerClipState.None, Tr ("OVERRIDE_LAYER_NO_CLIP"));
                     if (belowWriteLayer) return new LayerClipStatus (LayerClipState.Stale, Tr ("OVERRIDE_LAYER_BELOW_WRITE"));
@@ -104,25 +105,25 @@ namespace Lilium
                 },
             };
             // 並べ替えと外すのは段の名前の行（Output の段と同じ）。ファイルごと消すのはクリップの行
-            LayerClipButton.AddOrderButtons (headButtons, direction => host_.MoveOverride (index_, direction), direction => host_.GetMoveOverrideProblem (index_, direction),
-                Tr ("OVERRIDE_LAYER_MOVE_UP_TOOLTIP"), Tr ("OVERRIDE_LAYER_MOVE_DOWN_TOOLTIP"), () => host_.RemoveOverride (index_, false), Tr ("OVERRIDE_LAYER_REMOVE_TOOLTIP"));
+            LayerClipButton.AddOrderButtons (headButtons, direction => host.MoveOverride (index_, direction), direction => host.GetMoveOverrideProblem (index_, direction),
+                Tr ("OVERRIDE_LAYER_MOVE_UP_TOOLTIP"), Tr ("OVERRIDE_LAYER_MOVE_DOWN_TOOLTIP"), () => host.RemoveOverride (index_, false), Tr ("OVERRIDE_LAYER_REMOVE_TOOLTIP"));
             result.buttons.Add (new LayerClipButton {
                 label = Tr ("OVERRIDE_LAYER_DELETE_FILE"),
                 tooltip = Tr ("OVERRIDE_LAYER_DELETE_FILE_TOOLTIP"),
-                run = () => host_.RemoveOverride (index_, true),
-                visible = () => host_.layerStructureEditing,
+                run = () => host.RemoveOverride (index_, true),
+                visible = () => host.layerStructureEditing,
             });
             result.objects.Add (new LayerClipObject {
                 label = "Mask",
                 tooltip = Tr ("OVERRIDE_LAYER_MASK_TOOLTIP"),
                 type = typeof (ChannelMask),
                 get = () => mask,
-                set = value => host_.SetOverrideMask (index_, value as ChannelMask),
+                set = value => host.SetOverrideMask (index_, value as ChannelMask),
             });
             result.buttons.Add (new LayerClipButton {
                 label = mode.ToString (),
                 tooltip = Tr ("OVERRIDE_LAYER_MODE_TOOLTIP", next),
-                run = () => host_.SetOverrideMode (index_, next),
+                run = () => host.SetOverrideMode (index_, next),
             });
             return result;
         }
@@ -134,7 +135,7 @@ namespace Lilium
         {
             if (belowWriteLayer) return;
             // ✏ の段は、重ねる前の値を控える（書くときの元になる）
-            bool writing = host_ != null && index_ == host_.overrideWriteIndex;
+            bool writing = source_ != null && index_ == source_.overrideWriteIndex;
             if (writing) stage_.CaptureOverrideSource ();
             stage_.ApplyOverride (overrideClip, mode, weight, time, mask);
             stage_.Solve ();

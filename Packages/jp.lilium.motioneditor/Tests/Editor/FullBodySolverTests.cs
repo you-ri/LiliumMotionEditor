@@ -25,51 +25,19 @@ namespace Lilium
             definition_ = CreateDefinition ();
         }
 
-        sealed class Setup
-        {
-            public EditingRig rig;
-            public EditingRigSolver solver;
-            public FullBodyRig body;
-            public Vector3 forward;
-            public Vector3 up;
-        }
-
         /// <param name="toes">つま先の骨を足す（足の点はつま先の骨のあるキャラにだけできる）</param>
         /// <param name="fingers">親指・人差し指を足す（手のひらの人差し指側の点は指の骨のあるキャラにだけできる）。littleFingers なら小指も</param>
         /// <param name="shoulders">両肩（鎖骨）を足す（胸と首も付く）</param>
-        Setup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, bool fingers = false, bool littleFingers = false, bool shoulders = false)
+        FullBodySetup Create (bool withChest = true, float size = 1, bool toes = false, float toeOut = 0, bool eyes = false, bool fingers = false, bool littleFingers = false, bool shoulders = false)
         {
-            Setup s = new Setup ();
-            Animator display = CreateCharacter (withChest, size, toes, toeOut, fingers: fingers, eyes: eyes, littleFingers: littleFingers, shoulders: shoulders);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            s.rig = CreateEditingRig (definition_, display);
-            s.solver = new EditingRigSolver (s.rig);
-            s.solver.Capture ();
-            s.body = Keep (new FullBodyRig (s.rig, definition_));
-            s.forward = s.rig.root.transform.TransformDirection (s.rig.bodyForward).normalized;
-            s.up = Vector3.up;
-            return s;
-        }
-
-        static Transform Bone (Setup s, HumanBodyBones bone)
-        {
-            return s.rig.GetEditingBone (bone);
-        }
-
-        /// <summary>点を、今の骨の位置から offset だけ動かした所に固定する</summary>
-        static void Pin (Setup s, HumanBodyBones bone, Vector3 offset, bool rotation = false)
-        {
-            s.body.CapturePoint (bone);
-            s.body.SetPointPositionWorld (bone, Bone (s, bone).position + offset);
-            s.body.SetPositionWeight (bone, 1);
-            if (rotation) s.body.SetRotationWeight (bone, 1);
+            return CreateFullBody (CreateCharacter (withChest, size, toes, toeOut, fingers: fingers, eyes: eyes, littleFingers: littleFingers, shoulders: shoulders), definition_);
         }
 
         /// <summary>
         /// 今の点のまま、マネージドと Burst で 1 回ずつ解き、全部の骨の位置と向きが合うことを確かめる。checkManaged はマネージドで解いた直後に呼ぶ。
         /// Burst のコンパイルが済んでいなければ Inconclusive にする（短いバッチ実行では間に合わないことがある。失敗ではない）
         /// </summary>
-        static void AssertBurstMatchesManaged (Setup s, System.Action checkManaged = null)
+        static void AssertBurstMatchesManaged (FullBodySetup s, System.Action checkManaged = null)
         {
             Transform[] bones = s.rig.editingBones.ToArray ();
 
@@ -88,17 +56,7 @@ namespace Lilium
             }
         }
 
-        /// <summary>基準姿勢へ戻して、編集用リグ → 全身 IK の順に解く</summary>
-        static void Solve (Setup s)
-        {
-            s.body.Unsolve ();
-            s.rig.ResetBonesToRest ();
-            s.solver.Solve ();
-            s.body.CaptureInput ();
-            s.body.Solve ();
-        }
-
-        static Dictionary<Transform, float> Lengths (Setup s)
+        static Dictionary<Transform, float> Lengths (FullBodySetup s)
         {
             HashSet<Transform> bones = new HashSet<Transform> (s.rig.editingBones);
             return bones.Where (t => bones.Contains (t.parent)).ToDictionary (t => t, t => Vector3.Distance (t.position, t.parent.position));
@@ -113,7 +71,7 @@ namespace Lilium
             }
         }
 
-        static Vector3 ArmDirection (Setup s, bool right)
+        static Vector3 ArmDirection (FullBodySetup s, bool right)
         {
             Transform hand = Bone (s, right ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
             Transform upper = Bone (s, right ? HumanBodyBones.RightUpperArm : HumanBodyBones.LeftUpperArm);
@@ -125,7 +83,7 @@ namespace Lilium
         [Test]
         public void PinnedHand_ReachesTarget_AndBoneLengthsStay ([Values (true, false)] bool withChest)
         {
-            Setup s = Create (withChest);
+            FullBodySetup s = Create (withChest);
             Dictionary<Transform, float> lengths = Lengths (s);
             Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.1f + s.forward * 0.15f - s.up * 0.1f);
             Solve (s);
@@ -136,7 +94,7 @@ namespace Lilium
         [Test]
         public void PinnedFeet_StayWhileHandIsPulled ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Transform leftFoot = Bone (s, HumanBodyBones.LeftFoot);
             Quaternion footRotation = leftFoot.rotation;
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
@@ -154,7 +112,7 @@ namespace Lilium
         [Test]
         public void HipsDown_WithFeetPinned_BendsKneesForward ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Vector3 leftKnee = Bone (s, HumanBodyBones.LeftLowerLeg).position;
             Vector3 rightKnee = Bone (s, HumanBodyBones.RightLowerLeg).position;
@@ -176,7 +134,7 @@ namespace Lilium
         [Test]
         public void HandPushedTowardShoulder_BendsElbowBackward ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Vector3 elbow = Bone (s, HumanBodyBones.RightLowerArm).position;
             Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.2f);
             Solve (s);
@@ -190,7 +148,7 @@ namespace Lilium
         [Test]
         public void BodyCenter_MovesLessThanLimb ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Vector3 hips = Bone (s, HumanBodyBones.Hips).position;
             Vector3 chest = Bone (s, HumanBodyBones.Chest).position;
             Vector3 elbow = Bone (s, HumanBodyBones.RightLowerArm).position;
@@ -212,7 +170,7 @@ namespace Lilium
             float SpineBend (float stiffness)
             {
                 definition_.fkControls.First (c => c.bone == HumanBodyBones.Spine).stiffness = stiffness;
-                Setup s = Create ();
+                FullBodySetup s = Create ();
                 Quaternion rest = Bone (s, HumanBodyBones.Spine).localRotation;
                 Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
                 Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
@@ -231,7 +189,7 @@ namespace Lilium
         [Test]
         public void IncompatiblePoints_GiveFiniteResult_AndKeepBoneLengths ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
             Pin (s, HumanBodyBones.RightHand, s.forward * 3f);
@@ -252,7 +210,7 @@ namespace Lilium
         {
             // 足は固定しない: 伸びきった脚は、腰がわずかに下がるだけで膝の角度が大きく変わる（角度が高さの平方根で効く）ので、
             // 連続でも 1 コマの変化がそろわない。伸びきる付近は見ない
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Transform hand = Bone (s, HumanBodyBones.RightHand);
             Vector3 start = hand.position - ArmDirection (s, true) * 0.1f;
             Vector3 end = start + s.forward * 0.35f - s.up * 0.35f - ArmDirection (s, true) * 0.2f;
@@ -283,7 +241,7 @@ namespace Lilium
         [Test]
         public void FootMovedWithPinnedHip_KeepsKneeSteady ([Values (false, true)] bool beyondReach)
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
             Pin (s, HumanBodyBones.RightUpperLeg, Vector3.zero);
             Transform foot = Bone (s, HumanBodyBones.RightFoot);
@@ -320,7 +278,7 @@ namespace Lilium
         [Test]
         public void StraightLegFootRaised_WithHipsPinned_BendsKneeWithoutTurningHips ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform hips = Bone (s, HumanBodyBones.Hips);
             Quaternion hipsRotation = hips.rotation;
@@ -346,7 +304,7 @@ namespace Lilium
         [Test]
         public void HeelRaisedOnLockedToeTip_WithHipsPinned_KeepsUpperBody ()
         {
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform hips = Bone (s, HumanBodyBones.Hips);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
@@ -381,7 +339,7 @@ namespace Lilium
         public void HipsPulledBack_BeyondLegReach_KeepsUpperBodyUpright ([Values (false, true)] bool contactPoints, [Values (0.2f, 0.3f)] float back)
         {
             // 足の点（踵・つま先の先）はつま先の骨のあるキャラにだけできる。足首で固定する側も同じキャラで比べる
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform hips = Bone (s, HumanBodyBones.Hips);
             Quaternion hipsRotation = hips.rotation;
@@ -415,7 +373,7 @@ namespace Lilium
         [Test]
         public void HandPulledForwardDown_WithHipsAndFeetPinned_StillReaches ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
@@ -432,7 +390,7 @@ namespace Lilium
         [Test]
         public void PositionWeight_FadesInContinuously ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Transform hand = Bone (s, HumanBodyBones.RightHand);
             Vector3 rest = hand.position;
             Vector3 target = rest - ArmDirection (s, true) * 0.1f + s.forward * 0.2f;
@@ -452,19 +410,19 @@ namespace Lilium
 
         // ---- 向きの点 ----
 
-        static BodyPointId Direction (Setup s, params HumanBodyBones[] candidates)
+        static BodyPointId Direction (FullBodySetup s, params HumanBodyBones[] candidates)
         {
             // 既定の一覧では、胸の前の点は UpperChest に置く（無いキャラでは親の骨へ乗る）。名前は背骨をまとめた胸の点に合わせて ChestDirection
             return BodyPointId.Direction (candidates.Contains (HumanBodyBones.UpperChest) || candidates.Contains (HumanBodyBones.Chest) ? HumanBodyBones.Chest : candidates[0]);
         }
 
-        static BodyPointId ChestDirection (Setup s)
+        static BodyPointId ChestDirection (FullBodySetup s)
         {
             return Direction (s, HumanBodyBones.UpperChest, HumanBodyBones.Chest, HumanBodyBones.Spine);
         }
 
         /// <summary>向きの点を、今の骨の上の点の位置から offset だけ動かした所に固定する</summary>
-        static void PinDirection (Setup s, BodyPointId id, Vector3 offset)
+        static void PinDirection (FullBodySetup s, BodyPointId id, Vector3 offset)
         {
             Vector3 onBone;
             Assert.IsTrue (s.body.TryGetBonePointWorld (id, out onBone));
@@ -474,7 +432,7 @@ namespace Lilium
         }
 
         /// <summary>骨の上の点が、骨の付け根から見て、点の方からどれだけ外れているか（度）</summary>
-        static float AimError (Setup s, BodyPointId id)
+        static float AimError (FullBodySetup s, BodyPointId id)
         {
             Vector3 onBone, target;
             Quaternion rotation;
@@ -525,7 +483,7 @@ namespace Lilium
         public void AimPoint_TurnsOnlyItsBone ()
         {
             // 顔の前の点（重さ 0）を横へ: 頭が付け根まわりに回って点の方を向く。首から根の側は動かない
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform head = Bone (s, HumanBodyBones.Head);
             Transform[] bones = s.rig.editingBones.ToArray ();
@@ -543,7 +501,7 @@ namespace Lilium
         public void AimPoints_FrontAndTop_TiltHeadAroundFront ()
         {
             // 顔の前とてっぺん（どちらも重さ 0）: 顔の前で向きが決まり、てっぺんで顔の前の向きまわりのかしげが決まる
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId front = BodyPointId.Direction (HumanBodyBones.Head);
             BodyPointId top = BodyPointId.Top (HumanBodyBones.Head);
             Transform head = Bone (s, HumanBodyBones.Head);
@@ -572,7 +530,7 @@ namespace Lilium
         {
             // 手を Pin して胴ごと引いたとき、顔の前の点（重さ 0）は頭の付け根を引かない。
             // 頭は首に付いたまま目標の方を向き、頭より根の側の骨は、顔の前の点が無いときと同じ
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform head = Bone (s, HumanBodyBones.Head);
             Transform[] bones = s.rig.editingBones.ToArray ();
@@ -596,7 +554,7 @@ namespace Lilium
         {
             // 胸の前の点（重さ 0）を横へ: 胸が付け根まわりに回り、背骨・腰・脚は、胸の前の点が無いときのまま。
             // 両手を Pin していれば、胸は向きを譲らず、腕が曲がって手は点に留まる（T ポーズの伸びきった腕では届かないので、手を体の前へ寄せておく）
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             if (pinnedHands) {
                 Pin (s, HumanBodyBones.LeftHand, -ArmDirection (s, false) * 0.15f + s.forward * 0.2f);
                 Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.15f + s.forward * 0.2f);
@@ -623,7 +581,7 @@ namespace Lilium
         {
             // 胸の点（付け根から離れた点）を Pin にしたまま胸の前の点を横へ: 胸は胸の点を中心に回り、胸の点はその場に残る
             // （背骨が Spine だけのキャラでは、胸の点と胸の前の点が同じ Spine に乗る。10-20 まで、付け根まわりに向けると胸の点が外れるので、まったく回らなかった）
-            Setup s = Create (false);
+            FullBodySetup s = Create (false);
             BodyPointId chestPoint = s.body.pointIds.Single (id => id.name == "Chest");
             BodyPointId id = ChestDirection (s);
             Transform chest = s.body.GetBone (id);
@@ -657,7 +615,7 @@ namespace Lilium
         }
 
         /// <summary>左腕（肩があれば肩から）の骨か</summary>
-        static System.Func<Transform, bool> LeftArm (Setup s)
+        static System.Func<Transform, bool> LeftArm (FullBodySetup s)
         {
             Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
             Transform top = shoulder != null ? shoulder : Bone (s, HumanBodyBones.LeftUpperArm);
@@ -670,7 +628,7 @@ namespace Lilium
             // 手・肘・上腕の点を軽く（0）する。手を動かすと、腕は引かれて曲がる（届くなら届く）。胴・首・腰・ほかの手足の重い点は、届かなくても動かない
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
             Assert.IsEmpty (definition_.Validate ());
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Pose[] rest = Poses (bones);
@@ -691,21 +649,21 @@ namespace Lilium
         public void HeavyPoint_StillPullsLightPoints ()
         {
             // 重い手（1）を動かすと、軽い肘・上腕（0）も今までどおり付いてくる。軽い点を固定していなければ、軽い点の無い定義と同じ姿勢
-            Setup heavy = Create ();
+            FullBodySetup heavy = Create ();
             Pin (heavy, HumanBodyBones.LeftHand, ForwardDown (heavy));
             Solve (heavy);
             Pose[] expected = Poses (heavy.rig.editingBones.ToArray ());
 
             definition_ = CreateDefinition ();
             SetLight ("LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftHand, ForwardDown (s));
             Solve (s);
             Assert.LessOrEqual (s.body.GetResidual (HumanBodyBones.LeftHand), kReach, "手は届く");
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "軽い点を固定していないときは、軽い点の無い定義と同じ");
         }
 
-        static Vector3 ForwardDown (Setup s)
+        static Vector3 ForwardDown (FullBodySetup s)
         {
             return s.forward * 0.6f - s.up * 0.3f;
         }
@@ -715,7 +673,7 @@ namespace Lilium
         {
             // 膝の点（0）を外へ: 足首と腰（重い点）は動かずに、膝が外を向く（膝の Pole と同じような動き）
             SetLight ("LeftLowerLeg");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
@@ -745,7 +703,7 @@ namespace Lilium
             HumanBodyBones hinge = knee ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.LeftLowerArm;
             HumanBodyBones end = knee ? HumanBodyBones.LeftFoot : HumanBodyBones.LeftHand;
             SetLight (knee ? "LeftLowerLeg" : "LeftLowerArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             if (knee) {
                 Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
@@ -786,7 +744,7 @@ namespace Lilium
             // 肘が Lock なら、肘は置いた場所に留まり、手は肘まわりにしか回れないので届かない。
             // 重い胸・首・反対の腕は、どれでも動かない
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Pose[] rest = Poses (bones);
@@ -817,7 +775,7 @@ namespace Lilium
         {
             // 手・上腕を軽く（0）し、肘は重い（1）まま。手をつかんで動かすと、前腕が肘まわりに回るだけで、肘とその向こうの上腕・胴は動かない
             SetLight ("LeftHand", "LeftUpperArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Transform hand = Bone (s, HumanBodyBones.LeftHand);
@@ -839,7 +797,7 @@ namespace Lilium
             // 軽い（0）Pin の肘は、Free の点と同じに引かれる。
             // Lock の足は、届かない所でも動かない（つかんだ腰が譲る）
             SetLight ("LeftLowerArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.LeftLowerArm, Vector3.zero);
@@ -882,7 +840,7 @@ namespace Lilium
         {
             // 重い腰（1）をつかんで動かすと、軽い（0）Pin の肘・上腕は Free の点と同じに引かれる（Free にしたときと同じ姿勢）
             SetLight ("LeftLowerArm", "LeftUpperArm");
-            Setup free = Create ();
+            FullBodySetup free = Create ();
             Pin (free, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (free, HumanBodyBones.RightFoot, Vector3.zero, true);
             Solve (free);
@@ -892,7 +850,7 @@ namespace Lilium
             Pose[] expected = Poses (free.rig.editingBones.ToArray ());
             free.body.EndGrab ();
 
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.LeftLowerArm, Vector3.zero);
@@ -910,7 +868,7 @@ namespace Lilium
         {
             // 腰を Pin にして、重い首をつかんで持ち上げると、届かない分だけ Pin の腰が引かれて上がり、首は届く。
             // 腰は根で最後に置かれるので、Pin の点を外して解き直さないと、首の引きが腰の Pin に勝てなかった（PullPins）
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero, true);
             Pin (s, HumanBodyBones.Neck, Vector3.zero);
             Solve (s);
@@ -931,7 +889,7 @@ namespace Lilium
             // 背骨は伸びきっているので腰が引かれて上がり、胸の骨はほとんど回らない（11-03 実測で、デモの定義で胸が 60° 回り、頭が 30cm 動いた。
             // 点を鎖の向きへそろえる長さに数え、胸ごと回して点を振り上げれば届くとみなしていた）
             definition_.bodyPoints.First (p => p.name == EditRigDefinition.kChestPoint).offset = new Vector3 (0, 0, front);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
             Pin (s, HumanBodyBones.Neck, Vector3.zero);
             BodyPointId chest = new BodyPointId (EditRigDefinition.kChestPoint);
@@ -958,7 +916,7 @@ namespace Lilium
             // 腰と左手を Pin にして、重い首を 10cm 持ち上げる。首から根へたどる道の上にある腰の Pin が、首が届かなかった分だけ運ばれ、首は届く。
             // 腕の伸びに余裕のある左手の Pin は留まる（10-28 ユーザー報告「首を持ち上げると、手首がのびきっていないのに、手首が動いてしまう」）。
             // 届かなかった分より先へは運ばない（10-28 ユーザー指示「ひっぱる距離に応じて、強制的に姿勢をもとに戻す制御をしているが、そういったことはしないようにして」）
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero, true);
             // 肘を曲げておく（伸びきった腕のままだと、肩が上がると手に届かない）
             Pin (s, HumanBodyBones.LeftHand, s.forward * 0.15f - ArmDirection (s, false) * 0.15f, true);
@@ -989,7 +947,7 @@ namespace Lilium
                 if (control.bone == HumanBodyBones.Spine) control.stiffness = 0.8f;
                 if (control.bone == HumanBodyBones.Chest || control.bone == HumanBodyBones.UpperChest) control.stiffness = 0.6f;
             }
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero, true);
             Pin (s, HumanBodyBones.LeftHand, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightHand, Vector3.zero, true);
@@ -1020,7 +978,7 @@ namespace Lilium
             // （10-30 ユーザー報告「首を持ち上げても体がまっすぐにならない」。腰を運ぶ量を伸ばしきった長さの 95% から数えていて、胸・上胸に 35° ずつ曲がりが残った）。
             // 両手を Pin にして鎖骨に動かせない点があっても同じ（鎖骨まで伸ばせる長さに数えると、手に引かれて上胸が 21° 曲がったまま残った）
             if (hands) AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: hands);
+            FullBodySetup s = Create (shoulders: hands);
             Transform[] curled = new[] { HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest }.Select (b => Bone (s, b)).Where (b => b != null).ToArray ();
             System.Action solve = () => {
                 s.body.Unsolve ();
@@ -1070,7 +1028,7 @@ namespace Lilium
                 if (control.bone == HumanBodyBones.LeftShoulder) control.stiffness = 0.5f;
             }
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
             Pin (s, HumanBodyBones.LeftHand, Vector3.zero);
             Solve (s);
@@ -1096,7 +1054,7 @@ namespace Lilium
         {
             // 腰と両手（肘を曲げた所）を Pin にして、重い首を 2cm ずつ 60cm 持ち上げる。腕が伸びきるまでは手は動かず、手が運ばれている間は腕が伸びきっている
             // （10-29 ユーザー報告「首をどんどんひっぱったとき腕がのびきらない」。首が届かなかった分を手に運ぶと、運びすぎて腕が曲がった）
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.Hips, Vector3.zero, true);
             Pin (s, HumanBodyBones.LeftHand, s.forward * 0.15f - ArmDirection (s, false) * 0.15f, true);
             Pin (s, HumanBodyBones.RightHand, s.forward * 0.15f - ArmDirection (s, true) * 0.15f, true);
@@ -1123,7 +1081,7 @@ namespace Lilium
         public void PulledPins_BurstMatchesManaged ()
         {
             // 重い腰をつかんだ間（軽い Pin の点を外し、重い Pin の点を効かせる）も、Burst とマネージドで同じ答えになる
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.LeftLowerArm, Vector3.zero);
@@ -1139,7 +1097,7 @@ namespace Lilium
         {
             // 軽い手と重い腰をまとめてつかむと、一番重い腰で決める（重い点をつかんだときと同じ。Free の重い点も引かれる）。
             // 手も重い定義で、同じ 2 点をつかんだときと同じ姿勢になる
-            Setup expected = Create ();
+            FullBodySetup expected = Create ();
             expected.body.MarkGrabbed (HumanBodyBones.LeftHand);
             expected.body.MarkGrabbed (HumanBodyBones.Hips);
             Pin (expected, HumanBodyBones.Hips, Vector3.zero);
@@ -1150,7 +1108,7 @@ namespace Lilium
 
             definition_ = CreateDefinition ();
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             s.body.MarkGrabbed (HumanBodyBones.LeftHand);
             s.body.MarkGrabbed (HumanBodyBones.Hips);
             Pin (s, HumanBodyBones.Hips, Vector3.zero);
@@ -1166,7 +1124,7 @@ namespace Lilium
             // 左上腕の付け根（肩）の点だけを軽く（0）する。肩を動かしても、胴・首・頭・右肩は動かない（重い点を動かない物として解く）。
             // このテストの骨には鎖骨が無いので、肩は重い胸に付いたまま動けず、届かない
             SetLight ("LeftUpperArm");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Pose[] rest = Poses (bones);
@@ -1182,7 +1140,7 @@ namespace Lilium
         {
             // 胸・お腹も軽くすると胴は引かれて回るが、重い首の点は動かない物なので、首とその向こうの頭は動かない
             SetLight ("LeftUpperArm", "Chest", "Stomach");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform neck = Bone (s, HumanBodyBones.Neck);
             Transform head = Bone (s, HumanBodyBones.Head);
@@ -1212,7 +1170,7 @@ namespace Lilium
             // 付け根に置いた動かせない点は骨を縛らず、力も止めない。胴・腕を軽く（0）して肘をつかんで前へ動かすと、動かせない点の無い定義と同じ姿勢
             // （11-02 ユーザー指示「壁をなくす」。前は壁になり、胴が動かなかった）
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
-            Setup plain = Create (shoulders: true);
+            FullBodySetup plain = Create (shoulders: true);
             PullLightElbow (plain);
             Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
             plain.body.EndGrab ();
@@ -1221,13 +1179,13 @@ namespace Lilium
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm", "Chest", "Stomach");
             AddPassiveShoulders ();
             Assert.IsEmpty (definition_.Validate ());
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             PullLightElbow (s);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
             s.body.EndGrab ();
         }
 
-        static void PullLightElbow (Setup s)
+        static void PullLightElbow (FullBodySetup s)
         {
             Solve (s);
             s.body.MarkGrabbed (HumanBodyBones.LeftLowerArm);
@@ -1243,7 +1201,7 @@ namespace Lilium
             // 両腕も軽くする（重い点は Free でも留まるので、反対の腕の点が胸を止め、T ポーズで伸びきった腕の手は肩を止める）
             SetLight ("LeftHand", "RightHand", "LeftLowerArm", "RightLowerArm", "LeftUpperArm", "RightUpperArm", "Chest", "Stomach");
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Solve (s);
             BodyPointId id = new BodyPointId ("LeftShoulder");
             Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
@@ -1273,7 +1231,7 @@ namespace Lilium
             // 付け根と点は動かず、胸から先（胴・首・頭・反対の腕）も動かない（10-28 ユーザー指示「やっぱり回したい」）
             SetLight ("LeftHand", "LeftLowerArm", "LeftUpperArm");
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Solve (s);
             Transform[] bones = s.rig.editingBones.ToArray ();
             Pose[] rest = Poses (bones);
@@ -1313,7 +1271,7 @@ namespace Lilium
             // （11-02 ユーザー報告。肘を置く基準を鎖骨の先にしていたときは、引いた分が肘と一緒に打ち消され、肩が目標と逆へ滑ることがあった）
             SetLight ("LeftLowerArm", "LeftUpperArm");
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Solve (s);
             BodyPointId id = new BodyPointId ("LeftShoulder");
             Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
@@ -1356,21 +1314,21 @@ namespace Lilium
         public void PassiveShoulderAtRoot_ChangesNothing_ForHeavyPointsOrKeys ([Values (false, true)] bool grab)
         {
             // 付け根に置いた動かせない点は、軸を決めないので骨を縛らない。重い点をつかむ（腰）・キーから解き直す（つかまない）ときは、動かせない点の無い定義と同じ姿勢
-            Setup plain = Create (shoulders: true);
+            FullBodySetup plain = Create (shoulders: true);
             PullForPassive (plain, grab);
             Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
             plain.body.EndGrab ();
 
             definition_ = CreateDefinition ();
             AddPassiveShoulders ();
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             PullForPassive (s, grab);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
             s.body.EndGrab ();
         }
 
         /// <summary>grab なら重い腰をつかんで前へ、そうでなければ手を固定して解く（キーから解き直すのと同じ）</summary>
-        static void PullForPassive (Setup s, bool grab)
+        static void PullForPassive (FullBodySetup s, bool grab)
         {
             if (grab) {
                 s.body.MarkGrabbed (HumanBodyBones.Hips);
@@ -1388,7 +1346,7 @@ namespace Lilium
             // 鎖骨の付け根から前へずらした動かせない点は、胸から見ても動かない。重い手をつかんで引く（grab）ときも、キーから解き直す（つかまない）ときも、
             // 鎖骨は付け根と点を結ぶ軸まわりにだけ回る（10-28 ユーザー指示「passiveな制御点はローカルで固定されているので動かないようにしてほしい」）
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Solve (s);
             BodyPointId id = new BodyPointId ("LeftShoulder");
             Transform shoulder = Bone (s, HumanBodyBones.LeftShoulder);
@@ -1420,7 +1378,7 @@ namespace Lilium
             // 軸まわりにだけ回る関節（axisLock）でも、Burst とマネージドで同じ答えになる
             // （手を外へ伸ばしきって引くと、動かせない点が無くても 0.12mm 食い違う姿勢なので、届く所で比べる）
             AddPassiveShoulders (new Vector3 (0, 0, 0.05f));
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             Pin (s, HumanBodyBones.LeftHand, ForwardDown (s));
             AssertBurstMatchesManaged (s);
         }
@@ -1432,7 +1390,7 @@ namespace Lilium
             // 「passiveとふつうの点とを複数選択して移動するとpassiveの点が動く」。軽い胸だけをつかむと、両肩の点が胸を止めていた）。
             // 点は付け根に置く（付け根から離すと軸まわりにだけ回るので、無い定義とは姿勢が違う）
             SetLight ("Chest", "Stomach");
-            Setup plain = Create (shoulders: true);
+            FullBodySetup plain = Create (shoulders: true);
             GrabTorso (plain, withHand);
             Pose[] expected = Poses (plain.rig.editingBones.ToArray ());
             plain.body.EndGrab ();
@@ -1440,14 +1398,14 @@ namespace Lilium
             definition_ = CreateDefinition ();
             SetLight ("Chest", "Stomach");
             AddPassiveShoulders ();
-            Setup s = Create (shoulders: true);
+            FullBodySetup s = Create (shoulders: true);
             GrabTorso (s, withHand);
             AssertUnchanged (s.rig.editingBones.ToArray (), expected, 1e-4f, 0.01f, "動かせない点の無い定義と同じ");
             s.body.EndGrab ();
         }
 
         /// <summary>胸の点（withHand なら左手も）をつかんで、前へ動かして解く（まとめて選んで動かすのと同じ）</summary>
-        static void GrabTorso (Setup s, bool withHand)
+        static void GrabTorso (FullBodySetup s, bool withHand)
         {
             Solve (s);
             BodyPointId chest = new BodyPointId ("Chest");
@@ -1471,7 +1429,7 @@ namespace Lilium
         {
             // 首の点は重く（1）、頭の点を軽く（0）する。頭の点を前へ動かすと、首が付け根まわりに回って頭が前へ出る。首の付け根と胸から根の側は動かない
             SetLight ("Head");
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Transform neck = Bone (s, HumanBodyBones.Neck);
             Transform[] bones = s.rig.editingBones.ToArray ();
@@ -1498,7 +1456,7 @@ namespace Lilium
                 if (!point.contact) point.weight = 0;
             }
             Assert.IsEmpty (definition_.Validate ());
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Vector3 leftFoot = Bone (s, HumanBodyBones.LeftFoot).position;
             Vector3 rightFoot = Bone (s, HumanBodyBones.RightFoot).position;
@@ -1513,7 +1471,7 @@ namespace Lilium
         [Test]
         public void DirectionPoints_AreCreatedForHipsChestAndHead ([Values (true, false)] bool withChest)
         {
-            Setup s = Create (withChest);
+            FullBodySetup s = Create (withChest);
             BodyPointId[] directions = s.body.pointIds.Where (id => id.name.EndsWith ("Direction")).ToArray ();
             Assert.AreEqual (3, directions.Length, "腰・胸・頭に 1 つずつ");
             Assert.IsTrue (s.body.HasPoint (BodyPointId.Direction (HumanBodyBones.Hips)));
@@ -1531,7 +1489,7 @@ namespace Lilium
             }
 
             definition_.bodyPoints.RemoveAll (p => p.name.EndsWith ("Direction"));
-            Setup none = Create (withChest);
+            FullBodySetup none = Create (withChest);
             Assert.IsFalse (none.body.pointIds.Any (id => id.name.EndsWith ("Direction")), "定義の一覧から消すと無くなる");
         }
 
@@ -1540,7 +1498,7 @@ namespace Lilium
         {
             // 重さ 1 の向きの点も、骨の上の点の 1 つ（S26）。動かすと点が目標へ届くように骨ごと引かれ、遠くへ置けば体も引かれる
             SetDirectionWeight (1);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId id = which == HumanBodyBones.Chest ? ChestDirection (s) : BodyPointId.Direction (which);
             Dictionary<Transform, float> lengths = Lengths (s);
             Vector3 hips = Bone (s, HumanBodyBones.Hips).position;
@@ -1562,7 +1520,7 @@ namespace Lilium
         {
             // 頭の点（付け根）と顔の前の点（重さ 1）は同じ骨の上: 付け根を固定して顔の前の点を付け根まわりに回した所へ置くと、2 点とも届き頭が回る
             SetDirectionWeight (1);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId id = BodyPointId.Direction (HumanBodyBones.Head);
             Transform head = Bone (s, HumanBodyBones.Head);
             Quaternion rotation = head.rotation;
@@ -1582,7 +1540,7 @@ namespace Lilium
         {
             // 重さ 1 の頭の点（S26 の動き）
             SetDirectionWeight (1);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId top = BodyPointId.Top (HumanBodyBones.Head);
             BodyPointId front = BodyPointId.Direction (HumanBodyBones.Head);
             Assert.IsTrue (s.body.HasPoint (top), "頭のてっぺんの点がある");
@@ -1614,7 +1572,7 @@ namespace Lilium
             Assert.AreEqual (s.body.GetResidual (front), s.body.GetResidual (top), 1e-3f, "2 点は同じだけ外れる（頭の形と向きは合っている）");
 
             // 基準の場所に置いた 2 点は、姿勢を変えない
-            Setup t = Create ();
+            FullBodySetup t = Create ();
             Solve (t);
             Quaternion[] rotations = t.rig.editingBones.Select (b => b.rotation).ToArray ();
             PinDirection (t, top, Vector3.zero);
@@ -1628,7 +1586,7 @@ namespace Lilium
         public void HipsDirection_WithPinnedFeet_TurnsHipsAndKeepsFeet ([Values (0, 1)] int pull)
         {
             SetDirectionWeight (pull);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId id = BodyPointId.Direction (HumanBodyBones.Hips);
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
             Quaternion rotation = Bone (s, HumanBodyBones.Hips).rotation;
@@ -1652,7 +1610,7 @@ namespace Lilium
         {
             // 重さ 1 の胸の前の点を横へ: ほかの点と同じく、点が目標へ届くように胸ごと引かれる（向くだけにしない。S26）
             SetDirectionWeight (1);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId id = ChestDirection (s);
             Transform chest = s.body.GetBone (id);
             Vector3 origin = chest.position;
@@ -1678,7 +1636,7 @@ namespace Lilium
         public void DirectionPoint_AtRest_LeavesPoseUntouched ([Values (0, 1)] int pull)
         {
             SetDirectionWeight (pull);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Solve (s);
             Vector3[] positions = s.rig.editingBones.Select (b => b.position).ToArray ();
             Quaternion[] rotations = s.rig.editingBones.Select (b => b.rotation).ToArray ();
@@ -1700,7 +1658,7 @@ namespace Lilium
             EditRigDefinition.BodyPoint face = definition_.bodyPoints.First (p => p.name == "HeadDirection");
             face.toward = HumanBodyBones.LastBone;
             face.offset = new Vector3 (0, 0.075f, 0.25f);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Vector3 side = Vector3.Cross (s.up, s.forward).normalized;
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero);
@@ -2004,7 +1962,7 @@ namespace Lilium
         // ---- 骨の上の点（かかと・つま先の先・手のひら） ----
 
         /// <summary>点を、今の骨の上の点の位置から offset だけ動かした所に置いて Locked にする</summary>
-        static void LockPoint (Setup s, BodyPointId id, Vector3 offset)
+        static void LockPoint (FullBodySetup s, BodyPointId id, Vector3 offset)
         {
             PinDirection (s, id, offset);
             s.body.SetLocked (id, true);
@@ -2014,7 +1972,7 @@ namespace Lilium
         public void ContactPoints_AreCreatedForFeetAndHands ()
         {
             // 足の点はつま先の骨、手のひらの点は指の付け根から置くので、両方を持つキャラで
-            Setup s = Create (toes: true, fingers: true, littleFingers: true);
+            FullBodySetup s = Create (toes: true, fingers: true, littleFingers: true);
             foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
                 Vector3 ankle = Bone (s, foot).position;
                 Vector3 heel, toe;
@@ -2055,7 +2013,7 @@ namespace Lilium
             Assert.AreEqual ("Controls/Body/RightPalmLittle", RigPaths.BodyPoint (BodyPointId.PalmLittle (HumanBodyBones.RightHand).name));
 
             definition_.bodyPoints.RemoveAll (p => p.origin != HumanBodyBones.LastBone || p.toward != HumanBodyBones.LastBone);
-            Setup none = Create (toes: true, fingers: true, littleFingers: true);
+            FullBodySetup none = Create (toes: true, fingers: true, littleFingers: true);
             Assert.IsFalse (none.body.HasPoint (BodyPointId.Heel (HumanBodyBones.LeftFoot)), "定義の一覧から消すと無くなる");
             Assert.IsFalse (none.body.HasPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand)));
         }
@@ -2067,7 +2025,7 @@ namespace Lilium
         [Test]
         public void HipsMovedForward_WithKneesAndFeetPinned_KeepsFeet_LetsKneesYield ([Values (0.02f, 0.05f, 0.1f)] float forward)
         {
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
             HumanBodyBones[] knees = { HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg };
@@ -2100,7 +2058,7 @@ namespace Lilium
         {
             // 足の骨の上の 2 点（かかとと足裏の中心）を固定すれば、足は回らない。
             // つま先の先はつま先の骨に乗るので、かかととつま先の先の 2 点では足の骨の向きは決まらない
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Dictionary<Transform, float> lengths = Lengths (s);
             HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
             Quaternion[] rotations = feet.Select (f => Bone (s, f).rotation).ToArray ();
@@ -2123,7 +2081,7 @@ namespace Lilium
         public void ToeTipLocked_LetsHeelRise_WhenHipsGoUp ()
         {
             // つま先の先はつま先の骨のあるキャラにだけできる
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             HumanBodyBones[] feet = { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
             Quaternion[] rotations = feet.Select (f => Bone (s, f).rotation).ToArray ();
             Vector3[] ankles = feet.Select (f => Bone (s, f).position).ToArray ();
@@ -2145,7 +2103,7 @@ namespace Lilium
         {
             // つま先が外を向いた足（つま先の付け根を外へ 5cm）。踵・足裏の中心・つま先の先は、足首からつま先の付け根へ向かう線の上に並ぶ
             // （足裏の中心を支点に回すと足の真ん中で回る）。小指側は足裏の中心から、その線の真横の外
-            Setup s = Create (toes: true, toeOut: 0.05f);
+            FullBodySetup s = Create (toes: true, toeOut: 0.05f);
             foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
                 Vector3 ankle = Bone (s, foot).position;
                 Vector3 toes = Bone (s, foot == HumanBodyBones.LeftFoot ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes).position;
@@ -2173,7 +2131,7 @@ namespace Lilium
         {
             // 足首の位置を固定し、小指側の点を下へ: 足が足首まわりに回って小指側が下がる。脛から根の側は動かない
             // （小指側は重さ 1 だが、同じ骨の足首を固定しているので、足首まわりに回るだけ）
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero);
             Solve (s);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
@@ -2197,7 +2155,7 @@ namespace Lilium
         {
             // 小指側・足先（つま先の先）の点だけを固定して前上へ動かす: 手の 2 点と同じく、点が目標に届くまで脚ごと引く（向けるだけにしない）。
             // 足の点はつま先の骨のあるキャラにだけできる
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
             Vector3 ankle = foot.position;
             BodyPointId side = toeTip ? BodyPointId.ToeTip (HumanBodyBones.LeftFoot) : BodyPointId.LittleToeSide (HumanBodyBones.LeftFoot);
@@ -2213,7 +2171,7 @@ namespace Lilium
         public void HeadDirection_IsAtEyeHeight ([Values ("eyes", "none")] string source)
         {
             // 顔の前の点は、頭の付け根の真上の目の高さに置き、そこから前へ出す。目の高さは目の骨から、無ければ体の大きさから決める
-            Setup s = Create (eyes: source == "eyes");
+            FullBodySetup s = Create (eyes: source == "eyes");
             Transform head = Bone (s, HumanBodyBones.Head);
             float expected = source == "eyes" ? 0.08f : s.rig.humanScale * EditRigDefinition.kEyeHeight;
             Vector3 onBone;
@@ -2229,7 +2187,7 @@ namespace Lilium
         public void KneePole_IsPlacedInFrontOfKnee_OnThigh ()
         {
             AddPoles (definition_);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             foreach (HumanBodyBones thigh in new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg }) {
                 BodyPointId pole = KneePole (thigh);
                 Transform knee = Bone (s, thigh == HumanBodyBones.LeftUpperLeg ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg);
@@ -2247,7 +2205,7 @@ namespace Lilium
         {
             // 足を固定して腰を下げる（膝は前へ曲がる）。左の膝の Pole を外へ動かすと、足首は動かずに膝が外を向く
             AddPoles (definition_);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
@@ -2278,7 +2236,7 @@ namespace Lilium
             foreach (EditRigDefinition.BodyPoint point in definition_.bodyPoints) {
                 if (point.name.EndsWith ("KneePole")) point.blend = blend;
             }
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Transform thigh = Bone (s, HumanBodyBones.LeftUpperLeg);
             Transform shin = Bone (s, HumanBodyBones.LeftLowerLeg);
             thigh.rotation = Quaternion.FromToRotation (-s.up, s.forward) * thigh.rotation;
@@ -2297,7 +2255,7 @@ namespace Lilium
         {
             // 膝を曲げた姿勢で、膝の Pole を今の場所に固定しても姿勢は変わらない（表示の場所と解く側の場所が同じ。S34）
             AddPoles (definition_);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Transform knee = Bone (s, HumanBodyBones.LeftLowerLeg);
             Pin (s, HumanBodyBones.LeftFoot, s.forward * 0.1f + s.up * 0.25f, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
@@ -2321,7 +2279,7 @@ namespace Lilium
         public void ElbowPole_IsPlacedBehindElbow_OnUpperArm ()
         {
             AddPoles (definition_);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             foreach (HumanBodyBones upper in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm }) {
                 BodyPointId pole = ElbowPole (upper);
                 Transform elbow = Bone (s, upper == HumanBodyBones.LeftUpperArm ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
@@ -2341,7 +2299,7 @@ namespace Lilium
         {
             // 手を胸の前へ寄せて肘を曲げる。左の肘の Pole を外上へ動かすと、手は動かずに肘がそちらへ回る
             AddPoles (definition_);
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Dictionary<Transform, float> lengths = Lengths (s);
             Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
             Transform elbow = Bone (s, HumanBodyBones.LeftLowerArm);
@@ -2371,7 +2329,7 @@ namespace Lilium
         public void ElbowPole_Free_DoesNotChangeSolve ()
         {
             // 肘の Pole は、Free なら解いた姿勢を変えない（Pole を足しても、キーを打つまでは今までと同じ姿勢）
-            System.Func<Setup, Pose[]> solve = s => {
+            System.Func<FullBodySetup, Pose[]> solve = s => {
                 s.body.useBurst = false;
                 Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
                 Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
@@ -2403,7 +2361,7 @@ namespace Lilium
             };
             definition_.bodyPoints.Add (elbow);
             Assert.IsEmpty (definition_.Validate ());
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId id = new BodyPointId ("LeftArmBack");
             Transform upper = Bone (s, HumanBodyBones.LeftUpperArm);
             Transform lower = Bone (s, HumanBodyBones.LeftLowerArm);
@@ -2433,7 +2391,7 @@ namespace Lilium
             // 頭の付け根から上へ 0.1・前へ 0.2（humanScale 比）の所に、自分で点を足す
             definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "Nose", bone = HumanBodyBones.Head, offset = new Vector3 (0, 0.1f, 0.2f) });
             Assert.IsEmpty (definition_.Validate ());
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             BodyPointId nose = new BodyPointId ("Nose");
             Assert.IsTrue (s.body.HasPoint (nose));
             Transform head = Bone (s, HumanBodyBones.Head);
@@ -2458,7 +2416,7 @@ namespace Lilium
             // つま先の骨に乗せた点（基準は乗る骨の付け根で、前へずらすだけ）。つま先の骨が無いキャラでは足の骨へ乗る（親をたどる）。
             // 既定のつま先の先は、つま先の骨が無いと作らない（足の点の並ぶ向きが決まらない）ので、自分で足した点で確かめる
             definition_.bodyPoints.Add (new EditRigDefinition.BodyPoint { name = "ToeCap", bone = HumanBodyBones.LeftToes, offset = new Vector3 (0, 0, 0.05f) });
-            Setup s = Create (toes: toes);
+            FullBodySetup s = Create (toes: toes);
             BodyPointId cap = new BodyPointId ("ToeCap");
             Assert.IsTrue (s.body.HasPoint (cap));
             Assert.AreEqual (Bone (s, toes ? HumanBodyBones.LeftToes : HumanBodyBones.LeftFoot), s.body.GetBone (cap));
@@ -2472,7 +2430,7 @@ namespace Lilium
         {
             // 足の点はつま先の骨への向きで、手のひらの点は指の付け根に置く。その骨が無いキャラには作らない（足首・手首から見積もらない）。
             // ほかの点（顔の前）はそのまま作る
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             foreach (HumanBodyBones foot in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }) {
                 foreach (BodyPointId id in new[] { BodyPointId.Heel (foot), BodyPointId.SoleBall (foot), BodyPointId.LittleToeSide (foot), BodyPointId.ToeTip (foot) }) {
                     Assert.IsFalse (s.body.HasPoint (id), "つま先の骨が無いと足の点は無い: " + id.name);
@@ -2486,7 +2444,7 @@ namespace Lilium
             Assert.IsTrue (s.body.HasPoint (BodyPointId.Direction (HumanBodyBones.Head)), "顔の前の点はある");
 
             // 人差し指だけあって小指が無いキャラは、人差し指側の点だけ作る
-            Setup index = Create (fingers: true);
+            FullBodySetup index = Create (fingers: true);
             Assert.IsTrue (index.body.HasPoint (BodyPointId.PalmIndex (HumanBodyBones.LeftHand)));
             Assert.IsFalse (index.body.HasPoint (BodyPointId.PalmLittle (HumanBodyBones.LeftHand)));
         }
@@ -2496,7 +2454,7 @@ namespace Lilium
         {
             // つま先の骨があるキャラで、つま先の先を Locked にし、足首の点をつま先の先のまわりで回した場所と向きに置く（点の回転ギズモと同じ置き方）。
             // つま先の先はつま先の骨の上（足とは別の剛体）。足首を回しても、つま先の先は Locked の場所から外れない
-            Setup s = Create (toes: true);
+            FullBodySetup s = Create (toes: true);
             BodyPointId toe = BodyPointId.ToeTip (HumanBodyBones.LeftFoot);
             Transform foot = Bone (s, HumanBodyBones.LeftFoot);
             Vector3 pivot;
@@ -2518,7 +2476,7 @@ namespace Lilium
         {
             // 手のひらを Locked にして手首の点を動かす: 手のひらは動かず、手首は手のひらを支点に届く所まで寄る
             // （手のひらの点は指の骨のあるキャラにだけできる）
-            Setup s = Create (fingers: true);
+            FullBodySetup s = Create (fingers: true);
             BodyPointId palm = BodyPointId.PalmIndex (HumanBodyBones.LeftHand);
             Transform hand = Bone (s, HumanBodyBones.LeftHand);
             Quaternion rotation = hand.rotation;
@@ -2532,7 +2490,7 @@ namespace Lilium
 
             // 逆: 足首を Locked にして、同じ足の骨の上の足裏の中心を動かす。足首は動かず、足が足首を支点に回る。
             // 足の点はつま先の骨のあるキャラにだけでき、そのキャラのつま先の先はつま先の骨（足とは別の骨）に乗るので、足に乗る足裏の中心で試す
-            Setup t = Create (toes: true);
+            FullBodySetup t = Create (toes: true);
             BodyPointId ball = BodyPointId.SoleBall (HumanBodyBones.LeftFoot);
             Transform foot = Bone (t, HumanBodyBones.LeftFoot);
             Assert.AreEqual (foot, t.body.GetBone (ball), "足裏の中心は足首と同じ骨");
@@ -2554,7 +2512,7 @@ namespace Lilium
         {
             // 手首と人差し指側を Locked にして、小指側を動かす: 先の 2 点は動かず、手がその 2 点の軸まわりに回る
             // （手のひらの 2 点は人差し指・小指の付け根に置くので、小指まであるキャラで）
-            Setup s = Create (fingers: true, littleFingers: true);
+            FullBodySetup s = Create (fingers: true, littleFingers: true);
             HumanBodyBones hand = HumanBodyBones.LeftHand;
             BodyPointId index = BodyPointId.PalmIndex (hand);
             BodyPointId little = BodyPointId.PalmLittle (hand);
@@ -2584,7 +2542,7 @@ namespace Lilium
                 "小指側は、先の 2 点の軸まわりで点の方へ回る");
 
             // 手の 2 点を Locked にして手首を動かす: 2 点は動かず、手首は届く所まで
-            Setup t = Create (fingers: true, littleFingers: true);
+            FullBodySetup t = Create (fingers: true, littleFingers: true);
             rotation = Bone (t, hand).rotation;
             LockPoint (t, index, Vector3.zero);
             LockPoint (t, little, Vector3.zero);
@@ -2601,7 +2559,7 @@ namespace Lilium
         {
             // 手のひらの点だけを動かす: 点が届くように腕が付いてくる。骨の上で固定した点が 1 つだけなので、手の向きは決めない（S26）
             // （手のひらの点は指の骨のあるキャラにだけできる）
-            Setup s = Create (fingers: true);
+            FullBodySetup s = Create (fingers: true);
             BodyPointId palm = BodyPointId.PalmIndex (HumanBodyBones.RightHand);
             Dictionary<Transform, float> lengths = Lengths (s);
             PinDirection (s, palm, -ArmDirection (s, true) * 0.1f + s.forward * 0.15f - s.up * 0.1f);
@@ -2614,7 +2572,7 @@ namespace Lilium
         public void ContactPoints_BurstMatchesManaged ()
         {
             // 足の点と手のひらの 2 点を使うので、つま先と小指までの指を持つキャラで
-            Setup s = Create (toes: true, fingers: true, littleFingers: true);
+            FullBodySetup s = Create (toes: true, fingers: true, littleFingers: true);
             LockPoint (s, BodyPointId.Heel (HumanBodyBones.LeftFoot), Vector3.zero);
             LockPoint (s, BodyPointId.ToeTip (HumanBodyBones.LeftFoot), Vector3.zero);
             LockPoint (s, BodyPointId.ToeTip (HumanBodyBones.RightFoot), Vector3.zero);
@@ -2668,7 +2626,7 @@ namespace Lilium
         [Test]
         public void Burst_IsUsed_AndMatchesManaged ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             Pin (s, HumanBodyBones.LeftFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightFoot, Vector3.zero, true);
             Pin (s, HumanBodyBones.RightHand, -ArmDirection (s, true) * 0.15f + s.forward * 0.2f - s.up * 0.15f);
@@ -2825,7 +2783,7 @@ namespace Lilium
         [Test]
         public void Rig_CanBeCreatedAndDisposedRepeatedly ()
         {
-            Setup s = Create ();
+            FullBodySetup s = Create ();
             for (int i = 0; i < 20; i++) {
                 FullBodyRig body = new FullBodyRig (s.rig, definition_);
                 Assert.Greater (body.bodyCount, 0);

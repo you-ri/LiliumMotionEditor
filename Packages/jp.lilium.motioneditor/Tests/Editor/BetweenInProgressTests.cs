@@ -9,11 +9,10 @@ namespace Lilium
     /// <summary>
     /// 外で作っているキーの間（S85）。窓は作る側から区間を受け取り、タイムラインはその区間の波線を流す
     /// </summary>
-    public class BetweenInProgressTests
+    public class BetweenInProgressTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktBetweenInProgressTests";
 
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         PreviewWindow window_;
@@ -35,10 +34,7 @@ namespace Lilium
         public void TearDown ()
         {
             if (window_ != null) Object.DestroyImmediate (window_);
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 

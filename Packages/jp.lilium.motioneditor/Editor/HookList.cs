@@ -5,7 +5,7 @@ namespace Lilium
 {
 
     /// <summary>
-    /// パッケージの外（ゲーム側）が足す受け口の並び（ContextHooks・HumanoidBakeHooks・PoseGraphHooks など）。
+    /// パッケージの外（ゲーム側）が足す受け口の並び（HumanoidBakeHooks・PoseGraphHooks など）。
     /// 同じものは 1 回だけ足す。受け口が例外を出してもほかの受け口は呼ぶ（ゲーム側の不具合で窓が止まらないように）
     /// </summary>
     sealed class HookList<T> where T : class

@@ -10,7 +10,7 @@ namespace Lilium
     /// 焼いて書き出す段（S20・S21）。**この段より上を通った姿勢**を Humanoid のクリップに焼く。足す・消す・並びの中で動かすことができ、いくつも置ける。
     /// - Humanoid Pose の直後（Rig などより上）なら、編集用の体から焼き、Rig の重みとターゲットは値として焼く（今までの焼き方）
     /// - Rig・ゲーム側の段・Display Pose より下なら、そこまで段を通した表示モデルの骨から焼く。Rig を通した後なら Rig の値は焼かない（二重に掛からないように）
-    /// Humanoid Pose の参照（見比べ用）と演出の段の合成は焼かない。姿勢は変えないので、👁・✏・✋ は持たない
+    /// Humanoid Pose の参照（見比べ用）の合成は焼かない。姿勢は変えないので、👁・✏・✋ は持たない
     /// </summary>
     public sealed class OutputLayer : PoseLayer
     {

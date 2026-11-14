@@ -41,10 +41,6 @@ namespace Lilium
         static readonly Color kRulerTickColor = new Color (0.55f, 0.55f, 0.55f);
         static readonly Color kRulerTextColor = new Color (0.8f, 0.8f, 0.8f);
         static readonly Color kNegativeTimeColor = new Color (0, 0, 0, 0.25f);
-        /// <summary>演出の中でこのクリップが使われている区間（S15b）の不透明度。色はアクセントの色</summary>
-        const float kTimelineRangeAlpha = 0.9f;
-        /// <summary>その中で前後のクリップと混ざる区間（キーは打たない）</summary>
-        static readonly Color kTimelineBlendColor = new Color (1f, 0.6f, 0.2f, 0.9f);
         static readonly Color kLabelColor = new Color (0.13f, 0.13f, 0.14f);
         static readonly Color kLabelTextColor = new Color (0.82f, 0.82f, 0.82f);
         static readonly Color kTrackColor = new Color (0.45f, 0.45f, 0.45f);
@@ -417,7 +413,6 @@ namespace Lilium
             if (window_.timelineFirstFrame < 0) {
                 FillRect (painter, Rect.MinMaxRect (ruler.x, ruler.y, Mathf.Min (FrameToX (0), ruler.xMax), ruler.yMax), kNegativeTimeColor);
             }
-            DrawTimelineRange (painter, ruler);
             DrawCycleMarker (painter, ruler);
 
             int start, end, labelStep;
@@ -431,26 +426,6 @@ namespace Lilium
                     FillRect (painter, new Rect (x, ruler.yMax - 3, 1, 3), kRulerTickColor);
                 }
             }
-        }
-
-        /// <summary>
-        /// 演出のクリップと結び付けているとき、目盛りの上端に「演出で使われている区間」と「ブレンドの区間」を帯で出す（S15b）。
-        /// スローの演出ではクリップのうち使われる区間が短い（0.1 倍なら演出 2 秒でクリップ 12F）ので、どこを直せば演出に効くかを見せる
-        /// </summary>
-        void DrawTimelineRange (Painter2D painter, Rect ruler)
-        {
-            float start, end, blendInEnd, blendOutStart;
-            if (!window_.TryGetTimelineClipFrames (out start, out end, out blendInEnd, out blendOutStart)) return;
-            System.Action<float, float, Color> band = (from, to, color) => {
-                float x0 = Mathf.Max (ruler.x, FrameToX (from));
-                float x1 = Mathf.Min (ruler.xMax, FrameToX (to));
-                if (x1 - x0 < 1) x1 = x0 + 1;
-                if (x0 >= ruler.xMax || x1 <= ruler.x) return;
-                FillRect (painter, Rect.MinMaxRect (x0, ruler.y, x1, ruler.y + 3), color);
-            };
-            band (start, end, WithAlpha (accent_, kTimelineRangeAlpha));
-            if (blendInEnd > start) band (start, blendInEnd, kTimelineBlendColor);
-            if (blendOutStart < end) band (blendOutStart, end, kTimelineBlendColor);
         }
 
         /// <summary>

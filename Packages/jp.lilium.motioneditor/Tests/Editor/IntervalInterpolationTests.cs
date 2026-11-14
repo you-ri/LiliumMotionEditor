@@ -9,12 +9,11 @@ namespace Lilium
     /// <summary>
     /// タイムラインで選んだキーの間の矢印の補間（S86）。骨のトラックの矢印はその骨のカーブだけ、いくつ選んでも 1 回の Undo で戻る
     /// </summary>
-    public class IntervalInterpolationTests
+    public class IntervalInterpolationTests : RigTestFixture
     {
         const string kFolder = "Assets/__MktIntervalInterpolationTests";
         static readonly int[] kKeys = { 0, 30, 60 };
 
-        readonly List<Object> created_ = new List<Object> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         PreviewWindow window_;
@@ -36,10 +35,7 @@ namespace Lilium
         public void TearDown ()
         {
             if (window_ != null) Object.DestroyImmediate (window_);
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
+            DestroyCreated ();
             AssetDatabase.DeleteAsset (kFolder);
         }
 

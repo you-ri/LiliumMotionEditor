@@ -10,13 +10,11 @@ namespace Lilium
     /// <summary>
     /// 外部の骨格の BVH を Override として取り込む（S74）
     /// </summary>
-    public class BvhImportTests
+    public class BvhImportTests : RigTestFixture
     {
         const float kPositionTolerance = 0.01f;
         const float kAngleTolerance = 1f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
         GameObject prefab_;
         HumanPose rest_;
@@ -33,24 +31,6 @@ namespace Lilium
             display.transform.SetParent (prefab_.transform, false);
             rest_ = new HumanPose ();
             using (HumanPoseHandler handler = new HumanPoseHandler (display.avatar, display.transform)) handler.GetHumanPose (ref rest_);
-        }
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
-        AnimationClip NewClip ()
-        {
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            return clip;
         }
 
         static void SetCurve (AnimationClip clip, string name, System.Func<float, float> value)
@@ -138,19 +118,6 @@ namespace Lilium
             session.overrideWriteIndex = 0;
         }
 
-        static List<Pose> WorldPose (PoseSession session)
-        {
-            return session.stage.editingRig.editingBones.Select (t => new Pose (t.position, t.rotation)).ToList ();
-        }
-
-        static void AssertSamePose (List<Pose> expected, List<Pose> actual, string message, float position = kPositionTolerance, float angle = kAngleTolerance)
-        {
-            for (int i = 0; i < expected.Count; i++) {
-                Assert.LessOrEqual (Vector3.Distance (expected[i].position, actual[i].position), position, message + ": " + i + " 番目の骨の位置");
-                Assert.LessOrEqual (Quaternion.Angle (expected[i].rotation, actual[i].rotation), angle, message + ": " + i + " 番目の骨の向き");
-            }
-        }
-
         [Test]
         public void BvhImport_MatchesTheSameMotionImportedFromAnim ()
         {
@@ -160,19 +127,19 @@ namespace Lilium
 
             PoseSession fromAnim = OpenWithBase ();
             AnimationClip animLayer = NewClip ();
-            Assert.IsNull (fromAnim.ImportOverride (generated, animLayer, OverrideMode.Additive, false, out PoseSession.OverrideImportResult result));
+            Assert.IsNull (fromAnim.ImportOverride (generated, animLayer, OverrideMode.Additive, new PoseSession.OverrideImportOptions (), out PoseSession.OverrideImportResult result));
             Layer (fromAnim, animLayer);
 
             PoseSession fromBvh = OpenWithBase ();
             AnimationClip bvhLayer = NewClip ();
-            Assert.IsNull (fromBvh.ImportOverride (bvh, skeleton, bvhLayer, OverrideMode.Additive, false, true, true, out result));
+            Assert.IsNull (fromBvh.ImportOverride (bvh, skeleton, bvhLayer, OverrideMode.Additive, new PoseSession.OverrideImportOptions { lockFeet = false, alignRoot = true, fingers = true }, out result));
             Assert.AreEqual (61, result.frameCount, "30fps の BVH を 60fps の格子で取り直す");
             Layer (fromBvh, bvhLayer);
 
             foreach (int frame in new[] { 0, 15, 30, 45, 60 }) {
                 fromAnim.Evaluate (frame);
                 fromBvh.Evaluate (frame);
-                AssertSamePose (WorldPose (fromAnim), WorldPose (fromBvh), frame + "F");
+                AssertSamePose (WorldPose (fromAnim), WorldPose (fromBvh), frame + "F", kPositionTolerance, kAngleTolerance);
             }
         }
 
@@ -187,7 +154,7 @@ namespace Lilium
             ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
             Bvh bvh = ToBvh (Generated (Quaternion.identity, Vector3.zero), skeleton);
             AnimationClip layer = NewClip ();
-            Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, false, true, false, out PoseSession.OverrideImportResult result));
+            Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions { lockFeet = false, alignRoot = true, fingers = false }, out PoseSession.OverrideImportResult result));
 
             HashSet<string> fingerPaths = new HashSet<string> (session.stage.editingRig.binding.boneControls
                 .Where (c => c.human.HasValue && c.human.Value >= HumanBodyBones.LeftThumbProximal && c.human.Value <= HumanBodyBones.RightLittleDistal).Select (c => c.path));
@@ -212,7 +179,7 @@ namespace Lilium
             ExternalSkeleton skeleton = BvhTests.CreateKimodoLike (created_);
             Bvh bvh = ToBvh (Generated (Quaternion.identity, Vector3.zero), skeleton);
             AnimationClip layer = NewClip ();
-            Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, false, true, false, out PoseSession.OverrideImportResult result));
+            Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions { lockFeet = false, alignRoot = true, fingers = false }, out PoseSession.OverrideImportResult result));
             Assert.AreEqual (121, result.frameCount, "元のクリップの長さまで");
 
             List<Pose> Read (bool layered, int frame)
@@ -311,7 +278,7 @@ namespace Lilium
 
             foreach (bool align in new[] { true, false }) {
                 AnimationClip layer = NewClip ();
-                Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, false, align, false, out PoseSession.OverrideImportResult result));
+                Assert.IsNull (session.ImportOverride (bvh, skeleton, layer, OverrideMode.Additive, new PoseSession.OverrideImportOptions { lockFeet = false, alignRoot = align, fingers = false }, out PoseSession.OverrideImportResult result));
                 PoseSession check = OpenImported (Generated (turned, moved));
                 Layer (check, layer);
                 check.Evaluate (0);

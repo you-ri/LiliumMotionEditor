@@ -139,6 +139,13 @@ namespace Lilium
             return bound;
         }
 
+        /// <summary>持ち替えのカーブを外す条件（区間の補間で渡す。持ち替えが無ければ null）。窓と PoseSession が同じ物を使う</summary>
+        public static System.Predicate<EditorCurveBinding> SwitchCurveFilter (IReadOnlyList<ParentSwitchDefinition> definitions)
+        {
+            if (definitions == null || definitions.Count == 0) return null;
+            return binding => IsSwitchCurve (definitions, binding);
+        }
+
         /// <summary>
         /// 持ち替えのカーブ（重み・握り）か。重みはいつも段差、握りは持ち替えの 1 フレーム前から保つ段差なので、区間の補間（S80）では接線を変えない
         /// </summary>

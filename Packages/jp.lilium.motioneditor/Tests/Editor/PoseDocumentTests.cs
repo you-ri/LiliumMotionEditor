@@ -11,13 +11,11 @@ namespace Lilium
     /// <summary>
     /// 姿勢を少ない値で読み書きする（S36）。体の向き基準の点の場所・向き・状態だけで、窓と同じく全身 IK で解いてキーを打つ
     /// </summary>
-    public class PoseDocumentTests
+    public class PoseDocumentTests : RigTestFixture
     {
         const float kPositionTolerance = 1e-3f;
         const float kAngleTolerance = 0.1f;
 
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
         EditRigDefinition definition_;
 
         [SetUp]
@@ -28,32 +26,12 @@ namespace Lilium
             RigTestFixture.UseFreeDefaults (definition_);
         }
 
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
-
         /// <param name="yaw">キャラを置く向き（体の向き基準が置き方によらないことを見る）</param>
         PoseSession Open (float size = 1, float yaw = 0)
         {
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
             Animator display = TestSkeleton.CreateHumanoid (created_, true, size);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
             display.transform.localRotation = Quaternion.Euler (0, yaw, 0);
-            PoseSession session = new PoseSession (prefab, definition_);
-            disposables_.Add (session);
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            session.clip = clip;
-            return session;
+            return OpenSession (display, definition_);
         }
 
         static PoseDocument Read (PoseSession session, int frame)

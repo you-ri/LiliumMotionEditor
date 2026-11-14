@@ -11,38 +11,15 @@ namespace Lilium
     /// 細かく回しても、IK が足したねじれが積み上がらず、一度に回したのと同じ姿勢になる。
     /// いくつか選んだ点をまとめて回す・動かすと、いちばん根の方の骨（腰）も一緒に動き、体がそのまま回る・動く
     /// </summary>
-    public class PointTurnTests
+    public class PointTurnTests : RigTestFixture
     {
-        readonly List<Object> created_ = new List<Object> ();
-        readonly List<System.IDisposable> disposables_ = new List<System.IDisposable> ();
-
-        [TearDown]
-        public void TearDown ()
-        {
-            for (int i = disposables_.Count - 1; i >= 0; i--) disposables_[i].Dispose ();
-            disposables_.Clear ();
-            foreach (Object o in created_) {
-                if (o != null) Object.DestroyImmediate (o);
-            }
-            created_.Clear ();
-        }
 
         /// <param name="toes">つま先の骨を足す（足裏の点を使うとき）</param>
         PoseSession Open (bool toes = false)
         {
             EditRigDefinition definition = EditRigDefinition.CreateDefault ();
             created_.Add (definition);
-            GameObject prefab = new GameObject ("Prefab");
-            created_.Add (prefab);
-            Animator display = toes ? TestSkeleton.CreateHumanoidWithToes (created_) : TestSkeleton.CreateHumanoid (created_, false);
-            display.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            display.transform.SetParent (prefab.transform, false);
-            PoseSession session = new PoseSession (prefab, definition);
-            disposables_.Add (session);
-            AnimationClip clip = new AnimationClip { frameRate = 60 };
-            created_.Add (clip);
-            session.clip = clip;
-            return session;
+            return OpenSession (toes ? TestSkeleton.CreateHumanoidWithToes (created_) : TestSkeleton.CreateHumanoid (created_, false), definition);
         }
 
         [Test]
