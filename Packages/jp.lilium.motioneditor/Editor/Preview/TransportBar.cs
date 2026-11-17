@@ -44,13 +44,11 @@ namespace Lilium
             VisualElement poseGroup = new VisualElement ();
             poseGroup.style.flexDirection = FlexDirection.Row;
             poseGroup.style.alignItems = Align.Center;
-            // プロジェクト設定の Auto Key をここでも切り替える（設定のページまで行かずに済むように）。
-            // 表示は、保存を受けた窓の stateChanged → Refresh で合わせる（設定のページで変えたときも同じ道を通る）
+            // Auto Key（この PC の設定。MotionEditorPrefs）を切り替える。
+            // ほかの窓の表示は、変更を受けた窓の stateChanged → Refresh で合わせる
             // アイコンが今の状態を表す（赤のひし形 = 入 / 枠だけ = 切）。押すと切り替わる
             autoKey_ = new Button (() => {
-                ProjectSettings settings = ProjectSettings.instance;
-                settings.autoKey = !settings.autoKey;
-                settings.Save ();
+                MotionEditorPrefs.autoKey = !MotionEditorPrefs.autoKey;
                 Refresh ();
             }) { tooltip = Tr ("TIMELINE_OVERLAY_AUTO_KEY_TOOLTIP") };
             autoKey_.style.width = 24;
@@ -176,7 +174,7 @@ namespace Lilium
 
             rangeLabel_.text = window_.targetClip != null ? "/ " + window_.GetLastKeyFrame () + "   " + clock.rate + " fps" : "";
             tracksField_.SetValueWithoutNotify (window_.showTracks);
-            bool autoKeyOn = ProjectSettings.instance.autoKey;
+            bool autoKeyOn = MotionEditorPrefs.autoKey;
             if (shownAutoKey_ != autoKeyOn) {
                 shownAutoKey_ = autoKeyOn;
                 Texture2D autoKey = Icons.Load (autoKeyOn ? "AutoKey" : "AutoKeyOff");

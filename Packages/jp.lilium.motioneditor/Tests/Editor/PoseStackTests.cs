@@ -391,6 +391,24 @@ namespace Lilium
             Assert.AreEqual (LayerKind.EditingRig, stack.manipulateLayer.kind);
         }
 
+        /// <summary>
+        /// 窓は ✏・✋ をこの PC の設定に持つので、キャラの設定（state）へは書かず、外から渡して戻す
+        /// </summary>
+        [Test]
+        public void SelectionCanBeKeptOutOfState ()
+        {
+            PoseStack stack = Stack ();
+            LayerState state = new LayerState { write = "Saved", manipulate = "Saved" };
+            stack.SaveState (state, false);
+            Assert.AreEqual ("Saved", state.write, "選択は書かない");
+            Assert.AreEqual ("Saved", state.manipulate);
+            Assert.IsNotNull (state.Find (LayerKind.EditingRig.ToString ()), "👁 と重みは書く");
+
+            stack.LoadState (new LayerState { manipulate = "EditingRig" }, "EditingRig", "DisplayBone");
+            Assert.AreEqual (LayerKind.DisplayBone, stack.manipulateLayer.kind, "渡した選択を使う");
+            Assert.AreEqual ("DisplayBone", stack.manipulateId);
+        }
+
         [Test]
         public void WeightsRoundTripThroughState ()
         {

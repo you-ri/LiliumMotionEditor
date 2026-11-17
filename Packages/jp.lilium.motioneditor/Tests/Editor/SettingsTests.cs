@@ -43,8 +43,58 @@ namespace Lilium
         {
             EditorJsonUtility.FromJsonOverwrite (projectBackup_, ProjectSettings.instance);
             EditorPrefs.DeleteKey (AnimBank.kPrefsKey + AssetDatabase.AssetPathToGUID (kFolder + "/Hero_Variant.prefab"));
+            LayerSelection.Delete (prefab_);
             AssetDatabase.DeleteAsset (kFolder);
             SettingsLookup.Invalidate ();
+        }
+
+        /// <summary>
+        /// ✏・✋ の選択はキャラごとにこの PC の設定へ持つ。無いうちはキャラの設定の値で始める
+        /// </summary>
+        [Test]
+        public void LayerSelectionIsStoredPerPrefabInPrefs ()
+        {
+            LayerSelection.Delete (prefab_);
+            LayerState fallback = new LayerState { write = "Override:0", manipulate = "FullBodyIk" };
+            string write, manipulate;
+            LayerSelection.Load (prefab_, fallback, out write, out manipulate);
+            Assert.AreEqual ("Override:0", write, "この PC に無ければキャラの設定の値");
+            Assert.AreEqual ("FullBodyIk", manipulate);
+
+            LayerSelection.Save (prefab_, "EditingRig", "DisplayBone");
+            LayerSelection.Load (prefab_, fallback, out write, out manipulate);
+            Assert.AreEqual ("EditingRig", write);
+            Assert.AreEqual ("DisplayBone", manipulate);
+            Assert.AreEqual ("Override:0", fallback.write, "キャラの設定は変えない");
+
+            // prefab がアセットでなければ持たない
+            LayerSelection.Load (null, fallback, out write, out manipulate);
+            Assert.AreEqual ("Override:0", write);
+        }
+
+        /// <summary>
+        /// Auto Key はこの PC の設定。切り替えてもプロジェクト設定（共有するアセット）は変わらず、窓へ知らせる
+        /// </summary>
+        [Test]
+        public void AutoKeyIsStoredInPrefs ()
+        {
+            bool saved = MotionEditorPrefs.autoKey;
+            int changed = 0;
+            System.Action count = () => changed++;
+            MotionEditorPrefs.changed += count;
+            try {
+                string project = EditorJsonUtility.ToJson (ProjectSettings.instance);
+                MotionEditorPrefs.autoKey = !saved;
+                Assert.AreEqual (!saved, MotionEditorPrefs.autoKey);
+                Assert.AreEqual (1, changed, "窓へ知らせる");
+                MotionEditorPrefs.autoKey = !saved;
+                Assert.AreEqual (1, changed, "同じ値では知らせない");
+                Assert.AreEqual (project, EditorJsonUtility.ToJson (ProjectSettings.instance), "プロジェクト設定は変えない");
+                StringAssert.DoesNotContain ("autoKey", project);
+            } finally {
+                MotionEditorPrefs.changed -= count;
+                MotionEditorPrefs.autoKey = saved;
+            }
         }
 
         [Test]

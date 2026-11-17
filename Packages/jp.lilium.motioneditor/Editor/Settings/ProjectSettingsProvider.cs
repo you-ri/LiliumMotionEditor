@@ -43,7 +43,6 @@ namespace Lilium
                         shown, typeof (EditRigDefinition), false);
                     if (picked != shown) rig.objectReferenceValue = picked == packageDefault ? null : picked;
                     EditorGUILayout.PropertyField (serialized.FindProperty ("autoBake"), new GUIContent ("Auto Bake"));
-                    EditorGUILayout.PropertyField (serialized.FindProperty ("autoKey"), new GUIContent ("Auto Key", Tr ("PROJECT_SETTINGS_PROVIDER_AUTO_KEY_TOOLTIP")));
                     if (EditorGUI.EndChangeCheck ()) {
                         serialized.ApplyModifiedProperties ();
                         settings.Save ();

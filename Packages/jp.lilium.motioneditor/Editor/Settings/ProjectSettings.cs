@@ -35,17 +35,11 @@ namespace Lilium
         /// <summary>編集するクリップを保存したら Humanoid 版を焼き直す</summary>
         public bool autoBake = true;
 
-        /// <summary>
-        /// 操作したらキーを打つ（入）。切なら、今のフレームにキーがある物しか動かせず、操作でキーは増えない（誤って触ってもクリップが変わらない）。
-        /// キーは Stacker の Key All・Insert、Properties の Key などで打つ
-        /// </summary>
-        public bool autoKey = false;
-
         /// <summary>Layers の既定（キャラの設定が無いとき・作るときの始まりの値）</summary>
         public LayerState layers = new LayerState ();
 
         /// <summary>
-        /// 保存したとき（設定のページ・タイムラインの Auto Key）。設定はどちらからも変えられるので、窓はこれで表示を合わせる
+        /// 保存したとき（設定のページ）。窓はこれで表示を合わせる
         /// </summary>
         public static event System.Action changed;
 

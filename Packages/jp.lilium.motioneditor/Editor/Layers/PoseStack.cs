@@ -94,6 +94,18 @@ namespace Lilium
             get { return Find (manipulateId_) ?? Find (kDefaultManipulateId) ?? writeLayer; }
         }
 
+        /// <summary>選んでいる書き出し先の段の id（保存用。今のキャラに無い段でも選んだまま持つ）</summary>
+        public string writeId
+        {
+            get { return writeId_; }
+        }
+
+        /// <summary>選んでいる、つかむ段の id（保存用）</summary>
+        public string manipulateId
+        {
+            get { return manipulateId_; }
+        }
+
         public PoseLayer Find (string id)
         {
             return string.IsNullOrEmpty (id) ? null : layers_.FirstOrDefault (l => l.id == id);
@@ -545,9 +557,19 @@ namespace Lilium
 
         public void SaveState (LayerState state)
         {
+            SaveState (state, true);
+        }
+
+        /// <summary>
+        /// selection が false なら ✏・✋ の選択は書かない（窓はこの PC の設定に持つ。LayerSelection）
+        /// </summary>
+        public void SaveState (LayerState state, bool selection)
+        {
             if (state == null) return;
-            state.write = writeId_;
-            state.manipulate = manipulateId_;
+            if (selection) {
+                state.write = writeId_;
+                state.manipulate = manipulateId_;
+            }
             if (state.values == null) state.values = new List<LayerValues> ();
 
             // 重みは今のキャラに無い段の分も残す（キャラを行き来しても消えないように）。
@@ -574,9 +596,18 @@ namespace Lilium
         public void LoadState (LayerState state)
         {
             if (state == null) return;
+            LoadState (state, state.write, state.manipulate);
+        }
 
-            SetSelected (state.write, ref writeId_, true);
-            SetSelected (state.manipulate, ref manipulateId_, false);
+        /// <summary>
+        /// ✏・✋ の選択を state の外から渡して戻す（窓はこの PC の設定から渡す。LayerSelection）
+        /// </summary>
+        public void LoadState (LayerState state, string write, string manipulate)
+        {
+            if (state == null) return;
+
+            SetSelected (write, ref writeId_, true);
+            SetSelected (manipulate, ref manipulateId_, false);
             foreach (PoseLayer layer in layers_) {
                 LayerValues values = state.Find (layer.id);
                 // 値の無い段は 👁 を入れる（Undo で値が消えた段を、スタックを作り直さずに戻すため）。重みは値があるときだけ当てる

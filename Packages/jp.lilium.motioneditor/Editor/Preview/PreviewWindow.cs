@@ -128,6 +128,11 @@ namespace Lilium
         /// レイヤーの状態（書き出す段 / つかむ段 / 隠している段）。段そのものは対象から作り直すので、選択だけを持つ
         /// </summary>
         [SerializeField] LayerState layerState_ = new LayerState ();
+        /// <summary>
+        /// ✏・✋ の選択。この PC の設定（LayerSelection）に持ち、Undo で戻せるように窓にも写しておく
+        /// </summary>
+        [SerializeField] string writeLayer_;
+        [SerializeField] string manipulateLayer_;
 
         PreviewStage stage_;
         /// <summary>既定の置き場所を当てるかを見終えた（OverlayWindows.PlaceDefaults）</summary>
@@ -284,7 +289,7 @@ namespace Lilium
                 return false;
             }
 
-            if (poseStack_ != null && current != null) poseStack_.SaveState (current.layers);
+            if (poseStack_ != null && current != null) poseStack_.SaveState (current.layers, false);
             SettingsLookup.Assign (settings, prefab);
             ResetWindowSettingsFromProject ();
             overridesBase_ = null;
@@ -302,7 +307,7 @@ namespace Lilium
         {
             GameObject prefab = settingsPrefab;
             if (prefab == null || characterSettings != null) return characterSettings;
-            if (poseStack_ != null) poseStack_.SaveState (layerState_);
+            if (poseStack_ != null) poseStack_.SaveState (layerState_, false);
             CharacterSettings settings = SettingsLookup.Create (prefab, layerState_, ProjectSettings.instance.rigDefinition);
             RaiseStateChanged ();
             RaiseStackChanged ();
@@ -858,15 +863,15 @@ namespace Lilium
         }
 
         /// <summary>
-        /// キーの自動追加（プロジェクト設定）。切なら、今のフレームにキーがある物しか動かせず、操作でキーは増えない
+        /// キーの自動追加（この PC の設定）。切なら、今のフレームにキーがある物しか動かせず、操作でキーは増えない
         /// </summary>
         static bool autoKey
         {
-            get { return ProjectSettings.instance.autoKey; }
+            get { return MotionEditorPrefs.autoKey; }
         }
 
         /// <summary>
-        /// プロジェクト設定を保存したとき。Auto Key が替わると動かせる物が変わるので、パネル（タイムラインのスイッチ・Spinner）と表示を合わせる
+        /// プロジェクト設定を保存したとき・Auto Key を切り替えたとき。Auto Key が替わると動かせる物が変わるので、パネル（タイムラインのスイッチ・Spinner）と表示を合わせる
         /// </summary>
         void OnProjectSettingsChanged ()
         {
@@ -1039,6 +1044,8 @@ namespace Lilium
             SubscribeRigDefinition ();
             ProjectSettings.changed -= OnProjectSettingsChanged;
             ProjectSettings.changed += OnProjectSettingsChanged;
+            MotionEditorPrefs.changed -= OnProjectSettingsChanged;
+            MotionEditorPrefs.changed += OnProjectSettingsChanged;
 
             RefreshClipState ();
             RebuildStage ();
@@ -1050,6 +1057,7 @@ namespace Lilium
             Undo.undoRedoPerformed -= OnUndoRedo;
             UnsubscribeRigDefinition ();
             ProjectSettings.changed -= OnProjectSettingsChanged;
+            MotionEditorPrefs.changed -= OnProjectSettingsChanged;
             DisposeGhosts ();
             AnimationUtility.onCurveWasModified -= OnCurveWasModified;
             EditorApplication.delayCall -= RaiseKeysChanged;
@@ -1201,7 +1209,8 @@ namespace Lilium
         void BuildStack ()
         {
             poseStack_ = PoseStack.Build (stage_, this);
-            poseStack_.LoadState (layerState);
+            LayerSelection.Load (settingsPrefab, layerState, out writeLayer_, out manipulateLayer_);
+            poseStack_.LoadState (layerState, writeLayer_, manipulateLayer_);
             ghostsDirty_ = true;
             RaiseStackChanged ();
         }
@@ -1247,18 +1256,20 @@ namespace Lilium
         public void SetWriteLayer (PoseLayer layer)
         {
             string reason;
+            Undo.RecordObject (this, "Motion Editor Write Layer");
             if (!poseStack_.TrySetWrite (layer, out reason)) return;
             // キーを打つクリップが替わるので、キーの一覧を作り直す（前の書き込み先のキーがタイムラインに残っていた）
             keyFrames_ = null;
-            SaveLayerState ("Motion Editor Write Layer");
+            SaveLayerSelection ();
             RaiseStackChanged ();
         }
 
         public void SetManipulateLayer (PoseLayer layer)
         {
             string reason;
+            Undo.RecordObject (this, "Motion Editor Manipulate Layer");
             if (!poseStack_.TrySetManipulate (layer, out reason)) return;
-            SaveLayerState ("Motion Editor Manipulate Layer");
+            SaveLayerSelection ();
             RaiseStackChanged ();
             // 表示の骨をつかむ・やめると、選んでいる骨に効く拘束を切る・戻す
             SamplePose ();
@@ -1272,20 +1283,31 @@ namespace Lilium
             if (layer == null || !layer.hasWeight) return;
             layer.weight = Mathf.Clamp01 (weight);
             // ドラッグの刻みごとに Undo を積むと重いので、重みは記録せずに残すだけ
-            poseStack_.SaveState (layerState);
+            poseStack_.SaveState (layerState, false);
             SaveCharacterSettings ();
             ghostsDirty_ = true;
             SamplePose ();
         }
 
         /// <summary>
-        /// 段の選択はキャラの設定（無ければ窓）が持つので、それを記録すれば Undo で戻る
+        /// 段の 👁 はキャラの設定（無ければ窓）が持つので、それを記録すれば Undo で戻る
         /// </summary>
         void SaveLayerState (string name)
         {
             Undo.RecordObject (layerStateOwner, name);
-            poseStack_.SaveState (layerState);
+            poseStack_.SaveState (layerState, false);
             SaveCharacterSettings ();
+        }
+
+        /// <summary>
+        /// ✏・✋ の選択をこの PC の設定へ書く（キャラの設定には書かない。切り替えるたびにアセットが変わらないように）。
+        /// 呼ぶ前に窓を Undo へ記録しておく
+        /// </summary>
+        void SaveLayerSelection ()
+        {
+            writeLayer_ = poseStack_.writeId;
+            manipulateLayer_ = poseStack_.manipulateId;
+            LayerSelection.Save (settingsPrefab, writeLayer_, manipulateLayer_);
         }
 
         public void SetFrame (int frame)
@@ -1371,7 +1393,7 @@ namespace Lilium
         {
             if (layer == null || !layer.hasClipWeight) return;
             layer.clipWeight = Mathf.Clamp01 (weight);
-            poseStack_.SaveState (layerState);
+            poseStack_.SaveState (layerState, false);
             SaveCharacterSettings ();
             SamplePose ();
             RaiseStateChanged ();
@@ -1433,8 +1455,9 @@ namespace Lilium
             RestoreCycleAfterUndo ();
             RefreshClipState ();
             if (stage_ != null) stage_.InvalidateClipCurves ();
-            // 段の選択もキャラの設定（無ければ窓）に入っているので、戻った値をスタックへ入れ直す
-            poseStack_.LoadState (layerState);
+            // 段の 👁 はキャラの設定（無ければ窓）、✏・✋ は窓に入っているので、戻った値をスタックへ入れ直す
+            poseStack_.LoadState (layerState, writeLayer_, manipulateLayer_);
+            LayerSelection.Save (settingsPrefab, writeLayer_, manipulateLayer_);
             SamplePose ();
             RaiseStackChanged ();
             RaiseStateChanged ();

@@ -20,7 +20,6 @@ MonoBehaviour:
   characterSettingsFolder: '{prefabFolder}'
   rigDefinition: {fileID: 11400000, guid: 31afe97d722728c40b562c115ea2fd09, type: 2}
   autoBake: 1
-  autoKey: 0
   layers:
     write: 
     manipulate: 

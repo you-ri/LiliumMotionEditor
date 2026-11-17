@@ -1210,6 +1210,7 @@ UE が編集中は常にコントロール空間に閉じている（逆解決�
 - キーの自動追加（`MktProjectSettings.autoKey`、既定 切、Project Settings の Auto Key）: 切なら、ハンドル・Spinner・数値欄・Reset / Mirror（Spinner）・Rig の重み・Properties の値の欄は、今のフレームにその物（骨・コントローラー 1 つ）のキーがあるときだけ動かせる。無ければ動かさずクリップの姿勢へ戻し、窓に通知を出す。書き込みは `MktCurveWriter.onlyExistingKeys` で今のフレームにキーがある物（パス単位。キーのある物ならカーブの無いチャンネルも書く）だけ書き、キーの無い物を動かしたらつかむ前の操作値へ戻す（クリップの当て直しではカーブの無い値が戻らない。09-29 腰の位置で発覚）。IK を解き直した巻き添えで動いたキーの無い物はクリップの姿勢へ戻す。明示的に打つ操作（Key All・Stacker Insert・Transport の Paste / Reset・PoseBank・Properties の Key・取込）は切でもキーを作る。 **10-03 変更:** 全身 IK の点（ギズモ・Spinner・数値欄）も、切なら今のフレームに姿勢のキー（どれかの物のキー）があるときだけ動かせる。点を離すと全身の骨のキーを打つので、点ごとではなくフレームで見る（キーの無いフレームで動かすと、キーフレームが新しくできていた）。点の固定の付け外し（右クリック・Free / Pin / Lock・R）は明示的な操作として切でも打つ。
 - タイムラインの上端の段にも「Key」ボタン（Copy の左。中身は Key All と同じ）。
 - タイムラインの上端の段の左端に「Auto Key」のスイッチ（10-03 追加）。Project Settings の Auto Key と同じ値で、どちらで変えても両方の表示が合う（保存で `MktProjectSettings.changed` を出し、窓が stateChanged を出し直す）。
+  11-18 に Auto Key をこの PC の設定（`MotionEditorPrefs.autoKey`）へ移し、Project Settings の欄は消した（S110）。切り替えはこのスイッチだけ。
 - Stacker: 「Key All」ボタン。組の選択に関係なく、今のフレームで全部（体・手・Rig の重み・表情・任意のプロパティ）にキーを打つ（Stacker Insert のキー打ちを組 All で呼ぶ）。
 - 選んだ物だけのポーズのコピー（10-03 追加）: C（タイムラインの上端の段の Copy）は、対象（骨・手足の IK・全身 IK の点など。複数可）を選んでいればその物のカーブだけを今のフレームの値でコピーし、何も選んでいなければ全体をコピーする（別のキーは設けない）。貼り付けは今までどおり V で、写した対象のカーブにだけキーを打ち、ほかの骨は貼り先のまま。別のフレーム・別のクリップに貼れる。対象のカーブは、トラックと同じく対象がキーを打つパス（`CollectKeyedPaths`）で選ぶ。選んだ物にカーブが無ければ通知を出し、前のコピーは捨てる。
 
@@ -4660,7 +4661,7 @@ Burst とマネージドの不一致（11-05 調べ。ユーザー指示「調�
 
    | アセット | 持つもの | 数 |
    |---|---|---|
-   | プロジェクト設定（`LiliumMotionEditorSettings`） | 使い方。フォルダの並び（`{name}`・`{prefabFolder}`）・名前の接尾辞・キャラの設定の置き場所・既定のリグ定義・Auto Bake・Auto Key・Layers の始まりの値 | プロジェクトに 1 つ |
+   | プロジェクト設定（`LiliumMotionEditorSettings`） | 使い方。フォルダの並び（`{name}`・`{prefabFolder}`）・名前の接尾辞・キャラの設定の置き場所・既定のリグ定義・Auto Bake・Auto Key（11-18 に EditorPrefs へ移した。S110）・Layers の始まりの値 | プロジェクトに 1 つ |
    | リグ定義（`EditRigDefinition`） | 形。キャラに依らない（prefab の中を指すパスを持たない） | 基本 1 つを共有。キャラ固有の形の調整は複製して分ける（今と同じ） |
    | キャラの設定（`CharacterSettings`） | 結び付け。prefab・使う定義・Layers の状態・持ち替え・ベースの持ち物 | キャラごと（要るキャラだけ） |
    | Rig Variant（S92） | 装備。名前・足す物・定義の上書き | キャラ × 装備ごと |
@@ -4725,6 +4726,29 @@ Burst とマネージドの不一致（11-05 調べ。ユーザー指示「調�
 - Ghost の入切・幅・選んでいる組を変えても、クリップの .meta が変わらない（自動: `ViewSettingsAreNotStoredInTheMeta`）
 
 対象: `Packages/jp.lilium.motioneditor`（Editor/Preview・Editor/Clip/Stacker・Localization・Tests）。`Stacker.Settings` から `selected`・`ghost`・`ghostRange` を外した（ゲーム側は使っていない）。
+
+### S110: Layers の ✏・✋ の選択と Auto Key をこの PC の設定にする（2026-11-18）
+
+**Layers の書き出す段（✏）とつかむ段（✋）の選択と Auto Key を、共有するアセット（キャラの設定・プロジェクト設定）ではなくこの PC の設定（EditorPrefs）に持つ。**
+11-18 ユーザー指示（S109 で Ghost を移した続き。保存先を洗い出したうえで「移す」「後残りを」）。
+S19 ではキャラの設定に入れていたので、作業の途中で ✏・✋ を切り替えるたびにキャラの設定（バージョン管理するアセット）に差分が出ていた。
+
+- 選択はキャラ（prefab の GUID）ごとに EditorPrefs に持つ（`LayerSelection`）。この PC にまだ無ければ、キャラの設定（無ければプロジェクト設定）の Layers にある選択で始める。キャラの設定の `write`・`manipulate` は、窓からはもう書かない（読むだけの初めの値）。
+- Undo で戻せるように、窓にも写しておく（窓を Undo に記録する。前はキャラの設定を記録していた）。
+- 👁・重み・合成の重みはキャラの設定に残す。焼いた結果に効くため（👁 を落とした Override の段は焼かず、段を通して焼くときは重みが掛かる）、人によって焼いた結果が変わらないように共有する。
+- `PoseStack.SaveState` / `LoadState` に、選択を state の外に置く形を足した（前の形はそのまま。窓を開かずに使う口とテストが使う）。
+- Auto Key（S19 の 11-14 の整理ではプロジェクト設定の「使い方」に入れた）も、人がその場で切り替える作業の仕方なので、この PC の設定（`MotionEditorPrefs.autoKey`）へ移した。
+  プロジェクト設定から `autoKey` を外し、Project Settings のページの欄も消した（切り替えはタイムラインのスイッチ）。前のプロジェクト設定の値は引き継がない（既定の切から始まる）。
+  Auto Bake はプロジェクト設定に残す（焼いた版が保存のたびに作り直されるかどうかを、人によって変えないため）。
+
+受け入れ条件:
+- ✏・✋ を切り替えても、キャラの設定のアセットが変わらない（手動）
+- 窓を開き直す・キャラを行き来すると、この PC で選んだ ✏・✋ が戻る。Undo で戻る（手動）
+- 選択をキャラの設定に書かずに保存し、外から渡して戻せる（自動: `SelectionCanBeKeptOutOfState`）
+- 選択はキャラごとに EditorPrefs に持ち、無いうちはキャラの設定の値で始める（自動: `LayerSelectionIsStoredPerPrefabInPrefs`）
+- Auto Key を切り替えてもプロジェクト設定が変わらず、窓へ知らせる（自動: `AutoKeyIsStoredInPrefs`）
+
+対象: `Packages/jp.lilium.motioneditor`（Editor/Settings/LayerSelection・MotionEditorPrefs・ProjectSettings・Editor/Layers/PoseStack・Editor/Preview/PreviewWindow・TransportBar・Localization・Tests）。キャラの設定の形は変えない。ゲーム側は `autoKey` を使っていない。
 
 ## スプリント計画（1スプリント = 1機能）
 
@@ -4841,6 +4865,7 @@ Burst とマネージドの不一致（11-05 調べ。ユーザー指示「調�
 | S107 | 窓と PoseSession で同じ決まりを 1 か所に（11-14 追加） | 挙動を変えずに、書けるかの判定・書き出し口・キーの間の操作・段を通さない焼き・一時のセッションを共通の部品へ寄せる | S107 の受け入れ条件 |
 | S108 | 設定の分担を整理する（11-14 追加） | 使い方はプロジェクト設定、形はリグ定義、結び付けはキャラの設定、装備は Rig Variant。キャラの設定からフォルダと Auto Bake の上書きを抜く | S108 の受け入れ条件 |
 | S109 | ゴーストを選んでいる制御点・骨の軌跡にする（11-17 追加） | 選んでいる物の前後のフレームの位置を線と点で出し、動きの通り道が見える | S109 の受け入れ条件 |
+| S110 | Layers の ✏・✋ の選択と Auto Key をこの PC の設定にする（11-18 追加） | 段の選択や Auto Key を切り替えても共有するアセットに差分が出ない | S110 の受け入れ条件 |
 
 ## 評価指標と閾値
 - 共通: コンパイルエラー0 / エディタ上の例外0 / **Console 警告 0**（Rigging は拘束が invalid だと警告を出す）/ テスト失敗0。
@@ -5280,3 +5305,6 @@ Burst とマネージドの不一致（11-05 調べ。ユーザー指示「調�
 - [ ] S109 ゴーストを選んでいる制御点・骨の軌跡にする: 実装・テスト通過（11-17）。`PreviewWindow.UpdateGhosts`（選んだ物の `framePosition` をフレームごとに取る）・`DrawGhostTrails`（ハンドルの前に線と点を描く）。表示モデルを焼く形と `PreviewStage.BakeDisplayMeshes` は消した。幅の既定 10・上限 60。
   Ghost の入切・幅と選んでいる組を .meta から EditorPrefs へ移した（11-17）。窓での見た目は AI Walk で撮って確かめた（腰・右足・右手の軌跡）。
   6.0 でモーションエディタのテスト 899 件すべて通過。残り: 窓での目視（線と点の色・太さ・大きさ）・6.6（extrival）での確認
+- [ ] S110 Layers の ✏・✋ の選択と Auto Key をこの PC の設定にする: 実装・テスト通過（11-18）。`LayerSelection`（prefab の GUID ごとに EditorPrefs）。窓は選択をキャラの設定に書かず、Undo 用に窓へ写す。👁・重みは焼いた結果に効くのでキャラの設定に残した（ユーザー確認済み）。
+  Auto Key は `MotionEditorPrefs.autoKey` へ移し、プロジェクト設定とそのページから外した。開いている窓で ✋ を切り替え、アセットに差分が出ず Undo で戻ることを確かめた。
+  テスト 3 件追加、6.0 で 903 件すべて通過。残り: 6.6（extrival）での確認
