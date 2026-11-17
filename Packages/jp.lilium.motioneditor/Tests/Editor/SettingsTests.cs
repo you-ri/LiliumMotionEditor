@@ -184,34 +184,46 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 古い上書きの入ったキャラの設定は、引くとアセットごとに 1 回だけ警告する。入っていなければ警告しない（S108）
+        /// 古い上書きの入ったキャラの設定は、引くとアセットごとに 1 回だけ警告する。入っていなければ警告しない（S108）。
+        /// 見るのはこのテストのアセットの警告だけ（キャラの設定を探す間に、プロジェクトの中の別のアセットの警告が Unity から出ることがある。
+        /// 古いプラグインの .meta の警告が出るプロジェクトでは、LogAssert.NoUnexpectedReceived で落ちていた）
         /// </summary>
         [Test]
         public void ObsoleteOverridesWarnOncePerAsset ()
         {
-            CharacterSettings clean = ScriptableObject.CreateInstance<CharacterSettings> ();
-            clean.prefab = prefab_;
-            AssetDatabase.CreateAsset (clean, kFolder + "/Clean.asset");
-            SettingsLookup.Invalidate ();
-            Assert.AreSame (clean, SettingsLookup.Find (prefab_));
-            LogAssert.NoUnexpectedReceived ();
-            AssetDatabase.DeleteAsset (kFolder + "/Clean.asset");
+            List<string> warnings = new List<string> ();
+            Application.LogCallback collect = (message, stack, type) => {
+                if (type == LogType.Warning && message.Contains (kFolder)) warnings.Add (message);
+            };
+            Application.logMessageReceived += collect;
+            try {
+                CharacterSettings clean = ScriptableObject.CreateInstance<CharacterSettings> ();
+                clean.prefab = prefab_;
+                AssetDatabase.CreateAsset (clean, kFolder + "/Clean.asset");
+                SettingsLookup.Invalidate ();
+                Assert.AreSame (clean, SettingsLookup.Find (prefab_));
+                CollectionAssert.IsEmpty (warnings, "上書きが無ければ警告しない");
+                AssetDatabase.DeleteAsset (kFolder + "/Clean.asset");
 
-            // 警告はパスで 1 回にしているので、前の実行と重ならない名前にする
-            string path = kFolder + "/Old" + System.Guid.NewGuid ().ToString ("N") + ".asset";
-            CharacterSettings old = ScriptableObject.CreateInstance<CharacterSettings> ();
-            old.prefab = prefab_;
+                // 警告はパスで 1 回にしているので、前の実行と重ならない名前にする
+                string path = kFolder + "/Old" + System.Guid.NewGuid ().ToString ("N") + ".asset";
+                CharacterSettings old = ScriptableObject.CreateInstance<CharacterSettings> ();
+                old.prefab = prefab_;
 #pragma warning disable 0618
-            old.overrideAutoBake = true;
-            old.autoBake = false;
+                old.overrideAutoBake = true;
+                old.autoBake = false;
 #pragma warning restore 0618
-            AssetDatabase.CreateAsset (old, path);
-            SettingsLookup.Invalidate ();
-            LogAssert.Expect (LogType.Warning, new Regex (Regex.Escape (path)));
-            Assert.AreSame (old, SettingsLookup.Find (prefab_));
-            SettingsLookup.Invalidate ();
-            Assert.AreSame (old, SettingsLookup.Find (prefab_), "2 回目は警告しない");
-            LogAssert.NoUnexpectedReceived ();
+                AssetDatabase.CreateAsset (old, path);
+                SettingsLookup.Invalidate ();
+                Assert.AreSame (old, SettingsLookup.Find (prefab_));
+                Assert.AreEqual (1, warnings.Count, "上書きがあれば警告する");
+                StringAssert.Contains (path, warnings[0]);
+                SettingsLookup.Invalidate ();
+                Assert.AreSame (old, SettingsLookup.Find (prefab_));
+                Assert.AreEqual (1, warnings.Count, "2 回目は警告しない");
+            } finally {
+                Application.logMessageReceived -= collect;
+            }
         }
 
         /// <summary>
