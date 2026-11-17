@@ -11,7 +11,7 @@ namespace Lilium
     /// <summary>
     /// Stacker（S12）。組（All・Body・Hands・Rig と自分で作った組）ごとのポーズキーを並べ、
     /// 次までの間隔（フレーム）を直すと後ろのキーがまとめてずれる。Insert は今のポーズキーの後ろに同じ姿勢を足して押し出し、
-    /// Delete は消して詰める。Ghost で前後のフレームの残像（1 フレームずつ、幅は 1〜16）、Loop でサイクルキー（S32。最後のキーを先頭のキーに合わせ続ける）
+    /// Delete は消して詰める。Ghost で選んでいる制御点・骨の前後のフレームの軌跡（1 フレームずつ点を打って線でつなぐ）、Loop でサイクルキー（S32。最後のキーを先頭のキーに合わせ続ける）
     /// </summary>
     [Icon (Icons.kFolder + "Stacker.png")]
     [Overlay (typeof (PreviewWindow), "mkt-stacker", "Stacker", defaultDisplay = false,
@@ -83,7 +83,7 @@ namespace Lilium
             toggles.Add (loop_);
             root.Add (toggles);
 
-            // 残像の幅（前後それぞれ何フレームまで）
+            // 軌跡の幅（前後それぞれ何フレームまで）
             ghostRange_ = new SliderInt (Tr ("STACKER_OVERLAY_GHOST_RANGE"), 1, Stacker.kGhostRangeMax) { showInputField = true, tooltip = Tr ("STACKER_OVERLAY_GHOST_RANGE_TOOLTIP") };
             ghostRange_.labelElement.style.minWidth = 0;
             ghostRange_.labelElement.style.width = 20;

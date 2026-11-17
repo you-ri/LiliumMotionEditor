@@ -99,28 +99,38 @@ namespace Lilium
             AnimationClip clip = new AnimationClip ();
             AssetDatabase.CreateAsset (clip, kFolder + "/Walk.rig.anim");
             Stacker.Settings settings = Stacker.Load (clip);
-            Assert.AreEqual ("All", settings.selected);
+            Assert.AreEqual (0, settings.groups.Count);
             settings.groups.Add (new Stacker.Group { name = "Arms", targets = { "LeftUpperArm", "IK LeftArm" } });
-            settings.ghost = true;
             Assert.IsTrue (Stacker.Save (clip, settings));
 
             Stacker.Settings loaded = Stacker.Load (clip);
-            Assert.IsTrue (loaded.ghost);
             Assert.AreEqual ("Arms", loaded.groups[0].name);
             Assert.AreEqual (2, loaded.groups[0].targets.Count);
             Assert.IsFalse (Stacker.Save (new AnimationClip (), settings), "アセットでないクリップ");
         }
 
         [Test]
-        public void GhostRangeIsClampedAndOldSettingsGetTheDefault ()
+        public void ViewSettingsAreNotStoredInTheMeta ()
         {
-            Assert.AreEqual (Stacker.kGhostRangeDefault, Stacker.ClampGhostRange (0), "幅を持たない古い設定");
+            AssetDatabase.CreateFolder ("Assets", "__MktStackerTest");
+            AnimationClip clip = new AnimationClip ();
+            AssetDatabase.CreateAsset (clip, kFolder + "/Walk.rig.anim");
+            // 前の形の .meta（選んでいる組・ゴーストを持っていた）も読め、保存し直すとそれらは消える
+            AssetImporter importer = AssetImporter.GetAtPath (kFolder + "/Walk.rig.anim");
+            importer.userData = "{\"stacker\":{\"groups\":[],\"selected\":\"Body\",\"ghost\":true,\"ghostRange\":15}}";
+            Stacker.Settings settings = Stacker.Load (clip);
+            Assert.IsTrue (Stacker.Save (clip, settings));
+            string saved = AssetImporter.GetAtPath (kFolder + "/Walk.rig.anim").userData;
+            StringAssert.DoesNotContain ("ghost", saved);
+            StringAssert.DoesNotContain ("selected", saved);
+        }
+
+        [Test]
+        public void GhostRangeIsClamped ()
+        {
+            Assert.AreEqual (Stacker.kGhostRangeDefault, Stacker.ClampGhostRange (0));
             Assert.AreEqual (1, Stacker.ClampGhostRange (1));
-            Assert.AreEqual (16, Stacker.ClampGhostRange (40));
-            Stacker.Settings old = JsonUtility.FromJson<Stacker.Settings> ("{\"loop\":true,\"ghost\":true}");
-            Assert.AreEqual (Stacker.kGhostRangeDefault, Stacker.ClampGhostRange (old.ghostRange));
-            Stacker.Settings wide = JsonUtility.FromJson<Stacker.Settings> (JsonUtility.ToJson (new Stacker.Settings { ghostRange = 12 }));
-            Assert.AreEqual (12, wide.ghostRange);
+            Assert.AreEqual (Stacker.kGhostRangeMax, Stacker.ClampGhostRange (Stacker.kGhostRangeMax + 20));
         }
     }
 

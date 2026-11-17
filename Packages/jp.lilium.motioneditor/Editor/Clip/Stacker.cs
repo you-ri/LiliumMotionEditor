@@ -67,7 +67,7 @@ namespace Lilium
             return true;
         }
 
-        // ---- クリップごとの設定（組・残像）。AnimationClip は利用者のデータを持てないので .meta の userData に持つ ----
+        // ---- クリップごとの設定（自分で作った組）。AnimationClip は利用者のデータを持てないので .meta の userData に持つ ----
 
         [System.Serializable]
         public sealed class Group
@@ -82,18 +82,43 @@ namespace Lilium
         {
             /// <summary>自分で作った組（組み込みの組 All / Body / Hands / Rig は持たない）</summary>
             public List<Group> groups = new List<Group> ();
-            public string selected = "All";
             /// <summary>前の Loop（組ごとに先頭のポーズキーを末尾へ写した）。読むときにサイクルキーの印へ移し、false にする（ClipUserData.Load）</summary>
             public bool loop;
-            public bool ghost;
-            /// <summary>残像を出す幅（前後それぞれ何フレームまで）</summary>
-            public int ghostRange = kGhostRangeDefault;
         }
 
-        public const int kGhostRangeDefault = 2;
-        public const int kGhostRangeMax = 16;
+        // ---- 見え方の設定（選んでいる組・ゴースト）。この PC にだけ覚える（EditorPrefs） ----
+        // 前はクリップの .meta に持っていたが、トグルを触っただけでアセットが変わり、バージョン管理に差分が出た。
+        // 古い .meta に残っている値（selected・ghost・ghostRange）は読まない
 
-        /// <summary>1〜16 に収める（古い設定で 0 のときは既定）</summary>
+        const string kPrefsGroup = "LiliumMotionEditor.Stacker.Group";
+        const string kPrefsGhost = "LiliumMotionEditor.Stacker.Ghost";
+        const string kPrefsGhostRange = "LiliumMotionEditor.Stacker.GhostRange";
+
+        /// <summary>選んでいる組の名前（そのクリップに無い組なら、窓は All にする）</summary>
+        public static string selectedGroup
+        {
+            get { return EditorPrefs.GetString (kPrefsGroup, "All"); }
+            set { EditorPrefs.SetString (kPrefsGroup, value ?? "All"); }
+        }
+
+        /// <summary>ゴースト（選んでいる制御点・骨の軌跡）を出すか</summary>
+        public static bool ghost
+        {
+            get { return EditorPrefs.GetBool (kPrefsGhost, false); }
+            set { EditorPrefs.SetBool (kPrefsGhost, value); }
+        }
+
+        /// <summary>ゴーストを出す幅（前後それぞれ何フレームまで）</summary>
+        public static int ghostRange
+        {
+            get { return ClampGhostRange (EditorPrefs.GetInt (kPrefsGhostRange, kGhostRangeDefault)); }
+            set { EditorPrefs.SetInt (kPrefsGhostRange, ClampGhostRange (value)); }
+        }
+
+        public const int kGhostRangeDefault = 10;
+        public const int kGhostRangeMax = 60;
+
+        /// <summary>1〜kGhostRangeMax に収める（0 以下は既定）</summary>
         public static int ClampGhostRange (int range)
         {
             return range <= 0 ? kGhostRangeDefault : Mathf.Min (range, kGhostRangeMax);

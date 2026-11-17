@@ -78,29 +78,6 @@ namespace Lilium
             }
         }
 
-        /// <summary>
-        /// 表示モデルの今の見た目を焼いて、描く位置と一緒に result へ足す（Stacker のゴースト）。
-        /// メッシュは pool の used 番目から使い回し（足りなければ作る）、使った数を返す。骨を持たないメッシュは元のメッシュをそのまま描く
-        /// </summary>
-        public int BakeDisplayMeshes (List<Mesh> pool, int used, List<(Mesh, Matrix4x4)> result)
-        {
-            if (model == null) return used;
-            foreach (SkinnedMeshRenderer skin in model.GetComponentsInChildren<SkinnedMeshRenderer> ()) {
-                if (!skin.enabled || !skin.gameObject.activeInHierarchy || skin.sharedMesh == null) continue;
-                if (used >= pool.Count) pool.Add (new Mesh { hideFlags = HideFlags.HideAndDontSave });
-                Mesh mesh = pool[used++];
-                skin.BakeMesh (mesh);
-                // 焼いたメッシュはレンダラーの Transform から見た位置（大きさは焼かない）
-                result.Add ((mesh, skin.transform.localToWorldMatrix));
-            }
-            foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter> ()) {
-                MeshRenderer renderer = filter.GetComponent<MeshRenderer> ();
-                if (renderer == null || !renderer.enabled || !filter.gameObject.activeInHierarchy || filter.sharedMesh == null) continue;
-                result.Add ((filter.sharedMesh, filter.transform.localToWorldMatrix));
-            }
-            return used;
-        }
-
         Transform PickBoneInternal (Ray ray)
         {
             if (model == null) return null;

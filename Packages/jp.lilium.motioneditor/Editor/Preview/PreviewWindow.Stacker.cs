@@ -7,8 +7,8 @@ namespace Lilium
 {
 
     /// <summary>
-    /// Stacker（S12）の窓の側。組（骨のまとまり）ごとのポーズキーの一覧・挿入・削除・間隔、ループ（サイクルキー。S32）、前後のフレームの残像（ゴースト）。
-    /// 組と設定はクリップごとに .meta へ保存する（Stacker.Settings）。パネルは StackerOverlay
+    /// Stacker（S12）の窓の側。組（骨のまとまり）ごとのポーズキーの一覧・挿入・削除・間隔、ループ（サイクルキー。S32）、選んでいる物の前後のフレームの軌跡（ゴースト）。
+    /// 自分で作った組はクリップごとに .meta へ保存する（Stacker.Settings）。選んでいる組とゴーストはこの PC の設定（EditorPrefs）。パネルは StackerOverlay
     /// </summary>
     public partial class PreviewWindow
     {
@@ -21,10 +21,15 @@ namespace Lilium
         const string kBlendShape = "blendShape.";
         static readonly Color kGhostPrevious = new Color (0.35f, 0.65f, 1f, 1);
         static readonly Color kGhostNext = new Color (1f, 0.6f, 0.3f, 1);
-        /// <summary>隣のフレームの残像の濃さ。離れるほど薄くする</summary>
-        const float kGhostAlphaNear = 0.18f;
-        const float kGhostAlphaFar = 0.03f;
-        /// <summary>1 回の描画で残像を焼くのに使ってよい時間。足りなければ次の描画で続きを焼く</summary>
+        static readonly Color kGhostCurrent = new Color (1f, 1f, 1f, 0.95f);
+        /// <summary>軌跡の濃さ。離れるほど薄くする</summary>
+        const float kGhostAlphaNear = 0.95f;
+        const float kGhostAlphaFar = 0.2f;
+        const float kGhostLineWidth = 3;
+        /// <summary>軌跡の点の大きさ（ハンドルの大きさに対する比）。キーのフレームは大きくする</summary>
+        const float kGhostDotSize = 0.012f;
+        const float kGhostKeyDotSize = 0.028f;
+        /// <summary>1 回の描画で軌跡の位置を取るのに使ってよい時間。足りなければ次の描画で続きを取る</summary>
         const double kGhostBudgetSeconds = 0.03;
 
         Stacker.Settings stacker_ = new Stacker.Settings ();
@@ -41,7 +46,6 @@ namespace Lilium
                     stackerClip_ = editingClip_;
                     stackerLoaded_ = true;
                     stacker_ = Stacker.Load (editingClip_);
-                    ghostsDirty_ = true;
                 }
                 return stacker_;
             }
@@ -50,7 +54,12 @@ namespace Lilium
         void SaveStacker ()
         {
             Stacker.Save (editingClip_, stacker_);
-            ghostsDirty_ = true;
+            RaiseStackerChanged ();
+        }
+
+        /// <summary>見え方の設定（選んでいる組・ゴースト）を変えたとき。クリップには書かない</summary>
+        void RaiseStackerChanged ()
+        {
             if (stackerChanged != null) stackerChanged ();
             RepaintView ();
         }
@@ -112,13 +121,13 @@ namespace Lilium
         public string stackerGroup
         {
             get {
-                string selected = stacker.selected;
+                string selected = Stacker.selectedGroup;
                 return stackerGroupNames.Contains (selected) ? selected : kGroupAll;
             }
             set {
-                if (stacker.selected == value) return;
-                stacker.selected = value;
-                SaveStacker ();
+                if (Stacker.selectedGroup == value) return;
+                Stacker.selectedGroup = value;
+                RaiseStackerChanged ();
             }
         }
 
@@ -143,23 +152,22 @@ namespace Lilium
 
         public bool stackerGhost
         {
-            get { return stacker.ghost; }
+            get { return Stacker.ghost; }
             set {
-                if (stacker.ghost == value) return;
-                stacker.ghost = value;
-                SaveStacker ();
+                if (Stacker.ghost == value) return;
+                Stacker.ghost = value;
+                RaiseStackerChanged ();
             }
         }
 
-        /// <summary>残像を出す幅（前後それぞれ何フレームまで。1〜16）</summary>
+        /// <summary>軌跡を出す幅（前後それぞれ何フレームまで）</summary>
         public int stackerGhostRange
         {
-            get { return Stacker.ClampGhostRange (stacker.ghostRange); }
+            get { return Stacker.ghostRange; }
             set {
-                value = Stacker.ClampGhostRange (value);
-                if (stacker.ghostRange == value) return;
-                stacker.ghostRange = value;
-                SaveStacker ();
+                if (Stacker.ghostRange == Stacker.ClampGhostRange (value)) return;
+                Stacker.ghostRange = value;
+                RaiseStackerChanged ();
             }
         }
 
@@ -316,7 +324,7 @@ namespace Lilium
             Stacker.Group group = FindCustomGroup (name);
             if (group == null) stacker.groups.Add (group = new Stacker.Group { name = name });
             group.targets = members;
-            stacker.selected = name;
+            Stacker.selectedGroup = name;
             SaveStacker ();
         }
 
@@ -325,80 +333,73 @@ namespace Lilium
             Stacker.Group group = FindCustomGroup (stackerGroup);
             if (group == null) return;
             stacker.groups.Remove (group);
-            stacker.selected = kGroupAll;
+            Stacker.selectedGroup = kGroupAll;
             SaveStacker ();
         }
 
-        // ---- ゴースト（前後のフレームの残像。オニオンスキン） ----
+        // ---- ゴースト（選んでいる制御点・骨の前後のフレームの軌跡） ----
 
-        struct GhostMesh
-        {
-            public Mesh mesh;
-            public Matrix4x4 matrix;
-            /// <summary>焼いたメッシュ（使い回しの置き場へ返す）。false は MeshFilter の共有メッシュ</summary>
-            public bool baked;
-        }
-
-        /// <summary>フレームごとに焼いた残像。前後の幅から外れたフレームは返し、足りないフレームだけ焼き足す</summary>
-        readonly Dictionary<int, List<GhostMesh>> ghostFrames_ = new Dictionary<int, List<GhostMesh>> ();
-        readonly List<Mesh> ghostPool_ = new List<Mesh> ();
+        /// <summary>選んだ物の前後のフレームの位置。ghostTargets_ と同じ並び</summary>
+        readonly Dictionary<int, Vector3[]> ghostFrames_ = new Dictionary<int, Vector3[]> ();
+        readonly List<PoseTarget> ghostTargets_ = new List<PoseTarget> ();
         readonly List<int> ghostWanted_ = new List<int> ();
-        Material ghostMaterial_;
-        Material ghostDepth_;
-        MaterialPropertyBlock ghostBlock_;
+        readonly List<int> ghostOrder_ = new List<int> ();
+        /// <summary>キーや段が変わって取り直すフレーム</summary>
+        readonly HashSet<int> ghostStale_ = new HashSet<int> ();
         bool ghostsDirty_ = true;
-        int ghostFrame_ = -1;
 
         /// <summary>
-        /// 今のフレームの前後（幅は stackerGhostRange）を 1 フレームずつ焼く。キーや段が変わったら全部焼き直す。
-        /// 焼くときは段の並びをそのフレームで通し、終わったら今のフレームへ戻す。再生中は出さない
+        /// 選んでいる物の、今のフレームの前後（幅は stackerGhostRange）の位置を 1 フレームずつ取る。キーや段が変わったら全部取り直す。
+        /// 取るときは段の並びをそのフレームで通し、終わったら今のフレームへ戻す。再生中は出さない。
+        /// 前は表示モデルを焼いて重ねていたが、重なって動きが読み取りにくかった。動かしている点の通り道だけを線で出す
         /// </summary>
         void UpdateGhosts ()
         {
-            if (stage_ == null || editingClip_ == null || !stacker.ghost || clock_.isPlaying) {
+            if (stage_ == null || editingClip_ == null || !stackerGhost || clock_.isPlaying) {
                 ClearGhosts ();
                 return;
             }
-            if (ghostsDirty_) {
+            // 選び直したら取り直す（フレームごとの位置は選んだ物の並びで持つ）
+            List<PoseTarget> selected = SelectedTargets ().ToList ();
+            if (!selected.SequenceEqual (ghostTargets_)) {
                 ClearGhosts ();
+                ghostTargets_.AddRange (selected);
+            }
+            // キーや段が変わった: 取り直すまでは前の位置を出しておく（つかんで動かしている間に、遠いフレームの線が消えないように）
+            if (ghostsDirty_) {
+                ghostStale_.UnionWith (ghostFrames_.Keys);
                 ghostsDirty_ = false;
             }
+            if (ghostTargets_.Count == 0) return;
 
-            int frame = currentFrame;
-            ghostFrame_ = frame;
-            CollectGhostFrames (frame, ghostWanted_);
-            // 幅から外れたフレームを返す
+            CollectGhostFrames (currentFrame, ghostWanted_);
+            // 幅から外れたフレームを捨てる
             foreach (int stale in ghostFrames_.Keys.Where (f => !ghostWanted_.Contains (f)).ToList ()) {
-                ReleaseGhostFrame (stale);
+                ghostFrames_.Remove (stale);
+                ghostStale_.Remove (stale);
             }
 
-            // 近いフレームから焼く。時間が足りなければ残りは次の描画で
+            // 近いフレームから取る。時間が足りなければ残りは次の描画で
             double started = EditorApplication.timeSinceStartup;
             bool evaluated = false;
             bool pending = false;
             float rate = (float)clock_.rate;
             foreach (int wanted in ghostWanted_) {
-                if (ghostFrames_.ContainsKey (wanted)) continue;
+                if (ghostFrames_.ContainsKey (wanted) && !ghostStale_.Contains (wanted)) continue;
                 if (evaluated && EditorApplication.timeSinceStartup - started > kGhostBudgetSeconds) {
                     pending = true;
                     break;
                 }
                 poseStack_.Evaluate (PoseTime (wanted / rate));
-                List<(Mesh, Matrix4x4)> baked = new List<(Mesh, Matrix4x4)> ();
-                // 空いているメッシュ（置き場）を頭から使い、使った分は置き場から外す
-                stage_.BakeDisplayMeshes (ghostPool_, 0, baked);
-                List<GhostMesh> meshes = new List<GhostMesh> ();
-                foreach ((Mesh mesh, Matrix4x4 matrix) item in baked) {
-                    bool owned = ghostPool_.Contains (item.mesh);
-                    if (owned) ghostPool_.Remove (item.mesh);
-                    meshes.Add (new GhostMesh { mesh = item.mesh, matrix = item.matrix, baked = owned });
-                }
-                ghostFrames_[wanted] = meshes;
+                Vector3[] positions = new Vector3[ghostTargets_.Count];
+                for (int i = 0; i < positions.Length; i++) positions[i] = ghostTargets_[i].framePosition;
+                ghostFrames_[wanted] = positions;
+                ghostStale_.Remove (wanted);
                 evaluated = true;
             }
             // 今のフレームの姿勢へ戻す（イベントは出さない。描画の途中なので）
             if (evaluated) poseStack_.Evaluate (PoseTime (CurrentTime ()));
-            if (pending) RepaintView ();
+            if (evaluated || pending) RepaintView ();
         }
 
         /// <summary>
@@ -415,85 +416,69 @@ namespace Lilium
             }
         }
 
-        void ReleaseGhostFrame (int frame)
-        {
-            List<GhostMesh> meshes;
-            if (!ghostFrames_.TryGetValue (frame, out meshes)) return;
-            foreach (GhostMesh ghost in meshes) {
-                if (ghost.baked && ghost.mesh != null) ghostPool_.Add (ghost.mesh);
-            }
-            ghostFrames_.Remove (frame);
-        }
-
         void ClearGhosts ()
         {
-            foreach (int frame in ghostFrames_.Keys.ToList ()) ReleaseGhostFrame (frame);
-            ghostFrame_ = -1;
+            ghostFrames_.Clear ();
+            ghostTargets_.Clear ();
+            ghostStale_.Clear ();
         }
 
         /// <summary>
-        /// 描く直前に呼ぶ。残像を半透明で重ねる（前のフレームは青、後ろは橙。離れるほど薄い）
+        /// ハンドルの前に描く（Repaint のとき）。選んだ物ごとに前後のフレームの位置を線でつなぎ、フレームごとに点を打つ。
+        /// 前のフレームは青、後ろは橙で、離れるほど薄い。その物のキーのフレームは点を大きくする（キーの間の動きの速さが点の間隔で見える）
         /// </summary>
-        void DrawGhosts ()
+        void DrawGhostTrails ()
         {
-            if (ghostFrames_.Count == 0 || ghostFrame_ < 0) return;
-            if (ghostMaterial_ == null) ghostMaterial_ = CreateGhostMaterial (false);
-            if (ghostDepth_ == null) ghostDepth_ = CreateGhostMaterial (true);
-            if (ghostBlock_ == null) ghostBlock_ = new MaterialPropertyBlock ();
+            if (ghostTargets_.Count == 0 || ghostFrames_.Count == 0 || !stackerGhost || clock_.isPlaying) return;
+            int frame = currentFrame;
             int range = stackerGhostRange;
-            // 遠いフレームから描く（近いものが上に乗る）
-            foreach (KeyValuePair<int, List<GhostMesh>> pair in ghostFrames_.OrderByDescending (p => Mathf.Abs (p.Key - ghostFrame_))) {
-                int distance = Mathf.Abs (pair.Key - ghostFrame_);
-                if (distance == 0 || distance > range) continue;
-                Color color = pair.Key < ghostFrame_ ? kGhostPrevious : kGhostNext;
-                color.a = range <= 1 ? kGhostAlphaNear : Mathf.Lerp (kGhostAlphaNear, kGhostAlphaFar, (distance - 1) / (float)(range - 1));
-                ghostBlock_.SetColor ("_Color", color);
-                foreach (GhostMesh ghost in pair.Value) {
-                    if (ghost.mesh == null) continue;
-                    for (int sub = 0; sub < ghost.mesh.subMeshCount; sub++) {
-                        stage_.renderUtility.DrawMesh (ghost.mesh, ghost.matrix, ghostDepth_, sub);
-                        stage_.renderUtility.DrawMesh (ghost.mesh, ghost.matrix, ghostMaterial_, sub, ghostBlock_);
-                    }
+            ghostOrder_.Clear ();
+            foreach (int f in ghostFrames_.Keys) {
+                if (Mathf.Abs (f - frame) <= range) ghostOrder_.Add (f);
+            }
+            // 今のフレームは今の位置（つかんで動かしている間もついてくる）
+            ghostOrder_.Add (frame);
+            ghostOrder_.Sort ();
+            if (ghostOrder_.Count < 2) return;
+
+            Color handleColor = Handles.color;
+            Vector3[] points = new Vector3[ghostOrder_.Count];
+            Color[] colors = new Color[ghostOrder_.Count];
+            for (int t = 0; t < ghostTargets_.Count; t++) {
+                PoseTarget target = ghostTargets_[t];
+                if (target.gameObject == null) continue;
+                int[] keys = GetTargetKeyFrames (target);
+                for (int i = 0; i < ghostOrder_.Count; i++) {
+                    int f = ghostOrder_[i];
+                    points[i] = f == frame ? target.framePosition : ghostFrames_[f][t];
+                    colors[i] = GhostColor (f, frame, range);
+                }
+                Handles.color = Color.white;
+                Handles.DrawAAPolyLine (kGhostLineWidth, colors, points);
+                for (int i = 0; i < ghostOrder_.Count; i++) {
+                    int f = ghostOrder_[i];
+                    if (f == frame) continue;
+                    bool key = System.Array.IndexOf (keys, f) >= 0;
+                    Handles.color = colors[i];
+                    float size = HandleUtility.GetHandleSize (points[i]) * (key ? kGhostKeyDotSize : kGhostDotSize);
+                    Handles.DotHandleCap (0, points[i], Quaternion.identity, size, EventType.Repaint);
                 }
             }
+            Handles.color = handleColor;
         }
 
-        /// <summary>
-        /// 残像は 2 回に分けて描く。先に奥行きだけを書き（色は変えない）、次に一番手前の面だけを半透明で塗る。
-        /// 奥行きを書かずに塗ると、服の下の体など重なった面が全部塗り重なって濃くなる
-        /// </summary>
-        static Material CreateGhostMaterial (bool depthOnly)
+        static Color GhostColor (int frame, int current, int range)
         {
-            Material material = new Material (Shader.Find ("Hidden/Internal-Colored")) { hideFlags = HideFlags.HideAndDontSave };
-            material.SetColor ("_Color", kGhostPrevious);
-            material.SetInt ("_Cull", (int)UnityEngine.Rendering.CullMode.Back);
-            if (depthOnly) {
-                material.SetInt ("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
-                material.SetInt ("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
-                material.SetInt ("_ZWrite", 1);
-                material.SetInt ("_ZTest", (int)UnityEngine.Rendering.CompareFunction.LessEqual);
-                // キャラ（不透明）の後に描く。体の奥に入った残像は隠れる
-                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            }
-            else {
-                material.SetInt ("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                material.SetInt ("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                material.SetInt ("_ZWrite", 0);
-                material.SetInt ("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Equal);
-                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 1;
-            }
-            return material;
+            if (frame == current) return kGhostCurrent;
+            int distance = Mathf.Abs (frame - current);
+            Color color = frame < current ? kGhostPrevious : kGhostNext;
+            color.a = range <= 1 ? kGhostAlphaNear : Mathf.Lerp (kGhostAlphaNear, kGhostAlphaFar, (distance - 1) / (float)(range - 1));
+            return color;
         }
 
         void DisposeGhosts ()
         {
             ClearGhosts ();
-            foreach (Mesh mesh in ghostPool_) {
-                if (mesh != null) Object.DestroyImmediate (mesh);
-            }
-            ghostPool_.Clear ();
-            if (ghostMaterial_ != null) Object.DestroyImmediate (ghostMaterial_);
-            if (ghostDepth_ != null) Object.DestroyImmediate (ghostDepth_);
         }
     }
 

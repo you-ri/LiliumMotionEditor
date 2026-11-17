@@ -1525,9 +1525,8 @@ namespace Lilium
             bool flip = lighting_ == PreviewLighting.Default ? !flipLight_ : flipLight_;
             stage_.UpdateLights (viewRotation, lighting_, flip);
             stage_.renderUtility.BeginPreview (rect, GUIStyle.none);
-            // Stacker の残像（前後のフレーム）。Render の前に積む
+            // Stacker のゴースト（選んでいる物の前後のフレームの位置）。描くのはハンドルと一緒（DrawGhostTrails）
             UpdateGhosts ();
-            DrawGhosts ();
             stage_.renderUtility.Render (true, false);
             stage_.renderUtility.EndAndDrawPreview (rect);
             DrawViewportInfo (rect);

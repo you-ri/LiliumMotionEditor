@@ -168,12 +168,12 @@ namespace Lilium
             AssetDatabase.CreateAsset (clip, kFolder + "/Walk.rig.anim");
             Assert.IsFalse (ClipCycle.Load (clip));
             Stacker.Settings settings = Stacker.Load (clip);
-            settings.ghost = true;
+            settings.groups.Add (new Stacker.Group { name = "Arms" });
             Assert.IsTrue (Stacker.Save (clip, settings));
             Assert.IsTrue (ClipCycle.Save (clip, true));
             Assert.IsTrue (ClipCycle.Load (clip));
-            Assert.IsTrue (Stacker.Load (clip).ghost, "Stacker の設定は残る");
-            settings.selected = "Body";
+            Assert.AreEqual (1, Stacker.Load (clip).groups.Count, "Stacker の設定は残る");
+            settings.groups.Add (new Stacker.Group { name = "Legs" });
             Stacker.Save (clip, settings);
             Assert.IsTrue (ClipCycle.Load (clip), "Stacker の設定を保存しても印は残る");
             Assert.IsTrue (ClipCycle.Save (clip, false));
@@ -184,7 +184,7 @@ namespace Lilium
             AssetImporter importer = AssetImporter.GetAtPath (kFolder + "/Walk.rig.anim");
             importer.userData = "{\"stacker\":{\"selected\":\"Body\",\"loop\":false}}";
             Assert.IsFalse (ClipCycle.Load (clip));
-            Assert.AreEqual ("Body", Stacker.Load (clip).selected);
+            Assert.IsNotNull (Stacker.Load (clip));
             importer.userData = "{\"stacker\":{\"selected\":\"Body\",\"loop\":true}}";
             Assert.IsTrue (ClipCycle.Load (clip), "前の Loop はサイクルキー");
             Assert.IsFalse (Stacker.Load (clip).loop, "Stacker の側からは外す");

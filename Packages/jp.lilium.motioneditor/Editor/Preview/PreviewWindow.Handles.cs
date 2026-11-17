@@ -50,6 +50,8 @@ namespace Lilium
             Dictionary<Transform, FkTarget> fkByBone = pointGrab ? FkTargetsByBone () : null;
             FkTarget linkClicked = null;
             PoseHandleUtility.meshHover = meshHover_;
+            // Stacker のゴースト（選んでいる物の軌跡）。ハンドルより先に描き、ハンドルの下に敷く
+            if (ev.type == EventType.Repaint) DrawGhostTrails ();
             EditorGUI.BeginChangeCheck ();
             try {
                 foreach (PoseTarget target in targets_) {
