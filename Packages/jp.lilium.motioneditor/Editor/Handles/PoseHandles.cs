@@ -57,9 +57,19 @@ namespace Lilium
             return rotation;
         }
 
+        /// <summary>移動のギズモの矢印をつかんでいる間の軸（つかんだときの向き）</summary>
+        static Quaternion movingAxes_ = Quaternion.identity;
+
+        /// <summary>
+        /// 移動のギズモ。矢印をつかんでいる間は、つかんだときの向きの軸のまま出して動かす。
+        /// 軸を今の向き（ローカルの軸・物の上の点の形）で作り直すと、動かして物が回るたびに軸も回り、つかんだ軸と違う向きへ点が動いた
+        /// </summary>
         public static Vector3 PositionHandle (Vector3 position, Quaternion rotation)
         {
             if (locked) return position;
+            int hot = GUIUtility.hotControl;
+            if (hot == xAxisSliderHash || hot == yAxisSliderHash || hot == zAxisSliderHash) rotation = movingAxes_;
+            else movingAxes_ = rotation;
             float handleSize = HandleUtility.GetHandleSize (position);
             Color color = Handles.color;
             Handles.color = xAxisColor;
@@ -92,9 +102,6 @@ namespace Lilium
                             GUIUtility.hotControl = controlID;
 
                             _hangLocalPosition = hitInfo.point - position;
-                            // ボーンの向きが表側、裏側どちらに向いているか判断する。		
-                            _isBackSphere = Vector3.Dot (mouseRay.direction, hitInfo.point - position) >= 0 ? true : false;
-                            _radius = (hitInfo.point - position).magnitude;
                             _isBoneSelected = true;
                             ev.Use ();
 

@@ -56,15 +56,15 @@ namespace Lilium
             return TransformChannels.Position | TransformChannels.Rotation;
         }
 
-        public override void SpinMove (Vector3 delta)
+        /// <summary>ハンドル（DoObjectHandles）のギズモと同じ、ターゲットの向き</summary>
+        public override Quaternion gizmoAxes
         {
-            source_.editing.localPosition += delta;
-            rig_.rigProxies.Capture (source_);
+            get { return source_.editing != null ? source_.editing.rotation : Quaternion.identity; }
         }
 
-        public override void SpinRotateLocal (Quaternion delta)
+        public override void SpinMoveWorld (Vector3 delta)
         {
-            source_.editing.localRotation = source_.editing.localRotation * delta;
+            source_.editing.position += delta;
             rig_.rigProxies.Capture (source_);
         }
 

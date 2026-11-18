@@ -407,7 +407,7 @@ namespace Lilium
             shoulder.MoveBy (Vector3.forward * 0.1f);
             shoulder.RotateAround (before + Vector3.right, Quaternion.Euler (0, 30, 0), true);
             shoulder.SetState (BodyPointState.Pin);
-            shoulder.ToggleLock ();
+            shoulder.SetState (BodyPointState.Locked);
             shoulder.TogglePin ();
             shoulder.ResetValues (TransformChannels.All);
             Assert.AreEqual (BodyPointState.Free, shoulder.state, "固定できない");
@@ -580,7 +580,7 @@ namespace Lilium
             string path = RigPaths.Body (HumanBodyBones.LeftHand);
 
             // 腰を完全固定にして、手を体が届かない所へ引く
-            hips.ToggleLock ();
+            hips.SetState (BodyPointState.Locked);
             Assert.IsTrue (hips.locked);
             Vector3 far = bone.position + (bone.position - Bone (s, HumanBodyBones.Hips).position).normalized * 2f;
             hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
@@ -615,7 +615,7 @@ namespace Lilium
             Assert.IsFalse (Bindings (clip).Any (b => b.path == path && b.propertyName == BodyPoint.kLockedProperty), "完全固定にしていない点には、そのカーブを立てない");
 
             // 完全固定の点も、届かない所に置いたら、姿勢が決まった後に骨の位置へ合わせ直す（完全固定のまま。11-04 ユーザー指示）
-            hand.ToggleLock ();
+            hand.SetState (BodyPointState.Locked);
             hand.SetValues (TransformChannels.Position, root.InverseTransformPoint (far), Quaternion.identity);
             s.body.RestoreInput ();
             s.body.Solve ();
@@ -625,7 +625,7 @@ namespace Lilium
             Assert.IsTrue (hand.locked, "完全固定は外れない");
 
             // 完全固定を外すと固定は残る。固定ごと外すと完全固定も外れる
-            hand.ToggleLock ();
+            hand.SetState (BodyPointState.Pin);
             Assert.IsTrue (hand.pinned);
             Assert.IsFalse (hand.locked);
             Assert.IsFalse (hand.SyncToBone (), "もう合っているので直さない");

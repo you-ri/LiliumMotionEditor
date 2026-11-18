@@ -16,12 +16,12 @@ namespace Lilium
         readonly PreviewStage stage_;
         readonly ILayerSource source_;
 
-        /// <param name="source">クリップの持ち主。窓（IHumanoidHost）なら Layers のパネルの行も作る</param>
+        /// <param name="source">クリップの持ち主。窓（ILayerHost）なら Layers のパネルの行も作る</param>
         public HumanoidLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
             source_ = source;
-            if (source is IHumanoidHost host) {
+            if (source is ILayerHost host) {
                 clip = CreateClip (host);
                 // 構造を編集している間だけ出る（S21。Humanoid Pose は足したり外したりできる段。位置は固定）
                 headButtons.Add (new LayerClipButton {
@@ -44,7 +44,7 @@ namespace Lilium
             }
         }
 
-        LayerClip CreateClip (IHumanoidHost host)
+        LayerClip CreateClip (ILayerHost host)
         {
             LayerClip result = new LayerClip {
                 label = Tr ("HUMANOID_LAYER_REFERENCE"),

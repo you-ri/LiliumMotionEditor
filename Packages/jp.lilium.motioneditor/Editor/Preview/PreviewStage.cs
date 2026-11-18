@@ -55,9 +55,7 @@ namespace Lilium
         // このキャラで Humanoid のクリップを左右反転して読むか（受け口に一度だけ聞く）
         bool? mirrorHumanoidClips_;
         // 合成するときに、クリップを当てる前の姿勢を覚えておく場所
-        Vector3[] blendPositions_ = new Vector3[0];
-        Quaternion[] blendRotations_ = new Quaternion[0];
-        Vector3[] blendScales_ = new Vector3[0];
+        readonly LocalPoses blendFrom_ = new LocalPoses ();
         HumanPose blendPose_;
         // 合成に使う編集用の骨の並び・コントロールの基準の値（作った直後の値）
         List<Transform> editingBoneList_;
@@ -66,9 +64,7 @@ namespace Lilium
         readonly Dictionary<Transform, int> controlIndex_ = new Dictionary<Transform, int> ();
         /// <summary>書き込み先の Override の層の手前で控えた値（S14。書き込み先が元のクリップなら null）</summary>
         ControlState overrideSource_;
-        Vector3[] controlRestPositions_ = new Vector3[0];
-        Quaternion[] controlRestRotations_ = new Quaternion[0];
-        Vector3[] controlRestScales_ = new Vector3[0];
+        readonly LocalPoses controlRest_ = new LocalPoses ();
         /// <summary>全身 IK の点（S25）と、その固定の強さの基準（点ごとに BodyPoint.kValueCount 個ずつ並べる）</summary>
         Lilium.BodyPoint[] bodyPoints_ = new Lilium.BodyPoint[0];
         float[] bodyPointRest_ = new float[0];
@@ -94,9 +90,7 @@ namespace Lilium
         HumanPoseHandler humanoidWriter_;
         HumanPose humanoidPose_;
         Transform[] poseTransforms_ = new Transform[0];
-        Vector3[] restPositions_ = new Vector3[0];
-        Quaternion[] restRotations_ = new Quaternion[0];
-        Vector3[] restScales_ = new Vector3[0];
+        readonly LocalPoses rest_ = new LocalPoses ();
 
         public PreviewRenderUtility renderUtility { get; private set; }
         /// <summary>
@@ -292,13 +286,7 @@ namespace Lilium
         /// </summary>
         public void RestorePose ()
         {
-            for (int i = 0; i < poseTransforms_.Length; i++) {
-                Transform t = poseTransforms_[i];
-                if (t == null) continue;
-                t.localPosition = restPositions_[i];
-                t.localRotation = restRotations_[i];
-                t.localScale = restScales_[i];
-            }
+            rest_.Restore (poseTransforms_);
             if (editingRig != null) editingRig.ResetBonesToRest ();
             if (fullBody != null) fullBody.ClearInput ();
             rigWeights_.Clear ();
@@ -428,7 +416,7 @@ namespace Lilium
         Pose GetRestLocalPose (Transform transform)
         {
             int index = System.Array.IndexOf (poseTransforms_, transform);
-            if (index >= 0) return new Pose (restPositions_[index], restRotations_[index]);
+            if (index >= 0) return rest_.GetPose (index);
             transform.GetLocalPositionAndRotation (out Vector3 position, out Quaternion rotation);
             return new Pose (position, rotation);
         }
@@ -590,9 +578,7 @@ namespace Lilium
             controlTransforms_ = controls.GetComponentsInChildren<Transform> (true);
             controlIndex_.Clear ();
             for (int i = 0; i < controlTransforms_.Length; i++) controlIndex_[controlTransforms_[i]] = i;
-            controlRestPositions_ = controlTransforms_.Select (t => t.localPosition).ToArray ();
-            controlRestRotations_ = controlTransforms_.Select (t => t.localRotation).ToArray ();
-            controlRestScales_ = controlTransforms_.Select (t => t.localScale).ToArray ();
+            controlRest_.Capture (controlTransforms_);
             bodyPoints_ = controls.GetComponentsInChildren<Lilium.BodyPoint> (true);
             bodyPointRest_ = ReadPointValues ();
             weightProxies_ = controls.GetComponentsInChildren<Lilium.RigWeightProxy> (true);
@@ -618,13 +604,7 @@ namespace Lilium
             if (weight <= 0 || clip == null) return;
 
             SampleBase (clip, time);
-            for (int i = 0; i < controlTransforms_.Length; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out Vector3 p, out Quaternion q);
-                t.SetLocalPositionAndRotation (Vector3.Lerp (controlRestPositions_[i], p, weight), Quaternion.Slerp (controlRestRotations_[i], q, weight));
-                t.localScale = Vector3.Lerp (controlRestScales_[i], t.localScale, weight);
-            }
+            controlRest_.Mix (controlTransforms_, weight);
             for (int i = 0; i < bodyPoints_.Length; i++) {
                 if (bodyPoints_[i] == null) continue;
                 for (int v = 0; v < Lilium.BodyPoint.kValueCount; v++) {
@@ -734,9 +714,10 @@ namespace Lilium
             Transform t = CurveEdit.FindPath (root, path);
             int index;
             if (t == null || !controlIndex_.TryGetValue (t, out index)) return false;
-            position = overrideSource_.positions[index];
-            rotation = overrideSource_.rotations[index];
-            scale = overrideSource_.scales[index];
+            Pose pose = overrideSource_.transforms.GetPose (index);
+            position = pose.position;
+            rotation = pose.rotation;
+            scale = overrideSource_.transforms.GetScale (index);
             return true;
         }
 
@@ -745,11 +726,71 @@ namespace Lilium
         /// </summary>
         public sealed class ControlState
         {
-            public Vector3[] positions;
-            public Quaternion[] rotations;
-            public Vector3[] scales;
+            internal readonly LocalPoses transforms = new LocalPoses ();
             /// <summary>全身 IK の点の固定の強さ（点ごとに BodyPoint.kValueCount 個ずつ）</summary>
-            public float[] pointValues;
+            internal float[] pointValues;
+        }
+
+        /// <summary>
+        /// Transform の並びの local の位置・回転・スケールの控え。毎フレーム使うので、配列は長さが足りる限り使い回す
+        /// </summary>
+        internal sealed class LocalPoses
+        {
+            Vector3[] positions_ = new Vector3[0];
+            Quaternion[] rotations_ = new Quaternion[0];
+            Vector3[] scales_ = new Vector3[0];
+
+            /// <summary>控えた Transform の数</summary>
+            public int count { get; private set; }
+
+            public void Capture (IReadOnlyList<Transform> transforms)
+            {
+                count = transforms.Count;
+                if (positions_.Length < count) {
+                    positions_ = new Vector3[count];
+                    rotations_ = new Quaternion[count];
+                    scales_ = new Vector3[count];
+                }
+                for (int i = 0; i < count; i++) {
+                    Transform t = transforms[i];
+                    if (t == null) continue;
+                    t.GetLocalPositionAndRotation (out positions_[i], out rotations_[i]);
+                    scales_[i] = t.localScale;
+                }
+            }
+
+            /// <summary>控えた値へ戻す（Capture と同じ並びを渡す）</summary>
+            public void Restore (IReadOnlyList<Transform> transforms)
+            {
+                for (int i = 0; i < transforms.Count; i++) {
+                    Transform t = transforms[i];
+                    if (t == null) continue;
+                    t.SetLocalPositionAndRotation (positions_[i], rotations_[i]);
+                    t.localScale = scales_[i];
+                }
+            }
+
+            /// <summary>控えた値から今の値へ weight だけ寄せる（1 で今の値のまま、0 で控えた値）</summary>
+            public void Mix (IReadOnlyList<Transform> transforms, float weight)
+            {
+                for (int i = 0; i < transforms.Count; i++) {
+                    Transform t = transforms[i];
+                    if (t == null) continue;
+                    t.GetLocalPositionAndRotation (out Vector3 p, out Quaternion q);
+                    t.SetLocalPositionAndRotation (Vector3.Lerp (positions_[i], p, weight), Quaternion.Slerp (rotations_[i], q, weight));
+                    t.localScale = Vector3.Lerp (scales_[i], t.localScale, weight);
+                }
+            }
+
+            public Pose GetPose (int index)
+            {
+                return new Pose (positions_[index], rotations_[index]);
+            }
+
+            public Vector3 GetScale (int index)
+            {
+                return scales_[index];
+            }
         }
 
         float[] ReadPointValues ()
@@ -776,52 +817,15 @@ namespace Lilium
         public ControlState CaptureControlState ()
         {
             ControlState state = new ControlState { pointValues = ReadPointValues () };
-            CaptureTransforms (state);
+            state.transforms.Capture (controlTransforms_);
             return state;
         }
 
         public void RestoreControlState (ControlState state)
         {
-            if (state == null || state.positions.Length != controlTransforms_.Length) return;
-            RestoreTransforms (state);
+            if (state == null || state.transforms.count != controlTransforms_.Length) return;
+            state.transforms.Restore (controlTransforms_);
             WritePointValues (state.pointValues);
-        }
-
-        /// <summary>コントロールの Transform を state に控える（配列の長さが合っていれば使い回す）</summary>
-        void CaptureTransforms (ControlState state)
-        {
-            int count = controlTransforms_.Length;
-            if (state.positions == null || state.positions.Length != count) {
-                state.positions = new Vector3[count];
-                state.rotations = new Quaternion[count];
-                state.scales = new Vector3[count];
-            }
-            for (int i = 0; i < count; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out state.positions[i], out state.rotations[i]);
-                state.scales[i] = t.localScale;
-            }
-        }
-
-        void RestoreTransforms (ControlState state)
-        {
-            for (int i = 0; i < controlTransforms_.Length; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.SetLocalPositionAndRotation (state.positions[i], state.rotations[i]);
-                t.localScale = state.scales[i];
-            }
-        }
-
-        void SaveControls ()
-        {
-            CaptureTransforms (savedControls_);
-        }
-
-        void LoadControls ()
-        {
-            RestoreTransforms (savedControls_);
         }
 
         /// <summary>
@@ -1134,7 +1138,8 @@ namespace Lilium
                 if (bodyPoints_[i] == null) continue;
                 int index;
                 if (!controlIndex_.TryGetValue (bodyPoints_[i].transform, out index)) continue;
-                bodyPoints_[i].transform.SetLocalPositionAndRotation (controlRestPositions_[index], controlRestRotations_[index]);
+                Pose rest = controlRest_.GetPose (index);
+                bodyPoints_[i].transform.SetLocalPositionAndRotation (rest.position, rest.rotation);
             }
             WritePointValues (bodyPointRest_);
             carriedPoints_.Clear ();
@@ -1144,12 +1149,7 @@ namespace Lilium
         /// <summary>コントロールを基準の値へ戻す（焼くときに、フレームごとの値が前のフレームから残らないように）</summary>
         public void ResetControlsToRest ()
         {
-            for (int i = 0; i < controlTransforms_.Length; i++) {
-                Transform t = controlTransforms_[i];
-                if (t == null) continue;
-                t.SetLocalPositionAndRotation (controlRestPositions_[i], controlRestRotations_[i]);
-                t.localScale = controlRestScales_[i];
-            }
+            controlRest_.Restore (controlTransforms_);
             WritePointValues (bodyPointRest_);
             WriteProxyWeights (weightProxyRest_);
             if (heldObjects != null) heldObjects.ResetAttachments ();
@@ -1167,14 +1167,14 @@ namespace Lilium
             Vector3 scale = root.localScale;
             if (editingBoneList_ == null) editingBoneList_ = new List<Transform> (editingRig.editingBones);
             List<Transform> bones = editingBoneList_;
-            if (weight < 1) Remember (bones);
+            if (weight < 1) blendFrom_.Capture (bones);
             // 同じ Animator に編集用クリップのグラフもあると、こちらを流したときにコントロールが束縛時の値へ戻される（09-17 実測）。値を守る
-            SaveControls ();
+            savedControls_.transforms.Capture (controlTransforms_);
             genericSampler_.Sample (clip, time);
-            LoadControls ();
+            savedControls_.transforms.Restore (controlTransforms_);
             root.SetLocalPositionAndRotation (position, rotation);
             root.localScale = scale;
-            if (weight < 1) Mix (bones, weight);
+            if (weight < 1) blendFrom_.Mix (bones, weight);
         }
 
         /// <summary>
@@ -1284,7 +1284,7 @@ namespace Lilium
             if (blend) {
                 upstream = humanoidPose_;
                 upstream.muscles = (float[])humanoidPose_.muscles.Clone ();
-                Remember (poseTransforms_);
+                blendFrom_.Capture (poseTransforms_);
             }
             humanoidSampler_.Sample (ReadHumanoidClip (clip), time);
             // 表示に出るのはクリップを混ぜた後の姿勢。Rig へはそれを表示モデルから読ませる
@@ -1298,7 +1298,7 @@ namespace Lilium
                 humanoidWriter_.GetHumanPose (ref blendPose_);
                 // 人型でない骨は Transform で混ぜる（人型の骨はこの後 SetHumanPose で決まる）
                 root.SetLocalPositionAndRotation (position, rotation);
-                Mix (poseTransforms_, weight);
+                blendFrom_.Mix (poseTransforms_, weight);
                 root.SetLocalPositionAndRotation (Vector3.zero, Quaternion.identity);
                 blendPose_.bodyPosition = Vector3.Lerp (upstream.bodyPosition, blendPose_.bodyPosition, weight);
                 blendPose_.bodyRotation = Quaternion.Slerp (upstream.bodyRotation, blendPose_.bodyRotation, weight);
@@ -1309,32 +1309,6 @@ namespace Lilium
             }
             finally {
                 root.SetLocalPositionAndRotation (position, rotation);
-            }
-        }
-
-        void Remember (IReadOnlyList<Transform> transforms)
-        {
-            if (blendPositions_.Length < transforms.Count) {
-                blendPositions_ = new Vector3[transforms.Count];
-                blendRotations_ = new Quaternion[transforms.Count];
-                blendScales_ = new Vector3[transforms.Count];
-            }
-            for (int i = 0; i < transforms.Count; i++) {
-                Transform t = transforms[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out blendPositions_[i], out blendRotations_[i]);
-                blendScales_[i] = t.localScale;
-            }
-        }
-
-        void Mix (IReadOnlyList<Transform> transforms, float weight)
-        {
-            for (int i = 0; i < transforms.Count; i++) {
-                Transform t = transforms[i];
-                if (t == null) continue;
-                t.GetLocalPositionAndRotation (out Vector3 p, out Quaternion q);
-                t.SetLocalPositionAndRotation (Vector3.Lerp (blendPositions_[i], p, weight), Quaternion.Slerp (blendRotations_[i], q, weight));
-                t.localScale = Vector3.Lerp (blendScales_[i], t.localScale, weight);
             }
         }
 
@@ -1352,7 +1326,7 @@ namespace Lilium
         /// 任意のプロパティは元と Override を重ねた物を写し、使い終えた一時のクリップは捨てる
         /// </summary>
         /// <param name="apply">そのフレームの姿勢を作る関数（CreateHumanoidBaker と同じ）</param>
-        /// <param name="lockedSpanWeight">段を通さずに焼くときの全身 IK の段の重み。キーの間で前後のキーが Locked の点を解く（S25d）。段を通して焼くなら null</param>
+        /// <param name="lockedSpanWeight">段を通さずに焼くときの全身 IK の重み（段が入っていれば 1、無い・落としたなら 0）。キーの間で前後のキーが Locked の点を解く（S25d）。段を通して焼くなら null</param>
         /// <param name="configure">焼く前に焼く道具へ足す設定（窓の、表示モデルから読む・Rig の代理を焼かないなど）</param>
         public HumanoidBaker.Result BakeToAsset (AnimationClip baseClip, IList<AnimationClip> overrides, List<OverrideProperties.Layer> propertyLayers, string outputName,
             System.Action<float> apply, float? lockedSpanWeight, System.Action<HumanoidBaker> configure, out string outputPath)

@@ -14,12 +14,12 @@ namespace Lilium
         readonly PreviewStage stage_;
         readonly ILayerSource source_;
 
-        /// <param name="source">クリップの持ち主。窓（IEditClipHost）なら Layers のパネルの行も作る</param>
+        /// <param name="source">クリップの持ち主。窓（ILayerHost）なら Layers のパネルの行も作る</param>
         public EditingRigLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
             source_ = source;
-            if (source is IEditClipHost host) clip = CreateClip (host);
+            if (source is ILayerHost host) clip = CreateClip (host);
         }
 
         AnimationClip source
@@ -55,7 +55,7 @@ namespace Lilium
         public override void Evaluate (float time)
         {
             // 基準姿勢へ戻すのは段ではなくスタックの前処理（PoseStack.Evaluate の先頭）なので、ここでは当てるだけ。
-            // 重みが 1 未満なら、コントロールの基準の値へ合成する
+            // 編集するクリップは合成しない（clipWeight は常に 1。合成の重みを持つのは Generic Pose / Humanoid Pose の段だけ）。
             // 土台は編集用クリップか、Humanoid のクリップをフレームごとに操作値へ直したもの（S14）
             stage_.ClearOverrideSource ();
             if (source_ != null && source_.useHumanoidBase) stage_.SampleHumanoidAsControls (source_.clip, time);
@@ -89,14 +89,12 @@ namespace Lilium
         /// <summary>
         /// 編集するクリップ。欄は今開いているクリップを見せるだけ（開くのは AnimBank・New・取込）
         /// </summary>
-        LayerClip CreateClip (IEditClipHost host)
+        LayerClip CreateClip (ILayerHost host)
         {
             LayerClip result = new LayerClip {
                 label = Tr ("EDITING_RIG_LAYER_CLIP_LABEL"),
                 tooltip = Tr ("EDITING_RIG_LAYER_CLIP_TOOLTIP"),
                 getClip = () => host.clip,
-                getWeight = () => clipWeight,
-                setWeight = value => host.SetClipWeight (this, value),
                 getStatus = () => {
                     if (host.importPreviewing) {
                         return new LayerClipStatus (LayerClipState.Stale, Tr ("EDITING_RIG_LAYER_IMPORT_PREVIEWING"));
@@ -107,7 +105,6 @@ namespace Lilium
                     }
                     if (host.clip == null) return new LayerClipStatus (LayerClipState.None, Tr ("EDITING_RIG_LAYER_NO_CLIP"));
                     if (host.clipProblem != null) return new LayerClipStatus (LayerClipState.Blocked, Tr ("EDITING_RIG_LAYER_CANNOT_EDIT", host.clipProblem));
-                    if (clipWeight < 1) return new LayerClipStatus (LayerClipState.Stale, Tr ("EDITING_RIG_LAYER_BLENDING_NO_KEYS", Mathf.RoundToInt (clipWeight * 100)));
                     int stray = host.strayCurveCount;
                     if (stray > 0) return new LayerClipStatus (LayerClipState.Stale, Tr ("EDITING_RIG_LAYER_STRAY_CURVES", stray));
                     return new LayerClipStatus (LayerClipState.Ready, null);

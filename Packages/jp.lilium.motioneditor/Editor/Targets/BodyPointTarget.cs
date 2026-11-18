@@ -688,15 +688,6 @@ namespace Lilium
             lockedDirty_ = true;
         }
 
-        /// <summary>
-        /// 完全固定を付け外しする。固定していない点は、今の骨の位置で固定してから完全固定にする。外しても固定は残る
-        /// </summary>
-        public void ToggleLock ()
-        {
-            if (!pinned) PinPosition (bonePoint);
-            SetLockedFlag (!body_.GetLocked (human_));
-        }
-
         /// <summary>今のフレームでの点の状態</summary>
         public BodyPointState state
         {
@@ -815,17 +806,19 @@ namespace Lilium
             return hasRotation_ ? TransformChannels.Position | TransformChannels.Rotation : TransformChannels.Position;
         }
 
-        public override void SpinMove (Vector3 delta)
+        /// <summary>点のギズモ（OnHandleGUI）と同じ、点の形の軸</summary>
+        public override Quaternion gizmoAxes
         {
-            MoveBy (rig_.root.transform.TransformVector (delta));
+            get {
+                if (bone_ == null) return Quaternion.identity;
+                GetPoint (out Vector3 position, out Quaternion rotation);
+                return GetShape (position, rotation);
+            }
         }
 
-        public override void SpinRotateLocal (Quaternion delta)
+        public override void SpinMoveWorld (Vector3 delta)
         {
-            Vector3 position;
-            Quaternion rotation;
-            GetPoint (out position, out rotation);
-            PinRotation (rotation * delta);
+            MoveBy (delta);
         }
 
         public override void SpinRotateWorld (Quaternion delta)

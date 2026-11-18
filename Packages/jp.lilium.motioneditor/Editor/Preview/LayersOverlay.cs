@@ -327,23 +327,9 @@ namespace Lilium
             label.RegisterCallback<PointerLeaveEvent> (e => LayerHelpPopup.Close (layer));
             head.Add (label);
             // 段の ↑ ↓ 削除 は構造を編集している間だけ
-            if (window_.layerStructureEditing) foreach (LayerClipButton spec in layer.headButtons) {
-                LayerClipButton button = spec;
-                Button element = new Button (() => button.run ()) { text = button.label, tooltip = button.tooltip };
-                element.style.fontSize = 10;
-                element.style.height = 18;
-                element.style.marginLeft = 2;
-                element.style.marginRight = 0;
-                element.style.paddingLeft = 4;
-                element.style.paddingRight = 4;
-                head.Add (element);
-                System.Action refreshButton = () => {
-                    bool visible = button.visible == null || button.visible ();
-                    element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-                    string problem = button.problem != null ? button.problem () : null;
-                    element.SetEnabled (problem == null);
-                    element.tooltip = problem == null ? button.tooltip : Tr ("LAYERS_OVERLAY_BUTTON_CANNOT", button.label, problem);
-                };
+            if (window_.layerStructureEditing) foreach (LayerClipButton button in layer.headButtons) {
+                System.Action refreshButton;
+                head.Add (ClipButton (button, out refreshButton));
                 refreshButton ();
                 refreshers_.Add (refreshButton);
             }
@@ -400,6 +386,28 @@ namespace Lilium
         }
 
         /// <summary>
+        /// 段の行・クリップの行に並べる小さいボタン。refresh で、出すか・押せるか（押せない理由はツールチップ）を今の状態に合わせる
+        /// </summary>
+        static Button ClipButton (LayerClipButton button, out System.Action refresh)
+        {
+            Button element = new Button (() => button.run ()) { text = button.label, tooltip = button.tooltip };
+            element.style.fontSize = 10;
+            element.style.height = 18;
+            element.style.marginLeft = 2;
+            element.style.marginRight = 0;
+            element.style.paddingLeft = 4;
+            element.style.paddingRight = 4;
+            refresh = () => {
+                bool visible = button.visible == null || button.visible ();
+                element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                string problem = button.problem != null ? button.problem () : null;
+                element.SetEnabled (problem == null);
+                element.tooltip = problem == null ? button.tooltip : Tr ("LAYERS_OVERLAY_BUTTON_CANNOT", button.label, problem);
+            };
+            return element;
+        }
+
+        /// <summary>
         /// 段が持つクリップ。欄・ボタン・状態を 1 つにまとめる。
         /// 出力のクリップは選び直せないが、欄を押すと Project で場所が分かるように、押せるままにして値だけ戻す
         /// </summary>
@@ -429,23 +437,10 @@ namespace Lilium
             line.Add (field);
 
             System.Collections.Generic.List<System.Action> refreshControls = new System.Collections.Generic.List<System.Action> ();
-            foreach (LayerClipButton spec in clip.buttons) {
-                LayerClipButton button = spec;
-                Button element = new Button (() => button.run ()) { text = button.label, tooltip = button.tooltip };
-                element.style.fontSize = 10;
-                element.style.height = 18;
-                element.style.marginLeft = 2;
-                element.style.marginRight = 0;
-                element.style.paddingLeft = 4;
-                element.style.paddingRight = 4;
-                line.Add (element);
-                refreshControls.Add (() => {
-                    bool visible = button.visible == null || button.visible ();
-                    element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-                    string problem = button.problem != null ? button.problem () : null;
-                    element.SetEnabled (problem == null);
-                    element.tooltip = problem == null ? button.tooltip : Tr ("LAYERS_OVERLAY_BUTTON_CANNOT", button.label, problem);
-                });
+            foreach (LayerClipButton button in clip.buttons) {
+                System.Action refreshButton;
+                line.Add (ClipButton (button, out refreshButton));
+                refreshControls.Add (refreshButton);
             }
             foreach (LayerClipToggle spec in clip.toggles) {
                 LayerClipToggle toggle = spec;

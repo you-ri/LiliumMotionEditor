@@ -289,9 +289,7 @@ namespace Lilium
 
         static Quaternion EvaluateRotation (TransformCurves channel, float time)
         {
-            Quaternion q = new Quaternion (channel.rotation[0].Evaluate (time), channel.rotation[1].Evaluate (time), channel.rotation[2].Evaluate (time), channel.rotation[3].Evaluate (time));
-            float length = Mathf.Sqrt (q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-            return length > 1e-6f ? new Quaternion (q.x / length, q.y / length, q.z / length, q.w / length) : Quaternion.identity;
+            return CurveEdit.ToRotation (channel.rotation[0].Evaluate (time), channel.rotation[1].Evaluate (time), channel.rotation[2].Evaluate (time), channel.rotation[3].Evaluate (time));
         }
 
         static AvatarMaskBodyPart PartOf (ChannelMaskParts parts, string path)

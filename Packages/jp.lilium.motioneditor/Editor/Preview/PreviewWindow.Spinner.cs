@@ -111,16 +111,29 @@ namespace Lilium
             }
         }
 
-        /// <param name="delta">親から見た位置の変化（メートル）</param>
+        /// <param name="delta">Spinner の軸（Local ならギズモの軸、World ならワールドの軸）での位置の変化（メートル）</param>
         public void SpinMove (Vector3 delta)
         {
-            SpinEdit (TransformChannels.Position, target => target.SpinMove (delta));
+            SpinEdit (TransformChannels.Position, target => target.SpinMoveWorld (SpinAxes (target) * delta));
         }
 
-        /// <param name="euler">ローカル軸まわりの角度（度）</param>
+        /// <param name="euler">Spinner の軸（Local ならギズモの軸、World ならワールドの軸）まわりの角度（度）</param>
         public void SpinRotate (Vector3 euler)
         {
-            SpinEdit (TransformChannels.Rotation, target => target.SpinRotateLocal (Quaternion.Euler (euler)));
+            SpinEdit (TransformChannels.Rotation, target => {
+                Quaternion axes = SpinAxes (target);
+                target.SpinRotateWorld (Quaternion.Normalize (axes * Quaternion.Euler (euler) * Quaternion.Inverse (axes)));
+            });
+        }
+
+        /// <summary>
+        /// Spinner で動かす軸（ワールドの向き）。ビューのギズモと同じ軸にする（Controller の Local / World。11-18 ユーザー報告
+        /// 「controller ui の ローカル、ワールドの選択が効いていない」。前は移動が親（点はルート）の軸、回転が骨の軸で、選択を見ていなかった）。
+        /// 動かすたびに取り直す（ギズモも描くたびに今の向きで出す）
+        /// </summary>
+        Quaternion SpinAxes (PoseTarget target)
+        {
+            return gizmoWorld_ ? Quaternion.identity : target.gizmoAxes;
         }
 
         /// <summary>

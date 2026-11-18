@@ -68,13 +68,13 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 全身 IK の段の重み（段が無い・入っていないなら 0）。段を通さずに焼くとき、キーの間の Locked の点をこの重みで解く（S25d）
+        /// 全身 IK の段が入っているか（段が無い・👁 を落としたなら false）。段を通さずに焼くとき、入っていればキーの間の Locked の点を解く（S25d）
         /// </summary>
-        public float fullBodyWeight
+        public bool fullBodyActive
         {
             get {
                 PoseLayer layer = Find (LayerKind.FullBodyIk);
-                return layer != null && layer.active ? layer.weight : 0;
+                return layer != null && layer.active;
             }
         }
 
@@ -175,7 +175,7 @@ namespace Lilium
             while (pending.Count > 0) {
                 OutputEntry entry = pending.FirstOrDefault (e => layers_.Any (l => l.id == e.after)) ?? pending[0];
                 pending.Remove (entry);
-                OutputLayer layer = new OutputLayer (source as IOutputHost, entry);
+                OutputLayer layer = new OutputLayer (source as ILayerHost, entry);
                 if (Find (layer.id) != null) continue;
                 int index = layers_.FindIndex (l => l.id == entry.after);
                 // 直前の段が無ければ、Humanoid Pose（無ければ Editing Rig と Override）の後ろ

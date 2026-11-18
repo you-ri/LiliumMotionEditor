@@ -64,16 +64,6 @@ namespace Lilium
         }
 
         [Test]
-        public void RotationAngleEditKeepsOtherAxes ()
-        {
-            CurveEdit.SetRotationKey (clip_, kPath, 0, Quaternion.Euler (10, 20, 30));
-            CurveEdit.SetRotationAngle (clip_, kPath, 0, 1, 170, new Vector3 (10, 20, 30));
-            Vector3 euler = EulerAngles.Closest (CurveEdit.EvaluateRotation (clip_, kPath, 0), new Vector3 (10, 170, 30));
-            Assert.That (Vector3.Distance (new Vector3 (10, 170, 30), euler), Is.LessThan (0.01f), euler.ToString ());
-            Assert.AreEqual (4, AnimationUtility.GetCurveBindings (clip_).Length, "4 本とも書く");
-        }
-
-        [Test]
         public void RotationKeysStayOnTheSameHemisphere ()
         {
             CurveEdit.SetRotationKey (clip_, kPath, 0, Quaternion.Euler (0, 170, 0));

@@ -83,7 +83,6 @@ namespace Lilium
         {
             Assert.AreEqual ("Attack.rig", EditingClip.DefaultFileName ("Attack"));
             Assert.AreEqual ("New Motion.rig", EditingClip.DefaultFileName (null));
-            Assert.IsFalse (EditingClip.HasEditingName (clip_), "アセットでないクリップには名前の規約が無い");
         }
     }
 

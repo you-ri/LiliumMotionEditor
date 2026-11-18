@@ -243,7 +243,7 @@ namespace Lilium
                 // 段を通さずに焼くときも、キーの間で前後のキーが Locked の点は全身 IK で解く（画面の再生と同じ姿勢を焼く。S25d）
                 string path;
                 HumanoidBaker.Result result = stage_.BakeToAsset (baseClip, overrides, bakePropertyLayers, output.outputName, apply,
-                    throughStack ? (float?)null : poseStack_.fullBodyWeight,
+                    throughStack ? (float?)null : poseStack_.fullBodyActive ? 1 : 0,
                     baker => {
                         baker.readFromDisplay = throughStack;
                         baker.bakeRigProxies = !rig;

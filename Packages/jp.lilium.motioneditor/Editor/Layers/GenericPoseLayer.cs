@@ -16,12 +16,12 @@ namespace Lilium
         readonly PreviewStage stage_;
         readonly ILayerSource source_;
 
-        /// <param name="source">クリップの持ち主。窓（IGenericHost）なら Layers のパネルの行も作る</param>
+        /// <param name="source">クリップの持ち主。窓（ILayerHost）なら Layers のパネルの行も作る</param>
         public GenericPoseLayer (PreviewStage stage = null, ILayerSource source = null)
         {
             stage_ = stage;
             source_ = source;
-            if (source is IGenericHost host) clip = CreateClip (host);
+            if (source is ILayerHost host) clip = CreateClip (host);
         }
 
         /// <summary>
@@ -36,7 +36,7 @@ namespace Lilium
             }
         }
 
-        LayerClip CreateClip (IGenericHost host)
+        LayerClip CreateClip (ILayerHost host)
         {
             LayerClip result = new LayerClip {
                 label = "Clip",

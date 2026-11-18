@@ -427,7 +427,7 @@ namespace Lilium
         }
 
         /// <summary>
-        /// クリップの合成の重み（Editing Rig / Generic Pose / Humanoid Pose 共通）も段ごとに残る。クリップを持たない段には当てない
+        /// クリップの合成の重み（Generic Pose / Humanoid Pose）も段ごとに残る。合成しないクリップの段（Editing Rig・出力）や、クリップを持たない段には当てない
         /// </summary>
         [Test]
         public void ClipWeightsRoundTripThroughState ()
@@ -437,28 +437,31 @@ namespace Lilium
             GenericPoseLayer generic = new GenericPoseLayer (null, host);
             HumanoidLayer humanoid = new HumanoidLayer (null, host);
             FakeLayer rig = FakeLayer.Rig (InverseKind.Exact);
-            Assert.IsTrue (data.clip.hasWeight && generic.clip.hasWeight && humanoid.clip.hasWeight);
+            Assert.IsFalse (data.clip.hasWeight, "編集するクリップは合成しない");
+            Assert.IsTrue (generic.clip.hasWeight && humanoid.clip.hasWeight);
             OutputLayer output = new OutputLayer (host);
             Assert.IsFalse (output.clip.hasWeight, "出力は合成しない");
             Assert.IsFalse (output.hasBadges || output.isPoseStage, "書き出すだけの段は 👁・✏・✋ も矢印も持たない");
             Assert.Less (humanoid.order, output.order, "Humanoid Pose のすぐ下（上の段を通った姿勢を焼く）");
             Assert.Less (output.order, rig.order, "Rig の段より上（Rig の後の見た目は焼かない）");
 
-            data.clip.setWeight (0.5f);
-            Assert.AreEqual (0.5f, data.clip.getWeight (), "重みは窓を通して段に入る");
+            generic.clip.setWeight (0.5f);
+            Assert.AreEqual (0.5f, generic.clip.getWeight (), "重みは窓を通して段に入る");
             humanoid.clipWeight = 0;
             LayerState state = new LayerState ();
             Stack (data, generic, humanoid, rig).SaveState (state);
-            Assert.AreEqual (0.5f, state.Find (data.id).clipWeight);
-            Assert.AreEqual (1f, state.Find (generic.id).clipWeight);
+            Assert.AreEqual (0.5f, state.Find (generic.id).clipWeight);
             Assert.AreEqual (0f, state.Find (humanoid.id).clipWeight);
+            state.Find (data.id).clipWeight = 0.3f;
             state.Find (rig.id).clipWeight = 0.2f;
 
             EditingRigLayer data2 = new EditingRigLayer (null, host);
+            GenericPoseLayer generic2 = new GenericPoseLayer (null, host);
             HumanoidLayer humanoid2 = new HumanoidLayer (null, host);
             FakeLayer rig2 = FakeLayer.Rig (InverseKind.Exact);
-            PoseStack.FromLayers (new PoseLayer[] { data2, humanoid2, rig2 }).LoadState (state);
-            Assert.AreEqual (0.5f, data2.clipWeight);
+            PoseStack.FromLayers (new PoseLayer[] { data2, generic2, humanoid2, rig2 }).LoadState (state);
+            Assert.AreEqual (1f, data2.clipWeight, "前に残した Editing Rig の合成の重みは当てない");
+            Assert.AreEqual (0.5f, generic2.clipWeight);
             Assert.AreEqual (0f, humanoid2.clipWeight);
             Assert.AreEqual (1f, rig2.clipWeight, "クリップを持たない段にはクリップの重みを当てない");
         }

@@ -86,22 +86,24 @@ namespace Lilium
         }
 
         /// <summary>
-        /// Spinner の移動。delta は動かすものの親から見た位置の変化（メートル）。
+        /// ビューのギズモを Local にしたときの軸（ワールドの向き）。Spinner も Controller の Local / World に従い、Local ならこの軸で動かす
+        /// （ギズモと Spinner で軸が違うと、同じ X でも別の向きへ動いた）
+        /// </summary>
+        public virtual Quaternion gizmoAxes
+        {
+            get { return Quaternion.identity; }
+        }
+
+        /// <summary>
+        /// Spinner の移動。delta はワールドでの位置の変化（メートル。窓が Local / World の軸から直して渡す）。
         /// コントロールは保存値（正規化した値）を持つので、Transform を外から直接動かさず、対象に任せる
         /// </summary>
-        public virtual void SpinMove (Vector3 delta)
+        public virtual void SpinMoveWorld (Vector3 delta)
         {
         }
 
         /// <summary>
-        /// Spinner の回転。動かすもののローカル軸まわり（後ろから掛ける）
-        /// </summary>
-        public virtual void SpinRotateLocal (Quaternion delta)
-        {
-        }
-
-        /// <summary>
-        /// Spinner の回転。ワールドの軸まわり（前から掛ける）
+        /// Spinner の回転。ワールドの軸まわり（前から掛ける。Local の軸まわりの回転も、窓がワールドへ直して渡す）
         /// </summary>
         public virtual void SpinRotateWorld (Quaternion delta)
         {

@@ -72,17 +72,15 @@ namespace Lilium
             return label_ + " (" + bone_.name + ")";
         }
 
-        public override void SpinMove (Vector3 delta)
+        /// <summary>骨のハンドル（向きの棒・関節の丸）のギズモと同じ、骨の見た目の軸</summary>
+        public override Quaternion gizmoAxes
         {
-            if (!position_) return;
-            bone_.localPosition += delta;
-            solver_.CaptureFk (bone_);
+            get { return bone_ != null ? shapes_.GetRotation (bone_) : Quaternion.identity; }
         }
 
-        public override void SpinRotateLocal (Quaternion delta)
+        public override void SpinMoveWorld (Vector3 delta)
         {
-            bone_.localRotation = bone_.localRotation * delta;
-            solver_.CaptureFk (bone_);
+            MoveWorld (delta);
         }
 
         public override void SpinRotateWorld (Quaternion delta)

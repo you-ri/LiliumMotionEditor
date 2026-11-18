@@ -191,9 +191,7 @@ namespace Lilium
         void CaptureRestPose ()
         {
             poseTransforms_ = animator.GetComponentsInChildren<Transform> (true);
-            restPositions_ = poseTransforms_.Select (t => t.localPosition).ToArray ();
-            restRotations_ = poseTransforms_.Select (t => t.localRotation).ToArray ();
-            restScales_ = poseTransforms_.Select (t => t.localScale).ToArray ();
+            rest_.Capture (poseTransforms_);
         }
 
         /// <summary>
@@ -235,36 +233,12 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 剥がさずに残すものを外から足す受け口。ゲーム固有の設定（左右の対応表など）を読む必要があるコンポーネントを残す。
-        /// 残したものは止めてある（こちらから呼ぶときだけ動く）ので、置いても edit-mode で走らない
-        /// </summary>
-        public static void KeepComponent (System.Func<Component, bool> predicate)
-        {
-            keepPredicates_.Register (predicate);
-        }
-
-        static readonly HookList<System.Func<Component, bool>> keepPredicates_ = new HookList<System.Func<Component, bool>> ();
-
-        static bool IsKeptByHook (Component component)
-        {
-            foreach (System.Func<Component, bool> predicate in keepPredicates_.items) {
-                try {
-                    if (predicate (component)) return true;
-                } catch (System.Exception exception) {
-                    Debug.LogException (exception);
-                }
-            }
-            return false;
-        }
-
-        /// <summary>
         /// 外さずに残すもの。見た目（メッシュ・Animator）に加えて、**段として出すもの**（Rigging の部品・[PoseLayer]）。
         /// 段のコンポーネントを外すと「キャラに付いていない」ことになり、その段がスタックから消えてしまう
         /// </summary>
         static bool IsKeptComponent (Component component)
         {
             if (IsVisualComponent (component)) return true;
-            if (IsKeptByHook (component)) return true;
             return RigProbe.IsRigComponent (component) || LayerTypes.IsPoseLayer (component);
         }
 

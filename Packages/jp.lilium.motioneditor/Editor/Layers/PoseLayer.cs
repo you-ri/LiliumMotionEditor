@@ -206,7 +206,7 @@ namespace Lilium
         public LayerClip clip { get; protected set; }
 
         /// <summary>
-        /// 段のクリップを、流れてきた情報に合成する重み（Editing Rig / Generic Pose / Humanoid Pose 共通）。
+        /// 段のクリップを、流れてきた情報に合成する重み（Generic Pose / Humanoid Pose。Editing Rig は合成しないので常に 1）。
         /// 1（既定）で上書き、0 で合成しない。段の重み（weight。Rig の層など）とは別で、0 にしても段そのものは素通しにならない
         /// </summary>
         public float clipWeight = 1;

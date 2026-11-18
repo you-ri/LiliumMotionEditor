@@ -116,17 +116,6 @@ namespace Lilium
         }
 
         /// <summary>
-        /// 回転のキーの 1 軸だけを角度で変える（ほかの 2 軸は今の見え方のまま）
-        /// </summary>
-        /// <param name="hint">今見せている角度（同じ回転の表し方のうち、これに近いものを直す）</param>
-        internal static void SetRotationAngle (AnimationClip clip, string path, int frame, int axis, float degrees, Vector3 hint)
-        {
-            Vector3 euler = EulerAngles.Closest (EvaluateRotation (clip, path, frame / clip.frameRate), hint);
-            euler[axis] = degrees;
-            SetRotationKey (clip, path, frame, Quaternion.Euler (euler));
-        }
-
-        /// <summary>
         /// 数値のカーブの frame のキーの接線の種類を、両側そろえて変える
         /// </summary>
         public static bool SetTangentMode (AnimationClip clip, EditorCurveBinding binding, int frame, AnimationUtility.TangentMode mode)

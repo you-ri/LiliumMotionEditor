@@ -464,7 +464,7 @@ namespace Lilium
 
             try {
                 result = stage.BakeToAsset (clip_, layers, propertyLayers, outputName, layers.Count > 0 || useHumanoidBase ? ApplyBakePose : (System.Action<float>)null,
-                    stack != null ? stack.fullBodyWeight : 0, null, out outputPath);
+                    stack != null && stack.fullBodyActive ? 1 : 0, null, out outputPath);
                 return null;
             }
             catch (System.Exception e) {

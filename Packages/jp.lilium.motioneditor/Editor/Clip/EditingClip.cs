@@ -21,14 +21,6 @@ namespace Lilium
         public const string kExtension = ".anim";
 
         /// <summary>
-        /// 規約どおりの名前か（Attack.rig.anim）
-        /// </summary>
-        internal static bool HasEditingName (AnimationClip clip)
-        {
-            return IsEditingClipPath (clip != null ? AssetDatabase.GetAssetPath (clip) : null);
-        }
-
-        /// <summary>
         /// 規約どおりのパスか（〜.rig.anim）
         /// </summary>
         internal static bool IsEditingClipPath (string path)

@@ -90,7 +90,6 @@ namespace Lilium
             PoseLayer rig = poseStack_.Find (LayerKind.EditingRig);
             if (rig == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_EDITING_RIG_LAYER");
             if (!rig.enabled) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_LAYER_DISABLED");
-            if (rig.clipWeight < 1) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_CLIP_WEIGHT");
             return null;
         }
 
@@ -308,7 +307,6 @@ namespace Lilium
             PoseLayer rig = poseStack_.Find (LayerKind.EditingRig);
             if (rig == null) return Tr ("PREVIEW_WINDOW_IMPORT_NO_EDITING_RIG_LAYER");
             if (!rig.enabled) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_LAYER_DISABLED");
-            if (rig.clipWeight < 1) return Tr ("PREVIEW_WINDOW_IMPORT_EDITING_RIG_CLIP_WEIGHT");
             return null;
         }
 

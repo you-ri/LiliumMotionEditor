@@ -225,15 +225,6 @@ namespace Lilium
             return entry != null && entry.between != null && entry.active.Length > 0;
         }
 
-        /// <summary>
-        /// 元のクリップの time で、外部の補間を使うか（使うなら結果のファイルと重み。区間の中は 1）。元のクリップのカーブとプロジェクトが変わるまで使い回す
-        /// </summary>
-        public static bool TryGetBlend (AnimationClip baseClip, float time, out AnimationClip between, out float weight)
-        {
-            weight = TryGetSegment (baseClip, time, out between, out Range range) ? 1 : 0;
-            return weight > 0;
-        }
-
         /// <summary>元のクリップの time が、使う区間の中（両端のキーは含まない）か。中なら結果のファイルと区間</summary>
         public static bool TryGetSegment (AnimationClip baseClip, float time, out AnimationClip between, out Range range)
         {

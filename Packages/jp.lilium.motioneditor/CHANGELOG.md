@@ -81,9 +81,14 @@
 - AnimBank / PoseBank のフォルダと Auto Bake を、プロジェクト設定だけで決めるように変更。キャラの設定に入っていた上書きは使われなくなり、入っていると警告が出ます。
 - AnimBank / PoseBank で選び直した作る場所を、この PC にだけ覚えるように変更。
 
+- 対象の Spinner の移動を、ワールドの変化で受ける `PoseTarget.SpinMoveWorld` に変更。`SpinMove`・`SpinRotateLocal` はなくなりました。
+- 段の持ち主のインターフェースを `ILayerHost` 1 つにまとめた。`IEditClipHost`・`IOverrideHost`・`IGenericHost`・`IHumanoidHost`・`IOutputHost`・`IClipWeightHost` はなくなりました。
+
 ### Fixed
 
 - 膝・肘を深く折りたたんだ姿勢で、腰などの点を少し動かすだけで全身が大きく動く不具合を修正。
+- 持ち物の上の点を移動のギズモの軸で動かすと、点が暴れる不具合を修正。
+- Controller の Spinner が Local / World の選択に従わない不具合を修正。ギズモと同じ軸で動きます。
 - 角度制限の外にある姿勢で下半身を Lock して首などを引くと、膝が跳んだり戻ったりしてガクガクする不具合を修正。
 - Properties でキーを打った値を、段の行のスライダーで動かしても変わらない不具合を修正。クリップにカーブがある値は、行で動かすと今のフレームにキーを打ちます。
 - Play Mode を抜けた直後などに開くと、Animation Rigging の付いたキャラの表示モデルが編集した姿勢にならない不具合を修正。
@@ -115,6 +120,9 @@
 - Motion Editor In Scene (Experimental) の窓を削除。
 - 演出の prefab（Timeline）を一緒に置いて見る機能と、Timeline 窓への追従を削除。拡張点の `IContextHook` もなくなりました。
 - `PoseSession.ImportOverride` の、オプションを bool で並べて渡す形を削除。`OverrideImportOptions` を渡します。
+- 使われていない public API を削除。`PreviewStage.KeepComponent`・`BetweenClips.TryGetBlend`・`BodyPointTarget.ToggleLock` がなくなりました。
+- Layers の Full Body IK の段の重みを削除。全身 IK は常に重み 1 で解きます。`PoseStack.fullBodyWeight` は `fullBodyActive` に変わりました。
+- Layers の Editing Rig のクリップの合成の重みを削除。編集するクリップは常に上書きで当てます。
 
 ## [0.2.0] - 2026-10-26
 <!-- changelog-sha: 6ab3ad6bed0a922c5a4e87da6cacc91aea762613 -->

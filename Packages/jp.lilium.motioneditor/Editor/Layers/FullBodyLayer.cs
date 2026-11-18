@@ -16,7 +16,6 @@ namespace Lilium
     /// - 全身 IK の点が 1 つでも置けたキャラだけに並ぶ（PreviewStage.fullBody）。
     /// - 点の値は Editing Rig の段のクリップにある（保存データから配られた値）。つかむのは点で、間の段を通らずに保存データへ書く。
     /// - 効いている点が無ければ何もしない（素通し）。点のキーが無いクリップは、この段が無いときと同じ姿勢になる。
-    /// - 重みは、元の姿勢と解いた姿勢の混ぜ具合（骨のローカルの値）。
     /// - 毎回、受け取った元の姿勢から解く。この段から解き直すとき（EvaluateKeepingValues）は、控えた元の姿勢へ戻してから解く
     /// </summary>
     public sealed class FullBodyLayer : PoseLayer
@@ -38,7 +37,6 @@ namespace Lilium
         public override string label { get { return "Full Body IK"; } }
         public override bool canEvaluate { get { return rig != null && rig.pointCount > 0; } }
         public override PosePhase phase { get { return PosePhase.Body; } }
-        public override bool hasWeight { get { return true; } }
         public override GrabTarget grab { get { return GrabTarget.Values; } }
         public override InverseKind inverse { get { return InverseKind.Approximate; } }
         public override string inverseReason { get { return Tr ("FULL_BODY_LAYER_INVERSE_REASON"); } }
@@ -88,12 +86,12 @@ namespace Lilium
             if (held != null) held.Prepare (body, locked);
             // 持っている物の姿勢の点は、キーのあるフレームでも効かせる（S25d の例外。物のキーだけ直しても手が外れないように）
             ICollection<UnityEngine.Transform> controls = held != null ? held.WithHeldControls (locked) : locked;
-            if (weight > 0 && controls.Count > 0) {
+            if (controls.Count > 0) {
                 // Locked の点のある手足と持っている腕だけを IK で動かし、腰・背骨と Pin / Free の手足は骨のキーの補間（FK）のまま
-                body.SolveOnly (controls, weight, true);
+                body.SolveOnly (controls, 1, true);
             }
             else if (held == null) return;
-            if (held != null) held.Finish (body, weight);
+            if (held != null) held.Finish (body, 1);
             stage_.ShowEditingBody ();
         }
 
@@ -123,9 +121,9 @@ namespace Lilium
         {
             HeldObjectRig held = stage_.heldObjects;
             if (held != null) held.Prepare (body);
-            bool solve = weight > 0 && body.hasActivePoint;
-            if (solve) body.Solve (weight);
-            if (held != null) held.Finish (body, weight);
+            bool solve = body.hasActivePoint;
+            if (solve) body.Solve ();
+            if (held != null) held.Finish (body, 1);
             if (solve || held != null) stage_.ShowEditingBody ();
         }
     }

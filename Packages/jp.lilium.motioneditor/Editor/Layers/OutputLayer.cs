@@ -14,12 +14,12 @@ namespace Lilium
     /// </summary>
     public sealed class OutputLayer : PoseLayer
     {
-        readonly IOutputHost host_;
+        readonly ILayerHost host_;
 
         /// <summary>並びの設定（名前と置き場所）</summary>
         public OutputEntry entry { get; private set; }
 
-        public OutputLayer (IOutputHost host = null, OutputEntry entry = null)
+        public OutputLayer (ILayerHost host = null, OutputEntry entry = null)
         {
             host_ = host;
             this.entry = entry ?? new OutputEntry ();
@@ -53,7 +53,7 @@ namespace Lilium
             }
         }
 
-        LayerClip CreateClip (IOutputHost host)
+        LayerClip CreateClip (ILayerHost host)
         {
             LayerClip output = new LayerClip {
                 label = "Clip",

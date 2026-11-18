@@ -339,7 +339,7 @@ namespace Lilium
             Assert.IsNull (session.CommitPose ());
             session.stage.InvalidateClipCurves ();
             Assert.Greater (MaxAngle (before, Bones (session, 10)), 1, "外部の動きでなくなる");
-            Assert.IsFalse (BetweenClips.TryGetBlend (session.clip, 10 / kRate, out AnimationClip ignored, out float weight));
+            Assert.IsFalse (BetweenClips.TryGetSegment (session.clip, 10 / kRate, out _, out _));
         }
 
         [Test]
@@ -437,13 +437,13 @@ namespace Lilium
             EditorCurveBinding hipsY = AnimationUtility.GetCurveBindings (session.clip).First (b => b.propertyName == CurveEdit.kPosition + ".y" && b.path.EndsWith ("Hips"));
             CurveEdit.SetKey (session.clip, hipsY, 30, AnimationUtility.GetEditorCurve (session.clip, hipsY).Evaluate (0.5f) - 0.05f);
             Assert.AreEqual (BetweenClips.State.Stale, session.GetBetweenState (0), "キーの値が変わった");
-            Assert.IsTrue (BetweenClips.TryGetBlend (session.clip, 15 / kRate, out AnimationClip ignored, out float weight), "古くても使い続ける");
+            Assert.IsTrue (BetweenClips.TryGetSegment (session.clip, 15 / kRate, out _, out _), "古くても使い続ける");
             CollectionAssert.AreEqual (new[] { "stale@0-30" }, BetweenIssues (session), "検査で知らせる");
 
             session.Evaluate (15);
             Assert.IsNull (session.CommitPose ());
             Assert.AreEqual (BetweenClips.State.Lost, BetweenClips.GetState (session.clip, 0, 15), "キーのフレームが変わった（区間でなくなった）");
-            Assert.IsFalse (BetweenClips.TryGetBlend (session.clip, 10 / kRate, out ignored, out weight), "使わない");
+            Assert.IsFalse (BetweenClips.TryGetSegment (session.clip, 10 / kRate, out _, out _), "使わない");
             CollectionAssert.AreEqual (new[] { "lost@0-30" }, BetweenIssues (session));
         }
 
@@ -540,7 +540,7 @@ namespace Lilium
             Assert.IsNotNull (copied, "複製にも結果のファイル");
             Assert.AreNotEqual (BetweenClips.Find (clip), copied, "別のファイル");
             CollectionAssert.AreEqual (BetweenClips.GetSegments (BetweenClips.Find (clip)), BetweenClips.GetSegments (copied));
-            Assert.IsTrue (BetweenClips.TryGetBlend (copy, 15 / kRate, out AnimationClip ignored, out float weight), "複製でも外部の動き");
+            Assert.IsTrue (BetweenClips.TryGetSegment (copy, 15 / kRate, out _, out _), "複製でも外部の動き");
 
             string copiedPath = AssetDatabase.GetAssetPath (copied);
             Assert.IsTrue (AnimBank.Delete (copy));

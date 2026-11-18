@@ -19,13 +19,13 @@ namespace Lilium
         readonly ILayerSource source_;
         readonly int index_;
 
-        /// <param name="source">Override の並びの持ち主。窓（IOverrideHost）なら Layers のパネルの行も作る</param>
+        /// <param name="source">Override の並びの持ち主。窓（ILayerHost）なら Layers のパネルの行も作る</param>
         public OverrideLayer (PreviewStage stage, ILayerSource source, int index)
         {
             stage_ = stage;
             source_ = source;
             index_ = index;
-            if (source is IOverrideHost host) clip = CreateClip (host);
+            if (source is ILayerHost host) clip = CreateClip (host);
         }
 
         /// <summary>何枚目の Override か（下から 0）</summary>
@@ -89,7 +89,7 @@ namespace Lilium
             }
         }
 
-        LayerClip CreateClip (IOverrideHost host)
+        LayerClip CreateClip (ILayerHost host)
         {
             OverrideMode next = mode == OverrideMode.Additive ? OverrideMode.Override : OverrideMode.Additive;
             LayerClip result = new LayerClip {

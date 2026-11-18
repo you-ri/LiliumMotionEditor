@@ -6,7 +6,7 @@ namespace Lilium
 
     // 段のクリップと操作の持ち主。段は作り直すので、クリップそのものと焼く・取り込む処理は持ち主が持ち、段はここを通して見せる。
     // 姿勢を作るのに読むもの（ILayerSource）は窓も PoseSession も渡す。Layers のパネルの行に出す操作は窓だけが持ち（ILayerHost）、
-    // 段は渡されたものがその操作を持つときだけ行（LayerClip）を作る。操作は段ごとに分けている（1 つの段が受け取るのは 1 本だけ）
+    // 段は渡されたものが ILayerHost のときだけ行（LayerClip）を作る。操作を持つのは窓（とテストの偽物）だけなので、段ごとに分けず 1 つにまとめている
 
     /// <summary>
     /// 段が姿勢を作るのに読むもの（クリップ・Override の並び・どの段を置くか）
@@ -32,19 +32,17 @@ namespace Lilium
     }
 
     /// <summary>
-    /// 段のクリップを流れに合成する重み（Editing Rig / Generic Pose / Humanoid Pose 共通）
+    /// 窓: 段が読むものに、Layers のパネルの行に出す操作を全部足したもの
     /// </summary>
-    public interface IClipWeightHost
+    public interface ILayerHost : ILayerSource
     {
+        // ---- 段のクリップを流れに合成する重み（Editing Rig / Generic Pose / Humanoid Pose 共通）
+
         /// <summary>段のクリップを合成する重みを変える（PoseLayer.clipWeight。Undo と保存と当て直しは持ち主が行う）</summary>
         void SetClipWeight (PoseLayer layer, float weight);
-    }
 
-    /// <summary>
-    /// Editing Rig の段: 編集するクリップと、それに重ねた Override の統合
-    /// </summary>
-    public interface IEditClipHost : IClipWeightHost, ILayerSource
-    {
+        // ---- Editing Rig の段: 編集するクリップと、それに重ねた Override の統合
+
         /// <summary>編集できない理由（編集できるなら null）</summary>
         string clipProblem { get; }
         /// <summary>編集用リグ以外を指すカーブの数</summary>
@@ -72,13 +70,9 @@ namespace Lilium
         string GetMergeOverridesProblem ();
         /// <summary>効いている Override を元のクリップへ焼き込む（統合）</summary>
         bool MergeOverrides ();
-    }
 
-    /// <summary>
-    /// Override の段: 1 枚ずつの差し替え・並べ替え・外す
-    /// </summary>
-    public interface IOverrideHost : ILayerSource
-    {
+        // ---- Override の段: 1 枚ずつの差し替え・並べ替え・外す
+
         /// <summary>Layers の構造を編集中か（段の追加・削除・移動の操作を出す。S21）</summary>
         bool layerStructureEditing { get; }
         /// <summary>層のクリップを置き換える。null で層を外す</summary>
@@ -91,25 +85,17 @@ namespace Lilium
         /// <summary>Override の段を 1 つ上（-1）か下（+1）の Override と入れ替える（S21）</summary>
         void MoveOverride (int index, int direction);
         string GetMoveOverrideProblem (int index, int direction);
-    }
 
-    /// <summary>
-    /// Generic Pose の段: 骨を直接動かすクリップ（取り込み元）
-    /// </summary>
-    public interface IGenericHost : IClipWeightHost, ILayerSource
-    {
+        // ---- Generic Pose の段: 骨を直接動かすクリップ（取り込み元）
+
         void SetGenericClip (AnimationClip clip);
         /// <summary>Generic のクリップを取り込めない理由（取り込めるなら null）</summary>
         string GetImportProblem ();
         /// <summary>Generic Pose の段の出力（クリップを合成した姿勢）を編集用リグの値に直して、編集するクリップへ書く</summary>
         bool ImportGenericClip ();
-    }
 
-    /// <summary>
-    /// Humanoid Pose の段: 見比べる参照と、その姿勢の反映
-    /// </summary>
-    public interface IHumanoidHost : IClipWeightHost, ILayerSource
-    {
+        // ---- Humanoid Pose の段: 見比べる参照と、その姿勢の反映
+
         void SetHumanoidClip (AnimationClip clip);
         /// <summary>今のフレームの姿勢を編集用リグへ反映できない理由（できるなら null）</summary>
         string GetHumanoidApplyProblem ();
@@ -117,13 +103,9 @@ namespace Lilium
         bool ApplyHumanoidPoseToRig ();
         /// <summary>Humanoid Pose の段を置くか外すか（S21）</summary>
         void SetHumanoidPoseLayer (bool value);
-    }
 
-    /// <summary>
-    /// Output の段: 焼いて書き出す・並びの中で動かす・参照の差し替え
-    /// </summary>
-    public interface IOutputHost
-    {
+        // ---- Output の段: 焼いて書き出す・並びの中で動かす・参照の差し替え
+
         /// <summary>Output の段が何を焼くかの説明（段の位置による）</summary>
         string DescribeOutput (OutputLayer output);
         /// <summary>Output の段が焼くクリップの置き場所（決まらなければ null）</summary>
@@ -147,13 +129,6 @@ namespace Lilium
         string GetSwapProblem ();
         /// <summary>ゲームが使っているクリップへの参照を「元＋Override」を焼いたクリップへ差し替える（back で元へ戻す）</summary>
         bool SwapClipReferences (bool back);
-    }
-
-    /// <summary>
-    /// 窓: 段が読むものに、Layers のパネルの行に出す操作を全部足したもの
-    /// </summary>
-    public interface ILayerHost : IEditClipHost, IOverrideHost, IGenericHost, IHumanoidHost, IOutputHost
-    {
     }
 
 }
